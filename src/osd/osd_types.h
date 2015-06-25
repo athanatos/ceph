@@ -3371,8 +3371,9 @@ struct SnapSetContext {
   bool exists : 1;
 
   explicit SnapSetContext(const hobject_t& o) :
-    oid(o), ref(0), registered(false), exists(true) { }
+    oid(o), exists(true) { }
 };
+typedef ceph::shared_ptr<SnapSetContext> SnapSetContextRef;
 
 struct RWState {
   enum State {
@@ -3552,9 +3553,7 @@ typedef ceph::shared_ptr<ObjectContext> ObjectContextRef;
 struct ObjectContext {
   ObjectState obs;
 
-  SnapSetContext *ssc;  // may be null
-
-  Context *destructor_callback;
+  SnapSetContextRef ssc;  // may be null
 
   // any entity in obs.oi.watchers MUST be in either watchers or unconnected_watchers.
   map<pair<uint64_t, entity_name_t>, WatchRef> watchers;
@@ -3704,16 +3703,12 @@ struct ObjectContext {
   }
 
   ObjectContext(RWStateRef rwstate)
-    : ssc(NULL),
-      destructor_callback(0),
-      rwstate(rwstate),
+    : rwstate(rwstate),
       blocked(false),
       requeue_scrub_on_unblock(false) {}
 
   ~ObjectContext() {
     assert(rwstate->empty());
-    if (destructor_callback)
-      destructor_callback->complete(0);
   }
 
   void start_block() {

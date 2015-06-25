@@ -314,7 +314,7 @@ private:
 			 map<hobject_t, interval_set<uint64_t>, hobject_t::BitwiseComparator>& clone_subsets);
   ObjectRecoveryInfo recalc_subsets(
     const ObjectRecoveryInfo& recovery_info,
-    SnapSetContext *ssc
+    SnapSetContextRef ssc
     );
 
   /**
