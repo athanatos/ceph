@@ -1041,8 +1041,79 @@ public:
   void handle_watch_timeout(WatchRef watch);
 protected:
 
+  /**
+   * get_object_snapset
+   *
+   * Fetches the snapset for soid from disk
+   *
+   * @param soid [in] object to get snapset for
+   * @param SnapSet [out] resulting object info
+   * @param missing_oid [out] populated with the reason for EAGAIN return
+   * @param attr [in] optional, ssattr buffer to use instead of going to disk
+   * @return -ENOENT if no such object exists, -EAGAIN if an object is missing
+   */
+  int get_object_snapset(
+    const hobject_t &soid,
+    SnapSet *snapset,
+    hobject_t *missing_oid = NULL,
+    bufferlist *attr = NULL
+    );
+
+  /**
+   * get_object_info
+   *
+   * Fetches the object info off disk corresponding for soid.
+   * This method assumes that soid has already been resolved to a
+   * specific object and does not examine the SnapSet to map the
+   * snap to an object.
+   *
+   * @param soid [in] object to look up
+   * @param oi [out] resulting object info, may be null
+   * @param attr [in] OIATTR to use instead of looking at the disk
+   * @return -ENOENT if the object does not exist, -EAGAIN if missing
+   */
+  int get_object_info(
+    const hobject_t &soid,
+    object_info_t *oi,
+    bufferlist *attr = NULL
+    );
+
+  /**
+   * find_object_state
+   *
+   * Maps soid to a specific clone using the SnapSet and clone oi.snaps
+   * and returns the object_info.  Obtains read locks on relevant
+   * objects.
+   *
+   * @param soid [in] object to look up -- must not be SNAPDIR
+   * @param snapset [in] snapset for soid
+   * @param oi [out] object info if found, may be null
+   * @param map_snapid_to_clone [in] if true, treat the snap as the clone id
+   *        even if the snap has been removed (not present in oi.snaps)
+   * @param missing_oid [out] if non-null, will be filled in with the first
+   *        oid which caused an -EAGAIN return value.
+   * @param locks_to_drop [out] list of locks which need read locks dropped
+   * @return -ENOENT if the oid does not exist, -EAGAIN if a required object is
+   *         missing or if some lock was not available (in which case, none are
+   *         taken)
+   *
+   * A different return value may be necessary for the lock case if we want
+   * the replica to actually queue the request.  For now, returning -EAGAIN
+   * is fine.
+   */
+  int find_object_info_and_get_read_locks(
+    const hobject_t &soid,
+    object_info_t *oi,
+    list<RWStateRef> *locks_to_drop);
+
+
   ObjectContextRef create_object_context(
-    const object_info_t& oi, SnapSetContextRef ssc);
+    const object_info_t& oi,
+    SnapSetContextRef ssc,
+    bool exists,
+    map<string, bufferlist> *attrs = 0
+    );
+
   ObjectContextRef get_object_context(
     const hobject_t& soid,
     bool can_create,

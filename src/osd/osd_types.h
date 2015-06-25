@@ -3140,6 +3140,17 @@ struct SnapSet {
     return out;
   }
 
+  // resolve snap to a particular clone (or head)
+  snapid_t resolve_snap_to_clone(snapid_t snap) const {
+    for (vector<snapid_t>::const_iterator i = clones.begin();
+	 i != clones.end();
+	 ++i) {
+      if (*i >= snap)
+	return *i;
+    }
+    return CEPH_NOSNAP;
+  }
+
   // return min element of snaps > after, return max if no such element
   snapid_t get_first_snap_after(snapid_t after, snapid_t max) const {
     for (vector<snapid_t>::const_reverse_iterator i = snaps.rbegin();
