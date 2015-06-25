@@ -4842,9 +4842,6 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	tracepoint(osd, do_osd_op_pre_list_snaps, soid.oid.name.c_str(), soid.snap.val);
         obj_list_snap_response_t resp;
 
-        if (!ssc) {
-	  ssc = ctx->obc->ssc = get_snapset_context(soid, false);
-        }
         assert(ssc);
 
         int clonecount = ssc->snapset.clones.size();
@@ -9135,8 +9132,6 @@ void ReplicatedPG::add_object_context_to_pg_stat(ObjectContextRef obc, pg_stat_t
   if (oi.soid.snap && oi.soid.snap != CEPH_NOSNAP && oi.soid.snap != CEPH_SNAPDIR) {
     stat.num_object_clones++;
 
-    if (!obc->ssc)
-      obc->ssc = get_snapset_context(oi.soid, false);
     assert(obc->ssc);
 
     // subtract off clone overlap
