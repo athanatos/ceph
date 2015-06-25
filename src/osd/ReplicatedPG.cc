@@ -1494,7 +1494,11 @@ void ReplicatedPG::do_request(
       osd->reply_op_error(op, -EBLACKLISTED);
       return;
     }
-    do_op(op); // do it now
+    if (is_primary()) {
+      do_op(op); // do it now
+    } else {
+      do_op_replica(op);
+    }
     break;
   }
 
@@ -1544,6 +1548,169 @@ hobject_t ReplicatedPG::earliest_backfill() const
       e = iter->second.last_backfill;
   }
   return e;
+}
+
+/**
+ * do_op_replica
+ *
+ * Handle replica op on replica, replies with EAGAIN
+ * if the request must be resent to the primary
+ */
+void ReplicatedPG::do_op_replica(OpRequestRef &op)
+{
+  MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
+  assert(m->get_type() == CEPH_MSG_OSD_OP);
+
+  dout(10) << __func__ << " " << *m
+	   << (op->may_write() ? " may_write" : "")
+	   << (op->may_read() ? " may_read" : "")
+	   << (op->may_cache() ? " may_cache" : "")
+	   << " flags " << ceph_osd_flag_string(m->get_flags())
+	   << dendl;
+
+  if (info.is_incomplete()) {
+    derr << __func__
+	 << " got replica read op, but I'm backfilling -- BUG."
+	 << dendl;
+    osd->clog->error() << info.pgid
+		       << " got replica read op on backfilling replica"
+		       << ", most likely indicates a buggy client.";
+    osd->reply_op_error(op, -EAGAIN);
+    return;
+  }
+
+  if (pool.info.ec_pool()) {
+    // XXX: reviewer: should this ping the central log?  Only a buggy client
+    // would set BALANCE_READS etc on an ec pool
+    dout(10) << __func__
+	     << " got replica op on replica for ec pool, EAGAIN" << dendl;
+    osd->reply_op_error(op, -EAGAIN);
+    return;
+  }
+
+  if (op->includes_pg_op()) {
+    dout(10) << __func__ << " got pg op on replica, EAGAIN" << dendl;
+    osd->reply_op_error(op, -EAGAIN);
+    return;
+  }
+
+  if (op->may_write() || op->may_cache()) {
+    dout(10) << __func__ << " got pg op on write or cache, EAGAIN" << dendl;
+    osd->reply_op_error(op, -EAGAIN);
+    return;
+  }
+
+  if (m->has_flag(CEPH_OSD_FLAG_MAP_SNAP_CLONE)) {
+    dout(10) << __func__ << " CEPH_OSD_FLAG_MAP_SNAPCLONE, redirecting to "
+	     << "primary" << dendl;
+    osd->reply_op_error(op, -EAGAIN);
+    return;
+  }
+
+  hobject_t request_oid(m->get_oid(), m->get_object_locator().key,
+			m->get_snapid(), m->get_pg().ps(),
+			info.pgid.pool(), m->get_object_locator().nspace);
+
+  if (request_oid.is_snapdir()) {
+    dout(10) << __func__ << " got operation on snapdir, redirecting to "
+	     << "primary" << dendl;
+    osd->clog->error() << info.pgid
+		       << " got replica read op on snapdir "
+		       << ", most likely indicates a buggy client.";
+    osd->reply_op_error(op, -EAGAIN);
+    return;
+  }
+
+
+  // verify that this object has not been recently modified
+  for (list<pg_log_entry_t>::const_reverse_iterator i =
+	 pg_log.get_log().log.rbegin();
+       i != pg_log.get_log().log.rend();
+       ++i) {
+    // only need to check back to rollback_trimmed_to, nothing prior to that
+    // can later become divergent!
+    if (i->version <= pg_log.get_rollback_trimmed_to())
+      break;
+    if (i->soid.get_head() == request_oid.get_head()) {
+      dout(10) << __func__ << ": " << request_oid.get_head()
+	       << " recently modified, redirecting to primary"
+	       << dendl;
+      osd->reply_op_error(op, -EAGAIN);
+      return;
+    }
+  }
+
+  object_info_t oi;
+  list<RWStateRef> locks;
+  int r = find_object_info_and_get_read_locks(
+    request_oid, &oi, &locks);
+  if (r != 0) {
+    dout(10) << __func__ << " find_object_state on " << request_oid
+	     << " returned " << r << dendl;
+    if (r == -ENOENT && pool.info.is_tier()) {
+      dout(10) << __func__ << " translating replica ENOENT to EAGAIN"
+	       << " for tier" << dendl;
+      r = -EAGAIN;
+    }
+    osd->reply_op_error(op, r);
+    return;
+  }
+
+  object_stat_sum_t delta_stats;
+  bool first_read = false;
+  int data_off = 0;
+  int num_read = 0;
+  if (!oi.is_whiteout()) {
+    for (vector<OSDOp>::iterator p = m->ops.begin();
+	 p != m->ops.end();
+	 ++p) {
+      r = do_replica_safe_read(
+	*p,
+	oi,
+	delta_stats,
+	first_read,
+	data_off,
+	num_read,
+	0,
+	ObjectContextRef());
+      if (r < 0)
+	break;
+    }
+  } else {
+    r = -ENOENT;
+  }
+
+  list<OpRequestRef> to_requeue;
+  for (list<RWStateRef>::iterator i = locks.begin();
+       i != locks.end();
+       ++i) {
+    (*i)->put_read(&to_requeue);
+    assert(to_requeue.empty());
+  }
+  to_requeue.clear();
+
+  if (r < 0) {
+    dout(10) << __func__ << " ops ended up with error: "
+	     << r << dendl;
+    osd->reply_op_error(op, r);
+    return;
+  }
+
+  log_op_stats(
+    op,
+    0,
+    utime_t());
+  MOSDOpReply *reply = new MOSDOpReply(
+    m, 0, get_osdmap()->get_epoch(), 0,
+    false);
+  send_read_reply(
+    m->ops,
+    m,
+    reply,
+    r,
+    data_off,
+    oi.version,
+    oi.user_version);
 }
 
 /** do_op - do an op
