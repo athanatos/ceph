@@ -2900,7 +2900,10 @@ void ReplicatedPG::execute_ctx(OpContext *ctx)
     [m, ctx, this](){
       if (ctx->op)
 	log_op_stats(
-	  ctx);
+	  ctx->op,
+	  ctx->bytes_written,
+	  ctx->bytes_read,
+	  ctx->readable_stamp);
 
       if (m && m->wants_ondisk() && !ctx->sent_disk) {
 	// send commit.
@@ -2955,25 +2958,25 @@ void ReplicatedPG::reply_ctx(OpContext *ctx, int r, eversion_t v, version_t uv)
   close_op_ctx(ctx);
 }
 
-void ReplicatedPG::log_op_stats(OpContext *ctx)
+void ReplicatedPG::log_op_stats(
+  OpRequestRef op,
+  uint64_t inb,
+  uint64_t outb,
+  utime_t readable_stamp)
 {
-  OpRequestRef op = ctx->op;
   MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
 
   utime_t now = ceph_clock_now(cct);
   utime_t latency = now;
-  latency -= ctx->op->get_req()->get_recv_stamp();
+  latency -= op->get_req()->get_recv_stamp();
   utime_t process_latency = now;
-  process_latency -= ctx->op->get_dequeued_time();
+  process_latency -= op->get_dequeued_time();
 
   utime_t rlatency;
-  if (ctx->readable_stamp != utime_t()) {
-    rlatency = ctx->readable_stamp;
-    rlatency -= ctx->op->get_req()->get_recv_stamp();
+  if (readable_stamp != utime_t()) {
+    rlatency = readable_stamp;
+    rlatency -= op->get_req()->get_recv_stamp();
   }
-
-  uint64_t inb = ctx->bytes_written;
-  uint64_t outb = ctx->bytes_read;
 
   osd->logger->inc(l_osd_op);
 
@@ -6746,7 +6749,11 @@ void ReplicatedPG::complete_read_ctx(int result, OpContext *ctx)
 
   if (result >= 0) {
     if (!ctx->ignore_log_op_stats) {
-      log_op_stats(ctx);
+      log_op_stats(
+	ctx->op,
+	ctx->bytes_written,
+	ctx->bytes_read,
+	ctx->readable_stamp);
       publish_stats_to_osd();
     }
 
