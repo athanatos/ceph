@@ -6746,12 +6746,11 @@ void ReplicatedPG::complete_read_ctx(int result, OpContext *ctx)
     }
   }
 
-  ctx->reply->claim_op_out_data(ctx->ops);
-  ctx->reply->get_header().data_off = ctx->data_off;
-
   MOSDOpReply *reply = ctx->reply;
   ctx->reply = NULL;
 
+  eversion_t v;
+  version_t uv = 0;
   if (result >= 0) {
     if (!ctx->ignore_log_op_stats) {
       log_op_stats(
@@ -6763,20 +6762,37 @@ void ReplicatedPG::complete_read_ctx(int result, OpContext *ctx)
 
     // on read, return the current object version
     if (ctx->obs) {
-      reply->set_reply_versions(eversion_t(), ctx->obs->oi.user_version);
+      uv = ctx->obs->oi.user_version;
     } else {
-      reply->set_reply_versions(eversion_t(), ctx->user_at_version);
+      uv = ctx->user_at_version;
     }
   } else if (result == -ENOENT) {
     // on ENOENT, set a floor for what the next user version will be.
-    reply->set_enoent_reply_versions(info.last_update, info.last_user_version);
+    v = info.last_update;
+    uv = info.last_user_version;
   }
 
+  send_read_reply(ctx->ops, m, reply, result, ctx->data_off, v, uv);
+  close_op_ctx(ctx);
+}
+
+void ReplicatedPG::send_read_reply(
+  vector<OSDOp> &ops,
+  MOSDOp *m,
+  MOSDOpReply *reply,
+  int result,
+  int data_off,
+  eversion_t v,
+  version_t uv)
+{
+  reply->claim_op_out_data(ops);
+  reply->get_header().data_off = data_off;
+  reply->set_reply_versions(v, uv);
   reply->set_result(result);
   reply->add_flags(CEPH_OSD_FLAG_ACK | CEPH_OSD_FLAG_ONDISK);
   osd->send_message_osd_client(reply, m->get_connection());
-  close_op_ctx(ctx);
 }
+
 
 // ========================================================================
 // copyfrom

@@ -1341,6 +1341,14 @@ protected:
   int prepare_transaction(OpContext *ctx);
   list<pair<OpRequestRef, OpContext*> > in_progress_async_reads;
   void complete_read_ctx(int result, OpContext *ctx);
+  void send_read_reply(
+    vector<OSDOp> &ops,
+    MOSDOp *m,
+    MOSDOpReply *reply,
+    int result,
+    int data_off,
+    eversion_t version,
+    version_t user_version);
   
   // pg on-disk content
   void check_local();
