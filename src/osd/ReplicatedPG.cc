@@ -8194,6 +8194,54 @@ void ReplicatedPG::repop_all_committed(RepGather *repop)
   }
 }
 
+class C_PG_ReleaseReplicaWriteLocks : public Context {
+  /// No epoch here because the ops themselves will be discarded as necessary
+  ReplicatedPGRef pg;
+  list<RWStateRef> locks_to_release;
+
+public:
+  C_PG_ReleaseReplicaWriteLocks(
+    ReplicatedPGRef pg,
+    list<RWStateRef> &locks_to_release)
+    : pg(pg), locks_to_release(locks_to_release) {}
+
+  void finish(int) {
+    pg->lock();
+    list<OpRequestRef> to_requeue;
+    for (list<RWStateRef>::iterator i = locks_to_release.begin();
+	 i != locks_to_release.end();
+	 ++i) {
+      (*i)->put_write(&to_requeue);
+    }
+    assert(to_requeue.empty());
+    pg->unlock();
+  }
+};
+
+void ReplicatedPG::get_replica_write_locks(
+  const vector<pg_log_entry_t> &logv,
+  ObjectStore::Transaction *t)
+{
+  set<hobject_t, hobject_t::BitwiseComparator> taken;
+  list<RWStateRef> locks;
+  for (vector<pg_log_entry_t>::const_iterator i = logv.begin();
+       i != logv.end();
+       ++i) {
+    if (!taken.count(i->soid)) {
+      taken.insert(i->soid);
+      RWStateRef lock = rwstate_registry.lookup_or_create(i->soid);
+      bool got = lock->get_write_lock();
+
+      // Replicas only read syncronously, they release the rwstate
+      // before releasing the pg lock
+      assert(got);
+
+      locks.push_back(lock);
+    }
+  }
+  t->register_on_complete(new C_PG_ReleaseReplicaWriteLocks(this, locks));
+}
+
 void ReplicatedPG::op_applied(const eversion_t &applied_version)
 {
   dout(10) << "op_applied version " << applied_version << dendl;
