@@ -7720,7 +7720,7 @@ void ReplicatedPG::finish_promote(int r, CopyResults *results,
     dout(20) << __func__ << " took lock on obc, " << *(obc->rwstate)
              << dendl;
 
-    finish_ctx(tctx.get(), pg_log_entry_t::PROMOTE);
+    finish_ctx(tctx.get(), pg_log_entry_t::MODIFY);
 
     simple_opc_submit(std::move(tctx));
     return;
