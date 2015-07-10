@@ -7703,7 +7703,16 @@ void ReplicatedPG::finish_promote(int r, CopyResults *results,
     ObjectContextRef obc = get_object_context(head, false);
     assert(obc);
 
+    // take RWWRITE lock for duration of our local write.  ignore starvation.
+    if (!obc->rwstate->take_write_lock()) {
+      /* We haven't actually adjusted the snapset.  Hopefully on the next
+       * try we'll be able to get the lock */
+      return;
+    }
+
     OpContextUPtr tctx = simple_opc_create(obc);
+    tctx->lock_manager.adopt_write_lock(head, obc);
+
     tctx->at_version = get_next_version();
     filter_snapc(tctx->new_snapset.snaps);
     vector<snapid_t> new_clones;
@@ -7716,15 +7725,6 @@ void ReplicatedPG::finish_promote(int r, CopyResults *results,
     tctx->new_snapset.clones.swap(new_clones);
     tctx->new_snapset.clone_overlap.erase(soid.snap);
     tctx->new_snapset.clone_size.erase(soid.snap);
-
-    // take RWWRITE lock for duration of our local write.  ignore starvation.
-    if (!tctx->lock_manager.take_write_lock(
-	  head,
-	  obc)) {
-      assert(0 == "problem!");
-    }
-    dout(20) << __func__ << " took lock on obc, " << *(obc->rwstate)
-             << dendl;
 
     finish_ctx(tctx.get(), pg_log_entry_t::MODIFY);
 

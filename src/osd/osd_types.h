@@ -3806,6 +3806,15 @@ public:
       return false;
     }
   }
+  /// Take-over existing write lock
+  void adopt_write_lock(
+    const hobject_t &hoid,
+    ObjectContextRef obc) {
+    assert(locks.find(hoid) == locks.end());
+    locks.insert(
+      make_pair(
+	hoid, ObjectLockState(obc, RWState::RWWRITE)));
+  }
   /// Get write lock for snap trim
   bool get_snaptrimmer_write(
     const hobject_t &hoid,
