@@ -1317,7 +1317,7 @@ public:
     op.getxattrs(&xattrs, 0);
 
     unsigned flags = 0;
-    if (balance_reads)
+    if (balance_reads && (rand() % 2))
       flags |= librados::OPERATION_BALANCE_READS;
 
     assert(!context->io_ctx.aio_operate(context->prefix+oid, completions[0], &op,
