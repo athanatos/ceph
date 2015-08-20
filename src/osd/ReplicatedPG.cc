@@ -1977,12 +1977,9 @@ void ReplicatedPG::do_op(OpRequestRef& op)
     &missing_oid);
 
   if (r == -EAGAIN) {
-    // If we're not the primary of this OSD, and we have
-    // CEPH_OSD_FLAG_LOCALIZE_READS set, we just return -EAGAIN. Otherwise,
     // we have to wait for the object.
-    if (is_primary() ||
-	(!(m->has_flag(CEPH_OSD_FLAG_BALANCE_READS)) &&
-	 !(m->has_flag(CEPH_OSD_FLAG_LOCALIZE_READS)))) {
+    if ((!(m->has_flag(CEPH_OSD_FLAG_BALANCE_READS) &&
+	 !(m->has_flag(CEPH_OSD_FLAG_LOCALIZE_READS))))) {
       // missing the specific snap we need; requeue and wait.
       assert(!op->may_write()); // only happens on a read/cache
       wait_for_unreadable_object(missing_oid, op);
