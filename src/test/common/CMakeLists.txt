@@ -148,6 +148,13 @@ add_executable(unittest_config
 add_ceph_unittest(unittest_config)
 target_link_libraries(unittest_config ceph-common)
 
+# unittest_future
+add_executable(unittest_future
+  test_future.cc
+  )
+add_ceph_unittest(unittest_future)
+target_link_libraries(unittest_future)
+
 # unittest_context
 add_executable(unittest_context
   test_context.cc
