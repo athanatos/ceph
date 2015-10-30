@@ -3962,6 +3962,34 @@ bool ReplicatedPG::maybe_create_new_object(OpContext *ctx)
   return false;
 }
 
+int ReplicatedPG::do_replica_safe_read(
+  OSDOp &osd_op,
+  const object_info_t &oi,
+  object_stat_sum_t &delta_stats,
+  bool &first_read,
+  int &data_off,
+  int &num_read,
+  list<pair<boost::tuple<uint64_t, uint64_t, unsigned>,
+       pair<bufferlist*, Context*> > > *pending_async_reads,
+  ObjectContextRef obc)
+{
+  int result = 0;
+  const hobject_t &soid = oi.soid;
+  ceph_osd_op &op = osd_op.op;
+  bufferlist::iterator bp = osd_op.indata.begin();
+
+  switch (op.op) {
+
+
+  default:
+    result = -EOPNOTSUPP;
+    break;
+  }
+  return result;
+}
+
+
+
 int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 {
   int result = 0;
@@ -4034,7 +4062,6 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
     switch (op.op) {
       
       // --- READS ---
-
     case CEPH_OSD_OP_SYNC_READ:
       if (pool.info.require_rollback()) {
 	result = -EOPNOTSUPP;
@@ -4042,7 +4069,7 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
       }
       // fall through
     case CEPH_OSD_OP_READ:
-      ++ctx->num_read;
+      ++num_read;
       {
 	__u32 seq = oi.truncate_seq;
 	uint64_t size = oi.size;
@@ -4065,13 +4092,13 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	}
 
 	// read into a buffer
-	bool async = false;
+	bufferlist bl;
 	if (trimmed_read && op.extent.length == 0) {
 	  // read size was trimmed to zero and it is expected to do nothing
 	  // a read operation of 0 bytes does *not* do nothing, this is why
 	  // the trimmed_read boolean is needed
 	} else if (pool.info.require_rollback()) {
-	  async = true;
+	  assert(pending_async_reads);
 	  boost::optional<uint32_t> maybe_crc;
 	  // If there is a data digest and it is possible we are reading
 	  // entire object, pass the digest.  FillInVerifyExtent will
@@ -4079,13 +4106,13 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  if (oi.is_data_digest() && op.extent.offset == 0 &&
 	      op.extent.length >= oi.size)
 	    maybe_crc = oi.data_digest;
-	  ctx->pending_async_reads.push_back(
+	  pending_async_reads->push_back(
 	    make_pair(
 	      boost::make_tuple(op.extent.offset, op.extent.length, op.flags),
 	      make_pair(&osd_op.outdata,
 			new FillInVerifyExtent(&op.extent.length, &osd_op.rval,
-				&osd_op.outdata, maybe_crc, oi.size, osd,
-				soid, op.flags))));
+					       &osd_op.outdata, maybe_crc, oi.size, osd,
+					       soid, op.flags))));
 	  dout(10) << " async_read noted for " << soid << dendl;
 	} else {
 	  int r = pgbackend->objects_read_sync(
@@ -4114,28 +4141,23 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	}
 	if (first_read) {
 	  first_read = false;
-	  ctx->data_off = op.extent.offset;
+	  data_off = op.extent.offset;
 	}
 	// XXX the op.extent.length is the requested length for async read
 	// On error this length is changed to 0 after the error comes back.
-	ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(op.extent.length, 10);
-	ctx->delta_stats.num_rd++;
-
-	// Skip checking the result and just proceed to the next operation
-	if (async)
-	  continue;
-
+	delta_stats.num_rd_kb += SHIFT_ROUND_UP(op.extent.length, 10);
+	delta_stats.num_rd++;
       }
       break;
 
-    /* map extents */
+      /* map extents */
     case CEPH_OSD_OP_MAPEXT:
       tracepoint(osd, do_osd_op_pre_mapext, soid.oid.name.c_str(), soid.snap.val, op.extent.offset, op.extent.length);
       if (pool.info.require_rollback()) {
 	result = -EOPNOTSUPP;
 	break;
       }
-      ++ctx->num_read;
+      ++num_read;
       {
 	// read into a buffer
 	bufferlist bl;
@@ -4146,13 +4168,13 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	if (r < 0)
 	  result = r;
 	else
-	  ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(bl.length(), 10);
-	ctx->delta_stats.num_rd++;
+	  delta_stats.num_rd_kb += SHIFT_ROUND_UP(bl.length(), 10);
+	delta_stats.num_rd++;
 	dout(10) << " map_extents done on object " << soid << dendl;
       }
       break;
 
-    /* map extents */
+      /* map extents */
     case CEPH_OSD_OP_SPARSE_READ:
       tracepoint(osd, do_osd_op_pre_sparse_read, soid.oid.name.c_str(), soid.snap.val, oi.size, oi.truncate_seq, op.extent.offset, op.extent.length, op.extent.truncate_size, op.extent.truncate_seq);
       if (op.extent.truncate_seq) {
@@ -4160,10 +4182,11 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	result = -EINVAL;
 	break;
       }
-      ++ctx->num_read;
-      if (pool.info.ec_pool()) {
+      ++num_read;
+      if (pool.info.require_rollback()) {
+	assert(pending_async_reads);
 	// translate sparse read to a normal one if not supported
-	ctx->pending_async_reads.push_back(
+	pending_async_reads->push_back(
 	  make_pair(
 	    boost::make_tuple(op.extent.offset, op.extent.length, op.flags),
 	    make_pair(&osd_op.outdata, new ToSparseReadResult(osd_op.outdata,
@@ -4172,21 +4195,21 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
       } else {
 	// read into a buffer
 	bufferlist bl;
-        uint32_t total_read = 0;
+	uint32_t total_read = 0;
 	int r = osd->store->fiemap(ch, ghobject_t(soid, ghobject_t::NO_GEN,
 						  info.pgid.shard),
 				   op.extent.offset, op.extent.length, bl);
 	if (r < 0)  {
 	  result = r;
-          break;
+	  break;
 	}
-        map<uint64_t, uint64_t> m;
-        bufferlist::iterator iter = bl.begin();
-        ::decode(m, iter);
-        map<uint64_t, uint64_t>::iterator miter;
-        bufferlist data_bl;
+	map<uint64_t, uint64_t> m;
+	bufferlist::iterator iter = bl.begin();
+	::decode(m, iter);
+	map<uint64_t, uint64_t>::iterator miter;
+	bufferlist data_bl;
 	uint64_t last = op.extent.offset;
-        for (miter = m.begin(); miter != m.end(); ++miter) {
+	for (miter = m.begin(); miter != m.end(); ++miter) {
 	  // verify hole?
 	  if (cct->_conf->osd_verify_sparse_read_holes &&
 	      last < miter->first) {
@@ -4195,27 +4218,27 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	    r = pgbackend->objects_read_sync(soid, last, len, op.flags, &t);
 	    if (!t.is_zero()) {
 	      osd->clog->error() << coll << " " << soid << " sparse-read found data in hole "
-				<< last << "~" << len << "\n";
+				 << last << "~" << len << "\n";
 	    }
 	  }
 
-          bufferlist tmpbl;
+	  bufferlist tmpbl;
 	  r = pgbackend->objects_read_sync(soid, miter->first, miter->second, op.flags, &tmpbl);
-          if (r < 0)
-            break;
+	  if (r < 0)
+	    break;
 
-          if (r < (int)miter->second) /* this is usually happen when we get extent that exceeds the actual file size */
-            miter->second = r;
-          total_read += r;
-          dout(10) << "sparse-read " << miter->first << "@" << miter->second << dendl;
+	  if (r < (int)miter->second) /* this is usually happen when we get extent that exceeds the actual file size */
+	    miter->second = r;
+	  total_read += r;
+	  dout(10) << "sparse-read " << miter->first << "@" << miter->second << dendl;
 	  data_bl.claim_append(tmpbl);
 	  last = miter->first + r;
-        }
-        
-        if (r < 0) {
-          result = r;
-          break;
-        }
+	}
+
+	if (r < 0) {
+	  result = r;
+	  break;
+	}
 
 	// verify trailing hole?
 	if (cct->_conf->osd_verify_sparse_read_holes) {
@@ -4226,36 +4249,36 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	    r = pgbackend->objects_read_sync(soid, last, len, op.flags, &t);
 	    if (!t.is_zero()) {
 	      osd->clog->error() << coll << " " << soid << " sparse-read found data in hole "
-				<< last << "~" << len << "\n";
+				 << last << "~" << len << "\n";
 	    }
 	  }
 	}
 
-	// Why SPARSE_READ need checksum? In fact, librbd always use sparse-read. 
+	// Why SPARSE_READ need checksum? In fact, librbd always use sparse-read.
 	// Maybe at first, there is no much whole objects. With continued use, more and more whole object exist.
 	// So from this point, for spare-read add checksum make sense.
 	if (total_read == oi.size && oi.is_data_digest()) {
 	  uint32_t crc = data_bl.crc32c(-1);
 	  if (oi.data_digest != crc) {
 	    osd->clog->error() << info.pgid << std::hex
-	      << " full-object read crc 0x" << crc
-	      << " != expected 0x" << oi.data_digest
-	      << std::dec << " on " << soid;
+			       << " full-object read crc 0x" << crc
+			       << " != expected 0x" << oi.data_digest
+			       << std::dec << " on " << soid;
 	    // FIXME fall back to replica or something?
 	    result = -EIO;
 	    break;
 	  }
 	}
 
-        op.extent.length = total_read;
+	op.extent.length = total_read;
 
-        ::encode(m, osd_op.outdata); // re-encode since it might be modified
-        ::encode_destructively(data_bl, osd_op.outdata);
+	::encode(m, osd_op.outdata); // re-encode since it might be modified
+	::encode_destructively(data_bl, osd_op.outdata);
 
 	dout(10) << " sparse_read got " << total_read << " bytes from object " << soid << dendl;
       }
-      ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(op.extent.length, 10);
-      ctx->delta_stats.num_rd++;
+      delta_stats.num_rd_kb += SHIFT_ROUND_UP(op.extent.length, 10);
+      delta_stats.num_rd++;
       break;
 
     case CEPH_OSD_OP_CALL:
@@ -4474,47 +4497,49 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
       break;
 
     case CEPH_OSD_OP_GETXATTR:
-      ++ctx->num_read;
+      ++num_read;
       {
 	string aname;
 	bp.copy(op.xattr.name_len, aname);
 	tracepoint(osd, do_osd_op_pre_getxattr, soid.oid.name.c_str(), soid.snap.val, aname.c_str());
 	string name = "_" + aname;
 	int r = getattr_maybe_cache(
-	  ctx->obc,
+	  soid,
+	  obc,
 	  name,
 	  &(osd_op.outdata));
 	if (r >= 0) {
 	  op.xattr.value_len = osd_op.outdata.length();
 	  result = 0;
-	  ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
+	  delta_stats.num_rd_kb += SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
 	} else
 	  result = r;
 
-	ctx->delta_stats.num_rd++;
+	delta_stats.num_rd++;
       }
       break;
 
-   case CEPH_OSD_OP_GETXATTRS:
-      ++ctx->num_read;
+    case CEPH_OSD_OP_GETXATTRS:
+      ++num_read;
       {
 	tracepoint(osd, do_osd_op_pre_getxattrs, soid.oid.name.c_str(), soid.snap.val);
 	map<string, bufferlist> out;
 	result = getattrs_maybe_cache(
-	  ctx->obc,
+	  soid,
+	  obc,
 	  &out,
 	  true);
-        
-        bufferlist bl;
-        ::encode(out, bl);
-	ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(bl.length(), 10);
-        ctx->delta_stats.num_rd++;
-        osd_op.outdata.claim_append(bl);
+
+	bufferlist bl;
+	::encode(out, bl);
+	delta_stats.num_rd_kb += SHIFT_ROUND_UP(bl.length(), 10);
+	delta_stats.num_rd++;
+	osd_op.outdata.claim_append(bl);
       }
       break;
-      
+
     case CEPH_OSD_OP_CMPXATTR:
-      ++ctx->num_read;
+      ++num_read;
       {
 	string aname;
 	bp.copy(op.xattr.name_len, aname);
@@ -4524,42 +4549,43 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	
 	bufferlist xattr;
 	result = getattr_maybe_cache(
-	  ctx->obc,
+	  soid,
+	  obc,
 	  name,
 	  &xattr);
 	if (result < 0 && result != -EEXIST && result != -ENODATA)
 	  break;
 	
-	ctx->delta_stats.num_rd++;
-	ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(xattr.length(), 10);
+	delta_stats.num_rd++;
+	delta_stats.num_rd_kb += SHIFT_ROUND_UP(xattr.length(), 10);
 
 	switch (op.xattr.cmp_mode) {
 	case CEPH_OSD_CMPXATTR_MODE_STRING:
-	  {
-	    string val;
-	    bp.copy(op.xattr.value_len, val);
-	    val[op.xattr.value_len] = 0;
-	    dout(10) << "CEPH_OSD_OP_CMPXATTR name=" << name << " val=" << val
-		     << " op=" << (int)op.xattr.cmp_op << " mode=" << (int)op.xattr.cmp_mode << dendl;
-	    result = do_xattr_cmp_str(op.xattr.cmp_op, val, xattr);
-	  }
-	  break;
+	{
+	  string val;
+	  bp.copy(op.xattr.value_len, val);
+	  val[op.xattr.value_len] = 0;
+	  dout(10) << "CEPH_OSD_OP_CMPXATTR name=" << name << " val=" << val
+		   << " op=" << (int)op.xattr.cmp_op << " mode=" << (int)op.xattr.cmp_mode << dendl;
+	  result = do_xattr_cmp_str(op.xattr.cmp_op, val, xattr);
+	}
+	break;
 
-        case CEPH_OSD_CMPXATTR_MODE_U64:
-	  {
-	    uint64_t u64val;
-	    try {
-	      ::decode(u64val, bp);
-	    }
-	    catch (buffer::error& e) {
-	      result = -EINVAL;
-	      goto fail;
-	    }
-	    dout(10) << "CEPH_OSD_OP_CMPXATTR name=" << name << " val=" << u64val
-		     << " op=" << (int)op.xattr.cmp_op << " mode=" << (int)op.xattr.cmp_mode << dendl;
-	    result = do_xattr_cmp_u64(op.xattr.cmp_op, u64val, xattr);
+	case CEPH_OSD_CMPXATTR_MODE_U64:
+	{
+	  uint64_t u64val;
+	  try {
+	    ::decode(u64val, bp);
 	  }
-	  break;
+	  catch (buffer::error& e) {
+	    result = -EINVAL;
+	    break;
+	  }
+	  dout(10) << "CEPH_OSD_OP_CMPXATTR name=" << name << " val=" << u64val
+		   << " op=" << (int)op.xattr.cmp_op << " mode=" << (int)op.xattr.cmp_mode << dendl;
+	  result = do_xattr_cmp_u64(op.xattr.cmp_op, u64val, xattr);
+	}
+	break;
 
 	default:
 	  dout(10) << "bad cmp mode " << (int)op.xattr.cmp_mode << dendl;
@@ -4581,13 +4607,13 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
       break;
 
     case CEPH_OSD_OP_ASSERT_VER:
-      ++ctx->num_read;
+      ++num_read;
       {
 	uint64_t ver = op.assert_ver.ver;
 	tracepoint(osd, do_osd_op_pre_assert_ver, soid.oid.name.c_str(), soid.snap.val, ver);
 	if (!ver)
 	  result = -EINVAL;
-        else if (ver < oi.user_version)
+	else if (ver < oi.user_version)
 	  result = -ERANGE;
 	else if (ver > oi.user_version)
 	  result = -EOVERFLOW;
@@ -4595,30 +4621,30 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
       break;
 
     case CEPH_OSD_OP_LIST_WATCHERS:
-      ++ctx->num_read;
+      ++num_read;
       {
 	tracepoint(osd, do_osd_op_pre_list_watchers, soid.oid.name.c_str(), soid.snap.val);
-        obj_list_watch_response_t resp;
+	obj_list_watch_response_t resp;
 
-        map<pair<uint64_t, entity_name_t>, watch_info_t>::const_iterator oi_iter;
-        for (oi_iter = oi.watchers.begin(); oi_iter != oi.watchers.end();
-                                       ++oi_iter) {
-          dout(20) << "key cookie=" << oi_iter->first.first
-               << " entity=" << oi_iter->first.second << " "
-               << oi_iter->second << dendl;
-          assert(oi_iter->first.first == oi_iter->second.cookie);
-          assert(oi_iter->first.second.is_client());
+	map<pair<uint64_t, entity_name_t>, watch_info_t>::const_iterator oi_iter;
+	for (oi_iter = oi.watchers.begin(); oi_iter != oi.watchers.end();
+	     ++oi_iter) {
+	  dout(20) << "key cookie=" << oi_iter->first.first
+		   << " entity=" << oi_iter->first.second << " "
+		   << oi_iter->second << dendl;
+	  assert(oi_iter->first.first == oi_iter->second.cookie);
+	  assert(oi_iter->first.second.is_client());
 
-          watch_item_t wi(oi_iter->first.second, oi_iter->second.cookie,
-		 oi_iter->second.timeout_seconds, oi_iter->second.addr);
-          resp.entries.push_back(wi);
-        }
+	  watch_item_t wi(oi_iter->first.second, oi_iter->second.cookie,
+			  oi_iter->second.timeout_seconds, oi_iter->second.addr);
+	  resp.entries.push_back(wi);
+	}
 
-        resp.encode(osd_op.outdata);
-        result = 0;
+	resp.encode(osd_op.outdata);
+	result = 0;
 
-        ctx->delta_stats.num_rd++;
-        break;
+	delta_stats.num_rd++;
+	break;
       }
 
     case CEPH_OSD_OP_LIST_SNAPS:
@@ -5240,7 +5266,7 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	if (pool.info.require_rollback()) {
 	  map<string, boost::optional<bufferlist> > to_set;
 	  bufferlist old;
-	  int r = getattr_maybe_cache(ctx->obc, name, &old);
+	  int r = getattr_maybe_cache(soid, ctx->obc, name, &old);
 	  if (r == 0) {
 	    to_set[name] = old;
 	  } else {
@@ -5271,7 +5297,7 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	if (pool.info.require_rollback()) {
 	  map<string, boost::optional<bufferlist> > to_set;
 	  bufferlist old;
-	  int r = getattr_maybe_cache(ctx->obc, name, &old);
+	  int r = getattr_maybe_cache(soid, ctx->obc, name, &old);
 	  if (r == 0) {
 	    to_set[name] = old;
 	  } else {
@@ -5406,7 +5432,7 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 
       // OMAP Read ops
     case CEPH_OSD_OP_OMAPGETKEYS:
-      ++ctx->num_read;
+      ++num_read;
       {
 	string start_after;
 	uint64_t max_return;
@@ -5417,7 +5443,7 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	catch (buffer::error& e) {
 	  result = -EINVAL;
 	  tracepoint(osd, do_osd_op_pre_omapgetkeys, soid.oid.name.c_str(), soid.snap.val, "???", 0);
-	  goto fail;
+	  break;
 	}
 	tracepoint(osd, do_osd_op_pre_omapgetkeys, soid.oid.name.c_str(), soid.snap.val, start_after.c_str(), max_return);
 	set<string> out_set;
@@ -5435,13 +5461,13 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  }
 	} // else return empty out_set
 	::encode(out_set, osd_op.outdata);
-	ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
-	ctx->delta_stats.num_rd++;
+	delta_stats.num_rd_kb += SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
+	delta_stats.num_rd++;
       }
       break;
 
     case CEPH_OSD_OP_OMAPGETVALS:
-      ++ctx->num_read;
+      ++num_read;
       {
 	string start_after;
 	uint64_t max_return;
@@ -5454,7 +5480,7 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	catch (buffer::error& e) {
 	  result = -EINVAL;
 	  tracepoint(osd, do_osd_op_pre_omapgetvals, soid.oid.name.c_str(), soid.snap.val, "???", 0, "???");
-	  goto fail;
+	  break;
 	}
 	tracepoint(osd, do_osd_op_pre_omapgetvals, soid.oid.name.c_str(), soid.snap.val, start_after.c_str(), max_return, filter_prefix.c_str());
 	map<string, bufferlist> out_set;
@@ -5463,10 +5489,10 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  ObjectMap::ObjectMapIterator iter = osd->store->get_omap_iterator(
 	    coll, ghobject_t(soid)
 	    );
-          if (!iter) {
-            result = -ENOENT;
-            goto fail;
-          }
+	  if (!iter) {
+	    result = -ENOENT;
+	    break;
+	  }
 	  iter->upper_bound(start_after);
 	  if (filter_prefix > start_after) iter->lower_bound(filter_prefix);
 	  for (uint64_t i = 0;
@@ -5478,8 +5504,8 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  }
 	} // else return empty out_set
 	::encode(out_set, osd_op.outdata);
-	ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
-	ctx->delta_stats.num_rd++;
+	delta_stats.num_rd_kb += SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
+	delta_stats.num_rd++;
       }
       break;
 
@@ -5489,16 +5515,16 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	// return empty header
 	break;
       }
-      ++ctx->num_read;
+      ++num_read;
       {
 	osd->store->omap_get_header(ch, ghobject_t(soid), &osd_op.outdata);
-	ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
-	ctx->delta_stats.num_rd++;
+	delta_stats.num_rd_kb += SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
+	delta_stats.num_rd++;
       }
       break;
 
     case CEPH_OSD_OP_OMAPGETVALSBYKEYS:
-      ++ctx->num_read;
+      ++num_read;
       {
 	set<string> keys_to_get;
 	try {
@@ -5507,7 +5533,7 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	catch (buffer::error& e) {
 	  result = -EINVAL;
 	  tracepoint(osd, do_osd_op_pre_omapgetvalsbykeys, soid.oid.name.c_str(), soid.snap.val, "???");
-	  goto fail;
+	  break;
 	}
 	tracepoint(osd, do_osd_op_pre_omapgetvalsbykeys, soid.oid.name.c_str(), soid.snap.val, list_entries(keys_to_get).c_str());
 	map<string, bufferlist> out;
@@ -5515,15 +5541,15 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  osd->store->omap_get_values(ch, ghobject_t(soid), keys_to_get, &out);
 	} // else return empty omap entries
 	::encode(out, osd_op.outdata);
-	ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
-	ctx->delta_stats.num_rd++;
+	delta_stats.num_rd_kb += SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
+	delta_stats.num_rd++;
       }
       break;
 
     case CEPH_OSD_OP_OMAP_CMP:
-      ++ctx->num_read;
+      ++num_read;
       {
-	if (!obs.exists || oi.is_whiteout()) {
+	if (oi.is_whiteout()) {
 	  result = -ENOENT;
 	  tracepoint(osd, do_osd_op_pre_omap_cmp, soid.oid.name.c_str(), soid.snap.val, "???");
 	  break;
@@ -5535,7 +5561,7 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	catch (buffer::error& e) {
 	  result = -EINVAL;
 	  tracepoint(osd, do_osd_op_pre_omap_cmp, soid.oid.name.c_str(), soid.snap.val, "???");
-	  goto fail;
+	  break;
 	}
 	tracepoint(osd, do_osd_op_pre_omap_cmp, soid.oid.name.c_str(), soid.snap.val, list_keys(assertions).c_str());
 	
@@ -5556,14 +5582,14 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	} // else leave out empty
 
 	//Should set num_rd_kb based on encode length of map
-	ctx->delta_stats.num_rd++;
+	delta_stats.num_rd++;
 
 	int r = 0;
 	bufferlist empty;
 	for (map<string, pair<bufferlist, int> >::iterator i = assertions.begin();
 	     i != assertions.end();
 	     ++i) {
-	  bufferlist &bl = out.count(i->first) ? 
+	  bufferlist &bl = out.count(i->first) ?
 	    out[i->first] : empty;
 	  switch (i->second.second) {
 	  case CEPH_OSD_CMPXATTR_OP_EQ:
@@ -5785,11 +5811,31 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
       break;
 
     default:
-      tracepoint(osd, do_osd_op_pre_unknown, soid.oid.name.c_str(), soid.snap.val, op.op, ceph_osd_op_name(op.op));
-      dout(1) << "unrecognized osd op " << op.op
-	      << " " << ceph_osd_op_name(op.op)
-	      << dendl;
-      result = -EOPNOTSUPP;
+
+      if (!obs.exists) {
+	result = -ENOENT;
+      } else {
+	result = do_replica_safe_read(
+	  osd_op,
+	  obs.oi,
+	  ctx->delta_stats,
+	  first_read,
+	  ctx->data_off,
+	  ctx->num_read,
+	  &(ctx->pending_async_reads),
+	  ctx->obc);
+      }
+
+      if (result == 0)
+	break;
+
+      if (result == -EOPNOTSUPP) {
+	tracepoint(osd, do_osd_op_pre_unknown, soid.oid.name.c_str(), soid.snap.val, op.op, ceph_osd_op_name(op.op));
+	dout(1) << "unrecognized osd op " << op.op
+		<< " " << ceph_osd_op_name(op.op)
+		<< dendl;
+      }
+      goto fail;
     }
 
   fail:
@@ -6830,6 +6876,7 @@ int ReplicatedPG::fill_in_copy_get(
   map<string,bufferlist>& out_attrs = reply_obj.attrs;
   if (!cursor.attr_complete) {
     result = getattrs_maybe_cache(
+      oi.soid,
       ctx->obc,
       &out_attrs,
       true);
@@ -13039,11 +13086,13 @@ void ReplicatedPG::rmattr_maybe_cache(
 }
 
 int ReplicatedPG::getattr_maybe_cache(
+  const hobject_t &soid,
   ObjectContextRef obc,
   const string &key,
   bufferlist *val)
 {
   if (pool.info.require_rollback()) {
+    assert(obc);
     map<string, bufferlist>::iterator i = obc->attr_cache.find(key);
     if (i != obc->attr_cache.end()) {
       if (val)
@@ -13053,20 +13102,22 @@ int ReplicatedPG::getattr_maybe_cache(
       return -ENODATA;
     }
   }
-  return pgbackend->objects_get_attr(obc->obs.oi.soid, key, val);
+  return pgbackend->objects_get_attr(soid, key, val);
 }
 
 int ReplicatedPG::getattrs_maybe_cache(
+  const hobject_t &soid,
   ObjectContextRef obc,
   map<string, bufferlist> *out,
   bool user_only)
 {
   int r = 0;
   if (pool.info.require_rollback()) {
+    assert(obc);
     if (out)
       *out = obc->attr_cache;
   } else {
-    r = pgbackend->objects_get_attrs(obc->obs.oi.soid, out);
+    r = pgbackend->objects_get_attrs(soid, out);
   }
   if (out && user_only) {
     map<string, bufferlist> tmp;

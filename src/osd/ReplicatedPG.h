@@ -1494,6 +1494,18 @@ public:
 
   OpContextUPtr trim_object(const hobject_t &coid);
   void snap_trimmer(epoch_t e);
+
+  int do_replica_safe_read(
+    OSDOp &osd_op,
+    const object_info_t &oi,
+    object_stat_sum_t &delta_stats,
+    bool &first_read,
+    int &data_off,
+    int &num_read,
+    list<pair<boost::tuple<uint64_t, uint64_t, unsigned>,
+         pair<bufferlist*, Context*> > > *pending_async_reads, // null on replica
+    ObjectContextRef obc // null on replica
+    );
   int do_osd_ops(OpContext *ctx, vector<OSDOp>& ops);
 
   int _get_tmap(OpContext *ctx, bufferlist *header, bufferlist *vals);
@@ -1679,10 +1691,12 @@ public:
     PGBackend::PGTransaction *t,
     const string &key);
   int getattr_maybe_cache(
+    const hobject_t &soid,
     ObjectContextRef obc,
     const string &key,
     bufferlist *val);
   int getattrs_maybe_cache(
+    const hobject_t &soid,
     ObjectContextRef obc,
     map<string, bufferlist> *out,
     bool user_only = false);
