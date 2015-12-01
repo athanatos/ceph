@@ -1510,7 +1510,8 @@ void ReplicatedPG::do_request(
 	!(op->may_write() || op->may_cache())) {
       // balanced reads; any replica will do
       if (!(is_primary() || is_replica())) {
-	osd->handle_misdirected_op(this, op);
+	dout(7) << " dropping replica read from epoch" << m->get_map_epoch()
+		<< ", we are not primary or replica" << dendl;
 	return;
       }
     } else {
