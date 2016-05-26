@@ -9453,13 +9453,15 @@ SnapSetContextRef ReplicatedPG::get_snapset_context(
   } else {
     ssc = snapset_contexts.lookup_or_create(
       oid.get_snapdir(), oid.get_snapdir());
-    assert(!(ssc->exists));
+    ssc->exists = false;
     if (oid_existed) {
-      get_object_snapset(
+      int r = get_object_snapset(
 	oid,
 	&ssc->snapset,
 	NULL,
 	attr);
+      if (r != -ENOENT)
+	ssc->exists = true;
     }
     return ssc;
   }
