@@ -22,6 +22,8 @@
 #include <string>
 #include <string.h>
 #include <type_traits>
+#include <boost/intrusive/set.hpp>
+
 
 /*******************************************************
 
@@ -157,8 +159,8 @@ DEFINE_ENC_DEC_SIMPLE(unsigned char,char);
 DEFINE_ENC_DEC_SIMPLE(short,__le16);
 DEFINE_ENC_DEC_SIMPLE(unsigned short,__le16);
 DEFINE_ENC_DEC_SIMPLE(int,__le32);
-DEFINE_ENC_DEC_SIMPLE(unsigned int,__le32);
 DEFINE_ENC_DEC_SIMPLE(size_t,__le32);	         // __le32, we never encode anything larger than 2^32 :)
+DEFINE_ENC_DEC_SIMPLE(unsigned int,__le32);
 DEFINE_ENC_DEC_SIMPLE(long long,__le64);
 DEFINE_ENC_DEC_SIMPLE(unsigned long long,__le64);
 
@@ -169,7 +171,11 @@ template<> struct enc_dec_traits<std::string> { enum { is_bounded_size = false }
 inline size_t enc_dec(size_t p,std::string& s) { return p + sizeof(size_t) + s.size(); }
 inline char * enc_dec(char * p,std::string& s) { *(size_t *)p = s.size(); memcpy(p+sizeof(size_t),s.c_str(),s.size()); return p + sizeof(size_t) + s.size(); }
 inline const char *enc_dec(const char *p,std::string& s) { s = std::string(p + sizeof(size_t),*(size_t *)p); return p + sizeof(size_t) + s.size(); }
-
+// ceph::buffer::ptr
+template<> struct enc_dec_traits<ceph::buffer::ptr> { enum { is_bounded_size = false }; };
+inline size_t enc_dec(size_t p,ceph::buffer::ptr& s) { return p + sizeof(size_t) + s.length(); }
+inline char * enc_dec(char * p,ceph::buffer::ptr& s) { *(size_t *)p = s.length(); memcpy(p+sizeof(size_t),s.c_str(),s.length()); return p + sizeof(size_t) + s.length(); }
+inline const char *enc_dec(const char *p,ceph::buffer::ptr& s) { s = ceph::buffer::ptr(p + sizeof(size_t),*(size_t *)p); return p + sizeof(size_t) + s.length(); }
 //
 // unsigned VarInt
 //
@@ -256,6 +262,200 @@ inline enc_dec_varint(const char *p,t& o) {
    }
    return p;
 }
+
+// small_encoding.h
+// unsigned VarInt + Lowz
+//
+// first(low) 2 bits = how many low zero bits (nibbles)
+// high bit of each byte = another byte follows
+// (so, 5 bits data in first byte, 7 bits data thereafter)
+//
+#define ENABLE_IF_UNSIGNED(x,r) typename std::enable_if<not std::is_signed<x>::value,r>::type
+template<typename t> ENABLE_IF_UNSIGNED(t,size_t)
+inline enc_dec_varint_lowz(size_t p,t& o) { return p + sizeof(t) + 2; } // two extra bytes is maximum growth due to encoding
+
+template<typename t> ENABLE_IF_UNSIGNED(t,char *)
+inline enc_dec_varint_lowz(char * p,t& o) {
+  t v = o;
+  int lowz = v ? (ctz(v) / 4) : 0;
+  uint8_t byte = std::min(lowz, 3); 
+  v >>= byte * 4;
+  byte |= (((uint8_t)v << 2) & 0x7c);
+  v >>= 5;
+  while (v) {
+    byte |= 0x80;
+    *p++ = byte;
+    byte = (v & 0x7f);
+    v >>= 7;
+  }
+  *p++ = byte;
+  return p;
+}
+
+template<typename t> ENABLE_IF_UNSIGNED(t,const char *)
+inline enc_dec_varint_lowz(const char *p,t& v) {
+  uint8_t byte;
+  byte = *p++;
+  int shift = (byte & 3) * 4;
+  v = ((byte >> 2) & 0x1f) << shift;
+  shift += 5;
+  while (byte & 0x80) {
+    byte = *p++;
+    v |= (t)(byte & 0x7f) << shift;
+    shift += 7;
+  }
+  return p;
+}
+
+// signed varint + lowz encoding
+//
+// first low bit = 1 for negative, 0 for positive
+// next 2 bits = how many low zero bits (nibbles)
+// high bit of each byte = another byte follows
+// (so, 4 bits data in first byte, 7 bits data thereafter)
+
+#define ENABLE_IF_SIGNED(x,r) typename std::enable_if<std::is_signed<x>::value,r>::type
+template<typename t> ENABLE_IF_SIGNED(t,size_t)
+inline enc_dec_varint_lowz(size_t p,t& o) { return p + sizeof(t) + 2; } // two extra bytes is maximum growth due to encoding
+
+template<typename t> ENABLE_IF_SIGNED(t,char *)
+inline enc_dec_varint_lowz(char * p,t& o) {
+  t v = o;
+  uint8_t byte = 0;
+  if (v < 0) {
+    v = -v; 
+    byte = 1;
+  }
+  int lowz = v ? (ctz(v) / 4) : 0;
+  lowz = std::min(lowz, 3); 
+  byte |= lowz << 1;
+  v >>= lowz * 4;
+  byte |= (((uint8_t)v << 3) & 0x78);
+  v >>= 4;
+  while (v) {
+    byte |= 0x80;
+    *p++ = byte;
+    byte = (v & 0x7f);
+    v >>= 7;
+  }
+  *p++ = byte;
+  return p;
+
+}
+
+template<typename t> ENABLE_IF_SIGNED(t,const char *)
+inline enc_dec_varint_lowz(const char *p,t& v) {
+  uint8_t byte;
+  byte = *p++;
+  bool negative = byte & 1;
+  int shift = (byte & 6) * 2;
+  v = ((byte >> 3) & 0xf) << shift;
+  shift += 4;
+  while (byte & 0x80) {
+    byte = *p++;
+    v |= (t)(byte & 0x7f) << shift;
+    shift += 7;
+  }
+  if (negative) {
+    v = -v; 
+  }
+  return p;
+}
+
+// LBA
+//
+// first 1-3 bits = how many low zero bits
+//     *0 = 12 (common 4 K alignment case)
+//    *01 = 16
+//   *011 = 20
+//   *111 = byte
+// then 28-30 bits of data
+// then last bit = another byte follows
+// high bit of each subsequent byte = another byte follows
+#define ENABLE_IF_UNSIGNED(x,r) typename std::enable_if<not std::is_signed<x>::value,r>::type
+template<typename t> ENABLE_IF_UNSIGNED(t,size_t)
+inline enc_dec_lba(size_t p,t& o) { return p + sizeof(t) + 2; } // two extra bytes is maximum growth due to encoding
+
+
+// v= o
+// p = bl
+template<typename t> ENABLE_IF_UNSIGNED(t,char *)
+inline enc_dec_lba(char * p,t& o) {
+  t v = o;
+  int low_zero_nibbles = v ? (int)(ctz(v) / 4) : 0;
+  int pos;
+  uint32_t word;
+  int tx = low_zero_nibbles - 3;
+  if (tx < 0) {
+    pos = 3;
+    word = 0x7;
+  } else if (tx < 3) {
+    v >>= (low_zero_nibbles * 4);
+    pos = tx + 1;
+    word = (1 << tx) - 1;
+  } else {
+    v >>= 20;
+    pos = 3;
+    word = 0x3;
+  }
+  word |= (v << pos) & 0x7fffffff;
+  v >>= 31 - pos;
+  if (!v) {
+    //::encode(word, bl);
+    enc_dec_varint(p, word);
+    return p;
+  }
+  word |= 0x80000000;
+  //::encode(word, bl);
+  enc_dec_varint(p, word);
+  uint8_t byte = v & 0x7f;
+  v >>= 7;
+  while (v) {
+    byte |= 0x80;
+    *p++ = byte;
+    byte = (v & 0x7f);
+    v >>= 7;
+  }
+  *p++ = byte;
+   return p;
+}
+
+template<typename t> ENABLE_IF_UNSIGNED(t,const char *)
+inline enc_dec_lba(const char *p,t& v) {
+  uint32_t word;
+  //::decode(word, p);
+  enc_dec_varint(p, word);
+  int shift;
+  switch (word & 7) {
+  case 0:
+  case 2:
+  case 4:
+  case 6:
+    v = (uint64_t)(word & 0x7ffffffe) << (12 - 1);
+    shift = 12 + 30;
+    break;
+  case 1:
+  case 5:
+    v = (uint64_t)(word & 0x7ffffffc) << (16 - 2);
+    shift = 16 + 29;
+    break;
+  case 3:
+    v = (uint64_t)(word & 0x7ffffff8) << (20 - 3);
+    shift = 20 + 28;
+    break;
+  case 7:
+    v = (uint64_t)(word & 0x7ffffff8) >> 3;
+    shift = 28;
+  }
+  uint8_t byte = word >> 24;
+  while (byte & 0x80) {
+    byte = *p++;
+    v |= (uint64_t)(byte & 0x7f) << shift;
+    shift += 7;
+  }
+  return p;
+}
+
 
 //
 // A pair of values.
@@ -380,6 +580,53 @@ inline const char *enc_dec(
    }
    return p;
 }
+template<typename t> 
+inline size_t enc_dec(
+   size_t p,
+   boost::intrusive::set<t>& s,
+   enc_dec_set_context<t> c = enc_dec_set_context<t>(),
+   bool is_bounded_size = enc_dec_traits<t>::is_bounded_size) {
+   size_t sz;
+   p = enc_dec(p,sz);
+   if (is_bounded_size) {
+      p += s.size() * c(size_t(0),*(t *) 0);
+   } else {
+      for (const t&e : s) {
+         p = c(p,const_cast<t&>(e));
+      }
+   }
+   return p;
+}
+
+template<typename t>
+inline char *enc_dec(
+   char *p,
+   boost::intrusive::set<t>& s,
+   enc_dec_set_context<t> c = enc_dec_set_context<t>()
+   ) {
+   size_t sz = s.size();
+   p = enc_dec(p,sz);
+   for (const t& e : s) {
+      p = c(p,const_cast<t&>(e));
+   }
+   return p;
+}
+
+template<typename t>
+inline const char *enc_dec(
+   const char *p,
+   boost::intrusive::set<t>&s,
+   enc_dec_set_context<t> c = enc_dec_set_context<t>()
+   ) {
+   size_t sz;
+   p = enc_dec(p,sz);
+   while (sz--) {
+      t *temp = new t;;
+      p = c(p,*temp);
+      s.insert(*temp);
+   }
+   return p;
+}
 
 template<typename t> 
 inline size_t enc_dec(
@@ -477,6 +724,56 @@ template<typename k, typename v>
 inline const char *enc_dec(
    const char *p,
    std::map<k,v>&s,
+   enc_dec_map_context<k,v> c = enc_dec_map_context<k,v>()
+   ) {
+   size_t sz;
+   p = enc_dec(p,sz);
+   while (sz--) {
+      k key;
+      v value;
+      p = c(p,key,value);
+      s[key] = value;
+   }
+   return p;
+}
+
+template<typename k,typename v>
+inline size_t enc_dec(
+   size_t p,
+   boost::intrusive::set<std::pair<k, v>> &s,
+   enc_dec_map_context<k,v> c = enc_dec_map_context<k,v>(),
+   bool is_bounded_size = enc_dec_traits<k>::is_bounded_size && enc_dec_traits<v>::is_bounded_size
+   ) {
+   size_t sz;
+   p = enc_dec(p,sz);
+   if (is_bounded_size) {
+      p += s.size() * c(size_t(0),*(k *)0,*(v *)0);
+   } else {
+      for (auto &e : s) {
+         p = c(p,const_cast<k&>(e.first),e.second);
+      }
+   }
+   return p;
+}
+
+template<typename k, typename v>
+inline char *enc_dec(
+   char *p,
+   boost::intrusive::set<std::pair<k, v>> &s,
+   enc_dec_map_context<k,v> c = enc_dec_map_context<k,v>()
+   ){
+   size_t sz = s.size();
+   p = enc_dec(p,sz);
+   for (auto& e : s) {
+      p = c(p,const_cast<k&>(e.first),e.second);
+   }
+   return p;
+}
+
+template<typename k, typename v>
+inline const char *enc_dec(
+   const char *p,
+   boost::intrusive::set<std::pair<k, v>> &s,
    enc_dec_map_context<k,v> c = enc_dec_map_context<k,v>()
    ) {
    size_t sz;

@@ -20,7 +20,10 @@
 #include "common/ceph_argparse.h"
 #include "global/global_context.h"
 #include "gtest/gtest.h"
+#include "os/bluestore/bluestore_types.h"
+#include "os/bluestore/BlueStore.h"
 #include "include/enc_dec.h"
+
 
 static size_t break_point = 0;
 
@@ -330,6 +333,147 @@ TEST(test_enc_dec, vector_context) {
    EXPECT_EQ(dec_end,end);
 
    EXPECT_EQ(s,s2);
+}
+
+//#if 0
+// bluestore_onode_t and blob_map
+//
+void
+generate_dummy_onode(bluestore_onode_t& onode)
+{
+	onode.nid = 1252;
+	onode.size = 65536;
+        onode.attrs["attr1"] = bufferptr("attr_val1",10); 
+        onode.attrs["attr2"] = bufferptr("attr_val2",10); 
+        onode.extent_map[0] =  bluestore_lextent_t(23232, 0, 4096);
+        onode.extent_map[1] =  bluestore_lextent_t(23232, 16384, 8192);
+        onode.extent_map[2] =  bluestore_lextent_t(23232, 32768, 8192);
+	onode.omap_head = 12;
+	onode.expected_object_size = 4 * 65536;
+	onode.expected_write_size = 65536;
+	onode.alloc_hint_flags = 100;
+}
+
+char* gen_buffer(uint64_t size)
+{
+    char *buffer = new char[size];
+    boost::random::random_device rand;
+    rand.generate(buffer, buffer + size);
+    return buffer;
+}
+
+void
+generate_dummy_blob(bluestore_blob_t& blob)
+{
+  blob.init_csum(bluestore_blob_t::CSUM_XXHASH32, 16, 65536);
+  //blob.csum_data = buffer::claim_malloc(4, strdup("abcd"));
+  char *buf = gen_buffer(8);
+  blob.csum_data = buffer::claim_char(8, buf);
+  blob.ref_map.get(3, 5);
+  blob.add_unused(0, 3, 4096);
+  blob.add_unused(8, 8, 4096);
+  blob.extents.emplace_back(bluestore_pextent_t(0x40100000, 0x10000));
+  blob.extents.emplace_back(
+    bluestore_pextent_t(bluestore_pextent_t::INVALID_OFFSET, 0x1000));
+  blob.extents.emplace_back(bluestore_pextent_t(0x40120000, 0x10000));
+}
+
+void
+generate_dummy_blob_map(BlueStore::BlobMap& map)
+{
+  BlueStore::Blob *b = new BlueStore::Blob();
+  b->blob.init_csum(bluestore_blob_t::CSUM_XXHASH32, 16, 65536);
+  b->blob.csum_data = buffer::claim_malloc(4, strdup("abcd"));
+  b->blob.ref_map.get(3, 5);
+  b->blob.add_unused(0, 3, 4096);
+  b->blob.add_unused(8, 8, 4096);
+  b->blob.extents.emplace_back(bluestore_pextent_t(0x40100000, 0x10000));
+  b->blob.extents.emplace_back(
+    bluestore_pextent_t(bluestore_pextent_t::INVALID_OFFSET, 0x1000));
+  b->blob.extents.emplace_back(bluestore_pextent_t(0x40120000, 0x10000));
+  map.claim(b);
+  b = new BlueStore::Blob();
+  b->blob.init_csum(bluestore_blob_t::CSUM_XXHASH32, 16, 65536);
+  b->blob.csum_data = buffer::claim_malloc(4, strdup("abcd"));
+  b->blob.ref_map.get(3, 5);
+  b->blob.add_unused(0, 3, 4096);
+  b->blob.add_unused(8, 8, 4096);
+  b->blob.extents.emplace_back(bluestore_pextent_t(0x40100000, 0x10000));
+  b->blob.extents.emplace_back(
+    bluestore_pextent_t(bluestore_pextent_t::INVALID_OFFSET, 0x1000));
+  b->blob.extents.emplace_back(bluestore_pextent_t(0x40120000, 0x10000));
+  map.claim(b);
+  b = new BlueStore::Blob();
+  b->blob.init_csum(bluestore_blob_t::CSUM_XXHASH32, 16, 65536);
+  b->blob.csum_data = buffer::claim_malloc(4, strdup("abcd"));
+  b->blob.ref_map.get(3, 5);
+  b->blob.add_unused(0, 3, 4096);
+  b->blob.add_unused(8, 8, 4096);
+  b->blob.extents.emplace_back(bluestore_pextent_t(0x40100000, 0x10000));
+  b->blob.extents.emplace_back(
+    bluestore_pextent_t(bluestore_pextent_t::INVALID_OFFSET, 0x1000));
+  b->blob.extents.emplace_back(bluestore_pextent_t(0x40120000, 0x10000));
+  map.claim(b);
+  b = new BlueStore::Blob();
+  b->blob.init_csum(bluestore_blob_t::CSUM_XXHASH32, 16, 65536);
+  b->blob.csum_data = buffer::claim_malloc(4, strdup("abcd"));
+  b->blob.ref_map.get(3, 5);
+  b->blob.add_unused(0, 3, 4096);
+  b->blob.add_unused(8, 8, 4096);
+  b->blob.extents.emplace_back(bluestore_pextent_t(0x40100000, 0x10000));
+  b->blob.extents.emplace_back(
+    bluestore_pextent_t(bluestore_pextent_t::INVALID_OFFSET, 0x1000));
+  b->blob.extents.emplace_back(bluestore_pextent_t(0x40120000, 0x10000));
+  map.claim(b);
+}
+
+
+TEST(test_enc_dec, lextent_enc_dec) {
+   bluestore_lextent_t l1(23232, 0, 4096);
+   bluestore_lextent_t l2;
+   bufferlist bl;
+   std::cout << " L1 extent: " << l1 << std::endl;
+   enc(bl, l1);
+   bufferlist::iterator it = bl.begin();
+   dec(it,l2);
+   std::cout << " L2 extent: " << l2 << std::endl;
+}
+
+TEST(test_enc_dec, onode_enc_dec) {
+  bluestore_onode_t onode;
+  generate_dummy_onode(onode);
+  bluestore_onode_t o2;
+  std::cout << " nid: " << onode.nid << std::endl;
+  bufferlist bl;
+  enc(bl, onode);
+  bufferlist::iterator it = bl.begin();
+  dec(it,o2);
+  std::cout << " nid: " << o2.nid << std::endl;
+}
+
+TEST(test_enc_dec, blob_enc_dec) {
+  bluestore_blob_t blob;
+  generate_dummy_blob(blob);
+  std::cout << "Blob: " << blob << std::endl;
+  bluestore_blob_t blob2;
+  bufferlist bl;
+  enc(bl, blob);
+  std::cout<< " Blob encoded length: " << bl.length() << std::endl;
+  bufferlist::iterator it = bl.begin();
+  dec(it, blob2);
+  std::cout << "Blob: " << blob2 << std::endl;
+}
+
+TEST(test_enc_dec, blobmap_enc_dec) {
+  BlueStore::BlobMap map1, map2;
+  generate_dummy_blob_map(map1);
+  std::cout << "BlobMap1: " << map1 << std::endl;
+  bufferlist bl;
+  enc(bl, map1);
+  std::cout<< " Blob map encoded length: " << bl.length() << std::endl;
+  bufferlist::iterator it = bl.begin();
+  dec(it,map2);
+  std::cout << "BlobMap2: " << map2 << std::endl;
 }
 
 

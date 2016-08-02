@@ -22,6 +22,7 @@
 #include "include/utime.h"
 #include "include/small_encoding.h"
 #include "common/hobject.h"
+#include "include/enc_dec.h"
 
 namespace ceph {
   class Formatter;
@@ -128,6 +129,12 @@ struct bluestore_pextent_t : public AllocExtent{
     return offset != INVALID_OFFSET;
   }
 
+  DECLARE_ENC_DEC_MEMBER_FUNCTION() {
+    p = enc_dec_varint(p, offset);
+    p = enc_dec_varint_lowz(p, length);
+    return p;
+  }
+
   void encode(bufferlist& bl) const {
     small_encode_lba(offset, bl);
     small_encode_varint_lowz(length, bl);
@@ -140,6 +147,7 @@ struct bluestore_pextent_t : public AllocExtent{
   static void generate_test_instances(list<bluestore_pextent_t*>& ls);
 };
 WRITE_CLASS_ENCODER(bluestore_pextent_t)
+DECLARE_ENC_DEC_CLASS(bluestore_pextent_t);
 
 ostream& operator<<(ostream& out, const bluestore_pextent_t& o);
 
@@ -152,6 +160,11 @@ struct bluestore_extent_ref_map_t {
     uint32_t length;
     uint32_t refs;
     record_t(uint32_t l=0, uint32_t r=0) : length(l), refs(r) {}
+    DECLARE_ENC_DEC_MEMBER_FUNCTION() {
+      p = enc_dec_varint_lowz(p, length);
+      p = enc_dec_varint(p, refs);
+      return p;
+    }
     void encode(bufferlist& bl) const {
       small_encode_varint_lowz(length, bl);
       small_encode_varint(refs, bl);
@@ -164,6 +177,11 @@ struct bluestore_extent_ref_map_t {
   WRITE_CLASS_ENCODER(record_t)
 
   map<uint32_t,record_t> ref_map;
+
+  DECLARE_ENC_DEC_MEMBER_FUNCTION() {
+    p = enc_dec(p, ref_map);
+    return p;
+  }
 
   void _check() const;
   void _maybe_merge_left(map<uint32_t,record_t>::iterator& p);
@@ -196,6 +214,8 @@ struct bluestore_extent_ref_map_t {
 };
 WRITE_CLASS_ENCODER(bluestore_extent_ref_map_t::record_t)
 WRITE_CLASS_ENCODER(bluestore_extent_ref_map_t)
+DECLARE_ENC_DEC_CLASS(bluestore_extent_ref_map_t::record_t);
+DECLARE_ENC_DEC_CLASS(bluestore_extent_ref_map_t);
 
 ostream& operator<<(ostream& out, const bluestore_extent_ref_map_t& rm);
 static inline bool operator==(const bluestore_extent_ref_map_t::record_t& l,
@@ -301,6 +321,18 @@ struct bluestore_blob_t {
   unused_t unused;                    ///< portion that has never been written to
 
   bluestore_blob_t(uint32_t f = 0) : flags(f) {}
+
+  DECLARE_ENC_DEC_MEMBER_FUNCTION() {
+    p = enc_dec(p, extents);
+    p = enc_dec_varint(p, flags);
+    p = enc_dec_varint_lowz(p, compressed_length);
+    p = enc_dec(p, csum_type);
+    p = enc_dec(p, csum_chunk_order);
+    p = enc_dec(p, ref_map);
+    uint64_t uns = unused.to_ullong();
+    p = enc_dec_varint(p, uns);
+    return p;
+  }
 
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& p);
@@ -570,6 +602,7 @@ struct bluestore_blob_t {
 
 };
 WRITE_CLASS_ENCODER(bluestore_blob_t)
+DECLARE_ENC_DEC_CLASS(bluestore_blob_t);
 
 ostream& operator<<(ostream& out, const bluestore_blob_t& o);
 
@@ -591,6 +624,13 @@ struct bluestore_lextent_t {
       offset(o),
       length(l) {}
 
+  DECLARE_ENC_DEC_MEMBER_FUNCTION() {
+    p = enc_dec_varint(p, blob);
+    p = enc_dec_varint_lowz(p, offset);
+    p = enc_dec_varint_lowz(p, length);
+    return p;
+  }
+
   uint64_t end() const {
     return offset + length;
   }
@@ -606,6 +646,7 @@ struct bluestore_lextent_t {
   static void generate_test_instances(list<bluestore_lextent_t*>& o);
 };
 WRITE_CLASS_ENCODER(bluestore_lextent_t)
+DECLARE_ENC_DEC_CLASS(bluestore_lextent_t);
 
 ostream& operator<<(ostream& out, const bluestore_lextent_t& o);
 
@@ -634,6 +675,18 @@ struct bluestore_onode_t {
 
   /// get preferred csum chunk size
   size_t get_preferred_csum_order() const;
+
+  DECLARE_ENC_DEC_MEMBER_FUNCTION() {
+     p = enc_dec_varint(p, nid);
+     p = enc_dec_varint(p, size);
+     p = enc_dec(p, attrs);
+     p = enc_dec(p, extent_map);
+     p = enc_dec_varint(p, omap_head);
+     p = enc_dec_varint(p, expected_object_size);
+     p = enc_dec_varint(p, expected_write_size);
+     p = enc_dec_varint(p, alloc_hint_flags);
+     return p;
+  }
 
   /// find a lextent that includes offset
   map<uint64_t,bluestore_lextent_t>::iterator find_lextent(uint64_t offset) {
@@ -705,6 +758,7 @@ struct bluestore_onode_t {
   static void generate_test_instances(list<bluestore_onode_t*>& o);
 };
 WRITE_CLASS_ENCODER(bluestore_onode_t)
+DECLARE_ENC_DEC_CLASS(bluestore_onode_t);
 
 
 /// writeahead-logged op

@@ -38,6 +38,7 @@
 
 #include "bluestore_types.h"
 #include "BlockDevice.h"
+#include "include/enc_dec.h"
 class Allocator;
 class FreelistManager;
 class BlueFS;
@@ -291,9 +292,15 @@ public:
     bluestore_blob_t blob;   ///< blob metadata
     BufferSpace bc;          ///< buffer cache
 
+    Blob() : id(0), bc(NULL) {}
     Blob(int64_t i, Cache *c) : nref(0), id(i), bc(c) {}
     ~Blob() {
       assert(bc.empty());
+    }
+    DECLARE_ENC_DEC_MEMBER_FUNCTION() {
+      p = enc_dec_varint(p, id);
+      p = enc_dec(p, blob);
+      return p;
     }
 
     friend void intrusive_ptr_add_ref(Blob *b) { b->get(); }
@@ -333,6 +340,10 @@ public:
 
     blob_map_t blob_map;
 
+    DECLARE_ENC_DEC_MEMBER_FUNCTION() {
+      p = enc_dec(p, blob_map);
+      return p;
+    }
     void encode(bufferlist& bl) const;
     void decode(bufferlist::iterator& p, Cache *c);
 
@@ -1666,6 +1677,8 @@ private:
 			unsigned bits, int rem);
 
 };
+DECLARE_ENC_DEC_CLASS(BlueStore::Blob);
+DECLARE_ENC_DEC_CLASS(BlueStore::BlobMap);
 
 inline ostream& operator<<(ostream& out, const BlueStore::OpSequencer& s) {
   return out << *s.parent;

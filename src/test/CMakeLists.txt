@@ -679,7 +679,7 @@ add_executable(unittest_enc_dec
   test_enc_dec.cc
   )
 add_ceph_unittest(unittest_enc_dec ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/unittest_enc_dec)
-target_link_libraries(unittest_enc_dec global)
+target_link_libraries(unittest_enc_dec os global)
 
 # unittest_crypto
 add_executable(unittest_crypto
