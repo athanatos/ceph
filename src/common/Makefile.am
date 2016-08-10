@@ -164,6 +164,8 @@ noinst_HEADERS += \
 	common/crc32c_aarch64.h \
 	common/cohort_lru.h \
 	common/sstring.hh \
+	common/inline_variant.h \
+	common/function_signature.h \
 	xxHash/xxhash.h
 
 
