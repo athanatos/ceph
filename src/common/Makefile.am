@@ -166,6 +166,7 @@ noinst_HEADERS += \
 	common/sstring.hh \
 	common/inline_variant.h \
 	common/function_signature.h \
+	common/interval_map.h \
 	xxHash/xxhash.h
 
 
