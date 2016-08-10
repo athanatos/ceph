@@ -445,6 +445,11 @@ unittest_interval_set_CXXFLAGS = $(UNITTEST_CXXFLAGS)
 unittest_interval_set_LDADD = $(UNITTEST_LDADD) $(CEPH_GLOBAL)
 check_TESTPROGRAMS += unittest_interval_set
 
+unittest_interval_map_SOURCES = test/common/test_interval_map.cc
+unittest_interval_map_CXXFLAGS = $(UNITTEST_CXXFLAGS)
+unittest_interval_map_LDADD = $(UNITTEST_LDADD) $(CEPH_GLOBAL)
+check_TESTPROGRAMS += unittest_interval_map
+
 unittest_subprocess_SOURCES = test/test_subprocess.cc
 unittest_subprocess_LDADD = $(LIBCOMMON) $(UNITTEST_LDADD)
 unittest_subprocess_CXXFLAGS = $(UNITTEST_CXXFLAGS)
