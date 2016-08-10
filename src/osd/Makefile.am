@@ -51,6 +51,7 @@ noinst_HEADERS += \
 	osd/ECTransaction.h \
 	osd/Watch.h \
 	osd/ScrubStore.h \
+	osd/PGTransaction.h \
 	osd/osd_types.h
 
 endif # WITH_OSD
