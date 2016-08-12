@@ -340,7 +340,6 @@ private:
   };
   map<ceph_tid_t, InProgressOp> in_progress_ops;
 public:
-  PGTransaction *get_transaction();
   friend class C_OSD_OnOpCommit;
   friend class C_OSD_OnOpApplied;
   void submit_transaction(
@@ -350,6 +349,7 @@ public:
     const eversion_t &trim_to,
     const eversion_t &trim_rollback_to,
     const vector<pg_log_entry_t> &log_entries,
+    map<hobject_t, ObjectContextRef, hobject_t::BitwiseComparator> &&obc_map,
     boost::optional<pg_hit_set_history_t> &hset_history,
     Context *on_local_applied_sync,
     Context *on_all_applied,

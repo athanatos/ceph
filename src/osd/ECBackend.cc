@@ -1315,32 +1315,6 @@ void ECBackend::dump_recovery_info(Formatter *f) const
   f->close_section();
 }
 
-PGBackend::PGTransaction *ECBackend::get_transaction()
-{
-  return new ECTransaction;
-}
-
-struct MustPrependHashInfo : public ObjectModDesc::Visitor {
-  enum { EMPTY, FOUND_APPEND, FOUND_CREATE_STASH } state;
-  MustPrependHashInfo() : state(EMPTY) {}
-  void append(uint64_t) {
-    if (state == EMPTY) {
-      state = FOUND_APPEND;
-    }
-  }
-  void rmobject(version_t) {
-    if (state == EMPTY) {
-      state = FOUND_CREATE_STASH;
-    }
-  }
-  void create() {
-    if (state == EMPTY) {
-      state = FOUND_CREATE_STASH;
-    }
-  }
-  bool must_prepend_hash_info() const { return state == FOUND_APPEND; }
-};
-
 void ECBackend::submit_transaction(
   const hobject_t &hoid,
   const eversion_t &at_version,
@@ -1348,6 +1322,7 @@ void ECBackend::submit_transaction(
   const eversion_t &trim_to,
   const eversion_t &trim_rollback_to,
   const vector<pg_log_entry_t> &log_entries,
+  map<hobject_t, ObjectContextRef, hobject_t::BitwiseComparator> &&obc_map,
   boost::optional<pg_hit_set_history_t> &hset_history,
   Context *on_local_applied_sync,
   Context *on_all_applied,
@@ -1364,6 +1339,7 @@ void ECBackend::submit_transaction(
   op->trim_to = trim_to;
   op->trim_rollback_to = trim_rollback_to;
   op->log_entries = log_entries;
+  op->obc_map = std::move(obc_map);
   std::swap(op->updated_hit_set_history, hset_history);
   op->on_local_applied_sync = on_local_applied_sync;
   op->on_all_applied = on_all_applied;
@@ -1372,10 +1348,10 @@ void ECBackend::submit_transaction(
   op->reqid = reqid;
   op->client_op = client_op;
   
-  op->t.reset(static_cast<ECTransaction*>(_t.release()));
+  op->t = std::move(_t);
 
   set<hobject_t, hobject_t::BitwiseComparator> need_hinfos;
-  op->t->get_append_objects(&need_hinfos);
+  ECTransaction::get_append_objects(*(op->t), &need_hinfos);
   for (set<hobject_t, hobject_t::BitwiseComparator>::iterator i = need_hinfos.begin();
        i != need_hinfos.end();
        ++i) {
@@ -1391,27 +1367,6 @@ void ECBackend::submit_transaction(
       make_pair(
 	*i,
 	ref));
-  }
-
-  for (vector<pg_log_entry_t>::iterator i = op->log_entries.begin();
-       i != op->log_entries.end();
-       ++i) {
-    MustPrependHashInfo vis;
-    i->mod_desc.visit(&vis);
-    if (vis.must_prepend_hash_info()) {
-      dout(10) << __func__ << ": stashing HashInfo for "
-	       << i->soid << " for entry " << *i << dendl;
-      assert(op->unstable_hash_infos.count(i->soid));
-      ObjectModDesc desc;
-      map<string, boost::optional<bufferlist> > old_attrs;
-      bufferlist old_hinfo;
-      ::encode(*(op->unstable_hash_infos[i->soid]), old_hinfo);
-      old_attrs[ECUtil::get_hinfo_key()] = old_hinfo;
-      desc.setattrs(old_attrs);
-      i->mod_desc.swap(desc);
-      i->mod_desc.claim_append(desc);
-      assert(i->mod_desc.can_rollback());
-    }
   }
 
   dout(10) << __func__ << ": op " << *op << " starting" << dendl;
@@ -1780,11 +1735,29 @@ void ECBackend::start_write(Op *op) {
   }
   ObjectStore::Transaction empty;
 
-  op->t->generate_transactions(
+  /* TODO:
+   * Ultimately, generate_transactions is going to basically be the thing
+   * that builds the transaction plan.  Do we rollforward or backward?
+   * Do we need to do a pre-read?  That kind of thing.  It seems like
+   * we'll need to pass it the structure which tracks the state of the
+   * write (not unlike the read state machine).  Op seems like the logical
+   * choice.  We'll want to seperate the Backend local information from
+   * the stuff we're muling for ReplicatedPG.  That'll be what we pass
+   * to generate_transactions.  This part needs to be kept "pure" after
+   * a fashion.  We'll probably even want to template generate_transactions
+   * on the ObjectStore::Transaction type so that we can sneak in a stub
+   * object for testing purposes.  If we do this right, we can fully unit
+   * test the logic for turning PGTransaction into a transaction plan
+   * (including the resulting buffers)
+   */
+  ECTransaction::generate_transactions(
+    *(op->t),
     op->unstable_hash_infos,
     ec_impl,
     get_parent()->get_info().pgid.pgid,
     sinfo,
+    op->log_entries,
+    op->obc_map,
     &trans,
     &(op->temp_added),
     &(op->temp_cleared));
