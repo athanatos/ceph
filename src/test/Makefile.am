@@ -67,6 +67,8 @@ check_SCRIPTS += \
 	test/ceph_objectstore_tool.py \
 	test/test-ceph-helpers.sh \
 	test/cephtool-test-osd.sh \
+	test/ceph_test_rados.sh \
+	test/ceph_test_rados-ec.sh \
 	test/cephtool-test-mon.sh \
 	test/cephtool-test-mds.sh \
 	test/cephtool-test-rados.sh \
