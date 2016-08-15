@@ -403,6 +403,7 @@ int LFNIndex::list_objects(const vector<string> &to_list, int max_objs,
   char buf[offsetof(struct dirent, d_name) + PATH_MAX + 1];
   int r;
   if (!dir) {
+    dout(20) << __func__ << ": opendir returned: " << -errno << dendl;
     return -errno;
   }
 
@@ -428,6 +429,8 @@ int LFNIndex::list_objects(const vector<string> &to_list, int max_objs,
     if (lfn_is_object(short_name)) {
       r = lfn_translate(to_list, short_name, &obj);
       if (r < 0) {
+	dout(20) << __func__ << ": lfn_translate returned: " << r
+		 << " for short_name " << short_name << dendl;
 	r = -errno;
 	goto cleanup;
       } else if (r > 0) {
@@ -453,6 +456,7 @@ int LFNIndex::list_objects(const vector<string> &to_list, int max_objs,
   r = 0;
  cleanup:
   ::closedir(dir);
+  dout(20) << __func__ << " returned: r " << dendl;
   return r;
 }
 
@@ -943,8 +947,12 @@ int LFNIndex::lfn_translate(const vector<string> &path,
   string full_path = get_full_path(path, short_name);
   char attr[PATH_MAX];
   int r = chain_getxattr(full_path.c_str(), get_lfn_attr().c_str(), attr, sizeof(attr) - 1);
-  if (r < 0)
+  if (r < 0) {
+    dout(20) << __func__ << ": chain_getxattr returned: "
+	     << " for short_name " << short_name
+	     << " in path " << path << dendl;
     return -errno;
+  }
   if (r < (int)sizeof(attr))
     attr[r] = '\0';
 

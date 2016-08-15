@@ -780,8 +780,10 @@ int HashIndex::get_path_contents_by_hash(const vector<string> &path,
     cur_prefix.append(*i);
   }
   r = list_objects(path, 0, 0, &rev_objects);
-  if (r < 0)
+  if (r < 0) {
+    dout(20) << __func__ << ": list_objects returned: " << r << dendl;
     return r;
+  }
   for (map<string, ghobject_t>::iterator i = rev_objects.begin();
        i != rev_objects.end();
        ++i) {
@@ -796,8 +798,10 @@ int HashIndex::get_path_contents_by_hash(const vector<string> &path,
     objects->insert(pair<string, ghobject_t>(hash_prefix, i->second));
   }
   r = list_subdirs(path, &subdirs);
-  if (r < 0)
+  if (r < 0) {
+    dout(20) << __func__ << ": list_subdirs returned: " << r << dendl;
     return r;
+  }
   for (set<string>::iterator i = subdirs.begin();
        i != subdirs.end();
        ++i) {
@@ -830,8 +834,10 @@ int HashIndex::list_by_hash(const vector<string> &path,
 				    &seq,
 				    &hash_prefixes,
 				    &objects);
-  if (r < 0)
+  if (r < 0) {
+    dout(20) << __func__ << ": list_by_hash returned: " << r << dendl;
     return r;
+  }
   dout(20) << " prefixes " << hash_prefixes << dendl;
   for (set<string>::iterator i = hash_prefixes.begin();
        i != hash_prefixes.end();
