@@ -212,6 +212,7 @@ public:
   IsPGRecoverablePredicate *get_is_recoverable_predicate() {
     return get_pgbackend()->get_is_recoverable_predicate();
   }
+  virtual bool do_lazy_completion(bool need_lock) {return false;}
 protected:
   // Ops waiting for map, should be queued at back
   Mutex map_lock;
@@ -221,6 +222,7 @@ protected:
   PGPool pool;
 
   void queue_op(OpRequestRef& op);
+  void queue_op_with_op_lock(OpRequestRef& op);
   void take_op_map_waiters();
 
   void update_osdmap_ref(OSDMapRef newmap) {
@@ -528,7 +530,13 @@ public:
     void finish(int) {
       pg->lock();
       if (!pg->pg_has_reset_since(e)) {
-	pg->last_rollback_info_trimmed_to_applied = v;
+	if (pg->last_rollback_info_trimmed_to_applied < v) {
+	  pg->last_rollback_info_trimmed_to_applied = v;
+	} else {
+	  generic_dout(0) << __func__ << " passed last_rollback_info_trimmed_to_applied " <<
+		pg->last_rollback_info_trimmed_to_applied << dendl;
+	  assert(0);
+	}
       }
       pg->unlock();
     }
@@ -2243,7 +2251,8 @@ public:
     eversion_t trim_to,
     eversion_t trim_rollback_to,
     ObjectStore::Transaction &t,
-    bool transaction_applied = true);
+    bool transaction_applied = true,
+    CompletionItem * comp_item = NULL);
   bool check_log_for_corruption(ObjectStore *store);
   void trim_peers();
 
@@ -2395,10 +2404,49 @@ public:
   virtual void agent_delay() = 0;
   virtual void agent_clear() = 0;
   virtual void agent_choose_mode_restart() = 0;
+
+  virtual bool can_op_lock(OpRequestRef& op) = 0;
+  virtual void ops_sequence_lock(ThreadPool::TPHandle &handle) = 0;
+  virtual void ops_sequence_unlock() = 0;
 };
 
 ostream& operator<<(ostream& out, const PG& pg);
 
 ostream& operator<<(ostream& out, const PG::BackfillInterval& bi);
 
+// op lock completion
+enum COMP_OP_TYPE {
+  OP_COMP_PRIMARY_OP,
+  OP_COMP_SECONDARY_OP,
+  OP_COMP_NO_OP,
+};
+
+class CompletionItem {
+public:
+  int comp_type; 
+  bool reserve_completion;
+  bool need_direct_update;
+
+  /* callback functions which need PG lock */
+  list<std::function<void()>> on_applied_with_pg_lock;
+
+  template <typename F>
+  void register_on_applied_with_pg_lock(F &&f) {
+    on_applied_with_pg_lock.emplace_back(std::forward<F>(f));
+  }
+
+  CompletionItem(int comp_type):comp_type(comp_type),  
+		reserve_completion(false), need_direct_update(false) {}
+  CompletionItem():comp_type(OP_COMP_PRIMARY_OP), 
+		reserve_completion(false), need_direct_update(false) {}
+  virtual ~CompletionItem() {}
+
+  virtual void lock() = 0;
+  virtual void unlock() = 0;
+  virtual ceph_tid_t get_tid() = 0;
+  virtual OpRequestRef get_op() = 0;
+  virtual void set_applied() = 0;
+  virtual void set_committed() = 0;
+  virtual bool is_completed() = 0;
+};
 #endif

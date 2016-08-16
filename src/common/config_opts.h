@@ -1447,3 +1447,7 @@ OPTION(throttler_perf_counter, OPT_BOOL, true) // enable/disable throttler perf 
 OPTION(internal_safe_to_start_threads, OPT_BOOL, false)
 
 OPTION(debug_deliberately_leak_memory, OPT_BOOL, false)
+
+// op lock completion
+OPTION(osd_check_completion_min_time_interval, OPT_INT, 1)
+OPTION(osd_completion_worker, OPT_INT, 3)

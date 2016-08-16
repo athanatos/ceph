@@ -219,6 +219,8 @@ class CephContext;
 typedef ceph::shared_ptr<ObjectStore::Sequencer> SequencerRef;
 class MOSDOp;
 
+class CompletionItem;
+
 class DeletingState {
   Mutex lock;
   Cond cond;
@@ -384,23 +386,29 @@ public:
   OpQueueItem &operator=(const OpQueueItem &) = delete;
 
   OrderLocker::Ref get_order_locker() {
+    assert(qitem);
     return qitem->get_order_locker();
   }
 
   uint32_t get_queue_token() const {
+    assert(qitem);
     return qitem->get_queue_token();
   }
   void *get_ordering_token() const {
+    assert(qitem);
     return qitem->get_ordering_token();
   }
 
   boost::optional<OpRequestRef> maybe_get_op() const {
+    assert(qitem);
     return qitem->maybe_get_op();
   }
   uint64_t get_reserved_pushes() const {
+    assert(qitem);
     return qitem->get_reserved_pushes();
   }
   void run(OSD *osd, ThreadPool::TPHandle &handle) {
+    assert(qitem);
     qitem->run(osd, handle);
   }
   unsigned get_priority() const { return priority; }
@@ -881,6 +889,9 @@ public:
   void queue_for_snap_trim(PG *pg);
   void queue_for_scrub(PG *pg);
   void _queue_op(PG *pg, OpRequestRef op, bool front);
+  void _queue_for_completion(PG *pg, Context *cb, int second = -1);
+  void _queue_op_with_op_lock(PG *pg, OpRequestRef op, bool front);
+
   void queue_op(PG *pg, OpRequestRef op) {
     _queue_op(pg, op, false);
   };
@@ -1145,7 +1156,49 @@ public:
     }
   }
 #endif
-
+  // completion
+  class CompletionWorker {
+    int num_worker;
+    int min_time;
+  public:
+    CompletionWorker(int num_worker):num_worker(num_worker) {
+      for(int i = 0; i < num_worker; i++) {
+	string mutex_name = "OSDService::CWorker";
+	mutex_name+=std::to_string(i);
+	timer_mutexs.emplace_back(unique_ptr<Mutex>(new Mutex(mutex_name)));
+	completion_timers.emplace_back(
+	  unique_ptr<SafeTimer>(new SafeTimer(g_ceph_context, *(timer_mutexs[i]), false)));
+      } 
+      min_time = 1;
+    }
+    ~CompletionWorker() {
+    }
+    void reserve_lazy_completion(int id, Context *cb, int second = 0) {
+      timer_mutexs[id % num_worker]->Lock();
+      if (second == -1) {
+	completion_timers[id % num_worker]->add_event_after(min_time, cb);
+      } else {
+	completion_timers[id % num_worker]->add_event_after(second, cb);
+      }
+      timer_mutexs[id % num_worker]->Unlock();
+    }
+    vector<unique_ptr<SafeTimer>> completion_timers;
+    vector<unique_ptr<Mutex>> timer_mutexs;
+    void init() {
+      for(int i = 0; i < num_worker; i++) {
+	completion_timers[i]->init();
+      }
+    }
+    void shutdown() {
+      for(int i = 0; i < num_worker; i++) {
+	timer_mutexs[i]->Lock();
+	completion_timers[i]->cancel_all_events();
+	completion_timers[i]->shutdown();
+	timer_mutexs[i]->Unlock();
+      }
+    }
+  };
+  CompletionWorker comp_worker;
   explicit OSDService(OSD *osd);
   ~OSDService();
 };
@@ -1758,13 +1811,13 @@ private:
 	snprintf(
 	  order_lock_name, sizeof(order_lock_name),
 	  "%s.%d", "OSD:ShardedOpWQ:order:", i);
-	shard_list[i].reset(
-	  new ShardData(
+	shard_list.emplace_back(
+	  unique_ptr<ShardData>(new ShardData(
 	    queue_lock_name, order_lock_name,
-	    osd->cct->_conf->osd_op_pq_max_tokens_per_priority, 
+	    osd->cct->_conf->osd_op_pq_max_tokens_per_priority,
 	    osd->cct->_conf->osd_op_pq_min_cost,
 	    osd->cct,
-	    osd->op_queue));
+	    osd->op_queue)));
       }
     }
     
