@@ -1249,6 +1249,7 @@ private:
   void _dump_onode(OnodeRef o, int log_level=30);
   void _dump_bnode(BnodeRef b, int log_level=30);
   void _dump_blob_map(BlobMap &bm, int log_level);
+  void _dump_onode_ondisk(bluestore_onode_t &o, int log_level=0);
 
 
   TransContext *_txc_create(OpSequencer *osr);
@@ -1262,6 +1263,9 @@ public:
   void _txc_aio_finish(void *p) {
     _txc_state_proc(static_cast<TransContext*>(p));
   }
+  void onode_blob_encode(OnodeRef o);
+  void onode_blob_decode(bufferlist& bl);
+  void dump_blob_map_decode(BlobMap &bm, int log_level);
 private:
   void _txc_finish_io(TransContext *txc);
   void _txc_finish_kv(TransContext *txc);
@@ -1504,6 +1508,10 @@ public:
     vector<Transaction>& tls,
     TrackedOpRef op = TrackedOpRef(),
     ThreadPool::TPHandle *handle = NULL) override;
+
+  void dump_onode_ondisk(bluestore_onode_t &o) {
+    _dump_onode_ondisk(o, 0);
+  }
 
 private:
 

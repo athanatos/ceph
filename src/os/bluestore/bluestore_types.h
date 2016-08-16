@@ -130,7 +130,7 @@ struct bluestore_pextent_t : public AllocExtent{
   }
 
   DECLARE_ENC_DEC_MEMBER_FUNCTION() {
-    p = enc_dec_varint(p, offset);
+    p = enc_dec_lba(p, offset);
     p = enc_dec_varint_lowz(p, length);
     return p;
   }
@@ -328,6 +328,7 @@ struct bluestore_blob_t {
     p = enc_dec_varint_lowz(p, compressed_length);
     p = enc_dec(p, csum_type);
     p = enc_dec(p, csum_chunk_order);
+    p = enc_dec(p, csum_data);
     p = enc_dec(p, ref_map);
     uint64_t uns = unused.to_ullong();
     p = enc_dec_varint(p, uns);
@@ -680,7 +681,7 @@ struct bluestore_onode_t {
      p = enc_dec_varint(p, nid);
      p = enc_dec_varint(p, size);
      p = enc_dec(p, attrs);
-     p = enc_dec(p, extent_map);
+     //p = enc_dec(p, extent_map);
      p = enc_dec_varint(p, omap_head);
      p = enc_dec_varint(p, expected_object_size);
      p = enc_dec_varint(p, expected_write_size);

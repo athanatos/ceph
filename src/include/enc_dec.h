@@ -376,9 +376,6 @@ inline enc_dec_varint_lowz(const char *p,t& v) {
 template<typename t> ENABLE_IF_UNSIGNED(t,size_t)
 inline enc_dec_lba(size_t p,t& o) { return p + sizeof(t) + 2; } // two extra bytes is maximum growth due to encoding
 
-
-// v= o
-// p = bl
 template<typename t> ENABLE_IF_UNSIGNED(t,char *)
 inline enc_dec_lba(char * p,t& o) {
   t v = o;
@@ -401,13 +398,11 @@ inline enc_dec_lba(char * p,t& o) {
   word |= (v << pos) & 0x7fffffff;
   v >>= 31 - pos;
   if (!v) {
-    //::encode(word, bl);
-    enc_dec_varint(p, word);
+    p = enc_dec(p, word);
     return p;
   }
   word |= 0x80000000;
-  //::encode(word, bl);
-  enc_dec_varint(p, word);
+  p = enc_dec(p, word);
   uint8_t byte = v & 0x7f;
   v >>= 7;
   while (v) {
@@ -423,8 +418,7 @@ inline enc_dec_lba(char * p,t& o) {
 template<typename t> ENABLE_IF_UNSIGNED(t,const char *)
 inline enc_dec_lba(const char *p,t& v) {
   uint32_t word;
-  //::decode(word, p);
-  enc_dec_varint(p, word);
+  p = enc_dec(p, word);
   int shift;
   switch (word & 7) {
   case 0:
@@ -580,6 +574,7 @@ inline const char *enc_dec(
    }
    return p;
 }
+
 template<typename t> 
 inline size_t enc_dec(
    size_t p,
@@ -687,11 +682,70 @@ struct enc_dec_map_context {
    virtual ~enc_dec_map_context() {}
 };
 
+
+template<typename k,typename v>
+enc_dec_map_context<k,v>* get_default_ctx(k, v)
+{
+  enc_dec_map_context<k,v>* def_map_ctx = new enc_dec_map_context<k,v>();
+  return def_map_ctx;
+}
+// map without context
 template<typename k,typename v> 
 inline size_t enc_dec(
    size_t p,
    std::map<k,v>&s,
-   enc_dec_map_context<k,v> c = enc_dec_map_context<k,v>(),
+   bool is_bounded_size = enc_dec_traits<k>::is_bounded_size && enc_dec_traits<v>::is_bounded_size
+   ) {
+   size_t sz;
+   enc_dec_map_context<k,v> c = enc_dec_map_context<k,v>();
+   p = enc_dec(p,sz);
+   if (is_bounded_size) {
+      p += s.size() * c(size_t(0),*(k *)0,*(v *)0);
+   } else {
+      for (auto &e : s) {
+         p = c(p,const_cast<k&>(e.first),e.second);
+      }
+   }
+   return p;
+}
+
+template<typename k, typename v>
+inline char *enc_dec(
+   char *p,
+   std::map<k,v>& s
+   ){
+   enc_dec_map_context<k,v> c = enc_dec_map_context<k,v>();
+   size_t sz = s.size();
+   p = enc_dec(p,sz);
+   for (auto& e : s) {
+      p = c(p,const_cast<k&>(e.first),e.second);
+   }
+   return p;
+}
+
+template<typename k, typename v>
+inline const char *enc_dec(
+   const char *p,
+   std::map<k,v>&s
+   ) {
+   size_t sz;
+   enc_dec_map_context<k,v> c = enc_dec_map_context<k,v>();
+   p = enc_dec(p,sz);
+   while (sz--) {
+      k key;
+      v value;
+      p = c(p,key,value);
+      s[key] = value;
+   }
+   return p;
+}
+// map with context, need to generalize
+//
+template<typename k,typename v>
+inline size_t enc_dec(
+   size_t p,
+   std::map<k,v>&s,
+   enc_dec_map_context<k,v>& c,
    bool is_bounded_size = enc_dec_traits<k>::is_bounded_size && enc_dec_traits<v>::is_bounded_size
    ) {
    size_t sz;
@@ -710,7 +764,7 @@ template<typename k, typename v>
 inline char *enc_dec(
    char *p,
    std::map<k,v>& s,
-   enc_dec_map_context<k,v> c = enc_dec_map_context<k,v>() 
+   enc_dec_map_context<k,v>& c
    ){
    size_t sz = s.size();
    p = enc_dec(p,sz);
@@ -724,7 +778,7 @@ template<typename k, typename v>
 inline const char *enc_dec(
    const char *p,
    std::map<k,v>&s,
-   enc_dec_map_context<k,v> c = enc_dec_map_context<k,v>()
+   enc_dec_map_context<k,v>& c
    ) {
    size_t sz;
    p = enc_dec(p,sz);
@@ -736,12 +790,64 @@ inline const char *enc_dec(
    }
    return p;
 }
-
+// intrusive containers
+// without context
 template<typename k,typename v>
 inline size_t enc_dec(
    size_t p,
    boost::intrusive::set<std::pair<k, v>> &s,
-   enc_dec_map_context<k,v> c = enc_dec_map_context<k,v>(),
+   bool is_bounded_size = enc_dec_traits<k>::is_bounded_size && enc_dec_traits<v>::is_bounded_size
+   ) {
+   size_t sz;
+   enc_dec_map_context<k,v> c = enc_dec_map_context<k,v>();
+   p = enc_dec(p,sz);
+   if (is_bounded_size) {
+      p += s.size() * c(size_t(0),*(k *)0,*(v *)0);
+   } else {
+      for (auto &e : s) {
+         p = c(p,const_cast<k&>(e.first),e.second);
+      }
+   }
+   return p;
+}
+
+template<typename k, typename v>
+inline char *enc_dec(
+   char *p,
+   boost::intrusive::set<std::pair<k, v>> &s
+   ){
+   size_t sz = s.size();
+   enc_dec_map_context<k,v> c = enc_dec_map_context<k,v>();
+   p = enc_dec(p,sz);
+   for (auto& e : s) {
+      p = c(p,const_cast<k&>(e.first),e.second);
+   }
+   return p;
+}
+
+template<typename k, typename v>
+inline const char *enc_dec(
+   const char *p,
+   boost::intrusive::set<std::pair<k, v>> &s
+   ) {
+   size_t sz;
+   enc_dec_map_context<k,v> c = enc_dec_map_context<k,v>();
+   p = enc_dec(p,sz);
+   while (sz--) {
+      k key;
+      v value;
+      p = c(p,key,value);
+      s[key] = value;
+   }
+   return p;
+}
+
+// with context
+template<typename k,typename v>
+inline size_t enc_dec(
+   size_t p,
+   boost::intrusive::set<std::pair<k, v>> &s,
+   enc_dec_map_context<k,v>& c,
    bool is_bounded_size = enc_dec_traits<k>::is_bounded_size && enc_dec_traits<v>::is_bounded_size
    ) {
    size_t sz;
@@ -760,7 +866,7 @@ template<typename k, typename v>
 inline char *enc_dec(
    char *p,
    boost::intrusive::set<std::pair<k, v>> &s,
-   enc_dec_map_context<k,v> c = enc_dec_map_context<k,v>()
+   enc_dec_map_context<k,v>& c
    ){
    size_t sz = s.size();
    p = enc_dec(p,sz);
@@ -774,7 +880,7 @@ template<typename k, typename v>
 inline const char *enc_dec(
    const char *p,
    boost::intrusive::set<std::pair<k, v>> &s,
-   enc_dec_map_context<k,v> c = enc_dec_map_context<k,v>()
+   enc_dec_map_context<k,v>& c
    ) {
    size_t sz;
    p = enc_dec(p,sz);
@@ -786,7 +892,6 @@ inline const char *enc_dec(
    }
    return p;
 }
-
 //
 // And a multimap
 //
@@ -1050,9 +1155,7 @@ inline void enc(bufferlist& b,const t& o) {
    char *data_start = buffer_start + sizeof(__le32);
    char *end = enc_dec(data_start,const_cast<t&>(o));
    assert(size_t(end-buffer_start) <= sz); // If you fail here, you've lied about an encoded size somewhere and you've corrupted memory!!!!
-   
-   *(__le32 *)buffer_start = __le32(end-data_start);
-
+   *(__le32 *)buffer_start = __le32(end-data_start); // remember how many bytes encoded
    //
    // give back and unused space
    //
