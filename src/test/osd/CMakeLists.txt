@@ -81,3 +81,10 @@ add_executable(unittest_pg_transaction
 )
 add_ceph_unittest(unittest_pg_transaction ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/unittest_pg_transaction)
 target_link_libraries(unittest_pg_transaction osd global ${BLKID_LIBRARIES})
+
+# unittest object_mod_desc
+add_executable(unittest_object_mod_desc
+  test_object_mod_desc.cc
+)
+add_ceph_unittest(unittest_object_mod_desc ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/unittest_pg_transaction)
+target_link_libraries(unittest_object_mod_desc osd global ${BLKID_LIBRARIES})

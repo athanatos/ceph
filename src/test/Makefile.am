@@ -268,6 +268,12 @@ unittest_pg_transaction_LDADD = $(LIBCOMMON) $(UNITTEST_LDADD)
 unittest_pg_transaction_CXXFLAGS = $(UNITTEST_CXXFLAGS) -O2
 check_TESTPROGRAMS += unittest_pg_transaction
 
+unittest_object_mod_desc_SOURCES = osd/test_object_mod_desc.cc
+unittest_object_mod_desc_LDADD = $(LIBCOMMON) $(UNITTEST_LDADD)
+unittest_object_mod_desc_CXXFLAGS = $(UNITTEST_CXXFLAGS) -O2
+check_TESTPROGRAMS += unittest_object_mod_desc
+
+unittest_throttle_SOURCES = test/common/Throttle.cc
 unittest_throttle_SOURCES = test/common/Throttle.cc
 unittest_throttle_LDADD = $(UNITTEST_LDADD) $(CEPH_GLOBAL)
 unittest_throttle_CXXFLAGS = $(UNITTEST_CXXFLAGS) -O2
