@@ -147,7 +147,7 @@ template<typename t> struct enc_dec_traits;
 //
 
 #define DEFINE_ENC_DEC_SIMPLE(itype,etype) \
-template<> struct enc_dec_traits<itype> { enum { is_bounded_size = true }; }; \
+  template<> struct enc_dec_traits<itype> { enum { is_bounded_size = true }; /* This doesn't need to be an enum */}; \
 inline size_t      enc_dec(size_t p,itype &o)      { return p + sizeof(etype); } \
 inline char *      enc_dec(char *p, itype &o)      { *(etype *)p = static_cast<etype>(o); return p + sizeof(etype); } \
 inline const char *enc_dec(const char *p,itype &o) { o = static_cast<itype>(*(const etype *)p); return p + sizeof(etype); }
@@ -536,6 +536,12 @@ inline size_t enc_dec(
    size_t sz;
    p = enc_dec(p,sz);
    if (is_bounded_size) {
+      /* It seems to me that this is only correct because no
+       * is_bounded_size type examines the actual passed value
+       * -- why pass it at all? is_bounded_type<T> could imply
+       * a special unsigned enc_dec_traits<T>::get_max_space()
+       * function (you'd have to craft it specially anyway)
+       */
       p += s.size() * c(size_t(0),*(t *) 0);
    } else {
       for (const t&e : s) {
@@ -683,6 +689,7 @@ struct enc_dec_map_context {
 };
 
 
+/* This isn't used, right? */
 template<typename k,typename v>
 enc_dec_map_context<k,v>* get_default_ctx(k, v)
 {
@@ -699,7 +706,10 @@ inline size_t enc_dec(
    size_t sz;
    enc_dec_map_context<k,v> c = enc_dec_map_context<k,v>();
    p = enc_dec(p,sz);
-   if (is_bounded_size) {
+   /* This could actually be selected at compile time using enable_if
+    * etc.  In fact, I don't think it should ever be necessary to pass
+    * additional arguments to enc_desc */
+   if (is_bounded_size) { 
       p += s.size() * c(size_t(0),*(k *)0,*(v *)0);
    } else {
       for (auto &e : s) {
