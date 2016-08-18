@@ -325,13 +325,22 @@ struct bluestore_blob_t {
   DECLARE_ENC_DEC_MEMBER_FUNCTION() {
     p = enc_dec(p, extents);
     p = enc_dec_varint(p, flags);
-    p = enc_dec_varint_lowz(p, compressed_length);
-    p = enc_dec(p, csum_type);
-    p = enc_dec(p, csum_chunk_order);
-    p = enc_dec(p, csum_data);
-    p = enc_dec(p, ref_map);
-    uint64_t uns = unused.to_ullong();
-    p = enc_dec_varint(p, uns);
+    if (is_compressed()) {
+      p = enc_dec_varint_lowz(p, compressed_length_orig);
+      p = enc_dec_varint_lowz(p, compressed_length);
+    }
+    if (has_csum()) {
+      p = enc_dec(p, csum_type);
+      p = enc_dec(p, csum_chunk_order);
+      p = enc_dec(p, csum_data);
+    }
+    if (has_refmap()) {
+      p = enc_dec(p, ref_map);
+    }
+    if (has_unused()) {
+      uint64_t uns = unused.to_ullong();
+      p = enc_dec_varint(p, uns);
+    }
     return p;
   }
 

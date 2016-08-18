@@ -1264,6 +1264,7 @@ public:
     _txc_state_proc(static_cast<TransContext*>(p));
   }
   void onode_blob_encode(OnodeRef o);
+  void onode_blob_encode_v2(OnodeRef o);
   void onode_blob_decode(bufferlist& bl);
   void dump_blob_map_decode(BlobMap &bm, int log_level);
 private:

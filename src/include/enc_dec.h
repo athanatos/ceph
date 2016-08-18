@@ -749,7 +749,7 @@ inline size_t enc_dec(
    bool is_bounded_size = enc_dec_traits<k>::is_bounded_size && enc_dec_traits<v>::is_bounded_size
    ) {
    size_t sz;
-   p = enc_dec(p,sz); 
+   p = enc_dec_varint(p,sz);
    if (is_bounded_size) {
       p += s.size() * c(size_t(0),*(k *)0,*(v *)0);
    } else {
@@ -767,7 +767,7 @@ inline char *enc_dec(
    enc_dec_map_context<k,v>& c
    ){
    size_t sz = s.size();
-   p = enc_dec(p,sz);
+   p = enc_dec_varint(p,sz);
    for (auto& e : s) {
       p = c(p,const_cast<k&>(e.first),e.second);
    }
@@ -781,7 +781,7 @@ inline const char *enc_dec(
    enc_dec_map_context<k,v>& c
    ) {
    size_t sz;
-   p = enc_dec(p,sz);
+   p = enc_dec_varint(p,sz);
    while (sz--) {
       k key;
       v value;

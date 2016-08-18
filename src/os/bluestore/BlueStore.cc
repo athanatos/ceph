@@ -1173,6 +1173,7 @@ struct onode_blob_map_context  : public enc_dec_map_context<uint64_t,bluestore_l
    BlueStore::BlobMap& blob_map;
    BlueStore::BlobMap temp_blob_map;
    int new_blob_id = 1;
+   uint64_t pos = 0;
    map<int, int> old_new; // key is "old" blob_id, value is 'new' blob_id;
 
    onode_blob_map_context(BlueStore::BlobMap& _map):blob_map(_map) { }
@@ -1184,14 +1185,16 @@ struct onode_blob_map_context  : public enc_dec_map_context<uint64_t,bluestore_l
 
    virtual char* operator() (char *p, uint64_t& off, bluestore_lextent_t &le)
    {
-     p = enc_dec_varint(p, off);
+     uint64_t offset = off-pos;
+     pos = off;
+     p = enc_dec_varint_lowz(p, offset);
      p = enc_dec(p, le);
      int b = le.blob;
      if (b < 0) { // global blob id, serialize after the lextent serialization
      } else if (old_new.find(b) == old_new.end()) { // New blob, serialize along with lextent
        BlueStore::BlobRef blob = blob_map.get(b);
        p = enc_dec_varint(p, new_blob_id);
-       p = enc_dec(p, *blob);
+       p = enc_dec(p, blob->blob);
        old_new[le.blob] = new_blob_id++;
      } else { // already serialized, let us remember the id
        auto old_blob_id = old_new.find(b);
@@ -1204,18 +1207,22 @@ struct onode_blob_map_context  : public enc_dec_map_context<uint64_t,bluestore_l
    virtual const char* operator() (const char *p,uint64_t &off, bluestore_lextent_t& le)
    {
      int b;
-     p = enc_dec_varint(p, off);
+     uint64_t delta;
+     p = enc_dec_varint_lowz(p, delta);
+     pos += delta;
+     off = pos;
      p = enc_dec(p, le);
      p = enc_dec_varint(p, b);
      if (b < 0) {
        //nothing to do , we will deserialize  actual blob later
      } else if (old_new.find(b) == old_new.end()) {
        // blob id has to be retained
-       BlueStore::Blob* blob = new BlueStore::Blob;
-       p = enc_dec(p, *blob);
+       //BlueStore::Blob* blob = new BlueStore::Blob;
+       bluestore_blob_t blob;
+       p = enc_dec(p, blob);
        old_new[b] = new_blob_id++;
-       BlueStore::Blob* b = new BlueStore::Blob(blob->id, NULL);
-       b->blob = blob->blob;
+       BlueStore::Blob* b = new BlueStore::Blob(le.blob, NULL);
+       b->blob = blob;
        // is this a memory leak here? need to handle
        blob_map.blob_map.insert(*b);
      } else {
@@ -1265,15 +1272,15 @@ void BlueStore::onode_blob_encode(OnodeRef o)
   size_t sz = enc_dec(size_t(0), o->onode);
   sz += enc_dec(size_t(0), o->onode.extent_map, t);
   sz += enc_dec(size_t(0), o->blob_map);
-  dout(0) << __func__ << " estimated size: " << sz << dendl;
+  dout(0) << __func__ << o->oid << " estimated size: " << sz << dendl;
   assert(sz < (10 * 1024 *1024));
   //char buffer[sz] =  { 0 };
   char *buffer = new char[sz];
   char *data_start = buffer + sizeof(__le32);
   char *end = enc_dec(data_start, o->onode);
-  //dout(0) << __func__ << " encoded size of onode: " << (int)(end-data_start) << dendl;
+  dout(0) << __func__ << " encoded size of onode: " << (int)(end-data_start) << dendl;
   end = enc_dec(end, o->onode.extent_map, t);
-  //dout(0) << __func__ << " encoded size of onode_blob_map: " << (int)(end-buffer) << dendl;
+  dout(0) << __func__ << " encoded size of onode_blob_map: " << (int)(end-buffer) << dendl;
   //TODO:: can we optimize this? ideally we shouldn't have any blobs other
   //than onode space ones. Is there anything missing?
   if (o->blob_map.blob_map.size() > t.old_new.size()) {
@@ -1288,20 +1295,38 @@ void BlueStore::onode_blob_encode(OnodeRef o)
     uint16_t sz = o->blob_map.blob_map.size() - t.old_new.size();
     end = enc_dec(end, sz);
   }
-  dout(0) << __func__ << " encoded size of blob_map: " << (int)(end-buffer) << dendl;
+  dout(0) << __func__ << o->oid << " encoded size : " << (int)(end-buffer) << dendl;
   *(__le32*)buffer= __le32(end-data_start);
   size_t act_size = (__le32 )(end-data_start);
   //dout(0) << __func__ << " actual size: " << act_size << dendl;
   //TODO:: use pop back to release the unsed buffer back, but that seems broken now
   // we are consuming more than actual encoding now, have to debug the size
-  bufferptr bp = buffer::claim_char(act_size+sizeof(__le32), buffer);
-  bl.push_back(bp);
+  //bufferptr bp = buffer::claim_char(sz, buffer);
+  //bl.push_back(bp);
   //dout(0) << __func__ << "bufferlist size: " << bl.length() << dendl;
 
   // TODO:: Take this to mainsteam code
   // testing decode
-  onode_blob_decode(bl);
-  //delete []buffer;
+  //onode_blob_decode(bl);
+  //bl.clear();
+  delete []buffer;
+}
+
+void BlueStore::onode_blob_encode_v2(OnodeRef o)
+{
+  //bufferlist bl;
+  size_t sz = enc_dec(size_t(0), o->onode);
+  sz += enc_dec(size_t(0), o->blob_map);
+  dout(0) << __func__ << o->oid << " estimated size: " << sz << dendl;
+  assert(sz < (10 * 1024 *1024));
+  //char buffer[sz] =  { 0 };
+  char *buffer = new char[sz];
+  char *data_start = buffer + sizeof(__le32);
+  char *end = enc_dec(data_start, o->onode);
+  dout(0) << __func__ << " encoded size of onode: " << (int)(end-data_start) << dendl;
+  end = enc_dec(end, o->blob_map);
+  dout(0) << __func__ << o->oid << " encoded size : " << (int)(end-data_start) << dendl;
+  delete []buffer;
 }
 
 void BlueStore::dump_blob_map_decode(BlobMap &bm, int log_level)
@@ -1354,15 +1379,15 @@ void BlueStore::onode_blob_decode(bufferlist& bl)
     dec_end -= sizeof(__le16);
     dec_end = enc_dec((const char *)dec_end, map3);
   }
-  dout(0) << __func__ << "Decoded size: " << (int) (dec_end - dec_data_start) << dendl;
+  dout(0) << __func__ << " Decoded size: " << (int) (dec_end - dec_data_start) << dendl;
   //dump_onode_ondisk(o2);
   o2.extent_map = le_map;
   //dump_onode_ondisk(o2);
   //dump_blob_map_decode(t2.blob_map, 0);
   //for (auto& p : le_map) {
    // dout(0) << __func__ << "  lextent 0x" << std::hex << p.first
-   //                 << std::dec << ": " << p.second
-   //                 << dendl;
+     //               << std::dec << ": " << p.second
+     //               << dendl;
   //}
   //dump_blob_map_decode(map3, 0);
 }
@@ -5084,16 +5109,27 @@ void BlueStore::_txc_write_nodes(TransContext *txc, KeyValueDB::Transaction t)
        p != txc->onodes.end();
        ++p) {
     bufferlist bl;
-    _dump_onode(*p, 10);
     ::encode((*p)->onode, bl);
+    dout(0) << __func__ << " onode " << (*p)->oid << " onode encoded length is " << bl.length() << dendl;
     (*p)->blob_map.encode(bl);
+    dout(0) << __func__ << " onode " << (*p)->oid << " encoded length is " << bl.length() << dendl;
+    dout(0) << __func__ << " onode " << (*p)->oid << " blob_map size is " << (*p)->blob_map.blob_map.size() << dendl;
     onode_blob_encode(*p);
-    dout(20) << __func__ << " onode " << (*p)->oid << " encoded length is " << bl.length() << dendl;
     t->set(PREFIX_OBJ, (*p)->key, bl);
 
     std::lock_guard<std::mutex> l((*p)->flush_lock);
     (*p)->flush_txns.insert(txc);
   }
+
+#if 0
+  for (set<OnodeRef>::iterator p = txc->onodes.begin();
+       p != txc->onodes.end();
+       ++p) {
+    //_dump_onode_ondisk((*p)->onode, 0);
+    if ((*p)->blob_map.blob_map.size() == 512)
+       _dump_blob_map((*p)->blob_map, 0);
+  }
+#endif
 
   // finalize bnodes
   for (set<BnodeRef>::iterator p = txc->bnodes.begin();

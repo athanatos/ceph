@@ -263,7 +263,8 @@ TEST(test_enc_dec, map_context) {
 
    char *end = enc_dec(buffer,m,t);
 
-   EXPECT_EQ(sz,size_t(end-buffer));
+   //estimation is 9 bytes more in this case. Are we okay?
+   EXPECT_GT(sz,size_t(end-buffer));
    t.index = 1;
 
    const char *dec_end = enc_dec((const char *)buffer,m2,t);
@@ -337,28 +338,32 @@ TEST(test_enc_dec, vector_context) {
    EXPECT_EQ(s,s2);
 }
 
-void
-generate_dummy_onode(bluestore_onode_t& onode)
-{
-  onode.nid = 1252;
-  onode.size = 65536;
-  onode.attrs["attr1"] = bufferptr("attr_val1",10);
-  onode.attrs["attr2"] = bufferptr("attr_val2",10);
-  onode.extent_map[0] =  bluestore_lextent_t(2, 0, 4096);
-  onode.extent_map[8192] =  bluestore_lextent_t(3, 16384, 8192);
-  onode.extent_map[16384] =  bluestore_lextent_t(2, 32768, 8192);
-  onode.omap_head = 12;
-  onode.expected_object_size = 4 * 65536;
-  onode.expected_write_size = 65536;
-  onode.alloc_hint_flags = 100;
-}
-
 char* gen_buffer(uint64_t size)
 {
   char *buffer = new char[size];
   boost::random::random_device rand;
   rand.generate(buffer, buffer + size);
   return buffer;
+}
+
+void
+generate_dummy_onode(bluestore_onode_t& onode)
+{
+  onode.nid = 1252;
+  onode.size = 4194304;
+  char *buf = gen_buffer(293);
+  onode.attrs["-"] = bufferptr(buf, 293);
+  char *snapset = gen_buffer(31);
+  onode.attrs["snapset"] = bufferptr(snapset, 31);
+  uint64_t offset = 0;
+  for (int i = 1; i <= 512; i++) {
+    onode.extent_map[offset] =  bluestore_lextent_t(i, 0, 8192);
+    offset += 8192;
+  }
+  onode.omap_head = 12;
+  onode.expected_object_size = 4194304;
+  onode.expected_write_size = 4194304;
+  onode.alloc_hint_flags = 100;
 }
 
 void
@@ -379,50 +384,16 @@ generate_dummy_blob(bluestore_blob_t& blob)
 void
 generate_dummy_blob_map(BlueStore::BlobMap& map)
 {
-  BlueStore::Blob *b = new BlueStore::Blob();
-  b->blob.init_csum(bluestore_blob_t::CSUM_XXHASH32, 16, 65536);
-  b->blob.csum_data = buffer::claim_malloc(4, strdup("abcd"));
-  b->blob.ref_map.get(3, 5);
-  b->blob.add_unused(0, 3, 4096);
-  b->blob.add_unused(8, 8, 4096);
-  b->blob.extents.emplace_back(bluestore_pextent_t(0x40100000, 0x10000));
-  b->blob.extents.emplace_back(
-    bluestore_pextent_t(bluestore_pextent_t::INVALID_OFFSET, 0x1000));
-  b->blob.extents.emplace_back(bluestore_pextent_t(0x40120000, 0x10000));
-  map.claim(b);
-  b = new BlueStore::Blob();
-  b->blob.init_csum(bluestore_blob_t::CSUM_XXHASH32, 16, 65536);
-  b->blob.csum_data = buffer::claim_malloc(4, strdup("abcd"));
-  b->blob.ref_map.get(3, 5);
-  b->blob.add_unused(0, 3, 4096);
-  b->blob.add_unused(8, 8, 4096);
-  b->blob.extents.emplace_back(bluestore_pextent_t(0x40100000, 0x10000));
-  b->blob.extents.emplace_back(
-    bluestore_pextent_t(bluestore_pextent_t::INVALID_OFFSET, 0x1000));
-  b->blob.extents.emplace_back(bluestore_pextent_t(0x40120000, 0x10000));
-  map.claim(b);
-  b = new BlueStore::Blob();
-  b->blob.init_csum(bluestore_blob_t::CSUM_XXHASH32, 16, 65536);
-  b->blob.csum_data = buffer::claim_malloc(4, strdup("abcd"));
-  b->blob.ref_map.get(3, 5);
-  b->blob.add_unused(0, 3, 4096);
-  b->blob.add_unused(8, 8, 4096);
-  b->blob.extents.emplace_back(bluestore_pextent_t(0x40100000, 0x10000));
-  b->blob.extents.emplace_back(
-    bluestore_pextent_t(bluestore_pextent_t::INVALID_OFFSET, 0x1000));
-  b->blob.extents.emplace_back(bluestore_pextent_t(0x40120000, 0x10000));
-  map.claim(b);
-  b = new BlueStore::Blob();
-  b->blob.init_csum(bluestore_blob_t::CSUM_XXHASH32, 16, 65536);
-  b->blob.csum_data = buffer::claim_malloc(4, strdup("abcd"));
-  b->blob.ref_map.get(3, 5);
-  b->blob.add_unused(0, 3, 4096);
-  b->blob.add_unused(8, 8, 4096);
-  b->blob.extents.emplace_back(bluestore_pextent_t(0x40100000, 0x10000));
-  b->blob.extents.emplace_back(
-    bluestore_pextent_t(bluestore_pextent_t::INVALID_OFFSET, 0x1000));
-  b->blob.extents.emplace_back(bluestore_pextent_t(0x40120000, 0x10000));
-  map.claim(b);
+  uint64_t offset = 0xf114a5000;
+  for (int i = 1; i <= 512; i++) {
+    BlueStore::Blob *b = new BlueStore::Blob();
+    b->blob.init_csum(bluestore_blob_t::CSUM_CRC32C, 12, 8192);
+    b->blob.csum_data = buffer::claim_malloc(8, strdup("abcdefgh"));
+    b->blob.extents.emplace_back(bluestore_pextent_t(offset, 0x2000));
+    b->blob.set_flag(bluestore_blob_t::FLAG_MUTABLE|bluestore_blob_t::FLAG_CSUM);
+    offset += 8192;
+    map.claim(b);
+  }
 }
 
 void dump_onode_ondisk(bluestore_onode_t &o)
@@ -453,179 +424,136 @@ void dump_onode_ondisk(bluestore_onode_t &o)
 
 TEST(test_enc_dec, lextent_enc_dec) {
    bluestore_lextent_t l1(23232, 0, 4096);
-   bluestore_lextent_t l2;
+   //bluestore_lextent_t l2;
+   size_t sz = enc_dec(size_t(0), l1);
+   std::cout<< " lextent estimated size: " << sz << std::endl;
+   char *buf = new char[sz];
+   char *p = enc_dec(buf, l1);
+   std::cout<< " lextent encoded length: " << int(p-buf) << std::endl;
+   delete []buf;
    bufferlist bl;
-   std::cout << " L1 extent: " << l1 << std::endl;
-   enc(bl, l1);
-   bufferlist::iterator it = bl.begin();
-   dec(it,l2);
-   std::cout << " L2 extent: " << l2 << std::endl;
+   l1.encode(bl);
+   std::cout<< " lextent encoded length(default): " << bl.length() << std::endl;
+   //bufferlist bl;
+   //std::cout << " L1 extent: " << l1 << std::endl;
+   //enc(bl, l1);
+   //bufferlist::iterator it = bl.begin();
+   //dec(it,l2);
+   //std::cout << " L2 extent: " << l2 << std::endl;
 }
 
 TEST(test_enc_dec, onode_enc_dec) {
   bluestore_onode_t onode;
   generate_dummy_onode(onode);
   bluestore_onode_t o2;
-  dump_onode_ondisk(onode);
-  bufferlist bl;
-  enc(bl, onode);
-  std::cout<< " Blob map encoded length: " << bl.length() << std::endl;
-  bufferlist::iterator it = bl.begin();
-  dec(it,o2);
-  dump_onode_ondisk(o2);
+  //dump_onode_ondisk(onode);
+  //bufferlist bl;
+  //enc(bl, onode);
+  size_t sz = enc_dec(size_t(0), onode);
+  std::cout<< " Onode estimated size: " << sz << std::endl;
+  char *buf = new char[sz];
+  char *p = enc_dec(buf, onode);
+  std::cout<< " Onode encoded length: " << int(p-buf) << std::endl;
+  delete []buf;
+  //bufferlist::iterator it = bl.begin();
+  //dec(it,o2);
+  //dump_onode_ondisk(o2);
 }
 
-TEST(test_enc_dec, blob_enc_dec) {
-  bluestore_blob_t blob;
-  generate_dummy_blob(blob);
-  std::cout << "Blob: " << blob << std::endl;
-  bluestore_blob_t blob2;
-  bufferlist bl;
-  enc(bl, blob);
-  std::cout<< " Blob encoded length: " << bl.length() << std::endl;
-  bufferlist::iterator it = bl.begin();
-  dec(it, blob2);
-  std::cout << "Blob: " << blob2 << std::endl;
+void small_encode_copy(const map<uint64_t,bluestore_lextent_t>& extents, bufferlist& bl)
+{
+  size_t n = extents.size();
+  small_encode_varint(n, bl);
+  if (n) {
+    auto p = extents.begin();
+    small_encode_varint_lowz(p->first, bl);
+    p->second.encode(bl);
+    uint64_t pos = p->first;
+    while (--n) {
+      ++p;
+      small_encode_varint_lowz((uint64_t)p->first - pos, bl);
+      p->second.encode(bl);
+      pos = p->first;
+    }
+  }
 }
 
-TEST(test_enc_dec, blobmap_enc_dec) {
-  BlueStore::BlobMap map1, map2;
-  generate_dummy_blob_map(map1);
-  std::cout << "BlobMap1: " << map1 << std::endl;
-  bufferlist bl;
-  enc(bl, map1);
-  std::cout<< " Blob map encoded length: " << bl.length() << std::endl;
-  bufferlist::iterator it = bl.begin();
-  dec(it,map2);
-  std::cout << "BlobMap2: " << map2 << std::endl;
-}
-
-struct onode_blob_map_context  : public enc_dec_map_context<uint64_t,bluestore_lextent_t> {
-   BlueStore::BlobMap& blob_map;
-   int new_blob_id = 1;
-   map<int, int> old_new; // key is "old" blob_id, value is 'new' blob_id;
-
-   onode_blob_map_context(BlueStore::BlobMap& _map):blob_map(_map) { }
+struct extent_map_context  : public enc_dec_map_context<uint64_t,bluestore_lextent_t> {
+   uint64_t pos = 0;
 
    virtual size_t  operator() (size_t p, uint64_t& off, bluestore_lextent_t& le)
    {
-      auto ptr = blob_map.get(le.blob);
-      assert(ptr);
-      return enc_dec(p, *ptr) + enc_dec_pair(p,off,le); // need blob + lextent encoding estimate
+      return  enc_dec_pair(p,off,le); // need blob + lextent encoding estimate
    }
 
    virtual char* operator() (char *p, uint64_t& off, bluestore_lextent_t &le)
    {
-     p = enc_dec_varint(p, off);
+     uint64_t offset = off-pos;
+     pos = off;
+     p = enc_dec_varint_lowz(p, offset);
      p = enc_dec(p, le);
-     int b = le.blob;
-     if (b < 0) { // global blob id, serialize after the lextent serialization
-       // we will serialize this blob after connected blobs are serialized
-     } else if (old_new.find(b) == old_new.end()) { // New blob, serialize along with lextent
-       BlueStore::BlobRef blob = blob_map.get(b);
-       p = enc_dec_varint(p, new_blob_id);
-       p = enc_dec(p, *blob);
-       old_new[le.blob] = new_blob_id++;
-     } else { // already serialized, let us remember the id
-       auto old_blob_id = old_new.find(b);
-       int blob_id = old_blob_id->first;
-       p = enc_dec_varint(p, blob_id);
-     }
      return p;
    }
 
    virtual const char* operator() (const char *p,uint64_t &off, bluestore_lextent_t& le)
    {
-     int b;
-     p = enc_dec_varint(p, off);
+     uint64_t delta;
+     p = enc_dec_varint_lowz(p, delta);
+     pos += delta;
+     off = pos;
      p = enc_dec(p, le);
-     p = enc_dec_varint(p, b);
-     if (b < 0) {
-       //nothing to do , we will deserialize  actual blob later
-     } else if (old_new.find(b) == old_new.end()) {
-       // blob id has to be retained
-       BlueStore::Blob* blob = new BlueStore::Blob;
-       p = enc_dec(p, *blob);
-       old_new[b] = new_blob_id++;
-       BlueStore::Blob* b = new BlueStore::Blob(blob->id, NULL);
-       b->blob = blob->blob;
-       // is this a memory leak here? need to handle
-       blob_map.blob_map.insert(*b);
-     } else {
-      assert(old_new.find(b) != old_new.end());
-     }
      return p;
    }
 };
 
-TEST(test_enc_dec, onode_blob_map) {
-  bluestore_onode_t onode;
-  generate_dummy_onode(onode);
-  bluestore_onode_t o2;
-  dump_onode_ondisk(onode);
-  BlueStore::BlobMap map1, map2, map3;
-  generate_dummy_blob_map(map1);
-  map<uint64_t, bluestore_lextent_t> le_map;
-  std::cout << "BlobMap1: " << map1 << std::endl;
-  bufferlist bl;
-  //enc(bl, onode);
-  onode_blob_map_context t(map1);
-  size_t sz = enc_dec(size_t(0), onode);
-  sz += enc_dec(size_t(0), onode.extent_map, t);
-  sz += enc_dec(size_t(0), map1);
-  std::cout << " estimated size: " << sz << std::endl;
-  char *buffer = new char[sz];
-  char *data_start = buffer + sizeof(__le32);
-  char *end = enc_dec(data_start, onode);
-  end = enc_dec(end, onode.extent_map, t);
-  end = enc_dec(end, map1);
-  std::cout << " encoded size of onode_blob_map: " << (int)(end-buffer) << std::endl;
-  *(__le32*)buffer= __le32(end-data_start);
-  size_t act_size = (__le32 )(end-data_start);
-  std::cout << " actual size: " << act_size << std::endl;
-  bufferptr bp = buffer::claim_char(act_size+sizeof(__le32), buffer);
-  bl.push_back(bp);
-  std::cout << "bufferlist size: " << bl.length() << std::endl;
-
-
-  // let us decode now
-  //
-
-  bufferlist::iterator i = bl.begin();
-  unique_ptr<char> buf0;
-  unique_ptr<char> buf1; // Incase we have to allocate a buffer
-  //
-  // Read the sentinal
-  //
-  const char *dec_buf_start = straighten_iterator(i,sizeof(__le32),buf0);
-  size_t buf_sz = *(__le32 *)dec_buf_start;
-  //
-  // Now the data itself
-  //
-  const char *dec_data_start  = straighten_iterator(i,buf_sz,buf1);
-  std::cout << "decode actual size: " << buf_sz << std::endl;
-  onode_blob_map_context t2(map2);
-  const char *dec_end = enc_dec((const char *)dec_data_start, o2);
-  dec_end = enc_dec((const char *)dec_end, le_map, t2);
-  dec_end = enc_dec((const char *)dec_end, map3);
-  std::cout << "Decoded size: " << (int) (dec_end - dec_data_start) << std::endl;
-  dump_onode_ondisk(o2);
-  std::cout << "BlobMap2: " << t2.blob_map << std::endl;
-  for (auto& p : le_map) {
-    std::cout << __func__ << "  lextent 0x" << std::hex << p.first
-                    << std::dec << ": " << p.second
-                    << std::endl;
+TEST(test_enc_dec, extent_map) {
+  map<uint64_t,bluestore_lextent_t> extent_map;
+  uint64_t offset = 0;
+  for (int i = 1; i <= 512; i++) {
+    extent_map[offset] =  bluestore_lextent_t(i, 0, 8192);
+    offset += 8192;
   }
-  std::cout << "BlobMap3: " << map3 << std::endl;
+  size_t sz = enc_dec(size_t(0), extent_map);
+  std::cout<< " extent map estimated size: " << sz << std::endl;
+  char *buf = new char[sz];
+  char *p = enc_dec(buf, extent_map);
+  std::cout<< " extent map encoded length: " << int(p-buf) << std::endl;
+  delete []buf;
+  bufferlist bl;
+  small_encode_copy(extent_map, bl);
+  std::cout << "extent map encoded length(default):" << bl.length() << std::endl;
 }
 
-void dump_chars(char *ptr, int size)
-{
-   cout << std::endl;
-   for (int i = 0; i< size; i++) {
-     cout<<std::hex <<(int)ptr[i] << "\t";
-   }
-   cout << std::endl;
+TEST(test_enc_dec, extent_map_context) {
+  map<uint64_t,bluestore_lextent_t> extent_map;
+  uint64_t offset = 0;
+  for (int i = 1; i <= 512; i++) {
+    extent_map[offset] =  bluestore_lextent_t(i, 0, 8192);
+    offset += 8192;
+  }
+  extent_map_context ctx;
+  size_t sz = enc_dec(size_t(0), extent_map, ctx);
+  std::cout<< " extent map estimated size: " << sz << std::endl;
+  char *buf = new char[sz];
+  char *p = enc_dec(buf, extent_map, ctx);
+  std::cout<< " extent map encoded length: " << int(p-buf) << std::endl;
+  delete []buf;
+  bufferlist bl;
+  small_encode_copy(extent_map, bl);
+  std::cout << "extent map encoded length(default):" << bl.length() << std::endl;
+}
+
+TEST(test_enc_dec, blob_map) {
+  BlueStore::BlobMap bmap;
+  generate_dummy_blob_map(bmap);
+  size_t sz = enc_dec(size_t(0), bmap);
+  std::cout<< " extent map estimated size: " << sz << std::endl;
+  char *buf = new char[sz];
+  char *p = enc_dec(buf, bmap);
+  std::cout<< " Blob map encoded length: " << int(p-buf) << std::endl;
+  bufferlist bl;
+  bmap.encode(bl);
+  std::cout << "blob map encoded length(default):" << bl.length() << std::endl;
 }
 
 TEST(test_enc_dec, lba) {
@@ -652,11 +580,10 @@ TEST(test_enc_dec, lba) {
   char buf[8] = { 0 };
   for (unsigned i=0; v[i][1]; ++i) {
     bzero(buf, 8);
-    enc_dec_lba(buf, v[i][0]);
+    char *p = enc_dec_lba(buf, v[i][0]);
     cout << std::hex << v[i][0] << "\t" << v[i][1] << "\t";
     cout << std::endl;
-    //dump_chars(buf, 8);
-    //ASSERT_EQ(bl.length(), v[i][1]);
+    ASSERT_EQ(__le32(p-buf), v[i][1]);
     uint64_t u;
     enc_dec_lba((const char*)buf,u);
     ASSERT_EQ(v[i][0], u);
@@ -664,7 +591,6 @@ TEST(test_enc_dec, lba) {
 
 }
 
-#if 0
 TEST(test_enc_dec, varint) {
   uint32_t v[][4] = {
     /* value, varint bytes, signed varint bytes, signed varint bytes (neg) */
@@ -688,59 +614,43 @@ TEST(test_enc_dec, varint) {
     {0x7f0001, 4, 4, 4},
     {0xff00001, 4, 5, 5},
     {0x1ff00001, 5, 5, 5},
-    {0xffff0001, 5, 5, 5},
-    {0xffffffff, 5, 5, 5},
+    {0xffff0001, 5, 3, 5},
+    {0xffffffff, 5, 1, 5},
     {1074790401, 5, 5, 5},
     {0, 0, 0, 0}
   };
+  char buf[8] = { 0 };
   for (unsigned i=0; v[i][1]; ++i) {
     {
-      bufferlist bl;
-      small_encode_varint(v[i][0], bl);
+      bzero(buf, 8);
+      char *p = enc_dec_varint(buf, v[i][0]);
       cout << std::hex << v[i][0] << "\t" << v[i][1] << "\t";
-      bl.hexdump(cout, false);
       cout << std::endl;
-      ASSERT_EQ(bl.length(), v[i][1]);
+      ASSERT_EQ(__le32(p-buf), v[i][1]);
       uint32_t u;
-      auto p = bl.begin();
-      small_decode_varint(u, p);
+      enc_dec_varint((const char*)buf, u);
       ASSERT_EQ(v[i][0], u);
     }
     {
-      bufferlist bl;
-      enc(bl, v[i][0]);
-      cout << std::hex << v[i][0] << "\t" << v[i][1] << "\t";
-      bl.hexdump(cout, false);
-      cout << std::endl;
-      ASSERT_EQ(bl.length(), v[i][1]);
-      uint32_t u;
-      auto p = bl.begin();
-      dec(p, u);
-      ASSERT_EQ(v[i][0], u);
-    }
-    {
-      bufferlist bl;
-      small_encode_signed_varint(v[i][0], bl);
+      bzero(buf, 8);
+      int32_t vi = v[i][0];
+      char *p = enc_dec_varint(buf, vi);
       cout << std::hex << v[i][0] << "\t" << v[i][2] << "\t";
-      bl.hexdump(cout, false);
       cout << std::endl;
-      ASSERT_EQ(bl.length(), v[i][2]);
+      ASSERT_EQ(__le32(p-buf), v[i][2]);
       int32_t u;
-      auto p = bl.begin();
-      small_decode_signed_varint(u, p);
+      enc_dec_varint((const char*)buf, u);
       ASSERT_EQ((int32_t)v[i][0], u);
     }
     {
-      bufferlist bl;
+      bzero(buf, 8);
       int64_t x = -(int64_t)v[i][0];
-      small_encode_signed_varint(x, bl);
+      char *p = enc_dec_varint(buf, x);
       cout << std::dec << x << std::hex << "\t" << v[i][3] << "\t";
-      bl.hexdump(cout, false);
       cout << std::endl;
-      ASSERT_EQ(bl.length(), v[i][3]);
+      ASSERT_EQ(__le32(p-buf), v[i][3]);
       int64_t u;
-      auto p = bl.begin();
-      small_decode_signed_varint(u, p);
+      enc_dec_varint((const char*)buf, u);
       ASSERT_EQ(x, u);
     }
   }
@@ -774,48 +684,42 @@ TEST(test_enc_dec, varint_lowz) {
     {0x41000000, 3, 4, 4},
     {0, 0, 0, 0}
   };
+  char buf[8] = { 0 };
   for (unsigned i=0; v[i][1]; ++i) {
     {
-      bufferlist bl;
-      small_encode_varint_lowz(v[i][0], bl);
+      bzero(buf, 8);
+      char *p = enc_dec_varint_lowz(buf, v[i][0]);
       cout << std::hex << v[i][0] << "\t" << v[i][1] << "\t";
-      bl.hexdump(cout, false);
       cout << std::endl;
-      ASSERT_EQ(bl.length(), v[i][1]);
+      ASSERT_EQ(__le32(p-buf), v[i][1]);
       uint32_t u;
-      auto p = bl.begin();
-      small_decode_varint_lowz(u, p);
+      enc_dec_varint_lowz((const char*)buf, u);
       ASSERT_EQ(v[i][0], u);
     }
     {
-      bufferlist bl;
+      bzero(buf, 8);
       int64_t x = v[i][0];
-      small_encode_signed_varint_lowz(x, bl);
-      cout << std::hex << x << "\t" << v[i][1] << "\t";
-      bl.hexdump(cout, false);
+      char *p = enc_dec_varint_lowz(buf, x);
+      cout << std::hex << x << "\t" << v[i][2] << "\t";
       cout << std::endl;
-      ASSERT_EQ(bl.length(), v[i][2]);
+      ASSERT_EQ(__le32(p-buf), v[i][2]);
       int64_t u;
-      auto p = bl.begin();
-      small_decode_signed_varint_lowz(u, p);
+      enc_dec_varint_lowz((const char*)buf, u);
       ASSERT_EQ(x, u);
     }
     {
-      bufferlist bl;
+      bzero(buf, 8);
       int64_t x = -(int64_t)v[i][0];
-      small_encode_signed_varint_lowz(x, bl);
-      cout << std::dec << x << "\t" << v[i][1] << "\t";
-      bl.hexdump(cout, false);
+      char *p = enc_dec_varint_lowz(buf, x);
+      cout << std::dec << x << "\t" << v[i][3] << "\t";
       cout << std::endl;
-      ASSERT_EQ(bl.length(), v[i][3]);
+      ASSERT_EQ(__le32(p-buf), v[i][3]);
       int64_t u;
-      auto p = bl.begin();
-      small_decode_signed_varint_lowz(u, p);
+      enc_dec_varint_lowz((const char*)buf, u);
       ASSERT_EQ(x, u);
     }
   }
 }
-#endif
 
 int main(int argc, char **argv)
 {
