@@ -19,4 +19,4 @@ source $(dirname $0)/detect-build-env-vars.sh
 
 CEPH_CLI_TEST_DUP_COMMAND=1 \
 MON=1 OSD=3 CEPH_START='mon osd' CEPH_PORT=7301 $CEPH_ROOT/src/test/vstart_wrapper.sh \
-    $CEPH_BIN/ceph_test_rados --pool rbd --op write 100 --objects 50 --op read 100 --op snap_create 10 --op snap_remove 10 --op rollback 10 --op delete 100 --max-ops 3000
+    $CEPH_BIN/ceph_test_rados --pool rbd --max-in-flight 7 --op write 100 --objects 10 --op read 100 --op snap_create 10 --op snap_remove 10 --op rollback 10 --op delete 100 --max-ops 1000
