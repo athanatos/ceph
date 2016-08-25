@@ -325,7 +325,7 @@ public:
   }
 };
 
-void generate_transaction(
+void ReplicatedBackend::generate_transaction(
   PGTransactionUPtr &pgt,
   const coll_t &coll,
   vector<pg_log_entry_t> &log_entries,
@@ -356,19 +356,33 @@ void generate_transaction(
 	}
       }
 
+      assert(t);
       if (op.delete_first) {
-	if (op.delete_first) {
-	  t->remove(coll, goid);
-	}
+	t->remove(coll, goid);
       }
 
+      struct temp {
+	ObjectStore::Transaction *&t;
+	const coll_t &coll;
+	const ghobject_t &goid;
+	void operator()(const PGTransaction::ObjectOperation::Init::Create &op) const {
+	  t->touch(coll, goid);
+	}
+      };
       match(
 	op.init_type,
 	[&](const PGTransaction::ObjectOperation::Init::None &) {
 	},
+	temp{t, coll, goid},
+#if 0
 	[&](const PGTransaction::ObjectOperation::Init::Create &op) {
+	  dout(10) << "create op " << goid << dendl;
+	  ghobject_t blah = goid;
+	  coll_t blah2 = coll;
+	  assert(t);
 	  t->touch(coll, goid);
 	},
+#endif
 	[&](const PGTransaction::ObjectOperation::Init::Clone &op) {
 	  t->clone(
 	    coll,

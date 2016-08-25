@@ -266,6 +266,13 @@ private:
 		    PushOp *out_op,
 		    object_stat_sum_t *stat = 0,
                     bool cache_dont_need = true);
+  void generate_transaction(
+    PGTransactionUPtr &pgt,
+    const coll_t &coll,
+    vector<pg_log_entry_t> &log_entries,
+    ObjectStore::Transaction *t,
+    set<hobject_t, hobject_t::BitwiseComparator> *added,
+    set<hobject_t, hobject_t::BitwiseComparator> *removed);
   void submit_push_data(ObjectRecoveryInfo &recovery_info,
 			bool first,
 			bool complete,
