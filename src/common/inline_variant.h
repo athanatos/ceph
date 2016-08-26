@@ -62,17 +62,20 @@ struct function_arg_extractor
 // A private helper fusion metafunction to construct a fusion map of functions
 struct pair_maker
 {
+    template<typename Sig>
+    struct result;
+
     template <typename Function>
-    struct result
+    struct result<pair_maker(Function)>
     {
         typedef typename function_arg_extractor::apply<Function>::type arg_type;
         typedef boost::fusion::pair<arg_type, Function> type;
     };
 
     template <typename Function>
-    typename result<Function>::type operator()(Function a) const
+    typename result<pair_maker(Function)>::type operator()(Function a) const
     {
-        return boost::fusion::make_pair<typename result<Function>::arg_type>(a);
+        return boost::fusion::make_pair< typename result<pair_maker(Function)>::arg_type >(a);
     }
 };
 
