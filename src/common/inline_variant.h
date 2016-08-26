@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// -*- mode:C++; tab-width:8; c-basic-offset:4; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Copied from:
@@ -68,6 +68,8 @@ struct pair_maker
     template <typename Function>
     struct result<pair_maker(Function)>
     {
+        BOOST_STATIC_ASSERT_MSG(!std::is_reference<Function>::value,
+				"asdf");
         typedef typename function_arg_extractor::apply<Function>::type arg_type;
         typedef boost::fusion::pair<arg_type, Function> type;
     };
