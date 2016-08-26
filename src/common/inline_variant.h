@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:4; indent-tabs-mode:t -*-
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Copied from:
@@ -145,9 +145,9 @@ public:
         fmap(boost::move(other.fmap))
     {
     }
-    generic_visitor(Functions&&... functions)
+    generic_visitor(Functions... functions)
     :
-      fmap(boost::fusion::as_map(boost::fusion::transform(boost::fusion::make_vector(std::forward<Functions>(functions)...), pair_maker())))
+        fmap(boost::fusion::as_map(boost::fusion::transform(boost::fusion::make_vector(functions...), pair_maker())))
     {
     }
 
@@ -229,11 +229,12 @@ auto make_visitor(BOOST_RV_REF(Functions)... functions)
 
 }
 
-template <typename Variant, typename... Functions>
-auto match(Variant const& variant, BOOST_RV_REF(Functions)... functions)
-    -> typename detail::get_generic_visitor<Variant, Functions...>::result_type
+template <typename Variant, typename Function1, typename... Functions>
+auto match(Variant const& variant, Function1 function1, BOOST_RV_REF(Functions)... functions)
+    -> typename detail::get_generic_visitor<Variant, Function1, Functions...>::result_type
 {
     return boost::apply_visitor(detail::make_visitor<Variant>(
+        boost::forward<Function1>(function1),
         boost::forward<Functions>(functions)...), variant);
 }
 
