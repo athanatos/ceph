@@ -858,7 +858,7 @@ void ECBackend::handle_sub_write(
     op.log_entries,
     op.updated_hit_set_history,
     op.trim_to,
-    op.trim_rollback_to,
+    op.roll_forward_to,
     !(op.t.empty()),
     localt);
 
@@ -1320,7 +1320,7 @@ void ECBackend::submit_transaction(
   const eversion_t &at_version,
   PGTransactionUPtr &&_t,
   const eversion_t &trim_to,
-  const eversion_t &trim_rollback_to,
+  const eversion_t &roll_forward_to,
   const vector<pg_log_entry_t> &log_entries,
   boost::optional<pg_hit_set_history_t> &hset_history,
   Context *on_local_applied_sync,
@@ -1336,7 +1336,7 @@ void ECBackend::submit_transaction(
   op->hoid = hoid;
   op->version = at_version;
   op->trim_to = trim_to;
-  op->trim_rollback_to = trim_rollback_to;
+  op->roll_forward_to = roll_forward_to;
   op->log_entries = log_entries;
   std::swap(op->updated_hit_set_history, hset_history);
   op->on_local_applied_sync = on_local_applied_sync;
@@ -1770,7 +1770,7 @@ void ECBackend::start_write(Op *op) {
       should_send ? iter->second : empty,
       op->version,
       op->trim_to,
-      op->trim_rollback_to,
+      op->roll_forward_to,
       op->log_entries,
       op->updated_hit_set_history,
       op->temp_added,
