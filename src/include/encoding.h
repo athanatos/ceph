@@ -194,6 +194,101 @@ encdec(
   cnt += traits::estimate(v, features);
 }
 
+/* Finally, define an instance for enc_dec_traits which automagically
+ * generates an encdec typefunction for anything with a templated
+ * encdec method which takes the right arguments.
+ */
+template<typename T>
+struct true_if_valid { static const bool value = true; };
+
+template<typename type>
+struct enc_dec_traits<
+  type,
+  typename std::enable_if<
+    true_if_valid<
+      decltype(std::declval<type>().encdec(
+		 std::declval<size_t&>()))
+      >::value &&
+    true_if_valid<
+      decltype(std::declval<type>().encdec(
+	std::declval<bufferlist::iterator&>()))
+      >::value &&
+    true_if_valid<
+      decltype(std::declval<type>().encdec(
+	std::declval<bufferlist::safe_appender&>()))
+      >::value &&
+    true_if_valid<
+      decltype(std::declval<type>().encdec(
+	std::declval<bufferlist::unsafe_appender&>()))
+      >::value
+    >::type
+  > {
+  static const bool supported = true;
+  static const bool feature = false;
+  static const bool bounded_size = false;
+  static const size_t max_size = 0;
+
+  template <typename App> static void encode(
+    const type &v, App &ap, uint64_t features = 0) {
+    const_cast<type &>(v).encdec(ap); /* TODO: figure out, this is not great */
+  }
+  static void decode(
+    type &v, bufferlist::iterator &bl, uint64_t features = 0) {
+    v.encdec(bl);
+  }
+  static size_t estimate(const type &v, uint64_t features = 0) {
+    size_t ret = 0;
+    const_cast<type &>(v).encdec(ret);
+    return ret;
+  }
+};
+
+template<typename type>
+struct enc_dec_traits<
+  type,
+  typename std::enable_if<
+    true_if_valid<
+      decltype(std::declval<type>().encdec(
+        std::declval<size_t&>(),
+	std::declval<uint64_t>()))
+      >::value &&
+    true_if_valid<
+      decltype(std::declval<type>().encdec(
+        std::declval<bufferlist::iterator&>(),
+	std::declval<uint64_t>()))
+      >::value &&
+    true_if_valid<
+      decltype(std::declval<type>().encdec(
+        std::declval<bufferlist::safe_appender&>(),
+	std::declval<uint64_t>()))
+      >::value &&
+    true_if_valid<
+      decltype(std::declval<type>().encdec(
+        std::declval<bufferlist::unsafe_appender&>(),
+	std::declval<uint64_t>()))
+      >::value
+    >::type
+  > {
+  static const bool supported = true;
+  static const bool feature = true;
+  static const bool bounded_size = false;
+  static const size_t max_size = 0;
+
+  template <typename App> static void encode(
+    const type &v, App &ap, uint64_t features) {
+    const_cast<type &>(v).encdec(ap, features);
+  }
+  static void decode(
+    type &v, bufferlist::iterator &bl, uint64_t features) {
+    v.encdec(bl, features);
+  }
+  static size_t estimate(const type &v, uint64_t features) {
+    size_t ret = 0;
+    const_cast<type &>(v).encdec(ret, features);
+    return ret;
+  }
+};
+
 // --------------------------------------
 // base types
 
