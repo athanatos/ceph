@@ -276,8 +276,32 @@ public:
 
   bool parse(const string& s);
 
-  void encode(bufferlist& bl) const;
-  void decode(bufferlist::iterator& bl);
+  template <typename App>
+  void encdec(App& bl) const {
+    //ENCODE_START(4, 3, bl); TODO: handle ENCODE_START
+    ::encode(key, bl);
+    ::encode(oid, bl);
+    ::encode(snap, bl);
+    ::encode(hash, bl);
+    ::encode(max, bl);
+    ::encode(nspace, bl);
+    ::encode(pool, bl);
+    assert(!max || (*this == hobject_t(hobject_t::get_max())));
+    //ENCODE_FINISH(bl);
+  }
+  void encdec(bufferlist::iterator& bl);
+  void encdec(size_t &ret) const {
+    /* TODO: handle ENCODE_START overhead */
+    ::encdec(key, ret);
+    ::encdec(oid, ret);
+    ::encdec(snap, ret);
+    ::encdec(hash, ret);
+    ::encdec(max, ret);
+    ::encdec(nspace, ret);
+    ::encdec(pool, ret);
+  }
+  void encode(bufferlist &bl) const { encdec(bl); }
+  void decode(bufferlist::iterator& p) { encdec(p); }
   void decode(json_spirit::Value& v);
   void dump(Formatter *f) const;
   static void generate_test_instances(list<hobject_t*>& o);
@@ -320,7 +344,6 @@ public:
     }
   };
 };
-WRITE_CLASS_ENCODER(hobject_t)
 
 namespace std {
   template<> struct hash<hobject_t> {

@@ -102,21 +102,7 @@ string hobject_t::to_str() const
   return out;
 }
 
-void hobject_t::encode(bufferlist& bl) const
-{
-  ENCODE_START(4, 3, bl);
-  ::encode(key, bl);
-  ::encode(oid, bl);
-  ::encode(snap, bl);
-  ::encode(hash, bl);
-  ::encode(max, bl);
-  ::encode(nspace, bl);
-  ::encode(pool, bl);
-  assert(!max || (*this == hobject_t(hobject_t::get_max())));
-  ENCODE_FINISH(bl);
-}
-
-void hobject_t::decode(bufferlist::iterator& bl)
+void hobject_t::encdec(bufferlist::iterator& bl)
 {
   DECODE_START_LEGACY_COMPAT_LEN(4, 3, 3, bl);
   if (struct_v >= 1)
