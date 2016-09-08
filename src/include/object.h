@@ -45,14 +45,11 @@ struct object_t {
     name.clear();
   }
   
-  void encode(bufferlist &bl) const {
-    ::encode(name, bl);
-  }
-  void decode(bufferlist::iterator &bl) {
-    ::decode(name, bl);
+  template <typename T>
+  void encdec(T &t) {
+    ::encdec(name, t);
   }
 };
-WRITE_CLASS_ENCODER(object_t)
 
 inline bool operator==(const object_t& l, const object_t& r) {
   return l.name == r.name;
@@ -117,10 +114,12 @@ struct snapid_t {
   snapid_t operator+=(snapid_t o) { val += o.val; return *this; }
   snapid_t operator++() { ++val; return *this; }
   operator uint64_t() const { return val; }  
-};
 
-inline void encode(snapid_t i, bufferlist &bl, uint64_t features = 0) { encode(i.val, bl); }
-inline void decode(snapid_t &i, bufferlist::iterator &p, uint64_t features = 0) { decode(i.val, p); }
+  template <typename T>
+  void encdec(T &t) {
+    ::encdec(val, t);
+  }
+};
 
 inline ostream& operator<<(ostream& out, snapid_t s) {
   if (s == CEPH_NOSNAP)
