@@ -149,28 +149,50 @@ decode(type &v, bufferlist::iterator &bl, uint64_t features) {
   traits::decode(v, bl, features);
 }
 
-#if 0
-/* Next, define the new-style encdec */
+/* Next, define the new-style encdec -- only available for new-style */
+template<typename type, typename app, typename traits>
+void encdec() {
+}
+
 template<typename type, typename app, typename traits=enc_dec_traits<type> >
 inline typename std::enable_if<traits::supported && !traits::feature>::type
-encdec(type &v, app &a, uint64_t features=0) {
+encdec(const type &v, app &a, uint64_t features=0) {
   traits::encode(v, a);
+}
+
+template<typename type, typename app, typename traits=enc_dec_traits<type> >
+inline typename std::enable_if<traits::supported && traits::feature>::type
+encdec(const type &v, app &a, uint64_t features) {
+  traits::encode(v, a, features);
 }
 
 template<typename type, typename traits=enc_dec_traits<type> >
 inline typename std::enable_if<traits::supported && !traits::feature>::type
-encdec<type, bufferlist::iterator, traits>(
+encdec(
   type &v, bufferlist::iterator &bl, uint64_t features=0) {
   traits::decode(v, bl);
 }
 
 template<typename type, typename traits=enc_dec_traits<type> >
+inline typename std::enable_if<traits::supported && traits::feature>::type
+encdec(
+  type &v, bufferlist::iterator &bl, uint64_t features) {
+  traits::decode(v, bl, features);
+}
+
+template<typename type, typename traits=enc_dec_traits<type> >
 inline typename std::enable_if<traits::supported && !traits::feature>::type
-encdec<type, size_t &cnt, traits>(
-  type &v, size_t, uint64_t features=0) {
+encdec(
+  const type &v, size_t &cnt, uint64_t features=0) {
+  cnt += traits::estimate(v);
+}
+
+template<typename type, typename traits=enc_dec_traits<type> >
+inline typename std::enable_if<traits::supported && traits::feature>::type
+encdec(
+  const type &v, size_t &cnt, uint64_t features) {
   cnt += traits::estimate(v, features);
 }
-#endif
 
 // --------------------------------------
 // base types
@@ -190,7 +212,9 @@ encdec<type, size_t &cnt, traits>(
       type &v, bufferlist::iterator &bl, uint64_t features = 0) {       \
       decode_raw(v, bl);                                                \
     }                                                                   \
-    static size_t estimate(const type &v) { return max_size; }          \
+    static size_t estimate(const type &v, uint64_t feature = 0) {       \
+      return max_size;                                                  \
+    }							                \
   };                                                                    \
 
 WRITE_RAW_ENCODER(__u8)
