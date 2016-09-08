@@ -325,16 +325,28 @@ WRITE_RAW_ENCODER(ceph_le16)
 WRITE_RAW_ENCODER(float)
 WRITE_RAW_ENCODER(double)
 
-inline void encode(const bool &v, bufferlist& bl) {
-  __u8 vv = v;
-  encode_raw(vv, bl);
-}
-inline void decode(bool &v, bufferlist::iterator& p) {
-  __u8 vv;
-  decode_raw(vv, p);
-  v = vv;
-}
-
+template <>
+struct enc_dec_traits<bool> {
+  static const bool supported = true;
+  static const bool feature = false;
+  static const bool bounded_size = true;
+  static const size_t max_size = 1;
+  template <typename App> static void encode(
+    const bool &b, App &app, uint64_t features = 0) {
+    __u8 vv = b;
+    encode_raw(vv, app);
+  }
+  static void decode(
+    bool &b, bufferlist::iterator &p, uint64_t features = 0) {
+    __u8 vv;
+    decode_raw(vv, p);
+    b = vv;
+  }
+  static size_t estimate(
+    const bool &b, uint64_t features = 0) {
+    return 1;
+  }
+};
 
 // -----------------------------------
 // int types
@@ -428,20 +440,39 @@ WRITE_INTTYPE_ENCODER(int16_t, le16)
 
 
 // string
-inline void encode(const std::string& s, bufferlist& bl, uint64_t features=0)
-{
-  __u32 len = s.length();
-  encode(len, bl);
-  if (len)
-    bl.append(s.data(), len);
-}
-inline void decode(std::string& s, bufferlist::iterator& p)
-{
-  __u32 len;
-  decode(len, p);
-  s.clear();
-  p.copy(len, s);
-}
+template<>
+struct enc_dec_traits<std::string> {
+  static const bool supported = true;
+  static const bool feature = false;
+  static const bool bounded_size = false;
+  static const size_t max_size = 0;
+
+  template <typename App> static void encode(
+    const std::string &str,
+    App &app,
+    uint64_t features = 0) {
+    __u32 len = str.length();
+    ::encode(len, app);
+    if (len)
+      app.append(str.data(), len);
+  }
+
+  static void decode(
+    std::string &str,
+    bufferlist::iterator &p,
+    uint64_t features = 0) {
+    __u32 len;
+    ::decode(len, p);
+    str.clear();
+    p.copy(len, str);
+  }
+
+  static size_t estimate(
+    const std::string &str,
+    uint64_t features = 0) {
+    return str.length();
+  }
+};
 
 inline void encode_nohead(const std::string& s, bufferlist& bl)
 {
