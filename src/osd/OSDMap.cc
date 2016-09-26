@@ -404,7 +404,8 @@ void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
   // OSDMaps.  others should be passing around the canonical encoded
   // buffers from on high.  select out those callers by passing in an
   // "impossible" feature bit.
-  assert(features & CEPH_FEATURE_RESERVED);
+  // temporarily disabled for http://tracker.ceph.com/issues/17386
+  // assert(features & CEPH_FEATURE_RESERVED);
   features &= ~CEPH_FEATURE_RESERVED;
 
   size_t start_offset = bl.length();
@@ -1878,7 +1879,8 @@ void OSDMap::encode(bufferlist& bl, uint64_t features) const
   // OSDMaps.  others should be passing around the canonical encoded
   // buffers from on high.  select out those callers by passing in an
   // "impossible" feature bit.
-  assert(features & CEPH_FEATURE_RESERVED);
+  // assert(features & CEPH_FEATURE_RESERVED);
+  // temporarily disabled for http://tracker.ceph.com/issues/17386
   features &= ~CEPH_FEATURE_RESERVED;
 
   size_t start_offset = bl.length();
