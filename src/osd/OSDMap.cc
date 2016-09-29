@@ -413,7 +413,10 @@ void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
   buffer::list::iterator crc_it;
 
   // meta-encoding: how we include client-used and osd-specific data
-  ENCODE_START(8, 7, bl);
+  // disable crc checking if the feature bits does not match the one with which
+  // we encoded before. otherwise the full_crc won't match.
+  have_crc = !encode_features || features == encode_features;
+  ENCODE_START(have_crc ? 8 : 7, 7, bl);
 
   {
     ENCODE_START(3, 1, bl); // client-usable data
@@ -457,26 +460,27 @@ void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
     ENCODE_FINISH(bl); // osd-only data
   }
 
-  ::encode((uint32_t)0, bl); // dummy inc_crc
-  crc_it = bl.end();
-  crc_it.advance(-4);
-  tail_offset = bl.length();
+  if (have_crc) {
+    ::encode((uint32_t)0, bl); // dummy inc_crc
+    crc_it = bl.end();
+    crc_it.advance(-4);
+    tail_offset = bl.length();
 
-  ::encode(full_crc, bl);
-
+    ::encode(full_crc, bl);
+  }
   ENCODE_FINISH(bl); // meta-encoding wrapper
-
-  // fill in crc
-  bufferlist front;
-  front.substr_of(bl, start_offset, crc_it.get_off() - start_offset);
-  inc_crc = front.crc32c(-1);
-  bufferlist tail;
-  tail.substr_of(bl, tail_offset, bl.length() - tail_offset);
-  inc_crc = tail.crc32c(inc_crc);
-  ceph_le32 crc_le;
-  crc_le = inc_crc;
-  crc_it.copy_in(4, (char*)&crc_le);
-  have_crc = true;
+  if (have_crc) {
+    // fill in crc
+    bufferlist front;
+    front.substr_of(bl, start_offset, crc_it.get_off() - start_offset);
+    inc_crc = front.crc32c(-1);
+    bufferlist tail;
+    tail.substr_of(bl, tail_offset, bl.length() - tail_offset);
+    inc_crc = tail.crc32c(inc_crc);
+    ceph_le32 crc_le;
+    crc_le = inc_crc;
+    crc_it.copy_in(4, (char*)&crc_le);
+  }
 }
 
 void OSDMap::Incremental::decode_classic(bufferlist::iterator &p)
