@@ -4079,7 +4079,7 @@ void PG::chunky_scrub(ThreadPool::TPHandle &handle)
 	  if (!_range_available_for_scrub(scrubber.start, candidate_end)) {
 	    // we'll be requeued by whatever made us unavailable for scrub
 	    dout(10) << __func__ << ": scrub blocked somewhere in range "
-		     << "[" << scrubber.start << ", " << candidate_end << ")"
+		     << "[" << scrubber.start << ", " << candidate_end << "]"
 		     << dendl;
 	    done = true;
 	    break;
@@ -4092,7 +4092,8 @@ void PG::chunky_scrub(ThreadPool::TPHandle &handle)
         for (list<pg_log_entry_t>::const_iterator p = pg_log.get_log().log.begin();
              p != pg_log.get_log().log.end();
              ++p) {
-          if (p->soid >= scrubber.start && p->soid < scrubber.end)
+          if (p->soid >= scrubber.start && p->soid <= scrubber.end)
+	    // inclusive upper bound, @see write_blocked_by_scrub
             scrubber.subset_last_update = p->version;
         }
 
