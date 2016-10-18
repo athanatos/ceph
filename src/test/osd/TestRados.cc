@@ -54,7 +54,7 @@ public:
     if (m_op <= m_objects) {
       stringstream oid;
       oid << m_op;
-      if (m_op % 2) {
+      if (0 && m_op % 2) {
 	// make it a long name
 	oid << " " << string(300, 'o');
       }
