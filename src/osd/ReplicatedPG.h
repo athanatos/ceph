@@ -842,6 +842,7 @@ protected:
   void submit_log_entries(
     const list<pg_log_entry_t> &entries,
     ObcLockManager &&manager,
+    OpRequestRef to_requeue,
     boost::optional<std::function<void(void)> > &&on_complete);
   struct LogUpdateCtx {
     boost::intrusive_ptr<RepGather> repop;

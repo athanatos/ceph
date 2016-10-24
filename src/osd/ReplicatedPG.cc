@@ -2316,6 +2316,7 @@ void ReplicatedPG::record_write_error(OpRequestRef op, const hobject_t &soid,
   submit_log_entries(
     entries,
     std::move(lock_manager),
+    op,
     boost::optional<std::function<void(void)> >(
       [=]() {
 	dout(20) << "finished " << __func__ << " r=" << r << dendl;
@@ -8652,6 +8653,7 @@ void ReplicatedPG::simple_opc_submit(OpContextUPtr ctx)
 void ReplicatedPG::submit_log_entries(
   const list<pg_log_entry_t> &entries,
   ObcLockManager &&manager,
+  OpRequestRef to_requeue,
   boost::optional<std::function<void(void)> > &&_on_complete)
 {
   dout(10) << __func__ << entries << dendl;
@@ -8668,6 +8670,7 @@ void ReplicatedPG::submit_log_entries(
     repop = new_repop(
       std::move(manager),
       std::move(_on_complete));
+    repop->op = to_requeue;
   } else {
     on_complete = std::move(_on_complete);
   }
@@ -9871,6 +9874,7 @@ void ReplicatedPG::mark_all_unfound_lost(
   submit_log_entries(
     log_entries,
     std::move(manager),
+    OpRequestRef(),
     boost::optional<std::function<void(void)> >(
       [=]() {
 	requeue_ops(waiting_for_all_missing);
