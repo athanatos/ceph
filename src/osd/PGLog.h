@@ -970,6 +970,7 @@ public:
     const hobject_t &last_backfill,
     bool last_backfill_bitwise,
     const list<pg_log_entry_t> &entries,
+    bool maintain_rollback,
     IndexedLog *log,
     missing_type &missing,
     LogEntryHandler *rollbacker,
@@ -991,7 +992,7 @@ public:
 	missing.add_next_event(*p);
 	if (rollbacker) {
 	  // hack to match PG::mark_all_unfound_lost
-	  if (p->is_lost_delete() && p->can_rollback()) {
+	  if (maintain_rollback && p->is_lost_delete() && p->can_rollback()) {
 	    rollbacker->try_stash(p->soid, p->version.version);
 	  } else if (p->is_delete()) {
 	    rollbacker->remove(p->soid);
@@ -1010,6 +1011,7 @@ public:
       last_backfill,
       last_backfill_bitwise,
       entries,
+      true,
       &log,
       missing,
       rollbacker,

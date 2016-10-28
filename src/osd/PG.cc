@@ -4660,6 +4660,7 @@ void PG::merge_new_log_entries(
       pinfo.last_backfill,
       info.last_backfill_bitwise,
       entries,
+      true,
       NULL,
       pmissing,
       NULL,
