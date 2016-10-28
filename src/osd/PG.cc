@@ -3017,11 +3017,10 @@ void PG::append_log(
 
   PGLogEntryHandler handler{this, &t};
   if (!transaction_applied) {
-    /* TODOSAM DNM
-     * I'm fairly sure this is correct.  We must be a backfill
-     * peer, so it's ok if we apply out-of-turn since we won't
-     * be considered when determining a min possible last_update.
-     */
+     /* We must be a backfill peer, so it's ok if we apply
+      * out-of-turn since we won't be considered when
+      * determining a min possible last_update.
+      */
     pg_log.roll_forward(&handler);
   }
 
@@ -3029,6 +3028,14 @@ void PG::append_log(
        p != logv.end();
        ++p) {
     add_log_entry(*p, transaction_applied);
+
+    /* We don't want to leave the rollforward artifacts around
+     * here past last_backfill.  It's ok for the same reason as
+     * above */
+    if (transaction_applied &&
+	cmp(p->soid, info.last_backfill, get_sort_bitwise()) > 0) {
+      pg_log.roll_forward(&handler);
+    }
   }
   auto last = logv.rbegin();
   if (is_primary() && last != logv.rend()) {
