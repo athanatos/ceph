@@ -1677,6 +1677,7 @@ void ECBackend::start_write(Op *op) {
     op->unstable_hash_infos,
     ec_impl,
     get_parent()->get_info().pgid.pgid,
+    !get_osdmap()->test_flag(CEPH_OSDMAP_REQUIRE_KRAKEN),
     sinfo,
     op->log_entries,
     &trans,

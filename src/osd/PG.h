@@ -937,41 +937,11 @@ public:
   bool proc_replica_info(
     pg_shard_t from, const pg_info_t &info, epoch_t send_epoch);
 
-
-  struct LogEntryTrimmer : public ObjectModDesc::Visitor {
-    const hobject_t &soid;
-    PG *pg;
-    ObjectStore::Transaction *t;
-    LogEntryTrimmer(const hobject_t &soid, PG *pg, ObjectStore::Transaction *t)
-      : soid(soid), pg(pg), t(t) {}
-    void rmobject(version_t old_version) {
-      pg->get_pgbackend()->trim_stashed_object(
-	soid,
-	old_version,
-	t);
-    }
-  };
-
-  struct SnapRollBacker : public ObjectModDesc::Visitor {
-    const hobject_t &soid;
-    PG *pg;
-    ObjectStore::Transaction *t;
-    SnapRollBacker(const hobject_t &soid, PG *pg, ObjectStore::Transaction *t)
-      : soid(soid), pg(pg), t(t) {}
-    void update_snaps(set<snapid_t> &snaps) {
-      pg->update_object_snap_mapping(t, soid, snaps);
-    }
-    void create() {
-      pg->clear_object_snap_mapping(
-	t,
-	soid);
-    }
-  };
-
   struct PGLogEntryHandler : public PGLog::LogEntryHandler {
     list<pg_log_entry_t> to_rollback;
-    set<hobject_t, hobject_t::BitwiseComparator> to_remove;
+    list<pg_log_entry_t> to_rollforward;
     list<pg_log_entry_t> to_trim;
+    set<hobject_t, hobject_t::BitwiseComparator> to_remove;
     list<pair<hobject_t, version_t> > to_stash;
     
     // LogEntryHandler
@@ -985,7 +955,7 @@ public:
       to_rollback.push_back(entry);
     }
     void rollforward(const pg_log_entry_t &entry) {
-      to_trim.push_back(entry);
+      to_rollforward.push_back(entry);
     }
     void trim(const pg_log_entry_t &entry) {
       to_trim.push_back(entry);
@@ -995,10 +965,8 @@ public:
       for (list<pg_log_entry_t>::iterator j = to_rollback.begin();
 	   j != to_rollback.end();
 	   ++j) {
-	assert(j->mod_desc.can_rollback());
-	pg->get_pgbackend()->rollback(j->soid, j->mod_desc, t);
-	SnapRollBacker rollbacker(j->soid, pg, t);
-	j->mod_desc.visit(&rollbacker);
+	assert(j->can_rollback());
+	pg->get_pgbackend()->rollback(*j, t);
       }
       for (list<pair<hobject_t, version_t> >::iterator i = to_stash.begin();
 	   i != to_stash.end();
@@ -1008,21 +976,19 @@ public:
       for (set<hobject_t, hobject_t::BitwiseComparator>::iterator i = to_remove.begin();
 	   i != to_remove.end();
 	   ++i) {
-	pg->get_pgbackend()->rollback_create(*i, t);
-	pg->remove_snap_mapped_object(*t, *i);
+	pg->get_pgbackend()->remove(*i, t);
+      }
+      for (auto &&i: to_rollforward) {
+	pg->get_pgbackend()->rollforward(i, t);
       }
       for (list<pg_log_entry_t>::reverse_iterator i = to_trim.rbegin();
 	   i != to_trim.rend();
 	   ++i) {
-	LogEntryTrimmer trimmer(i->soid, pg, t);
-	i->mod_desc.visit(&trimmer);
+	pg->get_pgbackend()->trim(*i, t);
       }
     }
   };
   
-  friend struct SnapRollBacker;
-  friend struct PGLogEntryHandler;
-  friend struct LogEntryTrimmer;
   void update_object_snap_mapping(
     ObjectStore::Transaction *t, const hobject_t &soid,
     const set<snapid_t> &snaps);
