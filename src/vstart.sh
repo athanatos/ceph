@@ -364,6 +364,8 @@ else
         debug auth = 20
         debug ms = 1'
     COSDDEBUG='
+        osd min pg log entries = 20
+        osd max pg log entries = 30
         debug ms = 1
         debug osd = 25
         debug objecter = 20
