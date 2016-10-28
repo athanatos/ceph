@@ -9831,10 +9831,10 @@ void ReplicatedPG::mark_all_unfound_lost(
       prev = pick_newest_available(oid);
       if (prev > eversion_t()) {
 	// log it
-	++v.version;
 	pg_log_entry_t e(
 	  pg_log_entry_t::LOST_REVERT, oid, v,
 	  m->second.need, 0, osd_reqid_t(), mtime, 0);
+	++v.version;
 	e.reverting_to = prev;
 	e.mark_unrollbackable(
 	  !get_osdmap()->test_flag(CEPH_OSDMAP_REQUIRE_KRAKEN));
@@ -9848,9 +9848,9 @@ void ReplicatedPG::mark_all_unfound_lost(
 
     case pg_log_entry_t::LOST_DELETE:
       {
-	++v.version;
 	pg_log_entry_t e(pg_log_entry_t::LOST_DELETE, oid, v, m->second.need,
 			 0, osd_reqid_t(), mtime, 0);
+	++v.version;
 	if (get_osdmap()->test_flag(CEPH_OSDMAP_REQUIRE_JEWEL)) {
 	  if (pool.info.require_rollback()) {
 	    TransactionInfo::LocalRollBack lrb;
