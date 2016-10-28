@@ -356,6 +356,7 @@ void PGLog::merge_log(ObjectStore::Transaction& t,
     for (auto &&oe: divergent) {
       dout(10) << "merge_log divergent " << oe << dendl;
     }
+    log.roll_forward_to(info.last_update, rollbacker);
 
     list<pg_log_entry_t> new_entries;
     new_entries.splice(new_entries.end(), olog.log, from, to);
