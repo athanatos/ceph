@@ -3822,11 +3822,11 @@ int FileStore::_move_ranges_destroy_src(const coll_t& src_cid, const ghobject_t&
   uint64_t projected_size = st.st_size;
   for (auto &&i: move_info) {
     uint64_t end = i.get<1>() + i.get<2>();
-    if (end > (int64_t)projected_size) {
+    if (end > projected_size) {
       projected_size = end;
     }
   }
-  if (projected_size > st.st_size) {
+  if ((int64_t)projected_size > st.st_size) {
     r = ::ftruncate(**t, projected_size);
     if (r < 0) {
       r = -errno;
