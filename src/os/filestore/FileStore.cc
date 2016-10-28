@@ -3807,6 +3807,38 @@ int FileStore::_move_ranges_destroy_src(const coll_t& src_cid, const ghobject_t&
     }
   }
 
+  // truncate out to the right size to make btrfs happy
+  struct stat st;
+  r = ::fstat(**t, &st);
+  if (r < 0) {
+    r = -errno;
+    dout(10) << __func__ << ": fstat returned " << r
+	     << " after open suceeded"
+	     << dendl;
+    lfn_close(t);
+    lfn_close(b);
+    return r;
+  }
+  uint64_t projeced_size = st.st_size;
+  for (auto &&i: move_info) {
+    uint64_t end = i.get<1>() + i.get<2>();
+    if (end > projected_size) {
+      projected_size = end;
+    }
+  }
+  if (projected_size > st.size) {
+    r = ::ftruncate(**t, projected_size);
+    if (r < 0) {
+      r = -errno;
+      dout(10) << __func__ << ": fstat returned " << r
+	       << " after open suceeded"
+	       << dendl;
+      lfn_close(t);
+      lfn_close(b);
+      return r;
+    }
+  }
+
   for (unsigned i = 0; i < move_info.size(); ++i) {
      uint64_t srcoff = move_info[i].get<0>();
      uint64_t dstoff = move_info[i].get<1>();
