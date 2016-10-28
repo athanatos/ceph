@@ -63,6 +63,10 @@ void append(
 		     << offset + bl.length()
 		     << dendl;
 
+  hinfo->append(
+    sinfo.aligned_logical_offset_to_chunk_offset(offset),
+    buffers);
+
   for (auto &&i : *transactions) {
     assert(buffers.count(i.first));
     bufferlist &enc_bl = buffers[i.first];

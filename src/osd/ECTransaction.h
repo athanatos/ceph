@@ -76,17 +76,19 @@ namespace ECTransaction {
 
 	auto &will_write = plan.will_write[i.first];
 	if (i.second.truncate &&
-	    i.second.truncate->first < projected_size &&
-	    !(sinfo.logical_offset_is_stripe_aligned(i.second.truncate->first))) {
-	  plan.to_read[i.first].insert(
-	    sinfo.logical_to_prev_stripe_offset(i.second.truncate->first),
-	    sinfo.get_stripe_width());
+	    i.second.truncate->first < projected_size) {
+	  if (!(sinfo.logical_offset_is_stripe_aligned(
+		  i.second.truncate->first))) {
+	    plan.to_read[i.first].insert(
+	      sinfo.logical_to_prev_stripe_offset(i.second.truncate->first),
+	      sinfo.get_stripe_width());
 
-	  ldpp_dout(dpp, 20) << __func__ << ": unaligned truncate" << dendl;
+	    ldpp_dout(dpp, 20) << __func__ << ": unaligned truncate" << dendl;
 
-	  will_write.insert(
-	    sinfo.logical_to_prev_stripe_offset(i.second.truncate->first),
-	    sinfo.get_stripe_width());
+	    will_write.insert(
+	      sinfo.logical_to_prev_stripe_offset(i.second.truncate->first),
+	      sinfo.get_stripe_width());
+	  }
 	  projected_size = sinfo.logical_to_next_stripe_offset(
 	    i.second.truncate->first);
 	}
