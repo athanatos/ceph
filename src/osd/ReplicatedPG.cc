@@ -10003,9 +10003,8 @@ void ReplicatedPG::on_removal(ObjectStore::Transaction *t)
 
 
   // clear log
-  PGLogEntryHandler rollbacker;
+  PGLogEntryHandler rollbacker{this, t};
   pg_log.roll_forward(&rollbacker);
-  rollbacker.apply(this, t);
 
   write_if_dirty(*t);
 

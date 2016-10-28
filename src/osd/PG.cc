@@ -431,18 +431,16 @@ void PG::update_object_snap_mapping(
 void PG::merge_log(
   ObjectStore::Transaction& t, pg_info_t &oinfo, pg_log_t &olog, pg_shard_t from)
 {
-  PGLogEntryHandler rollbacker;
+  PGLogEntryHandler rollbacker{this, &t};
   pg_log.merge_log(
     t, oinfo, olog, from, info, &rollbacker, dirty_info, dirty_big_info);
-  rollbacker.apply(this, &t);
 }
 
 void PG::rewind_divergent_log(ObjectStore::Transaction& t, eversion_t newhead)
 {
-  PGLogEntryHandler rollbacker;
+  PGLogEntryHandler rollbacker{this, &t};
   pg_log.rewind_divergent_log(
     t, newhead, info, &rollbacker, dirty_info, dirty_big_info);
-  rollbacker.apply(this, &t);
 }
 
 /*
@@ -1861,9 +1859,8 @@ void PG::activate(ObjectStore::Transaction& t,
      *
      * See http://tracker.ceph.com/issues/17158 for the considerations here
      */
-    PGLogEntryHandler handler;
+    PGLogEntryHandler handler{this, &t};
     pg_log.roll_forward(&handler);
-    handler.apply(this, &t);
   }
 }
 
@@ -3018,7 +3015,7 @@ void PG::append_log(
   }
   dout(10) << "append_log " << pg_log.get_log() << " " << logv << dendl;
 
-  PGLogEntryHandler handler;
+  PGLogEntryHandler handler{this, &t};
   if (!transaction_applied) {
     /* TODOSAM DNM
      * I'm fairly sure this is correct.  We must be a backfill
@@ -3026,7 +3023,6 @@ void PG::append_log(
      * be considered when determining a min possible last_update.
      */
     pg_log.roll_forward(&handler);
-    handler.apply(this, &t);
   }
 
   for (vector<pg_log_entry_t>::const_iterator p = logv.begin();
@@ -3052,10 +3048,6 @@ void PG::append_log(
   }
 
   pg_log.trim(trim_to, info);
-
-  dout(10) << __func__ << ": rolling forward to " << roll_forward_to
-	   << " entries " << handler.to_trim << dendl;
-  handler.apply(this, &t);
 
   // update the local pg, pg log
   dirty_info = true;
@@ -4618,13 +4610,12 @@ bool PG::append_log_entries_update_missing(
   assert(!entries.empty());
   assert(entries.begin()->version > info.last_update);
 
-  PGLogEntryHandler rollbacker;
+  PGLogEntryHandler rollbacker{this, &t};
   bool invalidate_stats =
     pg_log.append_new_log_entries(info.last_backfill,
 				  info.last_backfill_bitwise,
 				  entries,
 				  &rollbacker);
-  rollbacker.apply(this, &t);
   info.last_update = pg_log.get_head();
 
   if (pg_log.get_missing().num_missing() == 0) {
@@ -7085,9 +7076,8 @@ boost::statechart::result PG::RecoveryState::Stray::react(const MLogRec& logevt)
     pg->dirty_info = true;
     pg->dirty_big_info = true;  // maybe.
 
-    PGLogEntryHandler rollbacker;
+    PGLogEntryHandler rollbacker{pg, t};
     pg->pg_log.reset_backfill_claim_log(msg->log, &rollbacker);
-    rollbacker.apply(pg, t);
 
     pg->pg_log.reset_backfill();
   } else {

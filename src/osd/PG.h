@@ -937,54 +937,26 @@ public:
     pg_shard_t from, const pg_info_t &info, epoch_t send_epoch);
 
   struct PGLogEntryHandler : public PGLog::LogEntryHandler {
-    list<pg_log_entry_t> to_rollback;
-    list<pg_log_entry_t> to_rollforward;
-    list<pg_log_entry_t> to_trim;
-    set<hobject_t, hobject_t::BitwiseComparator> to_remove;
-    list<pair<hobject_t, version_t> > to_stash;
-    
+    PG *pg;
+    ObjectStore::Transaction *t;
+    PGLogEntryHandler(PG *pg, ObjectStore::Transaction *t) : pg(pg), t(t) {}
+
     // LogEntryHandler
     void remove(const hobject_t &hoid) {
-      to_remove.insert(hoid);
+      pg->get_pgbackend()->remove(hoid, t);
     }
     void try_stash(const hobject_t &hoid, version_t v) {
-      to_stash.push_back(make_pair(hoid, v));
+      pg->get_pgbackend()->try_stash(hoid, v, t);
     }
     void rollback(const pg_log_entry_t &entry) {
-      to_rollback.push_back(entry);
+      assert(entry.can_rollback());
+      pg->get_pgbackend()->rollback(entry, t);
     }
     void rollforward(const pg_log_entry_t &entry) {
-      to_rollforward.push_back(entry);
+      pg->get_pgbackend()->rollforward(entry, t);
     }
     void trim(const pg_log_entry_t &entry) {
-      to_trim.push_back(entry);
-    }
-
-    void apply(PG *pg, ObjectStore::Transaction *t) {
-      for (list<pg_log_entry_t>::iterator j = to_rollback.begin();
-	   j != to_rollback.end();
-	   ++j) {
-	assert(j->can_rollback());
-	pg->get_pgbackend()->rollback(*j, t);
-      }
-      for (list<pair<hobject_t, version_t> >::iterator i = to_stash.begin();
-	   i != to_stash.end();
-	   ++i) {
-	pg->get_pgbackend()->try_stash(i->first, i->second, t);
-      }
-      for (set<hobject_t, hobject_t::BitwiseComparator>::iterator i = to_remove.begin();
-	   i != to_remove.end();
-	   ++i) {
-	pg->get_pgbackend()->remove(*i, t);
-      }
-      for (auto &&i: to_rollforward) {
-	pg->get_pgbackend()->rollforward(i, t);
-      }
-      for (list<pg_log_entry_t>::reverse_iterator i = to_trim.rbegin();
-	   i != to_trim.rend();
-	   ++i) {
-	pg->get_pgbackend()->trim(*i, t);
-      }
+      pg->get_pgbackend()->trim(entry, t);
     }
   };
   

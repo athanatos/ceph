@@ -1896,6 +1896,7 @@ bool ECBackend::try_reads_to_commit()
 	assert(0);
       }
     }
+  }
 
   hobject_t::bitwisemap<extent_set> written_set;
   for (auto &&i: written) {
