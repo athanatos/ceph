@@ -1944,7 +1944,7 @@ void ReplicatedPG::do_op(OpRequestRef& op)
     eversion_t replay_version;
     version_t user_version;
     int return_code = 0;
-    bool got = pg_log.get_log().get_request(
+    bool got = check_in_progress_op(
       m->get_reqid(), &replay_version, &user_version, &return_code);
     if (got) {
       dout(3) << __func__ << " dup " << m->get_reqid()
@@ -8556,6 +8556,9 @@ void ReplicatedPG::issue_repop(RepGather *repop, OpContext *ctx)
   if (!(ctx->log.empty())) {
     assert(ctx->at_version >= projected_last_update);
     projected_last_update = ctx->at_version;
+  }
+  for (auto &&entry: ctx->log) {
+    projected_log.add(entry);
   }
   pgbackend->submit_transaction(
     soid,
