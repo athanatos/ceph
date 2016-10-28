@@ -3822,7 +3822,7 @@ int FileStore::_move_ranges_destroy_src(const coll_t& src_cid, const ghobject_t&
   uint64_t projected_size = st.st_size;
   for (auto &&i: move_info) {
     uint64_t end = i.get<1>() + i.get<2>();
-    if (end > projected_size) {
+    if (end > (int64_t)projected_size) {
       projected_size = end;
     }
   }

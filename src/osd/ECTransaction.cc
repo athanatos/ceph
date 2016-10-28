@@ -54,6 +54,7 @@ void append(
   map<int, bufferlist> buffers;
   int r = ECUtil::encode(
     sinfo, ecimpl, bl, want, &buffers);
+  assert(r == 0);
 
   written.insert(offset, bl.length(), bl);
 
@@ -62,13 +63,6 @@ void append(
 		     << offset + bl.length()
 		     << dendl;
 
-  hinfo->append(
-    sinfo.aligned_logical_offset_to_chunk_offset(offset),
-    buffers);
-  bufferlist hbuf;
-  ::encode(*hinfo, hbuf);
-
-  assert(r == 0);
   for (auto &&i : *transactions) {
     assert(buffers.count(i.first));
     bufferlist &enc_bl = buffers[i.first];
@@ -86,11 +80,6 @@ void append(
       enc_bl.length(),
       enc_bl,
       flags);
-    i.second.setattr(
-      coll_t(spg_t(pgid, i.first)),
-      ghobject_t(oid, ghobject_t::NO_GEN, i.first),
-      ECUtil::get_hinfo_key(),
-      hbuf);
   }
 }
 
@@ -566,6 +555,16 @@ void ECTransaction::generate_rollback(
       written,
       transactions,
       dpp);
+  }
+
+  bufferlist hbuf;
+  ::encode(*hinfo, hbuf);
+  for (auto &&i : *transactions) {
+    i.second.setattr(
+      coll_t(spg_t(pgid, i.first)),
+      ghobject_t(oid, ghobject_t::NO_GEN, i.first),
+      ECUtil::get_hinfo_key(),
+      hbuf);
   }
   if (entry) {
     if (did_append) {
