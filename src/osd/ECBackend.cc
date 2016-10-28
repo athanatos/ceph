@@ -1888,6 +1888,15 @@ bool ECBackend::try_reads_to_commit()
   dout(20) << __func__ << ": written: " << written << dendl;
   dout(20) << __func__ << ": op: " << *op << dendl;
 
+  if (!get_parent()->get_pool().is_hacky_ecoverwrites()) {
+    for (auto &&i: op->log_entries) {
+      if (i.is_rollforward()) {
+	derr << __func__ << ": log entry " << i << " is rollforward,"
+	     << " but overwrites are not enabled!" << dendl;
+	assert(0);
+      }
+    }
+
   hobject_t::bitwisemap<extent_set> written_set;
   for (auto &&i: written) {
     written_set[i.first] = i.second.get_interval_set();
