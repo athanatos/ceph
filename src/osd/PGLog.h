@@ -194,7 +194,7 @@ public:
 	++iter;
 
       while (true) {
-	if (iter == log.rend())
+	if (iter == log.rbegin())
 	  break;
 	f(*(--iter));
       }
