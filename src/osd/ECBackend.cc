@@ -2179,7 +2179,7 @@ void ECBackend::objects_read_async(
 	  offset - range.first.get_off(),
 	  length);
 	if (read.second.second) {
-	  read.second.second->complete(0);
+	  read.second.second->complete(length);
 	  read.second.second = nullptr;
 	}
       }
