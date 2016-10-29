@@ -11359,7 +11359,8 @@ void ReplicatedPG::update_range(
     }
 
     dout(10) << __func__<< ": bi is old, (" << bi->version
-	     << ") can be updated with log" << dendl;
+	     << ") can be updated with log to projected_last_update "
+	     << projected_last_update << dendl;
 
     auto func = [&](const pg_log_entry_t &e) {
       dout(10) << __func__ << ": updating from version " << e.version
@@ -11381,9 +11382,11 @@ void ReplicatedPG::update_range(
 	}
       }
     };
-    bi->version = projected_last_update;
+    dout(10) << "scanning pg log first" << dendl;
     pg_log.get_log().scan_log_after(bi->version, func);
+    dout(10) << "scanning projected log" << dendl;
     projected_log.scan_log_after(bi->version, func);
+    bi->version = projected_last_update;
   } else {
     assert(0 == "scan_range should have raised bi->version past log_tail");
   }
