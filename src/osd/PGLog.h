@@ -187,19 +187,17 @@ public:
 
     template <typename T>
     void scan_log_after(
-      eversion_t bound, ///< [in] scan entries > bound
+      const eversion_t &bound, ///< [in] scan entries > bound
       T &&f) const {
-      if (log.empty())
-	return;
-      auto iter = log.end();
-      --iter;
-      while (iter != log.begin() && iter->version > bound)
-	--iter;
-      if (iter != log.end() && bound == iter->version)
+      auto iter = log.rbegin();
+      while (iter != log.rend() && iter->version > bound)
 	++iter;
 
-      while (iter != log.end())
-	f(*(iter++));
+      while (true) {
+	if (iter == log.rend())
+	  break;
+	f(*(--iter));
+      }
     }
 
     /****/
