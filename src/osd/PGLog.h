@@ -185,6 +185,20 @@ public:
       return divergent;
     }
 
+    template <typename T>
+    void scan_log_after(
+      eversion_t bound, ///< [in] scan entries > bound
+      T &&f) const {
+      auto iter = log.end();
+      while (iter != log.begin() && iter->version > bound)
+	--iter;
+      if (iter != log.end() && bound == iter->version)
+	++iter;
+
+      while (iter != log.end())
+	f(*(iter++));
+    }
+
     /****/
     void claim_log_and_clear_rollback_info(const pg_log_t& o) {
       // we must have already trimmed the old entries
