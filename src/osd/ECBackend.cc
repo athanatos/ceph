@@ -945,8 +945,8 @@ void ECBackend::handle_sub_write(
       new SubWriteApplied(this, msg, op.tid, op.at_version)));
   vector<ObjectStore::Transaction> tls;
   tls.reserve(2);
-  tls.push_back(std::move(localt));
   tls.push_back(std::move(op.t));
+  tls.push_back(std::move(localt));
   get_parent()->queue_transactions(tls, msg);
 }
 

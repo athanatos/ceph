@@ -3033,7 +3033,7 @@ void PG::append_log(
      * here past last_backfill.  It's ok for the same reason as
      * above */
     if (transaction_applied &&
-	cmp(p->soid, info.last_backfill, get_sort_bitwise()) > 0) {
+	(cmp(p->soid, info.last_backfill, get_sort_bitwise()) > 0)) {
       pg_log.roll_forward(&handler);
     }
   }
