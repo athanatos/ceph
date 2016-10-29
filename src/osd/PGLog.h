@@ -189,7 +189,10 @@ public:
     void scan_log_after(
       eversion_t bound, ///< [in] scan entries > bound
       T &&f) const {
+      if (log.empty())
+	return;
       auto iter = log.end();
+      --iter;
       while (iter != log.begin() && iter->version > bound)
 	--iter;
       if (iter != log.end() && bound == iter->version)
