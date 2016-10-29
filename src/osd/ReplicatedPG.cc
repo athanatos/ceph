@@ -9843,7 +9843,6 @@ void ReplicatedPG::mark_all_unfound_lost(
 	pg_log_entry_t e(
 	  pg_log_entry_t::LOST_REVERT, oid, v,
 	  m->second.need, 0, osd_reqid_t(), mtime, 0);
-	++v.version;
 	e.reverting_to = prev;
 	e.mark_unrollbackable(
 	  !get_osdmap()->test_flag(CEPH_OSDMAP_REQUIRE_KRAKEN));
@@ -9851,6 +9850,7 @@ void ReplicatedPG::mark_all_unfound_lost(
 	dout(10) << e << dendl;
 
 	// we are now missing the new version; recovery code will sort it out.
+	++v.version;
 	++m;
 	break;
       }
@@ -9859,7 +9859,6 @@ void ReplicatedPG::mark_all_unfound_lost(
       {
 	pg_log_entry_t e(pg_log_entry_t::LOST_DELETE, oid, v, m->second.need,
 			 0, osd_reqid_t(), mtime, 0);
-	++v.version;
 	if (get_osdmap()->test_flag(CEPH_OSDMAP_REQUIRE_JEWEL)) {
 	  if (pool.info.require_rollback()) {
 	    TransactionInfo::LocalRollBack lrb;
@@ -9875,6 +9874,7 @@ void ReplicatedPG::mark_all_unfound_lost(
 	dout(10) << e << dendl;
 	log_entries.push_back(e);
 
+	++v.version;
 	++m;
       }
       break;
