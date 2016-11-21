@@ -35,7 +35,7 @@ class OSD;
 
 class MOSDOp : public MOSDFastDispatchOp {
 private:
-  static constexpr int HEAD_VERSION = 8;
+  static constexpr int HEAD_VERSION = 9;
   static constexpr int COMPAT_VERSION = 3;
 
 private:
@@ -366,15 +366,23 @@ struct ceph_osd_request_head {
       encode(retry_attempt, payload);
       encode(features, payload);
     } else {
-      // latest v8 encoding with hobject_t hash separate from pgid, no
-      // reassert version
-      header.version = HEAD_VERSION;
+      // v9 encoding for dmclock use, otherwise v8.
+      // v8 encoding with hobject_t hash separate from pgid, no
+      // reassert version.
+      if (HAVE_FEATURE(features, QOS_DMC)) {
+	header.version = HEAD_VERSION;
+      } else {
+	header.version = 8;
+      }
 
       encode(pgid, payload);
       encode(hobj.get_hash(), payload);
       encode(osdmap_epoch, payload);
       encode(flags, payload);
       encode(reqid, payload);
+      if (header.version >= 9) {
+	encode(qos_params, payload);
+      }
       encode_trace(payload, features);
 
       // -- above decoded up front; below decoded post-dispatch thread --
@@ -404,7 +412,7 @@ struct ceph_osd_request_head {
     p = std::cbegin(payload);
 
     // Always keep here the newest version of decoding order/rule
-    if (header.version == HEAD_VERSION) {
+    if (header.version >= 8) {
       decode(pgid, p);      // actual pgid
       uint32_t hash;
       decode(hash, p); // raw hash value
@@ -412,6 +420,8 @@ struct ceph_osd_request_head {
       decode(osdmap_epoch, p);
       decode(flags, p);
       decode(reqid, p);
+      if (header.version >= 9)
+	decode(qos_params, p);
       decode_trace(p);
     } else if (header.version == 7) {
       decode(pgid.pgid, p);      // raw pgid
