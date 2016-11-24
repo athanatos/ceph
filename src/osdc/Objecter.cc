@@ -169,6 +169,7 @@ enum {
 
 static const char *config_keys[] = {
   "crush_location",
+  "objecter_mclock_service_tracker",
   NULL
 };
 
@@ -240,12 +241,26 @@ void Objecter::handle_conf_change(const ConfigProxy& conf,
   if (changed.count("crush_location")) {
     update_crush_location();
   }
+  if (changed.count("objecter_mclock_service_tracker")) {
+    update_mclock_service_tracker();
+  }
 }
 
 void Objecter::update_crush_location()
 {
   unique_lock wl(rwlock);
   crush_location = cct->crush_location.get_location();
+}
+
+void Objecter::update_mclock_service_tracker()
+{
+  unique_lock wl(rwlock);
+  if (cct->_conf->objecter_mclock_service_tracker && (!mclock_service_tracker)) {
+    qos_trk = ceph::make_unique<dmc::ServiceTracker<int>>();
+  } else if (!cct->_conf->objecter_mclock_service_tracker) {
+    qos_trk.reset();
+  }
+  mclock_service_tracker = cct->_conf->objecter_mclock_service_tracker;
 }
 
 // messages ------------------------------
@@ -3224,6 +3239,11 @@ MOSDOp *Objecter::_prepare_osd_op(Op *op)
     m->set_reqid(op->reqid);
   }
 
+  if (mclock_service_tracker) {
+    dmc::ReqParams rp = qos_trk->get_req_params(op->target.osd);
+    m->set_qos_params(rp);
+  }
+
   logger->inc(l_osdc_op_send);
   ssize_t sum = 0;
   for (unsigned i = 0; i < m->ops.size(); i++) {
@@ -4977,6 +4997,7 @@ Objecter::Objecter(CephContext *cct_, Messenger *m, MonClient *mc,
 		   double osd_timeout) :
   Dispatcher(cct_), messenger(m), monc(mc), finisher(fin),
   trace_endpoint("0.0.0.0", 0, "Objecter"),
+  mclock_service_tracker(cct->_conf->objecter_mclock_service_tracker),
   osdmap{std::make_unique<OSDMap>()},
   homeless_session(new OSDSession(cct, -1)),
   mon_timeout(ceph::make_timespan(mon_timeout)),
@@ -4985,7 +5006,11 @@ Objecter::Objecter(CephContext *cct_, Messenger *m, MonClient *mc,
 		    cct->_conf->objecter_inflight_op_bytes),
   op_throttle_ops(cct, "objecter_ops", cct->_conf->objecter_inflight_ops),
   retry_writes_after_first_reply(cct->_conf->objecter_retry_writes_after_first_reply)
-{}
+{
+  if (cct->_conf->objecter_mclock_service_tracker) {
+    qos_trk = ceph::make_unique<dmc::ServiceTracker<int>>();
+  }
+}
 
 Objecter::~Objecter()
 {

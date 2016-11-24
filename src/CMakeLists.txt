@@ -326,6 +326,8 @@ set(libcommon_files
   osd/osd_types.cc
   osd/PGPeeringEvent.cc
   osd/OpRequest.cc
+  dmclock/src/dmclock_util.cc
+  dmclock/support/src/run_every.cc
   osdc/Striper.cc
   osdc/Objecter.cc
   librbd/Features.cc

@@ -25,6 +25,7 @@
 
 #include <boost/thread/shared_mutex.hpp>
 
+#include "dmclock/src/dmclock_client.h"
 #include "include/ceph_assert.h"
 #include "include/buffer.h"
 #include "include/types.h"
@@ -1237,6 +1238,8 @@ public:
   MonClient *monc;
   Finisher *finisher;
   ZTracer::Endpoint trace_endpoint;
+  std::unique_ptr<dmc::ServiceTracker<int>> qos_trk;
+  std::atomic<bool> mclock_service_tracker;
 private:
   std::unique_ptr<OSDMap> osdmap;
 public:
@@ -1342,6 +1345,7 @@ private:
   void start_tick();
   void tick();
   void update_crush_location();
+  void update_mclock_service_tracker();
 
   class RequestStateHook;
 
