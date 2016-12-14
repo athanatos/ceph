@@ -445,17 +445,6 @@ void generate_transaction(
 	  t->truncate(coll, goid, op.truncate->second);
       }
 
-      if (!op.attr_updates.empty()) {
-	map<string, bufferlist> attrs;
-	for (auto &&p: op.attr_updates) {
-	  if (p.second)
-	    attrs[p.first] = *(p.second);
-	  else
-	    t->rmattr(coll, goid, p.first);
-	}
-	t->setattrs(coll, goid, attrs);
-      }
-
       if (op.clear_omap)
 	t->omap_clear(coll, goid);
       if (op.omap_header)
@@ -514,6 +503,17 @@ void generate_transaction(
 	      extent.get_len(),
 	      extent.get_off());
 	  });
+      }
+
+      if (!op.attr_updates.empty()) {
+	map<string, bufferlist> attrs;
+	for (auto &&p: op.attr_updates) {
+	  if (p.second)
+	    attrs[p.first] = *(p.second);
+	  else
+	    t->rmattr(coll, goid, p.first);
+	}
+	t->setattrs(coll, goid, attrs);
       }
     });
 }
