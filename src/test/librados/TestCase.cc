@@ -4,6 +4,7 @@
 #include <errno.h>
 #include "test/librados/test.h"
 #include "test/librados/TestCase.h"
+#include "include/scope_guard.h"
 
 using namespace librados;
 
@@ -284,7 +285,10 @@ void RadosTest::cleanup_namespace(rados_ioctx_t ioctx, std::string ns)
   rados_ioctx_snap_set_read(ioctx, LIBRADOS_SNAP_HEAD);
   rados_ioctx_set_namespace(ioctx, ns.c_str());
   rados_list_ctx_t list_ctx;
+
   ASSERT_EQ(0, rados_nobjects_list_open(ioctx, &list_ctx));
+  auto sg = make_scope_guard([&] { rados_nobjects_list_close(list_ctx); });
+
   int r;
   const char *entry = NULL;
   const char *key = NULL;
@@ -293,7 +297,6 @@ void RadosTest::cleanup_namespace(rados_ioctx_t ioctx, std::string ns)
     rados_ioctx_locator_set_key(ioctx, key);
     ASSERT_EQ(0, rados_remove(ioctx, entry));
   }
-  rados_nobjects_list_close(list_ctx);
 }
 
 std::string RadosTestPP::pool_name;
