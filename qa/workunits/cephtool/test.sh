@@ -1105,6 +1105,8 @@ function test_mon_osd()
   expect_false ceph osd unset require_jewel_osds
   ceph osd set require_kraken_osds
   expect_false ceph osd unset require_kraken_osds
+  ceph osd set require_luminous_osds
+  expect_false ceph osd unset require_luminous_osds
 
   ceph osd set noup
   ceph osd down 0
