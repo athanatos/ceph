@@ -748,6 +748,31 @@ void MemStore::_do_transaction(Transaction& t)
       }
       break;
 
+    case Transaction::OP_CREATE_WITH_CHECKSUMS:
+      /* TODO: add real support */
+      {
+        coll_t cid = i.get_cid(op->cid);
+        ghobject_t oid = i.get_oid(op->oid);
+	r = _touch(cid, oid);
+      }
+      break;
+
+    case Transaction::OP_WRITE_WITH_CHECKSUMS:
+      /* TODO: add real support */
+      {
+        coll_t cid = i.get_cid(op->cid);
+        ghobject_t oid = i.get_oid(op->oid);
+        uint64_t off = op->off;
+        uint64_t len = op->len;
+	uint32_t fadvise_flags = i.get_fadvise_flags();
+        bufferlist bl;
+        i.decode_bl(bl);
+	vector<uint32_t> checksums;
+	i.decode_checksums(checksums);
+	r = _write(cid, oid, off, len, bl, fadvise_flags);
+      }
+      break;
+
     case Transaction::OP_ZERO:
       {
         coll_t cid = i.get_cid(op->cid);

@@ -387,6 +387,8 @@ public:
       OP_COLL_HINT = 40, // cid, type, bl
 
       OP_TRY_RENAME = 41,   // oldcid, oldoid, newoid
+      OP_WRITE_WITH_CHECKSUMS = 42,  // cid, oid, bl, checksums
+      OP_CREATE_WITH_CHECKSUMS = 43, // cid, oid, checksum_granularity
     };
 
     // Transaction hint type
@@ -944,6 +946,9 @@ public:
       void decode_keyset_bl(bufferlist *pbl){
         decode_str_set_to_bl(data_bl_p, pbl);
       }
+      void decode_checksums(vector<uint32_t> &checksums) {
+	::decode(checksums, data_bl_p);
+      }
 
       const ghobject_t &get_oid(__le32 oid_id) {
         assert(oid_id < objects.size());
@@ -1061,6 +1066,67 @@ public:
       }
       data.ops++;
     }
+
+    /**
+     * create_with_checksums
+     *
+     * Only has defined behavior if the object does not currently exist
+     *
+     * @param cid collection
+     * @param oid oid object
+     * @param checksum_granularity
+     */
+    void create_with_checksums(
+      const coll_t& cid,
+      const ghobject_t& oid,
+      uint64_t checksum_granularity) {
+      Op* _op = _get_next_op();
+      _op->op = OP_CREATE_WITH_CHECKSUMS;
+      _op->cid = _get_coll_id(cid);
+      _op->oid = _get_object_id(oid);
+      _op->off = checksum_granularity;
+      data.ops++;
+    }
+
+    /**
+     * write_with_checksums
+     *
+     * Only has defined behavior on an object created with
+     * create_with_checksums
+     *
+     * @param cid collection for object
+     * @param oid oid of object
+     * @param off offset of write (must be aligned to checksum granularity)
+     * @param write_data data to write (must be aligned to checksum granularity)
+     * @param checksums length must match write_data with checksum granularity
+     * @param flags (optional) fadvise flags
+     */
+    void write_with_checksums(
+      const coll_t& cid,
+      const ghobject_t& oid,
+      uint64_t off,
+      const bufferlist& write_data,
+      const vector<uint32_t> &checksums,
+      uint32_t flags = 0) {
+      uint32_t orig_len = data_bl.length();
+      Op* _op = _get_next_op();
+      _op->op = OP_WRITE_WITH_CHECKSUMS;
+      _op->cid = _get_coll_id(cid);
+      _op->oid = _get_object_id(oid);
+      _op->off = off;
+      _op->len = write_data.length();
+      ::encode(write_data, data_bl);
+      ::encode(checksums, data_bl);
+
+      data.fadvise_flags = data.fadvise_flags | flags;
+      if (write_data.length() > data.largest_data_len) {
+	data.largest_data_len = write_data.length();
+	data.largest_data_off = off;
+	data.largest_data_off_in_data_bl = orig_len + sizeof(__u32);
+      }
+      data.ops++;
+    }
+
     /**
      * zero out the indicated byte range within an object. Some
      * ObjectStore instances may optimize this to release the
@@ -1633,6 +1699,25 @@ public:
     struct stat *st,
     bool allow_eio = false) {
     return stat(c->get_cid(), oid, st, allow_eio);
+  }
+
+  /**
+   * get_checksums
+   *
+   * @param cid collection for object
+   * @param oid oid of object
+   * @param pointer to vector for output data [(offset, checksum)]
+   * @returns 0 on success, negative error code on failure
+   *          -ENOTSUP if not supported by backend
+   *          -EINVAL if object not created with checksums
+   */
+  virtual int get_checksums(
+    const coll_t& cid,
+    const ghobject_t& oid,
+    uint64_t offset,
+    uint64_t len,
+    vector<uint32_t> *output) {
+    return -ENOTSUP;
   }
 
   /**

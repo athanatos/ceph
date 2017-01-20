@@ -2566,6 +2566,41 @@ void FileStore::_do_transaction(
       }
       break;
 
+    case Transaction::OP_CREATE_WITH_CHECKSUMS:
+      /* TODO: add real support */
+      {
+        coll_t cid = i.get_cid(op->cid);
+        ghobject_t oid = i.get_oid(op->oid);
+	uint64_t granularity = op->off;
+	_kludge_temp_object_collection(cid, oid);
+        tracepoint(
+	  objectstore, create_with_checksums_enter, osr_name, granularity);
+        if (_check_replay_guard(cid, oid, spos) > 0)
+          r = _touch(cid, oid);
+        tracepoint(objectstore, create_with_checksums_exit, r);
+      }
+      break;
+
+    case Transaction::OP_WRITE_WITH_CHECKSUMS:
+      /* TODO: add real support */
+      {
+        coll_t cid = i.get_cid(op->cid);
+        ghobject_t oid = i.get_oid(op->oid);
+	_kludge_temp_object_collection(cid, oid);
+        uint64_t off = op->off;
+        uint64_t len = op->len;
+	uint32_t fadvise_flags = i.get_fadvise_flags();
+        bufferlist bl;
+        i.decode_bl(bl);
+	vector<uint32_t> checksums;
+	i.decode_checksums(checksums);
+        tracepoint(objectstore, write_with_checksums_enter, osr_name, off, len);
+        if (_check_replay_guard(cid, oid, spos) > 0)
+	  r = _write(cid, oid, off, len, bl, fadvise_flags);
+        tracepoint(objectstore, write_with_checksums_exit, r);
+      }
+      break;
+
     case Transaction::OP_ZERO:
       {
         coll_t cid = i.get_cid(op->cid);

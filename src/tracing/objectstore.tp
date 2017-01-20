@@ -321,6 +321,26 @@ TRACEPOINT_EVENT(objectstore, write_exit,
     )
 )
 
+TRACEPOINT_EVENT(objectstore, write_with_checksums_enter,
+    TP_ARGS(
+        const char *, osr_name,
+        uint64_t, offset,
+        uint64_t, length),
+    TP_FIELDS(
+        ctf_string(osr_name, osr_name)
+        ctf_integer(uint64_t, offset, offset)
+        ctf_integer(uint64_t, length, length)
+    )
+)
+
+TRACEPOINT_EVENT(objectstore, write_with_checksums_exit,
+    TP_ARGS(
+        int, retval),
+    TP_FIELDS(
+        ctf_integer(int, retval, retval)
+    )
+)
+
 TRACEPOINT_EVENT(objectstore, setallochint_enter,
     TP_ARGS(
         const char *, osr_name),
@@ -789,6 +809,24 @@ TRACEPOINT_EVENT(objectstore, touch_enter,
 )
 
 TRACEPOINT_EVENT(objectstore, touch_exit,
+    TP_ARGS(
+        int, retval),
+    TP_FIELDS(
+        ctf_integer(int, retval, retval)
+    )
+)
+
+TRACEPOINT_EVENT(objectstore, create_with_checksums_enter,
+    TP_ARGS(
+        const char *, osr_name,
+        uint64_t, checksum_granularity),
+    TP_FIELDS(
+        ctf_string(osr_name, osr_name)
+        ctf_integer(uint64_t, checksum_granularity, checksum_granularity)
+    )
+)
+
+TRACEPOINT_EVENT(objectstore, create_with_checksums_exit,
     TP_ARGS(
         int, retval),
     TP_FIELDS(
