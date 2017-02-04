@@ -299,12 +299,7 @@ class Thrasher:
             cmd = (prefix + "--op import --file {file}")
             cmd = cmd.format(id=imp_osd, file=exp_path)
             proc = imp_remote.run(args=cmd, wait=True, check_status=False)
-            output = proc.stderr.getvalue()
-            bogosity = "The OSD you are using is older than the exported PG"
-            if proc.exitstatus == 1 and bogosity in output:
-                self.log("OSD older than exported PG"
-                         "...ignored")
-            elif proc.exitstatus == 10:
+            if proc.exitstatus == 10:
                 self.log("Pool went away before processing an import"
                          "...ignored")
             elif proc.exitstatus == 11:
