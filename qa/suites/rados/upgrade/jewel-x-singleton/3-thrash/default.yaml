@@ -9,12 +9,8 @@ overrides:
     - objects unfound and apparently lost
     - log bound mismatch
 tasks:
-- parallel:
-    - split_tasks
-split_tasks:
-  sequential:
-    - thrashosds:
-        timeout: 1200
-        chance_pgnum_grow: 1
-        chance_pgpnum_fix: 1
-    - print: "**** done thrashosds 3-thrash"
+- thrashosds:
+    timeout: 1200
+    chance_pgnum_grow: 1
+    chance_pgpnum_fix: 1
+- print: "**** done thrashosds 3-thrash"
