@@ -127,6 +127,14 @@
 
 #define MSG_OSD_PG_READY_TO_MERGE 122
 
+// *** Paxos PG ***
+#define MSG_OSD_PPG_REQUEST        0x801
+#define MSG_OSD_PPG_PREPARE        0x802
+#define MSG_OSD_PPG_PROMISE        0x803
+#define MSG_OSD_PPG_ACCEPT         0x804
+#define MSG_OSD_PPG_ACCEPTED       0x805
+#define MSG_OSD_PPG_RESPONSE       0x806
+
 // *** MDS ***
 
 #define MSG_MDS_BEACON             100  // to monitor

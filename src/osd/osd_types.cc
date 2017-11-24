@@ -24,6 +24,8 @@ extern "C" {
 }
 #include "OSDMap.h"
 
+const osd_id_t osd_id_t::NONE(0x7fffffff /* CRUSH_ITEM_NONE */);
+
 const char *ceph_osd_flag_name(unsigned flag)
 {
   switch (flag) {

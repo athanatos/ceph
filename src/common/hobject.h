@@ -316,6 +316,33 @@ public:
 };
 WRITE_CLASS_ENCODER(hobject_t)
 
+template<> struct denc_traits<hobject_t> {
+	static constexpr bool supported = true;
+	static constexpr bool featured = false;
+	static constexpr bool bounded = false;
+	static constexpr bool need_contiguous = true;
+	static void bound_encode(
+		const hobject_t &v, size_t &p, uint64_t f=0) {
+		bufferlist b;
+		v.encode(b);
+		p += b.length();
+	}
+	static void encode(
+		const hobject_t &v, buffer::list::contiguous_appender &p, uint64_t f=0) {
+		bufferlist b;
+		v.encode(b);
+		p.append(b);
+	}
+	static void decode(hobject_t &v, buffer::ptr::iterator &p, uint64_t f=0) {
+		bufferlist bl;
+		bl.append(
+			buffer::create_static(
+				p.get_end() - p.get_pos(), (char *)p.get_pos()));
+		bufferlist::iterator bp = bl.begin();
+		v.decode(bp);
+	}
+};
+
 namespace std {
   template<> struct hash<hobject_t> {
     size_t operator()(const hobject_t &r) const {

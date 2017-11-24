@@ -198,6 +198,13 @@
 #include "messages/MOSDECSubOpRead.h"
 #include "messages/MOSDECSubOpReadReply.h"
 
+#include "messages/MSPPGRequest.h"
+#include "messages/MSPPGPrepare.h"
+#include "messages/MSPPGPromise.h"
+#include "messages/MSPPGAccept.h"
+#include "messages/MSPPGAccepted.h"
+#include "messages/MSPPGResponse.h"
+
 #include "messages/MOSDPGUpdateLogMissing.h"
 #include "messages/MOSDPGUpdateLogMissingReply.h"
 
@@ -585,6 +592,23 @@ Message *decode_message(CephContext *cct, int crcflags,
   case MSG_OSD_EC_READ_REPLY:
     m = MOSDECSubOpReadReply::create();
     break;
+  case MSG_OSD_PPG_REQUEST:
+    m = new MSPPGRequest;
+    break;
+  case MSG_OSD_PPG_PROMISE:
+    m = new MSPPGPromise;
+    break;
+  case MSG_OSD_PPG_PREPARE:
+    m = new MSPPGPrepare;
+    break;
+  case MSG_OSD_PPG_ACCEPT:
+    m = new MSPPGAccept;
+    break;
+  case MSG_OSD_PPG_ACCEPTED:
+    m = new MSPPGAccepted;
+    break;
+  case MSG_OSD_PPG_RESPONSE:
+    m = new MSPPGResponse;
    // auth
   case CEPH_MSG_AUTH:
     m = MAuth::create();

@@ -171,6 +171,26 @@ WRITE_EQ_OPERATORS_2(pg_shard_t, osd, shard)
 WRITE_CMP_OPERATORS_2(pg_shard_t, osd, shard)
 ostream &operator<<(ostream &lhs, const pg_shard_t &rhs);
 
+
+/**
+ * Opaque osd type
+ */
+struct osd_id_t {
+  int id;
+  osd_id_t() : id(-1) {}
+  osd_id_t(int id) : id(id) {}
+
+  DENC(osd_id_t, o, p) {
+    denc(o.id, p);
+  }
+
+  static const osd_id_t NONE;
+};
+WRITE_EQ_OPERATORS_1(osd_id_t, id);
+WRITE_CMP_OPERATORS_1(osd_id_t, id);
+WRITE_CLASS_DENC(osd_id_t);
+
+
 class IsPGRecoverablePredicate {
 public:
   /**
