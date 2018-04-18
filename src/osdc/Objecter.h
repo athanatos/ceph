@@ -26,6 +26,8 @@
 #include <boost/thread/shared_mutex.hpp>
 
 #include "dmclock/src/dmclock_client.h"
+#include "QosProfileMgr.h"
+
 #include "include/ceph_assert.h"
 #include "include/buffer.h"
 #include "include/types.h"
@@ -71,6 +73,8 @@ struct ObjectOperation {
   std::vector<Context*> out_handler;
   std::vector<int*> out_rval;
 
+  osdc::shared_qos_profile qos_profile;
+
   ObjectOperation() : flags(0), priority(0) {}
   ~ObjectOperation() {
     while (!out_handler.empty()) {
@@ -81,6 +85,10 @@ struct ObjectOperation {
 
   size_t size() {
     return ops.size();
+  }
+
+  void set_qos_profile(const osdc::shared_qos_profile& qp) {
+    qos_profile = qp;
   }
 
   void set_last_op_flags(int flags) {
@@ -1479,6 +1487,8 @@ public:
     osd_reqid_t reqid; // explicitly setting reqid
     ZTracer::Trace trace;
 
+    osdc::shared_qos_profile qos_profile;
+    
     Op(const object_t& o, const object_locator_t& ol, std::vector<OSDOp>& op,
        int f, Context *fin, version_t *ov, int *offset = NULL,
        ZTracer::Trace *parent_trace = nullptr) :
@@ -1539,7 +1549,7 @@ public:
       }
       trace.event("finish");
     }
-  };
+  }; // struct Objecter::Op
 
   struct C_Op_Map_Latest : public Context {
     Objecter *objecter;
@@ -2316,6 +2326,7 @@ public:
     const object_t& oid, const object_locator_t& oloc,
     ObjectOperation& op, const SnapContext& snapc,
     ceph::real_time mtime, int flags,
+    osdc::shared_qos_profile qos_profile,
     Context *oncommit, version_t *objver = NULL,
     osd_reqid_t reqid = osd_reqid_t(),
     ZTracer::Trace *parent_trace = nullptr) {
@@ -2326,15 +2337,18 @@ public:
     o->snapc = snapc;
     o->out_rval.swap(op.out_rval);
     o->reqid = reqid;
+    o->qos_profile = qos_profile;
     return o;
   }
   ceph_tid_t mutate(
     const object_t& oid, const object_locator_t& oloc,
     ObjectOperation& op, const SnapContext& snapc,
     ceph::real_time mtime, int flags,
-    Context *oncommit, version_t *objver = NULL,
+    Context *oncommit,
+    version_t *objver = NULL,
     osd_reqid_t reqid = osd_reqid_t()) {
     Op *o = prepare_mutate_op(oid, oloc, op, snapc, mtime, flags,
+			      osdc::get_default_qos_profile(),
 			      oncommit, objver, reqid);
     ceph_tid_t tid;
     op_submit(o, &tid);

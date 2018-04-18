@@ -1563,7 +1563,7 @@ void OSDService::reply_op_error(OpRequestRef op, int err, eversion_t v,
   flags = m->get_flags() & (CEPH_OSD_FLAG_ACK|CEPH_OSD_FLAG_ONDISK);
 
   MOSDOpReply *reply = new MOSDOpReply(m, err, osdmap->get_epoch(), flags,
-				       err >= 0, op->qos_resp);
+				       err>=0, op->qos_cost, op->qos_phase);
   reply->set_reply_versions(v, uv);
   m->get_connection()->send_message(reply);
 }
@@ -10913,7 +10913,7 @@ int heap(CephContext& cct, const cmdmap_t& cmdmap, Formatter& f,
 }} // namespace ceph::osd_cmds
 
 
-std::ostream& operator<<(std::ostream& out, const io_queue& q) {
+std::ostream& operator<<(std::ostream& out, const io_queue q) {
   switch(q) {
   case io_queue::prioritized:
     out << "prioritized";
@@ -10926,6 +10926,9 @@ std::ostream& operator<<(std::ostream& out, const io_queue& q) {
     break;
   case io_queue::mclock_client:
     out << "mclock_client";
+    break;
+  case io_queue::mclock_client_profile:
+    out << "mclock_client_profile";
     break;
   }
   return out;

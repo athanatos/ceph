@@ -4032,3 +4032,48 @@ extern "C" void _rados_object_list_slice(
       split_finish_hobj);
 }
 LIBRADOS_C_API_BASE_DEFAULT(rados_object_list_slice);
+
+extern "C" int _rados_qos_profile_create(uint64_t reservation,
+					uint64_t weight,
+					uint64_t limit,
+					rados_qos_profile_t* profile)
+{
+  *profile =
+    (rados_qos_profile_t) qos_profile_mgr.create(reservation, weight, limit);
+  return 0;
+}
+LIBRADOS_C_API_BASE_DEFAULT(rados_qos_profile_create);
+
+extern "C" void _rados_ioctx_set_qos_profile(rados_ioctx_t ioctx,
+					   rados_qos_profile_t qos_profile)
+{
+  auto ctx = (librados::IoCtxImpl*) ioctx;
+  if (nullptr == qos_profile) {
+    ctx->set_qos_profile(osdc::get_default_qos_profile());
+  } else {
+    auto profile = (osdc::qos_profile_ref) qos_profile;
+    ctx->set_qos_profile(*profile);
+  }
+}
+LIBRADOS_C_API_BASE_DEFAULT(rados_ioctx_set_qos_profile);
+
+extern "C" void _rados_write_op_set_qos_profile(rados_write_op_t op,
+					       rados_qos_profile_t qp)
+{
+  auto operation = (::ObjectOperation *) op;
+  auto profile = (osdc::qos_profile_ref) qp;
+  operation->set_qos_profile(*profile);
+}
+LIBRADOS_C_API_BASE_DEFAULT(rados_write_op_set_qos_profile);
+
+extern "C" int _rados_qos_profile_release(rados_qos_profile_t qp)
+{
+  return qos_profile_mgr.release((osdc::qos_profile_ref) qp);
+}
+LIBRADOS_C_API_BASE_DEFAULT(rados_qos_profile_release);
+
+extern "C" uint64_t _rados_qos_profile_get_id(rados_qos_profile_t qp)
+{
+  return osdc::QosProfileMgr::get_profile_id((osdc::qos_profile_ref) qp);
+}
+LIBRADOS_C_API_BASE_DEFAULT(rados_qos_profile_get_id);

@@ -375,6 +375,7 @@ inline namespace v14_2_0 {
   {
   protected:
     time_t *unused;
+
   public:
     ObjectWriteOperation() : unused(NULL) {}
     ~ObjectWriteOperation() override {}
@@ -495,9 +496,10 @@ inline namespace v14_2_0 {
     void unset_manifest();
     void tier_flush();
 
+    void set_qos_profile(rados_qos_profile_t qos_profile);
 
     friend class IoCtx;
-  };
+  }; // class ObjectWriteOperation
 
   /*
    * ObjectReadOperation : compound object operation that return value
@@ -1263,6 +1265,8 @@ inline namespace v14_2_0 {
     void set_namespace(const std::string& nspace);
     std::string get_namespace() const;
 
+    void set_qos_profile(rados_qos_profile_t qos_profile);
+
     int64_t get_id();
 
     // deprecated versions
@@ -1456,6 +1460,15 @@ inline namespace v14_2_0 {
     int blacklist_add(const std::string& client_address,
                       uint32_t expire_seconds);
 
+
+    // qos calls
+
+    rados_qos_profile_t qos_profile_create(uint64_t reservation,
+                                           uint64_t weight,
+                                           uint64_t limit);
+    int qos_profile_release(rados_qos_profile_t qos_profile);
+    uint64_t qos_profile_get_id(rados_qos_profile_t qos_profile);
+
     /*
      * pool aio
      *
@@ -1481,4 +1494,3 @@ inline namespace v14_2_0 {
 } // namespace librados
 
 #endif
-

@@ -56,6 +56,7 @@
 #include "common/PrioritizedQueue.h"
 #include "osd/mClockOpClassQueue.h"
 #include "osd/mClockClientQueue.h"
+#include "osd/mClockClientProfileQueue.h"
 #include "messages/MOSDOp.h"
 #include "common/EventTrace.h"
 #include "osd/osd_perf_counters.h"
@@ -893,8 +894,9 @@ enum class io_queue {
   weightedpriority,
   mclock_opclass,
   mclock_client,
+  mclock_client_profile,
 };
-
+std::ostream& operator<<(std::ostream& out, const io_queue q);
 
 /*
 
@@ -1552,8 +1554,6 @@ private:
   friend struct C_OpenPGs;
 
   // -- op queue --
-  friend std::ostream& operator<<(std::ostream& out, const io_queue& q);
-
   const io_queue op_queue;
 public:
   const unsigned int op_prio_cutoff;
@@ -2067,7 +2067,8 @@ private:
       static io_queue index_lookup[] = { io_queue::prioritized,
 					 io_queue::weightedpriority,
 					 io_queue::mclock_opclass,
-					 io_queue::mclock_client };
+					 io_queue::mclock_client,
+					 io_queue::mclock_client_profile };
       srand(time(NULL));
       unsigned which = rand() % (sizeof(index_lookup) / sizeof(index_lookup[0]));
       return index_lookup[which];
@@ -2077,6 +2078,8 @@ private:
       return io_queue::mclock_opclass;
     } else if (cct->_conf->osd_op_queue == "mclock_client") {
       return io_queue::mclock_client;
+    } else if (cct->_conf->osd_op_queue == "mclock_client_profile") {
+      return io_queue::mclock_client_profile;
     } else {
       // default / catch-all is 'wpq'
       return io_queue::weightedpriority;
@@ -2191,9 +2194,6 @@ private:
   std::list<OSDPerfMetricQuery> m_perf_queries;
   std::map<OSDPerfMetricQuery, OSDPerfMetricLimits> m_perf_limits;
 };
-
-
-std::ostream& operator<<(std::ostream& out, const io_queue& q);
 
 
 //compatibility of the executable
