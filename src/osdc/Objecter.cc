@@ -256,7 +256,7 @@ void Objecter::update_mclock_service_tracker()
 {
   unique_lock wl(rwlock);
   if (cct->_conf->objecter_mclock_service_tracker && (!mclock_service_tracker)) {
-    qos_trk = ceph::make_unique<dmc::ServiceTracker<int>>();
+    qos_trk = make_unique<dmc::ServiceTracker<int>>();
   } else if (!cct->_conf->objecter_mclock_service_tracker) {
     qos_trk.reset();
   }
@@ -5011,7 +5011,7 @@ Objecter::Objecter(CephContext *cct_, Messenger *m, MonClient *mc,
   retry_writes_after_first_reply(cct->_conf->objecter_retry_writes_after_first_reply)
 {
   if (cct->_conf->objecter_mclock_service_tracker) {
-    qos_trk = ceph::make_unique<dmc::ServiceTracker<int>>();
+    qos_trk = make_unique<dmc::ServiceTracker<int>>();
   }
 }
 
