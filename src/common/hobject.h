@@ -333,13 +333,16 @@ template<> struct denc_traits<hobject_t> {
 		v.encode(b);
 		p.append(b);
 	}
-	static void decode(hobject_t &v, buffer::ptr::iterator &p, uint64_t f=0) {
+	static void decode(hobject_t &v, buffer::ptr::const_iterator &p, uint64_t f=0) {
 		bufferlist bl;
 		bl.append(
 			buffer::create_static(
 				p.get_end() - p.get_pos(), (char *)p.get_pos()));
-		bufferlist::iterator bp = bl.begin();
+		bufferlist::const_iterator bp = bl.cbegin();
 		v.decode(bp);
+	}
+	static void decode(hobject_t &v, buffer::list::const_iterator &p, uint64_t f=0) {
+		v.decode(p);
 	}
 };
 

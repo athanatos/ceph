@@ -12,7 +12,7 @@
 #include <boost/container/static_vector.hpp>
 #include <algorithm>
 
-#include "include/assert.h"
+#include "include/ceph_assert.h"
 #include "common/hobject.h"
 #include "messages/MSPPGRequest.h"
 #include "messages/MSPPGResponse.h"

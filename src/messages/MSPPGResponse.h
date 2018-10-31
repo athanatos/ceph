@@ -16,9 +16,9 @@
 #include "MOSDFastDispatchOp.h"
 #include "paxospg/protocol/multi/msg_types.h"
 
-class MSPPGResponse : public Message {
-  static const int HEAD_VERSION = 1;
-  static const int COMPAT_VERSION = 1;
+class MSPPGResponse : public MessageInstance<MSPPGResponse> {
+  static constexpr int HEAD_VERSION = 1;
+  static constexpr int COMPAT_VERSION = 1;
 
 public:
   ceph_tid_t tid = 0;
@@ -37,23 +37,27 @@ public:
   }
 
   MSPPGResponse()
-    : Message(MSG_OSD_PPG_RESPONSE, HEAD_VERSION, COMPAT_VERSION)
+    : MessageInstance(MSG_OSD_PPG_RESPONSE, HEAD_VERSION, COMPAT_VERSION)
     {}
 
   void decode_payload() override {
+/*
     bufferlist::iterator p = payload.begin();
     ::decode(tid, p);
     ::decode(encoded_response, p);
     ::decode(epoch, p);
     ::decode(hash, p);
+    */
   }
 
   void encode_payload(uint64_t features) override {
+/*
     ::encode(tid , payload);
     ::encode(encoded_response, payload);
     ::encode(epoch, payload);
     ::encode(hash, payload);
     encode_trace(payload, features);
+    */
   }
 
   const char *get_type_name() const override { return "MSPPGResponse"; }

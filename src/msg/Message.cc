@@ -593,22 +593,22 @@ Message *decode_message(CephContext *cct, int crcflags,
     m = MOSDECSubOpReadReply::create();
     break;
   case MSG_OSD_PPG_REQUEST:
-    m = new MSPPGRequest;
+    m = MSPPGRequest::create();
     break;
   case MSG_OSD_PPG_PROMISE:
-    m = new MSPPGPromise;
+    m = MSPPGPromise::create();
     break;
   case MSG_OSD_PPG_PREPARE:
-    m = new MSPPGPrepare;
+    m = MSPPGPrepare::create();
     break;
   case MSG_OSD_PPG_ACCEPT:
-    m = new MSPPGAccept;
+    m = MSPPGAccept::create();
     break;
   case MSG_OSD_PPG_ACCEPTED:
-    m = new MSPPGAccepted;
+    m = MSPPGAccepted::create();
     break;
   case MSG_OSD_PPG_RESPONSE:
-    m = new MSPPGResponse;
+    m = MSPPGResponse::create();
    // auth
   case CEPH_MSG_AUTH:
     m = MAuth::create();
