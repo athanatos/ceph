@@ -73,6 +73,7 @@ class ClientPartition :
     boost::container::static_vector<osd_id_t, MAX_ACCEPTORS> mapping;
 
     struct ConnectionStatus : boost::intrusive::set_base_hook<> {
+      InProgressOp *parent = nullptr;
       static const uint8_t DISCONNECTED = 0xFF;
       uint8_t rank = DISCONNECTED;
       bool heard_from = false;
@@ -82,15 +83,11 @@ class ClientPartition :
       ConnectionStatus() : rank(0xFF), heard_from(false) {}
 
       const InProgressOp &get_in_progress_op() const {
-	return *reinterpret_cast<const InProgressOp*>(
-	  reinterpret_cast<const char*>(this - rank) -
-	  offsetof(InProgressOp, connections));
+	return *parent;
       }
 
       InProgressOp &get_in_progress_op() {
-	return *reinterpret_cast<InProgressOp*>(
-	  reinterpret_cast<char*>(this - rank) -
-	  offsetof(InProgressOp, connections));
+	return *parent;
       }
 
 
@@ -114,7 +111,11 @@ class ClientPartition :
       Command c,
       Ceph::Promise<Response> on_complete)
       : tid(tid), hoid(hoid), c(std::move(c)),
-	on_complete(std::move(on_complete)) {}
+	on_complete(std::move(on_complete)) {
+      for (unsigned i = 0; i < MAX_ACCEPTORS; ++i) {
+	connections[i].parent = this;
+      }
+    }
 
     friend bool operator==(
       const InProgressOp &lhs, const InProgressOp &rhs) {
@@ -183,7 +184,7 @@ class ClientPartition :
     cs.rank = rank;
     cs.conn = conn;
     connection_status_map.insert(cs);
-    conn->send_message(cs.to_send);
+    conn->send_message(cs.to_send.get());
   }
 
   void restart_op(InProgressOp &op) {
@@ -243,7 +244,10 @@ public:
 	    commands);
 	  for (unsigned i = 0; i < conf.get_total_acceptors(); ++i) {
 	    bufferlist bl;
-	    ::encode(commands[i], bl);
+	    size_t len = 0;
+	    denc_traits<CommandRankedEncoding>::bound_encode(commands[i], len);
+	    auto a = bl.get_contiguous_appender(len);
+	    denc_traits<CommandRankedEncoding>::encode(commands[i], a);
 	    op->connections[i].to_send = new MSPPGRequest(
 	      op->tid, bl);
 	  }
