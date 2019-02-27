@@ -160,6 +160,28 @@ void PG::update_last_peering_reset()
   last_peering_reset = get_osdmap_epoch();
 }
 
+epoch_t PG::get_need_up_thru() const
+{
+  return need_up_thru;
+}
+
+void PG::update_need_up_thru(const OSDMap* o)
+{
+  if (!o) {
+    o = osdmap.get();
+  }
+  if (auto up_thru = o->get_up_thru(whoami.osd);
+      up_thru < info.history.same_interval_since) {
+    logger().info("up_thru {} < same_since {}, must notify monitor",
+                  up_thru, info.history.same_interval_since);
+    need_up_thru = info.history.same_interval_since;
+  } else {
+    logger().info("up_thru {} >= same_since {}, all is well",
+                  up_thru, info.history.same_interval_since);
+    need_up_thru = 0;
+  }
+}
+
 seastar::future<> PG::do_peering_event(std::unique_ptr<PGPeeringEvent> evt)
 {
   // todo
