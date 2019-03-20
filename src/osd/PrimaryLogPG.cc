@@ -4223,7 +4223,7 @@ void PrimaryLogPG::do_scan(
 	    std::make_shared<PGPeeringEvent>(
 	      get_osdmap_epoch(),
 	      get_osdmap_epoch(),
-	      BackfillTooFull())));
+	      PeeringState::BackfillTooFull())));
 	return;
       }
 
@@ -11944,14 +11944,14 @@ void PrimaryLogPG::mark_all_unfound_lost(
 	      std::make_shared<PGPeeringEvent>(
 	      get_osdmap_epoch(),
 	      get_osdmap_epoch(),
-	      DoRecovery())));
+	      PeeringState::DoRecovery())));
 	} else if (is_backfill_unfound()) {
 	  queue_peering_event(
 	    PGPeeringEventRef(
 	      std::make_shared<PGPeeringEvent>(
 	      get_osdmap_epoch(),
 	      get_osdmap_epoch(),
-	      RequestBackfill())));
+	      PeeringState::RequestBackfill())));
 	} else {
 	  queue_recovery();
 	}
@@ -12139,7 +12139,7 @@ void PrimaryLogPG::on_activate()
 	std::make_shared<PGPeeringEvent>(
 	  get_osdmap_epoch(),
 	  get_osdmap_epoch(),
-	  DoRecovery())));
+	  PeeringState::DoRecovery())));
   } else if (needs_backfill()) {
     dout(10) << "activate queueing backfill" << dendl;
     queue_peering_event(
@@ -12147,7 +12147,7 @@ void PrimaryLogPG::on_activate()
 	std::make_shared<PGPeeringEvent>(
 	  get_osdmap_epoch(),
 	  get_osdmap_epoch(),
-	  RequestBackfill())));
+	  PeeringState::RequestBackfill())));
   } else {
     dout(10) << "activate all replicas clean, no recovery" << dendl;
     eio_errors_to_process = false;
@@ -12156,7 +12156,7 @@ void PrimaryLogPG::on_activate()
 	std::make_shared<PGPeeringEvent>(
 	  get_osdmap_epoch(),
 	  get_osdmap_epoch(),
-	  AllReplicasRecovered())));
+	  PeeringState::AllReplicasRecovered())));
   }
 
   publish_stats_to_osd();
@@ -12490,7 +12490,7 @@ bool PrimaryLogPG::start_recovery_ops(
 	    std::make_shared<PGPeeringEvent>(
 	      get_osdmap_epoch(),
 	      get_osdmap_epoch(),
-	      RequestBackfill())));
+	      PeeringState::RequestBackfill())));
       }
       deferred_backfill = true;
     } else {
@@ -12545,7 +12545,7 @@ bool PrimaryLogPG::start_recovery_ops(
           std::make_shared<PGPeeringEvent>(
             get_osdmap_epoch(),
             get_osdmap_epoch(),
-            RequestBackfill())));
+            PeeringState::RequestBackfill())));
     } else {
       dout(10) << "recovery done, no backfill" << dendl;
       eio_errors_to_process = false;
@@ -12555,7 +12555,7 @@ bool PrimaryLogPG::start_recovery_ops(
           std::make_shared<PGPeeringEvent>(
             get_osdmap_epoch(),
             get_osdmap_epoch(),
-            AllReplicasRecovered())));
+            PeeringState::AllReplicasRecovered())));
     }
   } else { // backfilling
     state_clear(PG_STATE_BACKFILLING);
@@ -12568,7 +12568,7 @@ bool PrimaryLogPG::start_recovery_ops(
         std::make_shared<PGPeeringEvent>(
           get_osdmap_epoch(),
           get_osdmap_epoch(),
-          Backfilled())));
+          PeeringState::Backfilled())));
   }
 
   return false;
@@ -15235,7 +15235,7 @@ int PrimaryLogPG::rep_repair_primary_object(const hobject_t& soid, OpContext *ct
 	  std::make_shared<PGPeeringEvent>(
 	  get_osdmap_epoch(),
 	  get_osdmap_epoch(),
-	  DoRecovery())));
+	  PeeringState::DoRecovery())));
   } else {
     // A prior error must have already cleared clean state and queued recovery
     // or a map change has triggered re-peering.

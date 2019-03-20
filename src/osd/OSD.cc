@@ -7408,7 +7408,7 @@ void OSD::handle_scrub(MOSDScrub *m)
 	std::make_shared<PGPeeringEvent>(
 	  get_osdmap_epoch(),
 	  get_osdmap_epoch(),
-	  PG::RequestScrub(m->deep, m->repair))));
+	  PeeringState::RequestScrub(m->deep, m->repair))));
   }
 
   m->put();
@@ -7434,7 +7434,7 @@ void OSD::handle_fast_scrub(MOSDScrub2 *m)
 	std::make_shared<PGPeeringEvent>(
 	  m->epoch,
 	  m->epoch,
-	  PG::RequestScrub(m->deep, m->repair))));
+	  PeeringState::RequestScrub(m->deep, m->repair))));
   }
   m->put();
 }
@@ -9390,7 +9390,7 @@ void OSD::handle_fast_pg_remove(MOSDPGRemove *m)
       PGPeeringEventRef(
 	std::make_shared<PGPeeringEvent>(
 	  m->get_epoch(), m->get_epoch(),
-	  PG::DeleteStart())));
+	  PeeringState::DeleteStart())));
   }
   m->put();
 }
@@ -9411,14 +9411,14 @@ void OSD::handle_fast_force_recovery(MOSDForceRecovery *m)
 	  PGPeeringEventRef(
 	    std::make_shared<PGPeeringEvent>(
 	      epoch, epoch,
-	      PG::UnsetForceBackfill())));
+	      PeeringState::UnsetForceBackfill())));
       } else {
 	enqueue_peering_evt(
 	  pgid,
 	  PGPeeringEventRef(
 	    std::make_shared<PGPeeringEvent>(
 	      epoch, epoch,
-	      PG::SetForceBackfill())));
+	      PeeringState::SetForceBackfill())));
       }
     } else if (m->options & OFR_RECOVERY) {
       if (m->options & OFR_CANCEL) {
@@ -9427,14 +9427,14 @@ void OSD::handle_fast_force_recovery(MOSDForceRecovery *m)
 	  PGPeeringEventRef(
 	    std::make_shared<PGPeeringEvent>(
 	      epoch, epoch,
-	      PG::UnsetForceRecovery())));
+	      PeeringState::UnsetForceRecovery())));
       } else {
 	enqueue_peering_evt(
 	  pgid,
 	  PGPeeringEventRef(
 	    std::make_shared<PGPeeringEvent>(
 	      epoch, epoch,
-	      PG::SetForceRecovery())));
+	      PeeringState::SetForceRecovery())));
       }
     }
   }
@@ -9809,7 +9809,7 @@ void OSD::dequeue_delete(
     PGPeeringEventRef(
       std::make_shared<PGPeeringEvent>(
 	e, e,
-	PG::DeleteSome())),
+	PeeringState::DeleteSome())),
     handle);
 }
 
