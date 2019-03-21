@@ -1577,7 +1577,6 @@ private:
     }
   } snap_trimmer_machine;
 
-  using NamedState = PeeringState::NamedState;
   struct WaitReservation;
   struct Trimming : boost::statechart::state< Trimming, SnapTrimmer, WaitReservation >, NamedState {
     typedef boost::mpl::list <
