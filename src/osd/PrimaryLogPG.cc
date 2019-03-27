@@ -12304,7 +12304,7 @@ void PrimaryLogPG::plpg_on_role_change()
   }
 }
 
-void PrimaryLogPG::on_pool_change()
+void PrimaryLogPG::plpg_on_pool_change()
 {
   dout(10) << __func__ << dendl;
   // requeue cache full waiters just in case the cache_mode is
