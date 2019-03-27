@@ -971,7 +971,6 @@ boost::statechart::result PeeringState::Reset::react(const ActMap&)
   }
 
   ps->update_heartbeat_peers();
-  pg->take_waiters();
 
   return transit< Started >();
 }
@@ -1061,7 +1060,6 @@ boost::statechart::result PeeringState::Primary::react(const ActMap&)
   PG *pg = context< PeeringMachine >().pg;
   psdout(7) << "handle ActMap primary" << dendl;
   pg->publish_stats_to_osd();
-  pg->take_waiters();
   return discard_event();
 }
 
@@ -2625,7 +2623,6 @@ boost::statechart::result PeeringState::ReplicaActive::react(const ActMap&)
 	pg->info),
       pg->past_intervals);
   }
-  pg->take_waiters();
   return discard_event();
 }
 
@@ -2747,7 +2744,6 @@ boost::statechart::result PeeringState::Stray::react(const ActMap&)
 	pg->info),
       pg->past_intervals);
   }
-  pg->take_waiters();
   return discard_event();
 }
 
