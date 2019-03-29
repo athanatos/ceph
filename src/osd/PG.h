@@ -964,10 +964,14 @@ protected:
   friend class TestOpsSocketHook;
   void publish_stats_to_osd() override;
 
-  bool needs_recovery() const;
-  bool needs_backfill() const;
-
   void try_mark_clean();  ///< mark an active pg clean
+
+  bool needs_recovery() const {
+    return recovery_state.needs_recovery();
+  }
+  bool needs_backfill() const {
+    return recovery_state.needs_backfill();
+  }
 
   bool all_unfound_are_queried_or_lost(const OSDMapRef osdmap) const;
   virtual void dump_recovery_info(Formatter *f) const = 0;

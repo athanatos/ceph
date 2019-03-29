@@ -1452,6 +1452,10 @@ public:
     return info;
   }
 
+  bool needs_recovery() const;
+  bool needs_backfill() const;
+  bool all_unfound_are_queried_or_lost(const OSDMapRef osdmap) const;
+
   // Flush control interface
 private:
   void start_flush(ObjectStore::Transaction *t) {

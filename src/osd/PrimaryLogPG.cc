@@ -1091,7 +1091,7 @@ int PrimaryLogPG::do_command(
       return 0;  // make command idempotent
     }
 
-    if (!all_unfound_are_queried_or_lost(get_osdmap())) {
+    if (!recovery_state.all_unfound_are_queried_or_lost(get_osdmap())) {
       ss << "pg has " << unfound
 	 << " unfound objects but we haven't probed all sources, not marking lost";
       return -EINVAL;
