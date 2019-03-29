@@ -3148,7 +3148,7 @@ public:
     std::shared_ptr<const OSDMap> osdmap,      ///< [in] current map
     std::shared_ptr<const OSDMap> lastmap,     ///< [in] last map
     pg_t pgid,                                  ///< [in] pgid for pg
-    IsPGRecoverablePredicate &could_have_gone_active, ///< [in] predicate whether the pg can be active
+    const IsPGRecoverablePredicate &could_have_gone_active, ///< [in] predicate whether the pg can be active
     PastIntervals *past_intervals,              ///< [out] intervals
     ostream *out = 0                            ///< [out] debug ostream
     );
@@ -3234,7 +3234,7 @@ public:
     map<int, epoch_t> blocked_by;  ///< current lost_at values for any OSDs in cur set for which (re)marking them lost would affect cur set
 
     bool pg_down = false;   ///< some down osds are included in @a cur; the DOWN pg state bit should be set.
-    unique_ptr<IsPGRecoverablePredicate> pcontdec;
+    const IsPGRecoverablePredicate* pcontdec = nullptr;
 
     PriorSet() = default;
     PriorSet(PriorSet &&) = default;
@@ -3262,7 +3262,7 @@ public:
       set<int> down,
       map<int, epoch_t> blocked_by,
       bool pg_down,
-      IsPGRecoverablePredicate *pcontdec)
+      const IsPGRecoverablePredicate *pcontdec)
       : ec_pool(ec_pool), probe(probe), down(down), blocked_by(blocked_by),
 	pg_down(pg_down), pcontdec(pcontdec) {}
 
@@ -3272,7 +3272,7 @@ public:
       const PastIntervals &past_intervals,
       bool ec_pool,
       epoch_t last_epoch_started,
-      IsPGRecoverablePredicate *c,
+      const IsPGRecoverablePredicate *c,
       F f,
       const vector<int> &up,
       const vector<int> &acting,
@@ -3297,7 +3297,7 @@ PastIntervals::PriorSet::PriorSet(
   const PastIntervals &past_intervals,
   bool ec_pool,
   epoch_t last_epoch_started,
-  IsPGRecoverablePredicate *c,
+  const IsPGRecoverablePredicate *c,
   F f,
   const vector<int> &up,
   const vector<int> &acting,
