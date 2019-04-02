@@ -185,13 +185,7 @@ protected:
   pg_shard_t pg_whoami;
   pg_info_t &info;
   PGLog &pg_log;
-  eversion_t &last_update_ondisk;
-  eversion_t &last_complete_ondisk;
-  eversion_t &last_update_applied;
   map<pg_shard_t, pg_info_t> &peer_info;
-  map<pg_shard_t,eversion_t> &peer_last_complete_ondisk;
-  eversion_t &min_last_complete_ondisk;
-  eversion_t &pg_trim_to;
   MissingLoc &missing_loc;
 
 public:
@@ -988,29 +982,6 @@ protected:
 
   bool all_unfound_are_queried_or_lost(const OSDMapRef osdmap) const;
 
-  void calc_min_last_complete_ondisk() {
-    eversion_t min = last_complete_ondisk;
-    ceph_assert(!acting_recovery_backfill.empty());
-    for (set<pg_shard_t>::iterator i = acting_recovery_backfill.begin();
-	 i != acting_recovery_backfill.end();
-	 ++i) {
-      if (*i == get_primary()) continue;
-      if (peer_last_complete_ondisk.count(*i) == 0)
-	return;   // we don't have complete info
-      eversion_t a = peer_last_complete_ondisk[*i];
-      if (a < min)
-	min = a;
-    }
-    if (min == min_last_complete_ondisk)
-      return;
-    min_last_complete_ondisk = min;
-    return;
-  }
-
-  virtual void calc_trim_to() = 0;
-
-  virtual void calc_trim_to_aggressive() = 0;
-
   struct PGLogEntryHandler : public PGLog::LogEntryHandler {
     PG *pg;
     ObjectStore::Transaction *t;
@@ -1379,10 +1350,6 @@ protected:
   bool delete_needs_sleep = false;
 
 protected:
-  bool hard_limit_pglog() const {
-    return (get_osdmap()->test_flag(CEPH_OSDMAP_PGLOG_HARDLIMIT));
-  }
-
   bool state_test(uint64_t m) const { return recovery_state.state_test(m); }
   void state_set(uint64_t m) { recovery_state.state_set(m); }
   void state_clear(uint64_t m) { recovery_state.state_clear(m); }

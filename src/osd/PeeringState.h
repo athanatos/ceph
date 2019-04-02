@@ -1372,6 +1372,25 @@ public:
   void proc_replica_log(pg_info_t &oinfo, const pg_log_t &olog,
 			pg_missing_t& omissing, pg_shard_t from);
 
+  void calc_min_last_complete_ondisk() {
+    eversion_t min = last_complete_ondisk;
+    ceph_assert(!acting_recovery_backfill.empty());
+    for (set<pg_shard_t>::iterator i = acting_recovery_backfill.begin();
+	 i != acting_recovery_backfill.end();
+	 ++i) {
+      if (*i == get_primary()) continue;
+      if (peer_last_complete_ondisk.count(*i) == 0)
+	return;   // we don't have complete info
+      eversion_t a = peer_last_complete_ondisk[*i];
+      if (a < min)
+	min = a;
+    }
+    if (min == min_last_complete_ondisk)
+      return;
+    min_last_complete_ondisk = min;
+    return;
+  }
+
   void fulfill_info(
     pg_shard_t from, const pg_query_t &query,
     pair<pg_shard_t, pg_info_t> &notify_info);
@@ -1391,6 +1410,9 @@ public:
     boost::optional<eversion_t> roll_forward_to);
 
   void add_log_entry(const pg_log_entry_t& e, bool applied);
+
+  void calc_trim_to();
+  void calc_trim_to_aggressive();
 
 public:
   PeeringState(
@@ -1495,6 +1517,14 @@ public:
     bool transaction_applied,
     bool async);
 
+  void update_trim_to() {
+    bool hard_limit = (get_osdmap()->test_flag(CEPH_OSDMAP_PGLOG_HARDLIMIT));
+    if (hard_limit)
+      calc_trim_to_aggressive();
+    else
+      calc_trim_to();
+  }
+
   void pre_submit_op(
     const hobject_t &hoid,
     const vector<pg_log_entry_t>& logv,
@@ -1524,6 +1554,24 @@ public:
     pg_shard_t peer,
     const hobject_t &oid,
     eversion_t version);
+
+  void update_peer_last_complete_ondisk(
+    pg_shard_t fromosd,
+    eversion_t lcod) {
+    peer_last_complete_ondisk[fromosd] = lcod;
+  }
+
+  void update_last_complete_ondisk(
+    eversion_t lcod) {
+    last_complete_ondisk = lcod;
+  }
+
+  void recovery_committed_to(eversion_t version);
+
+  void complete_write(eversion_t v, eversion_t lc);
+  void local_write_applied(eversion_t v) {
+    last_update_applied = v;
+  }
 
   void dump_history(Formatter *f) const {
     state_history.dump(f);
@@ -1759,6 +1807,18 @@ public:
   }
   bool get_num_missing() const {
     return pg_log.get_missing().num_missing() > 0;
+  }
+
+  eversion_t get_min_last_complete_ondisk() const {
+    return min_last_complete_ondisk;
+  }
+
+  eversion_t get_pg_trim_to() const {
+    return pg_trim_to;
+  }
+
+  eversion_t get_last_update_applied() const {
+    return last_update_applied;
   }
 
   const MissingLoc::missing_by_count_t &get_missing_by_count() const {
