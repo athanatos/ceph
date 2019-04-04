@@ -283,13 +283,21 @@ public:
   }
 
   void set_last_scrub_stamp(utime_t t) {
-    info.stats.last_scrub_stamp = t;
-    info.history.last_scrub_stamp = t;
+    recovery_state.update_stats(
+      [t](auto &history, auto &stats) {
+	stats.last_scrub_stamp = t;
+	history.last_scrub_stamp = t;
+	return true;
+      });
   }
 
   void set_last_deep_scrub_stamp(utime_t t) {
-    info.stats.last_deep_scrub_stamp = t;
-    info.history.last_deep_scrub_stamp = t;
+    recovery_state.update_stats(
+      [t](auto &history, auto &stats) {
+	stats.last_deep_scrub_stamp = t;
+	history.last_deep_scrub_stamp = t;
+	return true;
+      });
   }
 
   bool is_deleting() const {

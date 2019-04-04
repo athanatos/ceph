@@ -3364,15 +3364,6 @@ void PG::scrub_finish()
       osd->clog->debug(oss);
   }
 
-  // finish up
-  unreg_next_scrub();
-  utime_t now = ceph_clock_now();
-  info.history.last_scrub = info.last_update;
-  info.history.last_scrub_stamp = now;
-  if (scrubber.deep) {
-    info.history.last_deep_scrub = info.last_update;
-    info.history.last_deep_scrub_stamp = now;
-  }
   // Since we don't know which errors were fixed, we can only clear them
   // when every one has been fixed.
   if (repair) {
@@ -3384,38 +3375,49 @@ void PG::scrub_finish()
       scrub_after_recovery = true;
     }
   }
-  if (deep_scrub) {
-    if ((scrubber.shallow_errors == 0) && (scrubber.deep_errors == 0))
-      info.history.last_clean_scrub_stamp = now;
-    info.stats.stats.sum.num_shallow_scrub_errors = scrubber.shallow_errors;
-    info.stats.stats.sum.num_deep_scrub_errors = scrubber.deep_errors;
-    info.stats.stats.sum.num_large_omap_objects = scrubber.omap_stats.large_omap_objects;
-    info.stats.stats.sum.num_omap_bytes = scrubber.omap_stats.omap_bytes;
-    info.stats.stats.sum.num_omap_keys = scrubber.omap_stats.omap_keys;
-    dout(25) << __func__ << " shard " << pg_whoami << " num_omap_bytes = "
-             << info.stats.stats.sum.num_omap_bytes << " num_omap_keys = "
-             << info.stats.stats.sum.num_omap_keys << dendl;
-    publish_stats_to_osd();
-  } else {
-    info.stats.stats.sum.num_shallow_scrub_errors = scrubber.shallow_errors;
-    // XXX: last_clean_scrub_stamp doesn't mean the pg is not inconsistent
-    // because of deep-scrub errors
-    if (scrubber.shallow_errors == 0)
-      info.history.last_clean_scrub_stamp = now;
-  }
-  info.stats.stats.sum.num_scrub_errors = 
-    info.stats.stats.sum.num_shallow_scrub_errors +
-    info.stats.stats.sum.num_deep_scrub_errors;
-  reg_next_scrub();
 
   {
+    // finish up
     ObjectStore::Transaction t;
-    dirty_info = true;
-    write_if_dirty(t);
+    recovery_state.update_stats(
+      [this, deep_scrub](auto &history, auto &stats) {
+	utime_t now = ceph_clock_now();
+	history.last_scrub = recovery_state.get_info().last_update;
+	history.last_scrub_stamp = now;
+	if (scrubber.deep) {
+	  history.last_deep_scrub = recovery_state.get_info().last_update;
+	  history.last_deep_scrub_stamp = now;
+	}
+
+	bool publish = false;
+	if (deep_scrub) {
+	  if ((scrubber.shallow_errors == 0) && (scrubber.deep_errors == 0))
+	    history.last_clean_scrub_stamp = now;
+	  stats.stats.sum.num_shallow_scrub_errors = scrubber.shallow_errors;
+	  stats.stats.sum.num_deep_scrub_errors = scrubber.deep_errors;
+	  stats.stats.sum.num_large_omap_objects = scrubber.omap_stats.large_omap_objects;
+	  stats.stats.sum.num_omap_bytes = scrubber.omap_stats.omap_bytes;
+	  stats.stats.sum.num_omap_keys = scrubber.omap_stats.omap_keys;
+	  dout(25) << __func__ << " shard " << pg_whoami << " num_omap_bytes = "
+		   << stats.stats.sum.num_omap_bytes << " num_omap_keys = "
+		   << stats.stats.sum.num_omap_keys << dendl;
+	  publish = true;
+	} else {
+	  stats.stats.sum.num_shallow_scrub_errors = scrubber.shallow_errors;
+	  // XXX: last_clean_scrub_stamp doesn't mean the pg is not inconsistent
+	  // because of deep-scrub errors
+	  if (scrubber.shallow_errors == 0)
+	    history.last_clean_scrub_stamp = now;
+	}
+	stats.stats.sum.num_scrub_errors =
+	  stats.stats.sum.num_shallow_scrub_errors +
+	  stats.stats.sum.num_deep_scrub_errors;
+	return publish;
+      },
+      &t);
     int tr = osd->store->queue_transaction(ch, std::move(t), NULL);
     ceph_assert(tr == 0);
   }
-
 
   if (has_error) {
     queue_peering_event(
