@@ -1590,7 +1590,7 @@ public:
   int get_role() const {
     return role;
   }
-  const vector<int> get_acting() const {
+  const vector<int> &get_acting() const {
     return acting;
   }
   int get_acting_primary() const {
