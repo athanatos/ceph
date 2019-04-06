@@ -785,6 +785,12 @@ void PeeringState::clear_primary_state()
   need_up_thru = false;
   missing_loc.clear();
   pg_log.reset_recovery_pointers();
+
+
+  pg_log.reset_recovery_pointers();
+  async_recovery_targets.clear();
+  backfill_targets.clear();
+
   pl->clear_primary_state();
 }
 
@@ -2946,7 +2952,7 @@ void PeeringState::update_calc_stats()
       int64_t peer_num_objects = peer.second.stats.stats.sum.num_objects;
       // Backfill targets always track num_objects accurately
       // all other peers track missing accurately.
-      if (is_backfill_targets(peer.first)) {
+      if (is_backfill_target(peer.first)) {
         missing = std::max((int64_t)0, num_objects - peer_num_objects);
       } else {
         if (peer_missing.count(peer.first)) {
