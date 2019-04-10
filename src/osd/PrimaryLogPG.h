@@ -445,7 +445,7 @@ public:
     ObjectStore::Transaction &t,
     bool async = false) override {
     if (hset_history) {
-      info.hit_set = *hset_history;
+      recovery_state.update_hset(*hset_history);
     }
     if (transaction_applied) {
       update_snap_map(logv, t);
@@ -482,7 +482,11 @@ public:
 
   void update_stats(
     const pg_stat_t &stat) override {
-    info.stats = stat;
+    recovery_state.update_stats(
+      [&stat](auto &history, auto &stats) {
+	stats = stat;
+	return false;
+      });
   }
 
   void schedule_recovery_work(
