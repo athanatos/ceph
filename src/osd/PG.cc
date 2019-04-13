@@ -3456,7 +3456,6 @@ void PG::scrub_finish()
 	return true;
       },
       &t);
-    reg_next_scrub();
     int tr = osd->store->queue_transaction(ch, std::move(t), NULL);
     ceph_assert(tr == 0);
   }
