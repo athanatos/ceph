@@ -3684,7 +3684,8 @@ void PeeringState::pre_submit_op(
                               eversion_t(), entry.is_delete());
       // clear out missing_loc
       missing_loc.clear_location(entry.soid);
-      for (auto &i: get_actingset()) {
+      for (auto &&i: get_actingset()) {
+        if (i == get_primary()) continue;
         if (!get_peer_missing(i).is_missing(entry.soid))
           missing_loc.add_location(entry.soid, i);
       }
