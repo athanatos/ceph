@@ -3656,11 +3656,9 @@ void PeeringState::pre_submit_op(
   eversion_t at_version)
 {
   if (at_version > eversion_t()) {
-    for (set<pg_shard_t>::iterator i = get_acting_recovery_backfill().begin();
-	 i != get_acting_recovery_backfill().end();
-	 ++i) {
-      if (*i == primary) continue;
-      pg_info_t &pinfo = peer_info[*i];
+    for (auto &&i : get_acting_recovery_backfill()) {
+      if (i == primary) continue;
+      pg_info_t &pinfo = peer_info[i];
       // keep peer_info up to date
       if (pinfo.last_complete == pinfo.last_update)
 	pinfo.last_complete = at_version;
@@ -3669,14 +3667,12 @@ void PeeringState::pre_submit_op(
   }
 
   bool requires_missing_loc = false;
-  for (set<pg_shard_t>::iterator i = get_async_recovery_targets().begin();
-       i != get_async_recovery_targets().end();
-       ++i) {
-    if (*i == primary || !get_peer_missing(*i).is_missing(hoid))
+  for (auto &&i : get_async_recovery_targets()) {
+    if (i == primary || !get_peer_missing(i).is_missing(hoid))
       continue;
     requires_missing_loc = true;
     for (auto &&entry: logv) {
-      peer_missing[*i].add_next_event(entry);
+      peer_missing[i].add_next_event(entry);
     }
   }
 
