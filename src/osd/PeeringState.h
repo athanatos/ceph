@@ -1863,7 +1863,7 @@ public:
   pg_shard_t get_primary() const {
     return primary;
   }
-  const vector<int> get_up() const {
+  const vector<int> &get_up() const {
     return up;
   }
   int get_up_primary() const {
