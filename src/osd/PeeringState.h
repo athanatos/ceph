@@ -1960,9 +1960,13 @@ public:
   const decltype(peer_missing) &get_peer_missing() const {
     return peer_missing;
   }
-  const pg_missing_t &get_peer_missing(pg_shard_t peer) const {
-    assert(peer_missing.count(peer));
-    return peer_missing.find(peer)->second;
+  const pg_missing_const_i &get_peer_missing(const pg_shard_t &peer) const {
+    if (peer == pg_whoami) {
+      return pg_log.get_missing();
+    } else {
+      assert(peer_missing.count(peer));
+      return peer_missing.find(peer)->second;
+    }
   }
   const pg_info_t&get_peer_info(pg_shard_t peer) const {
     assert(peer_info.count(peer));
