@@ -8,9 +8,11 @@ add_executable(crimson-osd
   pg.cc
   pg_backend.cc
   pg_meta.cc
-  recovery_machine.cc
-  recovery_state.cc
-  recovery_states.cc
-  replicated_backend.cc)
+  replicated_backend.cc
+  ${PROJECT_SOURCE_DIR}/src/osd/PeeringState.cc
+  ${PROJECT_SOURCE_DIR}/src/osd/PGStateUtils.cc
+  ${PROJECT_SOURCE_DIR}/src/osd/MissingLoc.cc
+  ${PROJECT_SOURCE_DIR}/src/osd/PGLog.cc
+  )
 target_link_libraries(crimson-osd
   crimson-common crimson-os crimson fmt::fmt)
