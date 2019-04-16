@@ -782,6 +782,12 @@ void PeeringState::init_primary_up_acting(
   ceph_assert(primary.osd == new_acting_primary);
 }
 
+void PeeringState::clear_recovery_state()
+{
+  async_recovery_targets.clear();
+  backfill_targets.clear();
+}
+
 void PeeringState::clear_primary_state()
 {
   psdout(10) << "clear_primary_state" << dendl;
@@ -802,10 +808,7 @@ void PeeringState::clear_primary_state()
   missing_loc.clear();
   pg_log.reset_recovery_pointers();
 
-
-  pg_log.reset_recovery_pointers();
-  async_recovery_targets.clear();
-  backfill_targets.clear();
+  clear_recovery_state();
 
   last_update_ondisk = eversion_t();
   missing_loc.clear();
@@ -2592,6 +2595,7 @@ void PeeringState::try_mark_clean()
 
   share_pg_info();
   pl->publish_stats_to_osd();
+  clear_recovery_state();
 }
 
 void PeeringState::split_into(
@@ -5148,6 +5152,7 @@ PeeringState::Clean::Clean(my_context ctx)
   if (ps->info.last_complete != ps->info.last_update) {
     ceph_abort();
   }
+
 
   ps->try_mark_clean();
 

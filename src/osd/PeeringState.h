@@ -1319,6 +1319,7 @@ public:
     const vector<int>& newacting, int acting_primary,
     ObjectStore::Transaction *t);
   void on_new_interval();
+  void clear_recovery_state();
   void clear_primary_state();
   void check_past_interval_bounds() const;
   bool set_force_recovery(bool b);
