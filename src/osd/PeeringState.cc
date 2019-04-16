@@ -2073,7 +2073,7 @@ void PeeringState::activate(
     t,
     std::make_shared<PGPeeringEvent>(
       get_osdmap_epoch(),
-      activation_epoch,
+      get_osdmap_epoch(),
       ActivateCommitted(
 	get_osdmap_epoch(),
 	activation_epoch)));
