@@ -376,10 +376,12 @@ void PeeringState::write_if_dirty(ObjectStore::Transaction& t)
     dirty_big_info,
     last_persisted_osdmap < get_osdmap_epoch(),
     t);
-  last_persisted_osdmap = get_osdmap_epoch();
-  last_written_info = info;
-  dirty_info = false;
-  dirty_big_info = false;
+  if (dirty_info || dirty_big_info) {
+    last_persisted_osdmap = get_osdmap_epoch();
+    last_written_info = info;
+    dirty_info = false;
+    dirty_big_info = false;
+  }
 }
 
 void PeeringState::advance_map(
