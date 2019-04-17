@@ -2023,7 +2023,7 @@ public:
   }
 
   bool debug_has_dirty_state() const {
-    return dirty_info || dirty_big_info || pg_log.is_dirty();
+    return dirty_info || dirty_big_info;
   }
 
   std::string get_pg_state_string() const {
