@@ -90,9 +90,12 @@ public:
   void send_cluster_message(
     int osd, Message *m,
     epoch_t epoch, bool share_map_update=false) override final {
+    send_to_osd(peer, m, from_epoch);
   }
     
-  void send_pg_created(pg_t pgid) override final {}
+  void send_pg_created(pg_t pgid) override final {
+    
+  }
 
   bool try_flush_or_schedule_async() override final {
     return true;
