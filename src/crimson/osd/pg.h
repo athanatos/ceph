@@ -204,8 +204,15 @@ public:
     const char *state_name, utime_t enter_time,
     uint64_t events, utime_t event_dur) override final {}
   void dump_recovery_info(Formatter *f) const override final {}
-  LogChannel &get_clog() override final {
-    return *((LogChannel*)nullptr);
+
+  OstreamTemp get_clog_info() override final {
+    return OstreamTemp(CLOG_INFO, *((OstreamTemp::OstreamTempSink*)nullptr));
+  }
+  OstreamTemp get_clog_debug() override final {
+    return OstreamTemp(CLOG_DEBUG, *((OstreamTemp::OstreamTempSink*)nullptr));
+  }
+  OstreamTemp get_clog_error() override final {
+    return OstreamTemp(CLOG_ERROR, *((OstreamTemp::OstreamTempSink*)nullptr));
   }
 
 

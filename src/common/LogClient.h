@@ -17,7 +17,7 @@
 
 #include <atomic>
 #include "common/LogEntry.h"
-#incldue "common/ostream_temp.h"
+#include "common/ostream_temp.h"
 #include "common/ceph_mutex.h"
 #include "include/health.h"
 

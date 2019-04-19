@@ -1,7 +1,7 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
-#include <stringstream>
+#include <sstream>
 
 typedef enum {
   CLOG_DEBUG = 0,
@@ -17,9 +17,9 @@ class OstreamTemp
 public:
   class OstreamTempSink {
   public:
-    void do_log(clog_type prio, std::stringstream& ss);
-    parent.do_log(type, ss);
-  }
+    virtual void do_log(clog_type prio, std::stringstream& ss) = 0;
+    virtual ~OstreamTempSink() {}
+  };
   OstreamTemp(clog_type type_, OstreamTempSink &parent_);
   OstreamTemp(OstreamTemp &&rhs) = default;
   ~OstreamTemp();

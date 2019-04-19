@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "common/LogClient.h"
 #include "crimson/mgr/client.h"
 #include "crimson/mon/MonClient.h"
 
@@ -28,6 +27,7 @@ class ShardServices {
   
   CephContext cct;
 
+public:
   ShardServices(
     ceph::net::Messenger &cluster_msgr,
     ceph::net::Messenger &public_msgr,
