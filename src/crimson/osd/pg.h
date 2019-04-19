@@ -90,7 +90,7 @@ public:
   void send_cluster_message(
     int osd, Message *m,
     epoch_t epoch, bool share_map_update=false) override final {
-    send_to_osd(peer, m, from_epoch);
+    send_to_osd(osd, m, epoch);
   }
     
   void send_pg_created(pg_t pgid) override final {

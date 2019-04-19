@@ -95,6 +95,10 @@ public:
   // AuthService methods
   AuthAuthorizer* get_authorizer(peer_type_t peer) const override;
 
+  MonMap &get_monmap_ref() {
+    return monmap;
+  }
+
 private:
   // AuthServer methods
   std::pair<std::vector<uint32_t>, std::vector<uint32_t>>

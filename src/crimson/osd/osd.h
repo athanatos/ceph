@@ -18,6 +18,7 @@
 #include "crimson/osd/chained_dispatchers.h"
 #include "crimson/osd/osdmap_service.h"
 #include "crimson/osd/state.h"
+#include "crimson/osd/shard_services.h"
 
 #include "osd/osd_types.h"
 
@@ -71,7 +72,6 @@ class OSD : public ceph::net::Dispatcher,
   std::unique_ptr<ceph::os::CyanStore> store;
   std::unique_ptr<OSDMeta> meta_coll;
 
-  std::unordered_map<spg_t, Ref<PG>> pgs;
   OSDState state;
 
   /// _first_ epoch we were marked up (after this process started)
@@ -98,6 +98,9 @@ class OSD : public ceph::net::Dispatcher,
   void handle_authentication(const EntityName& name,
 			     uint64_t global_id,
 			     const AuthCapsInfo& caps) final;
+
+  ceph::osd::ShardServices shard_services;
+  std::unordered_map<spg_t, Ref<PG>> pgs;
 
 public:
   OSD(int id, uint32_t nonce,

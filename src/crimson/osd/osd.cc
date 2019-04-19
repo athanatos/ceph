@@ -64,7 +64,8 @@ OSD::OSD(int id, uint32_t nonce,
     heartbeat{new Heartbeat{*this, *monc, hb_front_msgr, hb_back_msgr}},
     heartbeat_timer{[this] { update_heartbeat_peers(); }},
     store{std::make_unique<ceph::os::CyanStore>(
-      local_conf().get_val<std::string>("osd_data"))}
+      local_conf().get_val<std::string>("osd_data"))},
+    shard_services{cluster_msgr, public_msgr, *monc, *mgrc}
 {
   osdmaps[0] = boost::make_local_shared<OSDMap>();
   for (auto msgr : {std::ref(cluster_msgr), std::ref(public_msgr),
