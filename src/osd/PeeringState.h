@@ -1046,12 +1046,18 @@ public:
     unsigned priority = 0;
     typedef boost::mpl::list <
       boost::statechart::custom_reaction< ActMap >,
+      boost::statechart::custom_reaction< ActivateCommitted >,
       boost::statechart::custom_reaction< DeleteSome >
       > reactions;
     explicit ToDelete(my_context ctx);
     boost::statechart::result react(const ActMap &evt);
     boost::statechart::result react(const DeleteSome &evt) {
       // happens if we drop out of Deleting due to reprioritization etc.
+      return discard_event();
+    }
+    boost::statechart::result react(const ActivateCommitted&) {
+      // Can happens if we were activated as a stray but not actually pulled
+      // from prior to the pg going clean and sending a delete.
       return discard_event();
     }
     void exit();
