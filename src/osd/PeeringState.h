@@ -1696,10 +1696,15 @@ public:
    * of the acting set will be deemed to have the object.
    */
   void force_object_missing(
-    pg_shard_t peer,
+    const pg_shard_t &peer,
     const hobject_t &oid,
-    eversion_t version,
-    const set<pg_shard_t> *candidates=nullptr);
+    eversion_t version) {
+    force_object_missing({peer}, oid, version);
+  }
+  void force_object_missing(
+    const set<pg_shard_t> &peer,
+    const hobject_t &oid,
+    eversion_t version);
 
   /// Update state prior to backfilling soid on targets
   void prepare_backfill_for_missing(
