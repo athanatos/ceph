@@ -18,10 +18,6 @@ target_link_libraries(perf_crimson_msgr crimson)
 add_executable(perf_async_msgr perf_async_msgr.cc)
 target_link_libraries(perf_async_msgr ceph-common global)
 
-add_executable(unittest_seastar_echo
-  test_alien_echo.cc)
-target_link_libraries(unittest_seastar_echo crimson)
-
 add_executable(unittest_async_echo
   test_async_echo.cc)
 target_link_libraries(unittest_async_echo ceph-common global)
