@@ -9,6 +9,7 @@
 #include <typeinfo>
 #include <vector>
 
+#include <optional>
 #include <seastar/core/future.hh>
 
 #include "osd/osd_types.h"
@@ -21,7 +22,10 @@ class Transaction;
 
 // a just-enough store for reading/writing the superblock
 class CyanStore {
+public:
   using CollectionRef = boost::intrusive_ptr<Collection>;
+
+private:
   const std::string path;
   std::unordered_map<coll_t, CollectionRef> coll_map;
   std::map<coll_t,CollectionRef> new_coll_map;
@@ -73,11 +77,20 @@ public:
 					    std::string_view name);
   using attrs_t = std::map<std::string, ceph::bufferptr, std::less<>>;
   seastar::future<attrs_t> get_attrs(CollectionRef c, const ghobject_t& oid);
+
   using omap_values_t = std::map<std::string,bufferlist, std::less<>>;
   seastar::future<omap_values_t> omap_get_values(
     CollectionRef c,
     const ghobject_t& oid,
     std::vector<std::string>&& keys);
+
+  /// Retrieves paged set of values > start (if present)
+  seastar::future<bool, omap_values_t> omap_get_values(
+    CollectionRef c,           ///< [in] collection
+    const ghobject_t &oid,     ///< [in] oid
+    const std::optional<std::string> &start ///< [in] start, empty for begin
+    ); ///< @return <done, values> values.empty() iff done
+
   CollectionRef create_new_collection(const coll_t& cid);
   CollectionRef open_collection(const coll_t& cid);
   std::vector<coll_t> list_collections();

@@ -207,6 +207,29 @@ CyanStore::omap_get_values(CollectionRef c,
   return seastar::make_ready_future<omap_values_t>(std::move(values));
 }
 
+seastar::future<bool, CyanStore::omap_values_t>
+CyanStore::omap_get_values(
+    CollectionRef c,
+    const ghobject_t &oid,
+    const std::optional<string> &start
+  ) {
+  logger().debug(
+    "{} {} {}",
+    __func__, c->cid, oid);
+  auto o = c->get_object(oid);
+  if (!o) {
+    throw std::runtime_error(fmt::format("object does not exist: {}", oid));
+  }
+  omap_values_t values;
+  for (auto i = start ? o->omap.upper_bound(*start) : o->omap.begin();
+       values.size() < MAX_KEYS_PER_OMAP_GET_CALL && i != o->omap.end();
+       ++i) {
+    values.insert(*i);
+  }
+  return seastar::make_ready_future<bool, omap_values_t>(
+    true, omap_values_t());
+}
+
 seastar::future<> CyanStore::do_transaction(CollectionRef ch,
                                             Transaction&& t)
 {
