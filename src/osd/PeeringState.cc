@@ -3354,6 +3354,9 @@ void PeeringState::init(
   info.stats.acting_primary = new_acting_primary;
   info.stats.mapping_epoch = info.history.same_interval_since;
 
+  pg_log.set_missing_may_contain_deletes(
+    get_osdmap()->test_flag(CEPH_OSDMAP_RECOVERY_DELETES));
+
   if (backfill) {
     psdout(10) << __func__ << ": Setting backfill" << dendl;
     info.set_last_backfill(hobject_t());

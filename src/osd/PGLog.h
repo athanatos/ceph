@@ -839,6 +839,10 @@ public:
 			const pg_log_t &olog,
 			pg_missing_t& omissing, pg_shard_t from) const;
 
+  void set_missing_may_contain_deletes(bool missing_may_contain_deletes) {
+    missing.may_include_deletes = missing_may_contain_deletes;
+  }
+
   void rebuild_missing_set_with_deletes(ObjectStore *store,
 					ObjectStore::CollectionHandle& ch,
 					const pg_info_t &info);
