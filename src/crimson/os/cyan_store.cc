@@ -233,21 +233,22 @@ CyanStore::omap_get_values(
 seastar::future<> CyanStore::do_transaction(CollectionRef ch,
                                             Transaction&& t)
 {
-  auto i = t.begin();
-  while (i.have_op()) {
-    Transaction::Op* op = i.decode_op();
-    int r = 0;
-    switch (op->op) {
-    case Transaction::OP_NOP:
-      break;
-    case Transaction::OP_TOUCH:
+  try {
+    auto i = t.begin();
+    while (i.have_op()) {
+      Transaction::Op* op = i.decode_op();
+      int r = 0;
+      switch (op->op) {
+      case Transaction::OP_NOP:
+	break;
+      case Transaction::OP_TOUCH:
       {
         coll_t cid = i.get_cid(op->cid);
         ghobject_t oid = i.get_oid(op->oid);
         r = _touch(cid, oid);
       }
       break;
-    case Transaction::OP_WRITE:
+      case Transaction::OP_WRITE:
       {
         coll_t cid = i.get_cid(op->cid);
         ghobject_t oid = i.get_oid(op->oid);
@@ -259,7 +260,7 @@ seastar::future<> CyanStore::do_transaction(CollectionRef ch,
         r = _write(cid, oid, off, len, bl, fadvise_flags);
       }
       break;
-    case Transaction::OP_TRUNCATE:
+      case Transaction::OP_TRUNCATE:
       {
         coll_t cid = i.get_cid(op->cid);
         ghobject_t oid = i.get_oid(op->oid);
@@ -267,7 +268,7 @@ seastar::future<> CyanStore::do_transaction(CollectionRef ch,
         r = _truncate(cid, oid, off);
       }
       break;
-    case Transaction::OP_SETATTR:
+      case Transaction::OP_SETATTR:
       {
         coll_t cid = i.get_cid(op->cid);
         ghobject_t oid = i.get_oid(op->oid);
@@ -279,19 +280,46 @@ seastar::future<> CyanStore::do_transaction(CollectionRef ch,
         r = _setattrs(cid, oid, to_set);
       }
       break;
-    case Transaction::OP_MKCOLL:
+      case Transaction::OP_MKCOLL:
       {
         coll_t cid = i.get_cid(op->cid);
         r = _create_collection(cid, op->split_bits);
       }
       break;
-    default:
-      logger().error("bad op {}", static_cast<unsigned>(op->op));
-      abort();
+      case Transaction::OP_OMAP_SETKEYS:
+      {
+        coll_t cid = i.get_cid(op->cid);
+        ghobject_t oid = i.get_oid(op->oid);
+        map<string, bufferlist> aset;
+        i.decode_attrset(aset);
+        r = _omap_set_values(cid, oid, aset);
+      }
+      break;
+      case Transaction::OP_COLL_HINT:
+      {
+        bufferlist hint;
+        i.decode_bl(hint);
+	// ignored
+	break;
+      }
+      default:
+	logger().error("bad op {}", static_cast<unsigned>(op->op));
+	abort();
+      }
+      if (r < 0) {
+	abort();
+      }
     }
-    if (r < 0) {
-      abort();
-    }
+  } catch (...) {
+    logger().error(" transaction dump:\n");
+    JSONFormatter f(true);
+    f.open_object_section("transaction");
+    t.dump(&f);
+    f.close_section();
+    stringstream str;
+    f.flush(str);
+    logger().error("{}", str.str());
+    abort();
   }
   return seastar::now();
 }
@@ -329,6 +357,27 @@ int CyanStore::_write(const coll_t& cid, const ghobject_t& oid,
 
   return 0;
 }
+
+int CyanStore::_omap_set_values(
+  const coll_t& cid,
+  const ghobject_t& oid,
+  const map<string, bufferlist> &aset)
+{
+  logger().debug(
+    "{} {} {} {} keys",
+    __func__, cid, oid, aset.size());
+
+  auto c = open_collection(cid);
+  if (!c)
+    return -ENOENT;
+
+  ObjectRef o = c->get_or_create_object(oid);
+  for (auto &i: aset) {
+    o->omap.insert(i);
+  }
+  return 0;
+}
+
 
 int CyanStore::_truncate(const coll_t& cid, const ghobject_t& oid, uint64_t size)
 {

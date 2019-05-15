@@ -22,6 +22,7 @@ class Transaction;
 
 // a just-enough store for reading/writing the superblock
 class CyanStore {
+  constexpr static int MAX_KEYS_PER_OMAP_GET_CALL = 32;
 public:
   using CollectionRef = boost::intrusive_ptr<Collection>;
 
@@ -108,6 +109,10 @@ private:
   int _write(const coll_t& cid, const ghobject_t& oid,
 	     uint64_t offset, size_t len, const bufferlist& bl,
 	     uint32_t fadvise_flags);
+  int _omap_set_values(
+    const coll_t& cid,
+    const ghobject_t& oid,
+    const map<string, bufferlist> &aset);
   int _truncate(const coll_t& cid, const ghobject_t& oid, uint64_t size);
   int _setattrs(const coll_t& cid, const ghobject_t& oid,
                 map<string,bufferptr>& aset);
