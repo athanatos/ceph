@@ -321,7 +321,16 @@ seastar::future<> CyanStore::do_transaction(CollectionRef ch,
     logger().error("{}", str.str());
     abort();
   }
-  return seastar::now();
+  return seastar::now().then([t=std::move(t)]() mutable {
+    for (auto i : {
+	t.get_on_applied(),
+	t.get_on_commit(),
+	t.get_on_applied_sync()}) {
+      if (i) {
+	i->complete(0);
+      }
+    }
+  });
 }
 
 int CyanStore::_touch(const coll_t& cid, const ghobject_t& oid)
