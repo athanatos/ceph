@@ -98,6 +98,8 @@ PG::PG(
     new RecoverablePredicate());
 }
 
+PG::~PG() {}
+
 bool PG::try_flush_or_schedule_async() {
 // FIXME once there's a good way to schedule an "async" peering event
 #if 0

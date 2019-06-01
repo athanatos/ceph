@@ -11,6 +11,7 @@
 #include <seastar/core/future.hh>
 #include <seastar/core/shared_future.hh>
 
+#include "crimson/common/type_helpers.h"
 #include "common/dout.h"
 #include "crimson/net/Fwd.h"
 #include "os/Transaction.h"
@@ -19,7 +20,6 @@
 #include "osd/osd_internal_types.h"
 #include "osd/PeeringState.h"
 
-template<typename T> using Ref = boost::intrusive_ptr<T>;
 class OSDMap;
 class MQuery;
 class PGBackend;
@@ -58,6 +58,8 @@ public:
      cached_map_t osdmap,
      ceph::osd::ShardServices &shard_services,
      ec_profile_t profile);
+
+  ~PG();
 
   // EpochSource
   epoch_t get_osdmap_epoch() const final {
@@ -187,7 +189,7 @@ public:
     t.register_on_commit(
       new LambdaContext([this, on_commit](){
 	PeeringCtx rctx;
-        do_peering_event(on_commit, rctx);
+        do_peering_event(*on_commit, rctx);
 	shard_services.dispatch_context(std::move(rctx));
     }));
   }
@@ -392,16 +394,6 @@ public:
     PeeringCtx &rctx);
   void do_peering_event(
     PGPeeringEvent& evt, PeeringCtx &rctx);
-  void do_peering_event(
-    std::unique_ptr<PGPeeringEvent> evt,
-    PeeringCtx &rctx) {
-    return do_peering_event(*evt, rctx);
-  }
-  void do_peering_event(
-    PGPeeringEventRef evt,
-    PeeringCtx &rctx) {
-    return do_peering_event(*evt, rctx);
-  }
 
   void handle_advance_map(cached_map_t next_map, PeeringCtx &rctx);
   void handle_activate_map(PeeringCtx &rctx);

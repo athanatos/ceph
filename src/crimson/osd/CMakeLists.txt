@@ -10,6 +10,11 @@ add_executable(crimson-osd
   pg_meta.cc
   replicated_backend.cc
   shard_services.cc
+  osd_operation.cc
+  osd_operations/client_request.cc
+  osd_operations/peering_event.cc
+  osd_operations/compound_peering_request.cc
+  osdmap_gate.cc
   ${PROJECT_SOURCE_DIR}/src/osd/PeeringState.cc
   ${PROJECT_SOURCE_DIR}/src/osd/PGPeeringEvent.cc
   ${PROJECT_SOURCE_DIR}/src/osd/PGStateUtils.cc

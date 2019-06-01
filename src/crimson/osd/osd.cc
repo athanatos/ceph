@@ -12,12 +12,8 @@
 #include "messages/MOSDBoot.h"
 #include "messages/MOSDMap.h"
 #include "messages/MOSDOp.h"
-#include "messages/MOSDPGInfo.h"
 #include "messages/MOSDPGLog.h"
-#include "messages/MOSDPGNotify.h"
-#include "messages/MOSDPGQuery.h"
 #include "messages/MPGStats.h"
-#include "messages/MOSDPGCreate2.h"
 
 #include "crimson/mon/MonClient.h"
 #include "crimson/net/Connection.h"
@@ -33,6 +29,8 @@
 #include "crimson/osd/pg_meta.h"
 #include "osd/PGPeeringEvent.h"
 #include "osd/PeeringState.h"
+#include "crimson/osd/osd_operations/compound_peering_request.h"
+#include "crimson/osd/osd_operations/peering_event.h"
 
 namespace {
   seastar::logger& logger() {
@@ -43,6 +41,8 @@ namespace {
 
 using ceph::common::local_conf;
 using ceph::os::CyanStore;
+
+namespace ceph::osd {
 
 OSD::OSD(int id, uint32_t nonce,
          ceph::net::Messenger& cluster_msgr,
@@ -60,7 +60,8 @@ OSD::OSD(int id, uint32_t nonce,
     heartbeat_timer{[this] { update_heartbeat_peers(); }},
     store{std::make_unique<ceph::os::CyanStore>(
       local_conf().get_val<std::string>("osd_data"))},
-    shard_services{cluster_msgr, public_msgr, *monc, *mgrc, *store}
+    shard_services{cluster_msgr, public_msgr, *monc, *mgrc, *store},
+    osdmap_gate(shard_services)
 {
   osdmaps[0] = boost::make_local_shared<OSDMap>();
   for (auto msgr : {std::ref(cluster_msgr), std::ref(public_msgr),
@@ -187,6 +188,7 @@ seastar::future<> OSD::start()
     return get_map(superblock.current_epoch);
   }).then([this](cached_map_t&& map) {
     shard_services.update_map(osdmap);
+    osdmap_gate.got_map(map->get_epoch());
     osdmap = std::move(map);
     return load_pgs();
   }).then([this] {
@@ -258,9 +260,9 @@ seastar::future<> OSD::_preboot(version_t oldest, version_t newest)
   }
   // get all the latest maps
   if (osdmap->get_epoch() + 1 >= oldest) {
-    return osdmap_subscribe(osdmap->get_epoch() + 1, false);
+    return shard_services.osdmap_subscribe(osdmap->get_epoch() + 1, false);
   } else {
-    return osdmap_subscribe(oldest - 1, true);
+    return shard_services.osdmap_subscribe(oldest - 1, true);
   }
 }
 
@@ -395,16 +397,15 @@ seastar::future<> OSD::ms_dispatch(ceph::net::Connection* conn, MessageRef m)
     return handle_osd_map(conn, boost::static_pointer_cast<MOSDMap>(m));
   case CEPH_MSG_OSD_OP:
     return handle_osd_op(conn, boost::static_pointer_cast<MOSDOp>(m));
+  case MSG_OSD_PG_CREATE2:
   case MSG_OSD_PG_NOTIFY:
-    return handle_pg_notify(conn, boost::static_pointer_cast<MOSDPGNotify>(m));
   case MSG_OSD_PG_INFO:
-    return handle_pg_info(conn, boost::static_pointer_cast<MOSDPGInfo>(m));
   case MSG_OSD_PG_QUERY:
-    return handle_pg_query(conn, boost::static_pointer_cast<MOSDPGQuery>(m));
+    shard_services.start_operation<CompoundPeeringRequest>(
+      *this, m);
+    return seastar::now();
   case MSG_OSD_PG_LOG:
     return handle_pg_log(conn, boost::static_pointer_cast<MOSDPGLog>(m));
-  case MSG_OSD_PG_CREATE2:
-    return handle_pg_create(conn, boost::static_pointer_cast<MOSDPGCreate2>(m));
   default:
     logger().info("{} unhandled message {}", __func__, *m);
     return seastar::now();
@@ -537,17 +538,6 @@ seastar::future<> OSD::store_maps(ceph::os::Transaction& t,
   });
 }
 
-seastar::future<> OSD::osdmap_subscribe(version_t epoch, bool force_request)
-{
-  logger().info("{}({})", __func__, epoch);
-  if (monc->sub_want_increment("osdmap", epoch, CEPH_SUBSCRIBE_ONETIME) ||
-      force_request) {
-    return monc->renew_subs();
-  } else {
-    return seastar::now();
-  }
-}
-
 bool OSD::require_mon_peer(ceph::net::Connection *conn, Ref<Message> m)
 {
   if (!conn->peer_is_mon()) {
@@ -656,59 +646,6 @@ seastar::future<Ref<PG>> OSD::handle_pg_create_info(
     });
 }
 
-seastar::future<> OSD::handle_pg_create(
-  ceph::net::Connection* conn,
-  Ref<MOSDPGCreate2> m)
-{
-  logger().info("{}: {} from {}", __func__, *m, m->get_source());
-  if (!require_mon_peer(conn, m)) {
-    return seastar::now();
-  }
-  return handle_batch_pg_message(
-    m->pgs,
-    [this, conn, m](auto p)
-    -> std::optional<std::tuple<spg_t, std::unique_ptr<PGPeeringEvent>>> {
-      const spg_t &pgid = p.first;
-      const auto &[created, created_stamp] = p.second;
-
-      auto q = m->pg_extra.find(pgid);
-      ceph_assert(q != m->pg_extra.end());
-      logger().debug(
-	"{} {} e{} @{} history {} pi {}",
-	__func__,
-	pgid,
-	created,
-	created_stamp,
-	q->second.first,
-	q->second.second);
-      if (!q->second.second.empty() &&
-	  m->epoch < q->second.second.get_bounds().second) {
-	logger().error(
-	  "got pg_create on {} epoch {} unmatched past_intervals (history {})",
-	  pgid,
-	  m->epoch,
-	  q->second.second,
-	  q->second.first);
-	return std::nullopt;
-      } else {
-	return std::make_optional(
-	  std::make_tuple(
-	    pgid,
-	    std::make_unique<PGPeeringEvent>(
-	      m->epoch,
-	      m->epoch,
-	      NullEvt(),
-	      true,
-	      new PGCreateInfo(
-		pgid,
-		m->epoch,
-		q->second.first,
-		q->second.second,
-		true))));
-      }
-    });
-}
-
 seastar::future<> OSD::handle_osd_map(ceph::net::Connection* conn,
                                       Ref<MOSDMap> m)
 {
@@ -738,14 +675,14 @@ seastar::future<> OSD::handle_osd_map(ceph::net::Connection* conn,
     logger().info("handle_osd_map message skips epochs {}..{}",
                   start, first - 1);
     if (m->oldest_map <= start) {
-      return osdmap_subscribe(start, false);
+      return shard_services.osdmap_subscribe(start, false);
     }
     // always try to get the full range of maps--as many as we can.  this
     //  1- is good to have
     //  2- is at present the only way to ensure that we get a *full* map as
     //     the first map!
     if (m->oldest_map < first) {
-      return osdmap_subscribe(m->oldest_map - 1, true);
+      return shard_services.osdmap_subscribe(m->oldest_map - 1, true);
     }
     skip_maps = true;
     start = first;
@@ -930,115 +867,18 @@ void OSD::update_heartbeat_peers()
   heartbeat->update_peers(whoami);
 }
 
-seastar::future<> OSD::handle_pg_notify(
-  ceph::net::Connection* conn,
-  Ref<MOSDPGNotify> m)
-{
-  // assuming all pgs reside in a single shard
-  // see OSD::dequeue_peering_evt()
-  const int from = m->get_source().num();
-  return handle_batch_pg_message(
-    m->get_pg_list(),
-    [from, this](pair<pg_notify_t, PastIntervals> p) {
-      auto& [pg_notify, past_intervals] = p;
-      spg_t pgid{pg_notify.info.pgid.pgid, pg_notify.to};
-      MNotifyRec notify{pgid,
-                        pg_shard_t{from, pg_notify.from},
-                        pg_notify,
-                        0, // the features is not used
-                        past_intervals};
-      logger().debug("handle_pg_notify on {} from {}", pgid.pgid, from);
-      auto create_info = new PGCreateInfo{
-	pgid,
-	pg_notify.query_epoch,
-	pg_notify.info.history,
-	past_intervals,
-	false};
-      return std::make_optional(
-	std::make_tuple(
-	  pgid,
-	  std::make_unique<PGPeeringEvent>(
-	    pg_notify.epoch_sent,
-	    pg_notify.query_epoch,
-	    notify,
-	    true, // requires_pg
-	    create_info)));
-  });
-}
-
-seastar::future<> OSD::handle_pg_info(
-  ceph::net::Connection* conn,
-  Ref<MOSDPGInfo> m)
-{
-  // assuming all pgs reside in a single shard
-  // see OSD::dequeue_peering_evt()
-  const int from = m->get_source().num();
-  return handle_batch_pg_message(
-    m->pg_list,
-    [from, this](pair<pg_notify_t, PastIntervals> p) {
-      auto& pg_notify = p.first;
-      spg_t pgid{pg_notify.info.pgid.pgid, pg_notify.to};
-      logger().debug("handle_pg_info on {} from {}", pgid.pgid, from);
-      MInfoRec info{pg_shard_t{from, pg_notify.from},
-                    pg_notify.info,
-                    pg_notify.epoch_sent};
-      return std::make_optional(
-	std::tuple(
-	  pgid,
-	  std::make_unique<PGPeeringEvent>(
-	    pg_notify.epoch_sent,
-	    pg_notify.query_epoch,
-	    std::move(info))));
-    });
-}
-
-seastar::future<> OSD::handle_pg_query(ceph::net::Connection* conn,
-                                       Ref<MOSDPGQuery> m)
-{
-  // assuming all pgs reside in a single shard
-  // see OSD::dequeue_peering_evt()
-  const int from = m->get_source().num();
-  // TODO: handle missing pg -- handle_batch_pg_message ignores pgs
-  // that don't exist
-  return handle_batch_pg_message_with_missing_handler(
-    m->pg_list,
-    [from, this](pair<spg_t, pg_query_t> p) {
-      auto& [pgid, pg_query] = p;
-      MQuery query{pgid, pg_shard_t{from, pg_query.from},
-		   pg_query, pg_query.epoch_sent};
-      logger().debug("handle_pg_query on {} from {}", pgid, from);
-      return std::make_optional(
-	std::make_tuple(
-	  pgid,
-	  std::make_unique<PGPeeringEvent>(
-	    pg_query.epoch_sent,
-	    pg_query.epoch_sent,
-	    std::move(query))));
-    },
-    [this, from](pair<spg_t, pg_query_t> p, PeeringCtx &ctx) {
-      auto &[pgid, query] = p;
-      logger().debug("handle_pg_query on absent pg {} from {}", pgid, from);
-      pg_info_t empty(spg_t(pgid.pgid, query.to));
-      ceph_assert(query.type == pg_query_t::INFO);
-      ctx.notify_list[from].emplace_back(
-        pg_notify_t(
-          query.from, query.to,
-          query.epoch_sent,
-	  osdmap->get_epoch(),
-	  empty),
-	PastIntervals());
-    });
-}
-
 seastar::future<> OSD::handle_pg_log(
   ceph::net::Connection* conn,
   Ref<MOSDPGLog> m)
 {
   const int from = m->get_source().num();
   logger().debug("handle_pg_log on {} from {}", m->get_spg(), from);
-  return do_peering_event_and_dispatch(
-    m->get_spg(),
-    PGPeeringEventURef(m->get_event()));
+  shard_services.start_operation<PeeringEvent>(
+    *this,
+    pg_shard_t(from, m->from),
+    spg_t(m->info.pgid.pgid, m->to),
+    std::move(*m->get_event()));
+  return seastar::now();
 }
 
 void OSD::check_osdmap_features()
@@ -1056,19 +896,14 @@ seastar::future<> OSD::consume_map(epoch_t epoch)
   return seastar::parallel_for_each(pgs.begin(), pgs.end(), [=](auto& pg) {
     return advance_pg_to(pg.second, epoch);
   }).then([epoch, this] {
-    auto first = waiting_peering.begin();
-    auto last = waiting_peering.upper_bound(epoch);
-    std::for_each(first, last, [epoch, this](auto& blocked_requests) {
-      blocked_requests.second.set_value(epoch);
-    });
-    waiting_peering.erase(first, last);
-    return seastar::now();
+    osdmap_gate.got_map(epoch);
+    return seastar::make_ready_future();
   });
 }
 
 
 seastar::future<Ref<PG>>
-OSD::get_pg(
+OSD::get_or_create_pg(
   spg_t pgid,
   epoch_t epoch,
   std::unique_ptr<PGCreateInfo> info)
@@ -1105,10 +940,11 @@ OSD::do_peering_event(
   PGPeeringEventURef evt,
   PeeringCtx &rctx)
 {
-  return get_pg(pgid, evt->get_epoch_sent(), std::move(evt->create_info))
+  return get_or_create_pg(
+    pgid, evt->get_epoch_sent(), std::move(evt->create_info))
     .then([this, evt=std::move(evt), &rctx](Ref<PG> pg) mutable {
       if (pg) {
-	pg->do_peering_event(std::move(evt), rctx);
+	pg->do_peering_event(*evt, rctx);
       }
       return seastar::make_ready_future<Ref<PG>>(pg);
     });
@@ -1158,21 +994,6 @@ OSD::do_peering_event_and_dispatch(
     });
 }
 
-seastar::future<epoch_t> OSD::wait_for_map(epoch_t epoch)
-{
-  const auto mine = osdmap->get_epoch();
-  if (mine >= epoch) {
-    return seastar::make_ready_future<epoch_t>(mine);
-  } else {
-    logger().info("evt epoch is {}, i have {}, will wait", epoch, mine);
-    auto fut = waiting_peering[epoch].get_shared_future();
-    return osdmap_subscribe(osdmap->get_epoch(), true).then(
-      [fut=std::move(fut)]() mutable {
-      return std::move(fut);
-    });
-  }
-}
-
 seastar::future<> OSD::advance_pg_to(Ref<PG> pg, epoch_t to)
 {
   auto from = pg->get_osdmap_epoch();
@@ -1197,4 +1018,6 @@ seastar::future<> OSD::advance_pg_to(Ref<PG> pg, epoch_t to)
 	      std::move(rctx)));
 	});
     });
+}
+
 }
