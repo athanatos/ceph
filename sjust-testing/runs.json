@@ -1,0 +1,15 @@
+{
+	"base": {
+		"runtime": 300,
+		"devices": {
+			"nvme": "/mnt/sjust/nvme",
+			"hdd": "/mnt/sjust/hdd"
+		}
+	},
+	"runs": {
+	        "qd": [1, 64, 128, 256, 512],
+	        "bs": [4],
+		"target_device": ["hdd"],
+		"run": [0,1,2]
+	}
+}
