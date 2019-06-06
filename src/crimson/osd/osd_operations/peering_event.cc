@@ -20,10 +20,10 @@ void PeeringEvent::print(std::ostream &lhs) const
 {
   lhs << "PeeringEvent("
       << "from=" << from
-      << "pgid=" << pgid
-      << "sent=" << evt.get_epoch_sent()
-      << "requested=" << evt.get_epoch_requested()
-      << "evt=" << evt.get_desc()
+      << " pgid=" << pgid
+      << " sent=" << evt.get_epoch_sent()
+      << " requested=" << evt.get_epoch_requested()
+      << " evt=" << evt.get_desc()
       << ")";
 }
 
@@ -58,7 +58,7 @@ seastar::future<> PeeringEvent::start()
       }
       return complete_rctx(pg);
     }).then([this, ref=std::move(ref)] {
-      logger().debug("{}: complete");
+      logger().debug("{}: complete", *this);
     });
 
   return seastar::make_ready_future();
@@ -66,12 +66,12 @@ seastar::future<> PeeringEvent::start()
 
 void PeeringEvent::on_pg_absent()
 {
-  logger().debug("{}: pg absent, dropping");
+  logger().debug("{}: pg absent, dropping", *this);
 }
 
 seastar::future<> PeeringEvent::complete_rctx(Ref<PG> pg)
 {
-  logger().debug("{}: submitting ctx");
+  logger().debug("{}: submitting ctx", *this);
   return osd.get_shard_services().dispatch_context(
     pg->get_collection_ref(),
     std::move(ctx));

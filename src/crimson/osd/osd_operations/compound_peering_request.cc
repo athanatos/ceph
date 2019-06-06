@@ -26,10 +26,10 @@ namespace {
 using namespace ceph::osd;
 
 struct compound_state {
-  seastar::promise<> promise;
+  seastar::promise<BufferedRecoveryMessages> promise;
   BufferedRecoveryMessages ctx;
   ~compound_state() {
-    promise.set_value();
+    promise.set_value(std::move(ctx));
   }
 };
 using compound_state_ref = seastar::lw_shared_ptr<compound_state>;
@@ -42,10 +42,16 @@ public:
     PeeringEvent(std::forward<Args>(args)...), state(state) {}
 
   seastar::future<> complete_rctx(Ref<PG> pg) final {
-    logger().debug("{}: submitting ctx");
+    logger().debug("{}: submitting ctx transaction", *this);
     state->ctx.accept_buffered_messages(ctx);
-    return osd.get_shard_services().dispatch_context_transaction(
-      pg->get_collection_ref(), ctx);
+    state = {};
+    if (!pg) {
+      ceph_assert(ctx.transaction.empty());
+      return seastar::now();
+    } else {
+      return osd.get_shard_services().dispatch_context_transaction(
+	pg->get_collection_ref(), ctx);
+    }
   }
 };
 
@@ -281,12 +287,17 @@ seastar::future<> CompoundPeeringRequest::start()
 
   add_blocker(blocker.get());
   IRef ref = this;
+  logger().info("{}: about to fork future", *this);
   state->promise.get_future().then(
-    [this, ref=std::move(ref), blocker=std::move(blocker)] {
+    [this, blocker=std::move(blocker)](auto &&ctx) {
       clear_blocker(blocker.get());
+      logger().info("{}: sub events complete", *this);
+      return osd.get_shard_services().dispatch_context_messages(std::move(ctx));
+    }).then([this, ref=std::move(ref)] {
       logger().info("{}: complete", *this);
     });
 
+  logger().info("{}: forked, returning", *this);
   return seastar::now();
 }
 
