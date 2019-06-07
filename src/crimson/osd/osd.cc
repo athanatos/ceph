@@ -923,7 +923,8 @@ OSD::get_or_create_pg(
   std::unique_ptr<PGCreateInfo> info,
   Operation &op)
 {
-  return wait_for_map(epoch).then([this, pgid, epoch, info=std::move(info)](epoch_t) mutable {
+  return op.with_blocking_future(osdmap_gate.wait_for_map(epoch)).then(
+    [this, pgid, epoch, info=std::move(info)](epoch_t) mutable {
     if (auto pg = pgs.find(pgid); pg != pgs.end()) {
       return advance_pg_to(pg->second, epoch).then([pg=pg->second]() {
 	return seastar::make_ready_future<Ref<PG>>(pg);

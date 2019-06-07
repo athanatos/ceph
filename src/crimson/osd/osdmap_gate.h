@@ -25,12 +25,16 @@ class OSDMapGate {
     const char * type_name;
     epoch_t epoch;
 
-    OSDMapBlocker(
-      const char *type_name,
-      epoch_t epoch) : type_name(type_name), epoch(epoch) {}
+    OSDMapBlocker(std::pair<const char *, epoch_t> args) 
+      : type_name(args.first), epoch(args.second) {}
+
+    OSDMapBlocker(const OSDMapBlocker &) = delete;
+    OSDMapBlocker(OSDMapBlocker &&) = delete;
+    OSDMapBlocker &operator=(const OSDMapBlocker &) = delete;
+    OSDMapBlocker &operator=(OSDMapBlocker &&) = delete;
 
     seastar::shared_promise<epoch_t> promise;
-    seastar::future<epoch_t> block_op(OperationRef op);
+
     void dump_detail(Formatter *f) const final;
     const char *get_type_name() const final {
       return type_name;
@@ -54,7 +58,7 @@ public:
     : blocker_type(blocker_type), shard_services(shard_services) {}
 
   // wait for an osdmap whose epoch is greater or equal to given epoch
-  seastar::future<epoch_t> wait_for_map(OperationRef req, epoch_t epoch);
+  blocking_future<epoch_t> wait_for_map(epoch_t epoch);
   void got_map(epoch_t epoch);
 };
 

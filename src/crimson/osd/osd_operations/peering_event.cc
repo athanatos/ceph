@@ -43,7 +43,7 @@ seastar::future<> PeeringEvent::start()
   logger().debug("{}: start", *this);
 
   IRef ref = this;
-  osd.osdmap_gate.wait_for_map(this, evt.get_epoch_sent())
+  with_blocking_future(osd.osdmap_gate.wait_for_map(evt.get_epoch_sent()))
     .then([this](auto epoch) {
       logger().debug("{}: got map {}", *this, epoch);
       return osd.get_or_create_pg(

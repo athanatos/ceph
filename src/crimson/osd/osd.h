@@ -155,10 +155,6 @@ private:
   seastar::future<Ref<PG>> handle_pg_create_info(
     std::unique_ptr<PGCreateInfo> info);
 
-  seastar::future<epoch_t> wait_for_map(epoch_t epoch) {
-    return seastar::make_ready_future<epoch_t>(0);
-  }
-
   seastar::future<> handle_osd_map(ceph::net::Connection* conn,
                                    Ref<MOSDMap> m);
   seastar::future<> handle_osd_op(ceph::net::Connection* conn,

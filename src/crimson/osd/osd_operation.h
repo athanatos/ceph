@@ -33,11 +33,39 @@ class OperationRegistry;
 using registry_hook_t = boost::intrusive::list_member_hook<
   boost::intrusive::link_mode<boost::intrusive::auto_unlink>>;
 
+class Operation;
+class Blocker;
+
+template <typename... T>
+class blocking_future {
+  friend class Operation;
+  friend class Blocker;
+  Blocker *blocker = nullptr;
+  seastar::future<T...> fut;
+  blocking_future(Blocker *b, seastar::future<T...> &&f)
+    : blocker(b), fut(std::move(f)) {}
+
+  template <typename... V, typename... U>
+  friend blocking_future<V...> make_ready_blocking_future(U&&... args);
+};
+
+template <typename... V, typename... U>
+blocking_future<V...> make_ready_blocking_future(U&&... args) {
+  return blocking_future<V...>(
+    nullptr,
+    seastar::make_ready_future<V...>(std::forward<U>(args)...));
+}
+
 class Blocker {
 protected:
   virtual void dump_detail(Formatter *f) const = 0;
 
 public:
+  template <typename... T>
+  blocking_future<T...> get_blocking_future(seastar::future<T...> &&f) {
+    return blocking_future(this, std::move(f));
+  }
+
   void dump(Formatter *f) const;
 
   virtual const char *get_type_name() const = 0;
@@ -53,15 +81,6 @@ public:
   }
 
   virtual ~BlockerT() = default;
-};
-
-class Operation;
-
-template <typename... T>
-class blocking_future {
-  friend class Operation;
-  seastar::future<T...> f;
-  Blocker &b;
 };
 
 class Operation : public boost::intrusive_ref_counter<
@@ -96,11 +115,12 @@ public:
 
   template <typename... T>
   seastar::future<T...> with_blocking_future(blocking_future<T...> &&f) {
-    if (f.available() || f.failed()) {
-      return std::move(f);
+    if (f.fut.available() || f.fut.failed()) {
+      return std::move(f.fut);
     }
-    add_blocker(&f.blocker);
-    return std::move(f).then_wrapped([this, blocker=&f.blocker](auto &&arg) {
+    ceph_assert(f.blocker);
+    add_blocker(f.blocker);
+    return std::move(f.fut).then_wrapped([this, blocker=f.blocker](auto &&arg) {
       clear_blocker(blocker);
       return std::move(arg);
     });

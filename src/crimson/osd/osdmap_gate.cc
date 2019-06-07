@@ -20,27 +20,20 @@ void OSDMapGate::OSDMapBlocker::dump_detail(Formatter *f) const
   f->close_section();
 }
 
-seastar::future<epoch_t> OSDMapGate::OSDMapBlocker::block_op(OperationRef op)
-{
-  op->add_blocker(this);
-  return promise.get_shared_future().then([=](epoch_t got_epoch) {
-    op->clear_blocker(this);
-    return seastar::make_ready_future<epoch_t>(got_epoch);
-  });
-}
-
-seastar::future<epoch_t> OSDMapGate::wait_for_map(OperationRef op, epoch_t epoch)
+blocking_future<epoch_t> OSDMapGate::wait_for_map(epoch_t epoch)
 {
   if (current >= epoch) {
-    return seastar::make_ready_future<epoch_t>(current);
+    return make_ready_blocking_future<epoch_t>(current);
   } else {
     logger().info("evt epoch is {}, i have {}, will wait", epoch, current);
-    auto fut = waiting_peering.insert(
-      make_pair(epoch, OSDMapBlocker(blocker_type, epoch))).first->second.block_op(op);
-    return shard_services.osdmap_subscribe(current, true).then(
-      [fut=std::move(fut)]() mutable {
-      return std::move(fut);
-    });
+    auto &blocker = waiting_peering.emplace(
+      epoch, make_pair(blocker_type, epoch)).first->second;
+    auto fut = blocker.promise.get_shared_future();
+    return blocker.get_blocking_future(
+      shard_services.osdmap_subscribe(current, true).then(
+	[fut=std::move(fut)]() mutable {
+	  return std::move(fut);
+	}));
   }
 }
 
