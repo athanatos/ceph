@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <seastar/core/future.hh>
+
 #include <vector>
 #include <set>
 #include <boost/intrusive/list.hpp>
@@ -31,7 +33,37 @@ class OperationRegistry;
 using registry_hook_t = boost::intrusive::list_member_hook<
   boost::intrusive::link_mode<boost::intrusive::auto_unlink>>;
 
-class Blocker;
+class Blocker {
+protected:
+  virtual void dump_detail(Formatter *f) const = 0;
+
+public:
+  void dump(Formatter *f) const;
+
+  virtual const char *get_type_name() const = 0;
+
+  virtual ~Blocker() = default;
+};
+
+template <typename T>
+class BlockerT : public Blocker {
+public:
+  const char *get_type_name() const final {
+    return T::type_name;
+  }
+
+  virtual ~BlockerT() = default;
+};
+
+class Operation;
+
+template <typename... T>
+class blocking_future {
+  friend class Operation;
+  seastar::future<T...> f;
+  Blocker &b;
+};
+
 class Operation : public boost::intrusive_ref_counter<
   Operation, boost::thread_unsafe_counter> {
   friend class OperationRegistry;
@@ -60,6 +92,18 @@ public:
 
   void clear_blocker(Blocker *b) {
     blockers.erase(b);
+  }
+
+  template <typename... T>
+  seastar::future<T...> with_blocking_future(blocking_future<T...> &&f) {
+    if (f.available() || f.failed()) {
+      return std::move(f);
+    }
+    add_blocker(&f.blocker);
+    return std::move(f).then_wrapped([this, blocker=&f.blocker](auto &&arg) {
+      clear_blocker(blocker);
+      return std::move(arg);
+    });
   }
 
   void dump(Formatter *f);
@@ -116,28 +160,6 @@ public:
     op->set_id(op_id_counters[static_cast<int>(T::type)]++);
     return op;
   }
-};
-
-class Blocker {
-protected:
-  virtual void dump_detail(Formatter *f) const = 0;
-
-public:
-  void dump(Formatter *f) const;
-
-  virtual const char *get_type_name() const = 0;
-
-  virtual ~Blocker() = default;
-};
-
-template <typename T>
-class BlockerT : public Blocker {
-public:
-  const char *get_type_name() const final {
-    return T::type_name;
-  }
-
-  virtual ~BlockerT() = default;
 };
 
 template <typename OpType>
