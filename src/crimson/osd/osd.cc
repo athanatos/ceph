@@ -867,8 +867,9 @@ seastar::future<> OSD::handle_pg_log(
 {
   const int from = m->get_source().num();
   logger().debug("handle_pg_log on {} from {}", m->get_spg(), from);
-  shard_services.start_operation<PeeringEvent>(
+  shard_services.start_operation<RemotePeeringEvent>(
     *this,
+    shard_services,
     pg_shard_t(from, m->from),
     spg_t(m->info.pgid.pgid, m->to),
     std::move(*m->get_event()));

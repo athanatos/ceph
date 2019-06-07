@@ -34,12 +34,12 @@ struct compound_state {
 };
 using compound_state_ref = seastar::lw_shared_ptr<compound_state>;
 
-class PeeringSubEvent : public PeeringEvent {
+class PeeringSubEvent : public RemotePeeringEvent {
   compound_state_ref state;
 public:
   template <typename... Args>
   PeeringSubEvent(compound_state_ref state, Args &&... args) : 
-    PeeringEvent(std::forward<Args>(args)...), state(state) {}
+    RemotePeeringEvent(std::forward<Args>(args)...), state(state) {}
 
   seastar::future<> complete_rctx(Ref<PG> pg) final {
     logger().debug("{}: submitting ctx transaction", *this);
@@ -86,6 +86,7 @@ std::vector<OperationRef> handle_pg_create(
       auto op = osd.get_shard_services().start_operation<PeeringSubEvent>(
 	state,
 	osd,
+	osd.get_shard_services(),
 	pg_shard_t(),
 	pgid,
 	m->epoch,
@@ -129,6 +130,7 @@ std::vector<OperationRef> handle_pg_notify(
     auto op = osd.get_shard_services().start_operation<PeeringSubEvent>(
       state,
       osd,
+      osd.get_shard_services(),
       pg_shard_t(from, pg_notify.from),
       pgid,
       pg_notify.epoch_sent,
@@ -160,6 +162,7 @@ std::vector<OperationRef> handle_pg_info(
     auto op = osd.get_shard_services().start_operation<PeeringSubEvent>(
 	state,
 	osd,
+	osd.get_shard_services(),
 	pg_shard_t(from, pg_notify.from),
 	pgid,
 	pg_notify.epoch_sent,
@@ -205,6 +208,7 @@ std::vector<OperationRef> handle_pg_query(
     auto op = osd.get_shard_services().start_operation<QuerySubEvent>(
       state,
       osd,
+      osd.get_shard_services(),
       pg_shard_t(from, pg_query.from),
       pgid,
       pg_query.epoch_sent,

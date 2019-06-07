@@ -43,28 +43,21 @@ seastar::future<> PeeringEvent::start()
   logger().debug("{}: start", *this);
 
   IRef ref = this;
-  with_blocking_future(osd.osdmap_gate.wait_for_map(evt.get_epoch_sent()))
-    .then([this](auto epoch) {
-      logger().debug("{}: got map {}", *this, epoch);
+  get_pg().then([this](Ref<PG> pg) {
+    if (!pg) {
+      logger().debug("{}: pg absent, did not create", *this);
+      on_pg_absent();
+    } else {
+      logger().debug("{}: pg present", *this);
       return with_blocking_future(
-	osd.get_or_create_pg(
-	  pgid, evt.get_epoch_sent(), std::move(evt.create_info)));
-    }).then([this](Ref<PG> pg) {
-      if (!pg) {
-	logger().debug("{}: pg absent, did not create", *this);
-	on_pg_absent();
-      } else {
-	logger().debug("{}: pg present", *this);
-	return with_blocking_future(
-	  pg->osdmap_gate.wait_for_map(evt.get_epoch_sent())).then([this, pg](auto) {
-	    pg->do_peering_event(evt, ctx);
-	  });
-      }
-      return complete_rctx(pg);
-    }).then([this, ref=std::move(ref)] {
-      logger().debug("{}: complete", *this);
-    });
-
+	pg->osdmap_gate.wait_for_map(evt.get_epoch_sent())).then([this, pg](auto) {
+	  pg->do_peering_event(evt, ctx);
+	});
+    }
+    return complete_rctx(pg);
+  }).then([this, ref=std::move(ref)] {
+    logger().debug("{}: complete", *this);
+  });
   return seastar::make_ready_future();
 }
 
@@ -76,9 +69,19 @@ void PeeringEvent::on_pg_absent()
 seastar::future<> PeeringEvent::complete_rctx(Ref<PG> pg)
 {
   logger().debug("{}: submitting ctx", *this);
-  return osd.get_shard_services().dispatch_context(
+  return shard_services.dispatch_context(
     pg->get_collection_ref(),
     std::move(ctx));
+}
+
+seastar::future<Ref<PG>> RemotePeeringEvent::get_pg() {
+  return with_blocking_future(osd.osdmap_gate.wait_for_map(evt.get_epoch_sent()))
+    .then([this](auto epoch) {
+      logger().debug("{}: got map {}", *this, epoch);
+      return with_blocking_future(
+	osd.get_or_create_pg(
+	  pgid, evt.get_epoch_sent(), std::move(evt.create_info)));
+    });
 }
 
 }

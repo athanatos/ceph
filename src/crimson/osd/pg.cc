@@ -24,15 +24,17 @@
 
 #include "osd/OSDMap.h"
 
+#include "os/Transaction.h"
+
 #include "crimson/net/Connection.h"
 #include "crimson/net/Messenger.h"
 #include "crimson/os/cyan_collection.h"
 #include "crimson/os/cyan_store.h"
-#include "os/Transaction.h"
+
 #include "crimson/osd/exceptions.h"
 #include "crimson/osd/pg_meta.h"
-
-#include "pg_backend.h"
+#include "crimson/osd/pg_backend.h"
+#include "crimson/osd/osd_operations/peering_event.h"
 
 namespace {
   seastar::logger& logger() {
@@ -103,24 +105,20 @@ PG::PG(
 PG::~PG() {}
 
 bool PG::try_flush_or_schedule_async() {
-// FIXME once there's a good way to schedule an "async" peering event
-#if 0
   shard_services.get_store().do_transaction(
     coll_ref,
     ObjectStore::Transaction()).then(
-      [this, epoch=peering_state.get_osdmap()->get_epoch()](){
-	if (!peering_state.pg_has_reset_since(epoch)) {
-	  PeeringCtx rctx;
-	  auto evt = PeeringState::IntervalFlush();
-	  do_peering_event(evt, rctx);
-	  return shard_services.dispatch_context(std::move(rctx));
-	} else {
-	  return seastar::now();
-	}
+      [this, epoch=peering_state.get_osdmap()->get_epoch()]() {
+	return shard_services.start_operation<ceph::osd::LocalPeeringEvent>(
+	  this,
+	  shard_services,
+	  pg_whoami,
+	  pgid,
+	  epoch,
+	  epoch,
+	  PeeringState::IntervalFlush());
       });
   return false;
-#endif
-  return true;
 }
 
 void PG::log_state_enter(const char *state) {
