@@ -785,6 +785,7 @@ seastar::future<> OSD::handle_osd_op(ceph::net::Connection* conn,
 {
   shard_services.start_operation<ClientRequest>(
     *this,
+    conn->get_shared(),
     std::move(m));
   return seastar::now();
 }
@@ -911,76 +912,10 @@ OSD::get_or_create_pg(
 }
 
 blocking_future<Ref<PG>> OSD::wait_for_pg(
-  spg_t pgid,
-  epoch_t epoch)
+  spg_t pgid)
 {
   return pg_map.get_pg(pgid).first;
 }
-
-#if 0
-seastar::future<Ref<PG>>
-OSD::do_peering_event(
-  spg_t pgid,
-  PGPeeringEventURef evt,
-  PeeringCtx &rctx,
-  Operation &op)
-{
-  return get_or_create_pg(
-    pgid, evt->get_epoch_sent(), std::move(evt->create_info), op)
-    .then([this, evt=std::move(evt), &rctx](Ref<PG> pg) mutable {
-      if (pg) {
-	pg->do_peering_event(*evt, rctx);
-      }
-      return seastar::make_ready_future<Ref<PG>>(pg);
-    });
-}
-
-seastar::future<bool>
-OSD::do_peering_event_and_dispatch_transaction(
-  spg_t pgid,
-  std::unique_ptr<PGPeeringEvent> evt,
-  PeeringCtx &rctx,
-  Operation &op)
-{
-  return do_peering_event(pgid, std::move(evt), rctx, op).then(
-    [this, pgid, &rctx](Ref<PG> pg) mutable {
-      if (pg) {
-	return seastar::when_all_succeed(
-	  pg->get_need_up_thru() ? _send_alive() : seastar::now(),
-	  shard_services.dispatch_context_transaction(
-	    pg->get_collection_ref(), rctx)).then([] { return true; });
-      } else {
-	return seastar::make_ready_future<bool>(false);
-      }
-    });
-}
-
-seastar::future<>
-OSD::do_peering_event_and_dispatch(
-  spg_t pgid,
-  std::unique_ptr<PGPeeringEvent> evt,
-  Operation &op)
-{
-  return seastar::do_with(
-    PeeringCtx{},
-    [this, pgid, &op, evt=std::move(evt)](auto &rctx) mutable {
-      return do_peering_event(pgid, std::move(evt), rctx, op).then(
-	[this, pgid, &rctx](Ref<PG> pg) mutable {
-	  if (pg) {
-	    return seastar::when_all_succeed(
-	      pg->get_need_up_thru() ? _send_alive() : seastar::now(),
-	      shard_services.dispatch_context(
-		pg->get_collection_ref(), std::move(rctx)));
-	  } else {
-	    return seastar::now();
-	  }
-	});
-    }).handle_exception([](auto ep) {
-      logger().error("do_peering_event_and_dispatch saw {}", ep);
-      return seastar::make_exception_future<>(ep);
-    });
-}
-#endif
 
 seastar::future<> OSD::advance_pg_to(Ref<PG> pg, epoch_t to)
 {

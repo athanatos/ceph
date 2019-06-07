@@ -187,25 +187,7 @@ public:
     epoch_t epoch,
     std::unique_ptr<PGCreateInfo> info);
   blocking_future<Ref<PG>> wait_for_pg(
-    spg_t pgid,
-    epoch_t epoch);
-
-#if 0
-  seastar::future<Ref<PG>> do_peering_event(
-    spg_t pgid,
-    std::unique_ptr<PGPeeringEvent> evt,
-    PeeringCtx &rctx,
-    Operation &op);
-  seastar::future<> do_peering_event_and_dispatch(
-    spg_t pgid,
-    std::unique_ptr<PGPeeringEvent> evt,
-    Operation &op);
-  seastar::future<bool> do_peering_event_and_dispatch_transaction(
-    spg_t pgid,
-    std::unique_ptr<PGPeeringEvent> evt,
-    PeeringCtx &rctx,
-    Operation &op);
-#endif
+    spg_t pgid);
 
   seastar::future<> advance_pg_to(Ref<PG> pg, epoch_t to);
   bool should_restart() const;

@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "crimson/net/Connection.h"
 #include "crimson/osd/osd_operation.h"
 #include "crimson/common/type_helpers.h"
 
@@ -13,12 +14,13 @@ class OSD;
 
 class ClientRequest final : public OperationT<ClientRequest> {
   OSD &osd;
+  ceph::net::ConnectionRef conn;
   Ref<MOSDOp> m;
   
 public:
   static constexpr OperationTypeCode type = OperationTypeCode::client_request;
 
-  ClientRequest(OSD &osd, Ref<MOSDOp> &&m);
+  ClientRequest(OSD &osd, ceph::net::ConnectionRef, Ref<MOSDOp> &&m);
 
   void print(std::ostream &) const final;
   void dump_detail(Formatter *f) const final;

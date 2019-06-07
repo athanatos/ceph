@@ -78,7 +78,12 @@ class Connection : public seastar::enable_shared_from_this<Connection> {
   }
   auto get_last_keepalive() const { return last_keepalive; }
   auto get_last_keepalive_ack() const { return last_keepalive_ack; }
+
+  seastar::shared_ptr<Connection> get_shared() {
+    return shared_from_this();
+  }
 };
+using ConnectionRef = seastar::shared_ptr<Connection>;
 
 inline ostream& operator<<(ostream& out, const Connection& conn) {
   out << "[";
