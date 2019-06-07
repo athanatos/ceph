@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <seastar/core/shared_mutex.hh>
 #include <seastar/core/future.hh>
 
 #include <vector>
@@ -182,10 +183,36 @@ public:
   }
 };
 
-template <typename OpType>
-class ExclusivePipelinePhase : public BlockerT<ExclusivePipelinePhase<OpType>> {
-  static constexpr const char * type_name = "exclusive_pipeline_phase";
+class OrderedPipelinePhase : public Blocker {
+  const char * name;
+
+protected:
+  virtual void dump_detail(Formatter *f) const final;
+  const char *get_type_name() const final {
+    return name;
+  }
+
 public:
+  seastar::shared_mutex mutex;
+  
+  class Handle {
+    OrderedPipelinePhase *phase = nullptr;
+
+  public:
+    Handle() = default;
+
+    Handle(const Handle&) = delete;
+    Handle(Handle&&) = delete;
+    Handle &operator=(const Handle&) = delete;
+    Handle &operator=(Handle&&) = delete;
+    
+    void exit();
+    blocking_future<> enter(OrderedPipelinePhase &phase);
+
+    ~Handle();
+  };
+
+  OrderedPipelinePhase(const char *name) : name(name) {}
 };
 
 }

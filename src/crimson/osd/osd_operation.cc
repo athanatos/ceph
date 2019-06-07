@@ -50,4 +50,29 @@ void Blocker::dump(Formatter *f) const
   f->close_section();
 }
 
+void OrderedPipelinePhase::Handle::exit()
+{
+  if (phase) {
+    phase->mutex.unlock();
+    phase = nullptr;
+  }
+}
+
+blocking_future<> OrderedPipelinePhase::Handle::enter(OrderedPipelinePhase &new_phase)
+{
+  auto fut = phase->mutex.lock();
+  exit();
+  phase = &new_phase;
+  return new_phase.get_blocking_future(std::move(fut));
+}
+
+OrderedPipelinePhase::Handle::~Handle()
+{
+  exit();
+}
+
+void OrderedPipelinePhase::dump_detail(Formatter *f) const
+{
+}
+
 }
