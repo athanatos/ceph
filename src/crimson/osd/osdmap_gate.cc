@@ -35,7 +35,8 @@ seastar::future<epoch_t> OSDMapGate::wait_for_map(OperationRef op, epoch_t epoch
     return seastar::make_ready_future<epoch_t>(current);
   } else {
     logger().info("evt epoch is {}, i have {}, will wait", epoch, current);
-    auto fut = waiting_peering.emplace(epoch, epoch).first->second.block_op(op);
+    auto fut = waiting_peering.insert(
+      make_pair(epoch, OSDMapBlocker(blocker_type, epoch))).first->second.block_op(op);
     return shard_services.osdmap_subscribe(current, true).then(
       [fut=std::move(fut)]() mutable {
       return std::move(fut);

@@ -21,15 +21,20 @@ namespace ceph {
 namespace ceph::osd {
 
 class OSDMapGate {
-  struct OSDMapBlocker : public BlockerT<OSDMapBlocker> {
-    constexpr static const char * type_name = "OSDMapBlocker";
+  struct OSDMapBlocker : public Blocker {
+    const char * type_name;
     epoch_t epoch;
 
-    OSDMapBlocker(epoch_t epoch) : epoch(epoch) {}
+    OSDMapBlocker(
+      const char *type_name,
+      epoch_t epoch) : type_name(type_name), epoch(epoch) {}
 
     seastar::shared_promise<epoch_t> promise;
     seastar::future<epoch_t> block_op(OperationRef op);
-    virtual void dump_detail(Formatter *f) const override final;
+    void dump_detail(Formatter *f) const final;
+    const char *get_type_name() const final {
+      return type_name;
+    }
   };
   
   // order the promises in descending order of the waited osdmap epoch,
@@ -38,11 +43,15 @@ class OSDMapGate {
   using waiting_peering_t = std::map<epoch_t,
 				     OSDMapBlocker,
 				     std::greater<epoch_t>>;
+  const char *blocker_type;
   waiting_peering_t waiting_peering;
   epoch_t current = 0;
   ShardServices &shard_services;
 public:
-  OSDMapGate(ShardServices &shard_services) : shard_services(shard_services) {}
+  OSDMapGate(
+    const char *blocker_type,
+    ShardServices &shard_services)
+    : blocker_type(blocker_type), shard_services(shard_services) {}
 
   // wait for an osdmap whose epoch is greater or equal to given epoch
   seastar::future<epoch_t> wait_for_map(OperationRef req, epoch_t epoch);

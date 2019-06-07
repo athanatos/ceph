@@ -181,24 +181,49 @@ public:
 
   seastar::future<> consume_map(epoch_t epoch);
 
-  std::map<spg_t, seastar::shared_future<Ref<PG>>> pgs_creating;
-
-  seastar::future<Ref<PG>> get_or_create_pg(
+private:
+  struct PGCreationState {
+    spg_t pgid;
+    seastar::shared_promise<Ref<PG>> promise;
+    bool creating = true;
+    PGCreationState(spg_t pgid);
+    ~PGCreationState();
+  };
+  std::map<spg_t, PGCreationState> pgs_creating;
+  PGCreationState &populate_creating(
+    spg_t pgid) {
+    return pgs_creating.emplace(pgid, pgid).first->second;
+  }
+  PGCreationState &maybe_create_pg(
     spg_t pgid,
     epoch_t epoch,
     std::unique_ptr<PGCreateInfo> info);
 
+public:
+  seastar::future<Ref<PG>> get_or_create_pg(
+    spg_t pgid,
+    epoch_t epoch,
+    std::unique_ptr<PGCreateInfo> info,
+    Operation &op);
+  seastar::future<Ref<PG>> wait_for_pg(
+    spg_t pgid,
+    epoch_t epoch,
+    Operation &op);
+
   seastar::future<Ref<PG>> do_peering_event(
     spg_t pgid,
     std::unique_ptr<PGPeeringEvent> evt,
-    PeeringCtx &rctx);
+    PeeringCtx &rctx,
+    Operation &op);
   seastar::future<> do_peering_event_and_dispatch(
     spg_t pgid,
-    std::unique_ptr<PGPeeringEvent> evt);
+    std::unique_ptr<PGPeeringEvent> evt,
+    Operation &op);
   seastar::future<bool> do_peering_event_and_dispatch_transaction(
     spg_t pgid,
     std::unique_ptr<PGPeeringEvent> evt,
-    PeeringCtx &rctx);
+    PeeringCtx &rctx,
+    Operation &op);
 
   seastar::future<> advance_pg_to(Ref<PG> pg, epoch_t to);
   bool should_restart() const;
