@@ -24,6 +24,7 @@
 #include "crimson/osd/state.h"
 #include "crimson/osd/shard_services.h"
 #include "crimson/osd/osdmap_gate.h"
+#include "crimson/osd/pg_map.h"
 #include "crimson/osd/osd_operations/peering_event.h"
 
 #include "osd/PeeringState.h"
@@ -178,34 +179,20 @@ public:
   seastar::future<> consume_map(epoch_t epoch);
 
 private:
-  struct PGCreationState {
-    spg_t pgid;
-    seastar::shared_promise<Ref<PG>> promise;
-    bool creating = true;
-    PGCreationState(spg_t pgid);
-    ~PGCreationState();
-  };
-  std::map<spg_t, PGCreationState> pgs_creating;
-  PGCreationState &populate_creating(
-    spg_t pgid) {
-    return pgs_creating.emplace(pgid, pgid).first->second;
-  }
-  PGCreationState &maybe_create_pg(
-    spg_t pgid,
-    epoch_t epoch,
-    std::unique_ptr<PGCreateInfo> info);
+  PGMap pg_map;
 
 public:
-  seastar::future<Ref<PG>> get_or_create_pg(
+  blocking_future<Ref<PG>> get_or_create_pg(
     spg_t pgid,
     epoch_t epoch,
     std::unique_ptr<PGCreateInfo> info,
     Operation &op);
-  seastar::future<Ref<PG>> wait_for_pg(
+  blocking_future<Ref<PG>> wait_for_pg(
     spg_t pgid,
     epoch_t epoch,
     Operation &op);
 
+#if 0
   seastar::future<Ref<PG>> do_peering_event(
     spg_t pgid,
     std::unique_ptr<PGPeeringEvent> evt,
@@ -220,6 +207,7 @@ public:
     std::unique_ptr<PGPeeringEvent> evt,
     PeeringCtx &rctx,
     Operation &op);
+#endif
 
   seastar::future<> advance_pg_to(Ref<PG> pg, epoch_t to);
   bool should_restart() const;

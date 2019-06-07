@@ -46,8 +46,9 @@ seastar::future<> PeeringEvent::start()
   with_blocking_future(osd.osdmap_gate.wait_for_map(evt.get_epoch_sent()))
     .then([this](auto epoch) {
       logger().debug("{}: got map {}", *this, epoch);
-      return osd.get_or_create_pg(
-	pgid, evt.get_epoch_sent(), std::move(evt.create_info), *this);
+      return with_blocking_future(
+	osd.get_or_create_pg(
+	  pgid, evt.get_epoch_sent(), std::move(evt.create_info), *this));
     }).then([this](Ref<PG> pg) {
       if (!pg) {
 	logger().debug("{}: pg absent, did not create", *this);

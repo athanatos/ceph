@@ -325,7 +325,7 @@ seastar::future<> OSD::load_pgs()
       if (coll.is_pg(&pgid)) {
         return load_pg(pgid).then([pgid, this](auto&& pg) {
           logger().info("load_pgs: loaded {}", pgid);
-          pgs.emplace(pgid, std::move(pg));
+          pg_map.load(pgid, std::move(pg));
           return seastar::now();
         });
       } else if (coll.is_temp(&pgid)) {
@@ -448,7 +448,7 @@ MessageRef OSD::get_stats()
   // MPGStats::had_map_for is not used since PGMonitor was removed
   auto m = make_message<MPGStats>(monc->get_fsid(), osdmap->get_epoch());
 
-  for (auto [pgid, pg] : pgs) {
+  for (auto [pgid, pg] : pg_map.get_pgs()) {
     if (pg->is_primary()) {
       auto stats = pg->get_stats();
       // todo: update reported_epoch,reported_seq,last_fresh
@@ -636,12 +636,7 @@ seastar::future<Ref<PG>> OSD::handle_pg_create_info(
 	  pg->handle_activate_map(rctx);
 
 	  logger().info("{} new pg {}", __func__, *pg);
-	  pgs.emplace(info->pgid, pg);
-
-	  auto state = pgs_creating.find(info->pgid);
-	  ceph_assert(state != pgs_creating.end());
-	  state->second.promise.set_value(pg);
-	  pgs_creating.erase(info->pgid);
+	  pg_map.pg_created(info->pgid, pg);
 
 	  return seastar::when_all_succeed(
 	    pg->get_need_up_thru() ? _send_alive() : seastar::now(),
@@ -851,7 +846,7 @@ void OSD::update_heartbeat_peers()
   if (!state.is_active()) {
     return;
   }
-  for (auto& pg : pgs) {
+  for (auto& pg : pg_map.get_pgs()) {
     vector<int> up, acting;
     osdmap->pg_to_up_acting_osds(pg.first.pgid,
                                  &up, nullptr,
@@ -891,6 +886,7 @@ void OSD::check_osdmap_features()
 seastar::future<> OSD::consume_map(epoch_t epoch)
 {
   // todo: m-to-n: broadcast this news to all shards
+  auto &pgs = pg_map.get_pgs();
   return seastar::parallel_for_each(pgs.begin(), pgs.end(), [=](auto& pg) {
     return advance_pg_to(pg.second, epoch);
   }).then([epoch, this] {
@@ -900,9 +896,6 @@ seastar::future<> OSD::consume_map(epoch_t epoch)
 }
 
 
-OSD::PGCreationState::PGCreationState(spg_t pgid) : pgid(pgid) {}
-OSD::PGCreationState::~PGCreationState() {}
-
 OSD::PGCreationState &OSD::maybe_create_pg(
   spg_t pgid,
   epoch_t epoch,
@@ -910,57 +903,32 @@ OSD::PGCreationState &OSD::maybe_create_pg(
 {
   auto &state = populate_creating(pgid);
   if (!state.creating) {
-    handle_pg_create_info(std::move(info));
-    state.creating = true;
   }
   return state;
 }
 
-seastar::future<Ref<PG>>
+seastar::blocking_future<Ref<PG>>
 OSD::get_or_create_pg(
   spg_t pgid,
   epoch_t epoch,
-  std::unique_ptr<PGCreateInfo> info,
-  Operation &op)
+  std::unique_ptr<PGCreateInfo> info)
 {
-  return op.with_blocking_future(osdmap_gate.wait_for_map(epoch)).then(
-    [this, pgid, epoch, info=std::move(info)](epoch_t) mutable {
-    if (auto pg = pgs.find(pgid); pg != pgs.end()) {
-      return advance_pg_to(pg->second, epoch).then([pg=pg->second]() {
-	return seastar::make_ready_future<Ref<PG>>(pg);
-      });
-    } else if (!info) {
-      return seastar::make_ready_future<Ref<PG>>();
-    } else {
-      return maybe_create_pg(pgid, epoch, std::move(info)
-      ).promise.get_shared_future().then(
-	[this, epoch](auto pg) {
-	  return advance_pg_to(pg, epoch).then([pg]() {
-	    return seastar::make_ready_future<Ref<PG>>(pg);
-	  });
-	});
-    }
-  });
+  auto [fut, creating] = pg_map.get_pg(pgid, bool(info));
+  if (!creating && info) {
+    pg_map.set_creating(pgid);
+    handle_pg_create_info(std::move(info));
+  }
+  return std::move(fut);
 }
 
-seastar::future<Ref<PG>> OSD::wait_for_pg(
+seastar::blocking_future<Ref<PG>> OSD::wait_for_pg(
   spg_t pgid,
-  epoch_t epoch,
-  Operation &op)
+  epoch_t epoch)
 {
-  return ([=]() {
-    if (auto pg = pgs.find(pgid); pg != pgs.end()) {
-      return seastar::make_ready_future<Ref<PG>>(pg->second);
-    } else {
-      return populate_creating(pgid).promise.get_shared_future();
-    }
-  })().then([=](auto pg) {
-    return advance_pg_to(pg, epoch).then([pg]() {
-      return seastar::make_ready_future<Ref<PG>>(pg);
-    });
-  });
+  return pg_map.get_pg(pgid).first;
 }
 
+#if 0
 seastar::future<Ref<PG>>
 OSD::do_peering_event(
   spg_t pgid,
@@ -1023,6 +991,7 @@ OSD::do_peering_event_and_dispatch(
       return seastar::make_exception_future<>(ep);
     });
 }
+#endif
 
 seastar::future<> OSD::advance_pg_to(Ref<PG> pg, epoch_t to)
 {
