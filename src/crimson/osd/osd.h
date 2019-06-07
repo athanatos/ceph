@@ -185,12 +185,10 @@ public:
   blocking_future<Ref<PG>> get_or_create_pg(
     spg_t pgid,
     epoch_t epoch,
-    std::unique_ptr<PGCreateInfo> info,
-    Operation &op);
+    std::unique_ptr<PGCreateInfo> info);
   blocking_future<Ref<PG>> wait_for_pg(
     spg_t pgid,
-    epoch_t epoch,
-    Operation &op);
+    epoch_t epoch);
 
 #if 0
   seastar::future<Ref<PG>> do_peering_event(

@@ -325,7 +325,7 @@ seastar::future<> OSD::load_pgs()
       if (coll.is_pg(&pgid)) {
         return load_pg(pgid).then([pgid, this](auto&& pg) {
           logger().info("load_pgs: loaded {}", pgid);
-          pg_map.load(pgid, std::move(pg));
+          pg_map.pg_loaded(pgid, std::move(pg));
           return seastar::now();
         });
       } else if (coll.is_temp(&pgid)) {
@@ -896,18 +896,7 @@ seastar::future<> OSD::consume_map(epoch_t epoch)
 }
 
 
-OSD::PGCreationState &OSD::maybe_create_pg(
-  spg_t pgid,
-  epoch_t epoch,
-  std::unique_ptr<PGCreateInfo> info)
-{
-  auto &state = populate_creating(pgid);
-  if (!state.creating) {
-  }
-  return state;
-}
-
-seastar::blocking_future<Ref<PG>>
+blocking_future<Ref<PG>>
 OSD::get_or_create_pg(
   spg_t pgid,
   epoch_t epoch,
@@ -921,7 +910,7 @@ OSD::get_or_create_pg(
   return std::move(fut);
 }
 
-seastar::blocking_future<Ref<PG>> OSD::wait_for_pg(
+blocking_future<Ref<PG>> OSD::wait_for_pg(
   spg_t pgid,
   epoch_t epoch)
 {
