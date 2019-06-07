@@ -55,7 +55,10 @@ seastar::future<> PeeringEvent::start()
 	on_pg_absent();
       } else {
 	logger().debug("{}: pg present", *this);
-	pg->do_peering_event(evt, ctx);
+	return with_blocking_future(
+	  pg->osdmap_gate.wait_for_map(evt.get_epoch_sent())).then([this, pg](auto) {
+	    pg->do_peering_event(evt, ctx);
+	  });
       }
       return complete_rctx(pg);
     }).then([this, ref=std::move(ref)] {

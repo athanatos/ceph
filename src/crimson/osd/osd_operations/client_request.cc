@@ -40,6 +40,11 @@ seastar::future<> ClientRequest::start()
     .then([this](epoch_t epoch) {
       return with_blocking_future(osd.wait_for_pg(m->get_spg()));
     }).then([this](Ref<PG> pg) {
+      return with_blocking_future(
+	pg->osdmap_gate.wait_for_map(m->get_map_epoch())).then([pg](auto) {
+	  return pg;
+	});
+    }).then([this](Ref<PG> pg) {
       pg->handle_op(conn.get(), std::move(m));
     });
   return seastar::make_ready_future();

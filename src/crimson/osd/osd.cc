@@ -62,7 +62,7 @@ OSD::OSD(int id, uint32_t nonce,
     store{std::make_unique<ceph::os::CyanStore>(
       local_conf().get_val<std::string>("osd_data"))},
     shard_services{cluster_msgr, public_msgr, *monc, *mgrc, *store},
-    osdmap_gate("OSD::osdmap_gate", shard_services)
+    osdmap_gate("OSD::osdmap_gate", std::make_optional(std::ref(shard_services)))
 {
   osdmaps[0] = boost::make_local_shared<OSDMap>();
   for (auto msgr : {std::ref(cluster_msgr), std::ref(public_msgr),

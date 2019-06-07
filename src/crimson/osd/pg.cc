@@ -70,6 +70,7 @@ PG::PG(
     pg_whoami{pg_shard},
     coll_ref(shard_services.get_store().open_collection(coll)),
     pgmeta_oid{pgid.make_pgmeta_oid()},
+    osdmap_gate("PG::osdmap_gate", std::nullopt),
     shard_services{shard_services},
     osdmap{osdmap},
     backend(
@@ -96,6 +97,7 @@ PG::PG(
   peering_state.set_backend_predicates(
     new ReadablePredicate(pg_whoami),
     new RecoverablePredicate());
+  osdmap_gate.got_map(osdmap->get_epoch());
 }
 
 PG::~PG() {}
@@ -232,6 +234,7 @@ void PG::handle_advance_map(
     newacting,
     acting_primary,
     rctx);
+  osdmap_gate.got_map(next_map->get_epoch());
 }
 
 void PG::handle_activate_map(PeeringCtx &rctx)

@@ -3,7 +3,9 @@
 
 #pragma once
 
+#include <functional>
 #include <map>
+#include <optional>
 
 #include <seastar/core/future.hh>
 #include <seastar/core/shared_future.hh>
@@ -50,11 +52,11 @@ class OSDMapGate {
   const char *blocker_type;
   waiting_peering_t waiting_peering;
   epoch_t current = 0;
-  ShardServices &shard_services;
+  std::optional<std::reference_wrapper<ShardServices>> shard_services;
 public:
   OSDMapGate(
     const char *blocker_type,
-    ShardServices &shard_services)
+    std::optional<std::reference_wrapper<ShardServices>> shard_services)
     : blocker_type(blocker_type), shard_services(shard_services) {}
 
   // wait for an osdmap whose epoch is greater or equal to given epoch

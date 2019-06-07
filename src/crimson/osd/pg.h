@@ -11,14 +11,16 @@
 #include <seastar/core/future.hh>
 #include <seastar/core/shared_future.hh>
 
-#include "crimson/common/type_helpers.h"
 #include "common/dout.h"
 #include "crimson/net/Fwd.h"
 #include "os/Transaction.h"
-#include "crimson/osd/shard_services.h"
 #include "osd/osd_types.h"
 #include "osd/osd_internal_types.h"
 #include "osd/PeeringState.h"
+
+#include "crimson/common/type_helpers.h"
+#include "crimson/osd/shard_services.h"
+#include "crimson/osd/osdmap_gate.h"
 
 class OSDMap;
 class MQuery;
@@ -34,6 +36,11 @@ namespace ceph::net {
 
 namespace ceph::os {
   class CyanStore;
+}
+
+namespace ceph::osd {
+  class ClientRequest;
+  class PeeringEvent;
 }
 
 class PG : public boost::intrusive_ref_counter<
@@ -412,6 +419,7 @@ private:
 					     uint64_t limit);
 
 private:
+  ceph::osd::OSDMapGate osdmap_gate;
   ceph::osd::ShardServices &shard_services;
 
   cached_map_t osdmap;
@@ -423,6 +431,8 @@ private:
   seastar::future<> wait_for_active();
 
   friend std::ostream& operator<<(std::ostream&, const PG& pg);
+  friend class ceph::osd::ClientRequest;
+  friend class ceph::osd::PeeringEvent;
 };
 
 std::ostream& operator<<(std::ostream&, const PG& pg);
