@@ -42,6 +42,8 @@ namespace {
   }
 }
 
+namespace ceph::osd {
+
 using ceph::common::local_conf;
 
 class RecoverablePredicate : public IsPGRecoverablePredicate {
@@ -66,7 +68,7 @@ PG::PG(
   pg_pool_t&& pool,
   std::string&& name,
   cached_map_t osdmap,
-  ceph::osd::ShardServices &shard_services,
+  ShardServices &shard_services,
   ec_profile_t profile)
   : pgid{pgid},
     pg_whoami{pg_shard},
@@ -109,7 +111,7 @@ bool PG::try_flush_or_schedule_async() {
     coll_ref,
     ObjectStore::Transaction()).then(
       [this, epoch=peering_state.get_osdmap()->get_epoch()]() {
-	return shard_services.start_operation<ceph::osd::LocalPeeringEvent>(
+	return shard_services.start_operation<LocalPeeringEvent>(
 	  this,
 	  shard_services,
 	  pg_whoami,
@@ -408,4 +410,6 @@ seastar::future<> PG::handle_op(ceph::net::Connection* conn,
   }).then([conn](Ref<MOSDOpReply> reply) {
     return conn->send(reply);
   });
+}
+
 }

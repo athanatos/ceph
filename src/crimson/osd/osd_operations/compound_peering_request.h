@@ -13,6 +13,7 @@
 namespace ceph::osd {
 
 class OSD;
+class PG;
 
 using osd_id_t = int;
 

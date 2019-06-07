@@ -39,9 +39,8 @@ namespace ceph::os {
 }
 
 namespace ceph::osd {
-  class ClientRequest;
-  class PeeringEvent;
-}
+class ClientRequest;
+class PeeringEvent;
 
 class PG : public boost::intrusive_ref_counter<
   PG,
@@ -63,7 +62,7 @@ public:
      pg_pool_t&& pool,
      std::string&& name,
      cached_map_t osdmap,
-     ceph::osd::ShardServices &shard_services,
+     ShardServices &shard_services,
      ec_profile_t profile);
 
   ~PG();
@@ -419,8 +418,8 @@ private:
 					     uint64_t limit);
 
 private:
-  ceph::osd::OSDMapGate osdmap_gate;
-  ceph::osd::ShardServices &shard_services;
+  OSDMapGate osdmap_gate;
+  ShardServices &shard_services;
 
   cached_map_t osdmap;
   std::unique_ptr<PGBackend> backend;
@@ -431,8 +430,10 @@ private:
   seastar::future<> wait_for_active();
 
   friend std::ostream& operator<<(std::ostream&, const PG& pg);
-  friend class ceph::osd::ClientRequest;
-  friend class ceph::osd::PeeringEvent;
+  friend class ClientRequest;
+  friend class PeeringEvent;
 };
 
 std::ostream& operator<<(std::ostream&, const PG& pg);
+
+}

@@ -41,7 +41,7 @@ public:
   PeeringSubEvent(compound_state_ref state, Args &&... args) : 
     RemotePeeringEvent(std::forward<Args>(args)...), state(state) {}
 
-  seastar::future<> complete_rctx(Ref<PG> pg) final {
+  seastar::future<> complete_rctx(Ref<ceph::osd::PG> pg) final {
     logger().debug("{}: submitting ctx transaction", *this);
     state->ctx.accept_buffered_messages(ctx);
     state = {};

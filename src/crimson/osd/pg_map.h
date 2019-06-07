@@ -13,9 +13,8 @@
 #include "crimson/osd/osd_operation.h"
 #include "osd/osd_types.h"
 
-class PG;
-
 namespace ceph::osd {
+class PG;
 
 class PGMap {
   struct PGCreationState : BlockerT<PGCreationState> {

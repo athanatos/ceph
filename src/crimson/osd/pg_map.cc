@@ -46,7 +46,8 @@ void PGMap::set_creating(spg_t pgid)
   pg->second.creating = true;
 }
 
-void PGMap::pg_created(spg_t pgid, Ref<PG> pg) {
+void PGMap::pg_created(spg_t pgid, Ref<PG> pg)
+{
   ceph_assert(!pgs.count(pgid));
   pgs.emplace(pgid, pg);
 
@@ -56,7 +57,8 @@ void PGMap::pg_created(spg_t pgid, Ref<PG> pg) {
   pgs_creating.erase(pgid);
 }
 
-void PGMap::pg_loaded(spg_t pgid, Ref<PG> pg) {
+void PGMap::pg_loaded(spg_t pgid, Ref<PG> pg)
+{
   ceph_assert(!pgs.count(pgid));
   pgs.emplace(pgid, pg);
 }

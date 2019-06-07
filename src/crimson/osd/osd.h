@@ -36,7 +36,6 @@ class MOSDMap;
 class MOSDOp;
 class OSDMap;
 class OSDMeta;
-class PG;
 class Heartbeat;
 
 namespace ceph::mon {
@@ -54,7 +53,7 @@ namespace ceph::os {
 }
 
 namespace ceph::osd {
-
+class PG;
 
 class OSD : public ceph::net::Dispatcher,
 	    private OSDMapService,
