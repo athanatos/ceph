@@ -16,6 +16,7 @@ class ClientRequest final : public OperationT<ClientRequest> {
   OSD &osd;
   ceph::net::ConnectionRef conn;
   Ref<MOSDOp> m;
+  OrderedPipelinePhase handle;
   
 public:
   static constexpr OperationTypeCode type = OperationTypeCode::client_request;

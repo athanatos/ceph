@@ -82,6 +82,20 @@ class Connection : public seastar::enable_shared_from_this<Connection> {
   seastar::shared_ptr<Connection> get_shared() {
     return shared_from_this();
   }
+
+  class priv {
+    virtual ~Priv() = default;
+  };
+private:
+  unique_ptr<priv> priv;
+public:
+  void set_priv(unique_ptr<Priv> new_priv) {
+    priv = new_priv;
+  }
+  priv &get_priv() {
+    ceph_assert(priv);
+    return *priv;
+  }
 };
 using ConnectionRef = seastar::shared_ptr<Connection>;
 

@@ -9,6 +9,7 @@
 #include "crimson/osd/osd.h"
 #include "common/Formatter.h"
 #include "crimson/osd/osd_operations/client_request.h"
+#include "crimson/osd/osd_connection_priv.h"
 
 namespace {
   seastar::logger& logger() {
@@ -36,8 +37,13 @@ seastar::future<> ClientRequest::start()
 {
   logger().debug("{}: start", *this);
 
-  with_blocking_future(osd.osdmap_gate.wait_for_map(m->get_map_epoch()))
-    .then([this](epoch_t epoch) {
+  with_blocking_future(handle.enter(get_osd_priv(conn.get()).connection_to_map))
+    .then([this]() {
+      return with_blocking_future(osd.osdmap_gate.wait_for_map(m->get_map_epoch()));
+    }).then([this](epoch_t epoch) {
+      return with_blocking_future(
+	handle.enter(get_osd_priv(conn.get()).connection_to_map));
+    }).then([this](epoch_t epoch) {
       return with_blocking_future(osd.wait_for_pg(m->get_spg()));
     }).then([this](Ref<PG> pg) {
       return with_blocking_future(
