@@ -8,6 +8,7 @@
 
 #include "msg/MessageRef.h"
 
+#include "crimson/net/Connection.h"
 #include "crimson/osd/osd_operation.h"
 
 namespace ceph::osd {
@@ -24,11 +25,12 @@ public:
 
 private:
   OSD &osd;
+  ceph::net::ConnectionRef conn;
   Ref<Message> m;
 
 public:
   CompoundPeeringRequest(
-    OSD &osd, Ref<Message> m);
+    OSD &osd, ceph::net::ConnectionRef conn, Ref<Message> m);
 
   void print(std::ostream &) const final;
   void dump_detail(Formatter *f) const final;

@@ -57,6 +57,7 @@ public:
 
 std::vector<OperationRef> handle_pg_create(
   OSD &osd,
+  ceph::net::ConnectionRef conn,
   compound_state_ref state,
   Ref<MOSDPGCreate2> m)
 {
@@ -86,6 +87,7 @@ std::vector<OperationRef> handle_pg_create(
       auto op = osd.get_shard_services().start_operation<PeeringSubEvent>(
 	state,
 	osd,
+	conn,
 	osd.get_shard_services(),
 	pg_shard_t(),
 	pgid,
@@ -106,6 +108,7 @@ std::vector<OperationRef> handle_pg_create(
 
 std::vector<OperationRef> handle_pg_notify(
   OSD &osd,
+  ceph::net::ConnectionRef conn,
   compound_state_ref state,
   Ref<MOSDPGNotify> m)
 {
@@ -130,6 +133,7 @@ std::vector<OperationRef> handle_pg_notify(
     auto op = osd.get_shard_services().start_operation<PeeringSubEvent>(
       state,
       osd,
+      conn,
       osd.get_shard_services(),
       pg_shard_t(from, pg_notify.from),
       pgid,
@@ -146,6 +150,7 @@ std::vector<OperationRef> handle_pg_notify(
 
 std::vector<OperationRef> handle_pg_info(
   OSD &osd,
+  ceph::net::ConnectionRef conn,
   compound_state_ref state,
   Ref<MOSDPGInfo> m)
 {
@@ -162,6 +167,7 @@ std::vector<OperationRef> handle_pg_info(
     auto op = osd.get_shard_services().start_operation<PeeringSubEvent>(
 	state,
 	osd,
+	conn,
 	osd.get_shard_services(),
 	pg_shard_t(from, pg_notify.from),
 	pgid,
@@ -194,6 +200,7 @@ public:
 
 std::vector<OperationRef> handle_pg_query(
   OSD &osd,
+  ceph::net::ConnectionRef conn,
   compound_state_ref state,
   Ref<MOSDPGQuery> m)
 {
@@ -208,6 +215,7 @@ std::vector<OperationRef> handle_pg_query(
     auto op = osd.get_shard_services().start_operation<QuerySubEvent>(
       state,
       osd,
+      conn,
       osd.get_shard_services(),
       pg_shard_t(from, pg_query.from),
       pgid,
@@ -241,8 +249,9 @@ struct SubOpBlocker : BlockerT<SubOpBlocker> {
 namespace ceph::osd {
 
 CompoundPeeringRequest::CompoundPeeringRequest(
-  OSD &osd, Ref<Message> m)
+  OSD &osd, ceph::net::ConnectionRef conn, Ref<Message> m)
   : osd(osd),
+    conn(conn),
     m(m)
 {}
 
@@ -266,21 +275,25 @@ seastar::future<> CompoundPeeringRequest::start()
       case MSG_OSD_PG_CREATE2:
 	return handle_pg_create(
 	  osd,
+	  conn,
 	  state,
 	  boost::static_pointer_cast<MOSDPGCreate2>(m));
       case MSG_OSD_PG_NOTIFY:
 	return handle_pg_notify(
 	  osd,
+	  conn,
 	  state,
 	  boost::static_pointer_cast<MOSDPGNotify>(m));
       case MSG_OSD_PG_INFO:
 	return handle_pg_info(
 	  osd,
+	  conn,
 	  state,
 	  boost::static_pointer_cast<MOSDPGInfo>(m));
       case MSG_OSD_PG_QUERY:
 	return handle_pg_query(
 	  osd,
+	  conn,
 	  state,
 	  boost::static_pointer_cast<MOSDPGQuery>(m));
       default:

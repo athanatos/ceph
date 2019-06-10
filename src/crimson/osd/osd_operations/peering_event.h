@@ -77,6 +77,7 @@ public:
 class RemotePeeringEvent : public PeeringEvent {
 protected:
   OSD &osd;
+  ceph::net::ConnectionRef conn;
 
   seastar::future<Ref<PG>> get_pg() final;
 
@@ -92,9 +93,10 @@ public:
   };
 
   template <typename... Args>
-  RemotePeeringEvent(OSD &osd, Args&&... args) :
+  RemotePeeringEvent(OSD &osd, ceph::net::ConnectionRef conn, Args&&... args) :
     PeeringEvent(std::forward<Args>(args)...),
-    osd(osd)
+    osd(osd),
+    conn(conn)
   {}
 
 private:

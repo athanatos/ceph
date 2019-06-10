@@ -403,7 +403,9 @@ seastar::future<> OSD::ms_dispatch(ceph::net::Connection* conn, MessageRef m)
   case MSG_OSD_PG_INFO:
   case MSG_OSD_PG_QUERY:
     shard_services.start_operation<CompoundPeeringRequest>(
-      *this, m);
+      *this,
+      conn->get_shared(),
+      m);
     return seastar::now();
   case MSG_OSD_PG_LOG:
     return handle_pg_log(conn, boost::static_pointer_cast<MOSDPGLog>(m));
@@ -869,6 +871,7 @@ seastar::future<> OSD::handle_pg_log(
   logger().debug("handle_pg_log on {} from {}", m->get_spg(), from);
   shard_services.start_operation<RemotePeeringEvent>(
     *this,
+    conn->get_shared(),
     shard_services,
     pg_shard_t(from, m->from),
     spg_t(m->info.pgid.pgid, m->to),

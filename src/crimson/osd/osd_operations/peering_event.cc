@@ -92,7 +92,7 @@ seastar::future<> PeeringEvent::complete_rctx(Ref<PG> pg)
 
 RemotePeeringEvent::ConnectionPipeline &RemotePeeringEvent::cp()
 {
-  return get_osd_priv(nullptr /* TODO */).peering_request_conn_pipeline;
+  return get_osd_priv(conn.get()).peering_request_conn_pipeline;
 }
 
 seastar::future<Ref<PG>> RemotePeeringEvent::get_pg() {
