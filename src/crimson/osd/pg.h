@@ -20,6 +20,7 @@
 
 #include "crimson/common/type_helpers.h"
 #include "crimson/osd/osd_operations/client_request.h"
+#include "crimson/osd/osd_operations/peering_event.h"
 #include "crimson/osd/shard_services.h"
 #include "crimson/osd/osdmap_gate.h"
 
@@ -41,7 +42,6 @@ namespace ceph::os {
 
 namespace ceph::osd {
 class ClientRequest;
-class PeeringEvent;
 
 class PG : public boost::intrusive_ref_counter<
   PG,
@@ -53,6 +53,7 @@ class PG : public boost::intrusive_ref_counter<
   using cached_map_t = boost::local_shared_ptr<const OSDMap>;
 
   ClientRequest::PGPipeline client_request_pg_pipeline;
+  PeeringEvent::PGPipeline peering_request_pg_pipeline;
 
   spg_t pgid;
   pg_shard_t pg_whoami;

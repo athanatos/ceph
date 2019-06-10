@@ -7,6 +7,7 @@
 #include "crimson/osd/osd.h"
 #include "common/Formatter.h"
 #include "crimson/osd/osd_operations/peering_event.h"
+#include "crimson/osd/osd_connection_priv.h"
 
 namespace {
   seastar::logger& logger() {
@@ -38,8 +39,15 @@ void PeeringEvent::dump_detail(Formatter *f) const
   f->close_section();
 }
 
+
+PeeringEvent::PGPipeline &PeeringEvent::pp(PG &pg)
+{
+  return pg.peering_request_pg_pipeline;
+}
+
 seastar::future<> PeeringEvent::start()
 {
+
   logger().debug("{}: start", *this);
 
   IRef ref = this;
@@ -47,14 +55,22 @@ seastar::future<> PeeringEvent::start()
     if (!pg) {
       logger().debug("{}: pg absent, did not create", *this);
       on_pg_absent();
+      handle.exit();
+      return complete_rctx(pg);
     } else {
       logger().debug("{}: pg present", *this);
-      return with_blocking_future(
-	pg->osdmap_gate.wait_for_map(evt.get_epoch_sent())).then([this, pg](auto) {
-	  pg->do_peering_event(evt, ctx);
-	});
+      return with_blocking_future(handle.enter(pp(*pg).await_map)
+      ).then([this, pg] {
+	return with_blocking_future(
+	  pg->osdmap_gate.wait_for_map(evt.get_epoch_sent()));
+      }).then([this, pg](auto) {
+	return with_blocking_future(handle.enter(pp(*pg).process));
+      }).then([this, pg] {
+	pg->do_peering_event(evt, ctx);
+	handle.exit();
+	return complete_rctx(pg);
+      });
     }
-    return complete_rctx(pg);
   }).then([this, ref=std::move(ref)] {
     logger().debug("{}: complete", *this);
   });
@@ -74,14 +90,31 @@ seastar::future<> PeeringEvent::complete_rctx(Ref<PG> pg)
     std::move(ctx));
 }
 
-seastar::future<Ref<PG>> RemotePeeringEvent::get_pg() {
-  return with_blocking_future(osd.osdmap_gate.wait_for_map(evt.get_epoch_sent()))
-    .then([this](auto epoch) {
-      logger().debug("{}: got map {}", *this, epoch);
-      return with_blocking_future(
-	osd.get_or_create_pg(
-	  pgid, evt.get_epoch_sent(), std::move(evt.create_info)));
-    });
+RemotePeeringEvent::ConnectionPipeline &RemotePeeringEvent::cp()
+{
+  return get_osd_priv(nullptr /* TODO */).peering_request_conn_pipeline;
 }
+
+seastar::future<Ref<PG>> RemotePeeringEvent::get_pg() {
+  return with_blocking_future(
+    handle.enter(cp().await_map)
+  ).then([this] {
+    return with_blocking_future(
+      osd.osdmap_gate.wait_for_map(evt.get_epoch_sent()));
+  }).then([this](auto epoch) {
+    logger().debug("{}: got map {}", *this, epoch);
+    return with_blocking_future(handle.enter(cp().get_pg));
+  }).then([this] {
+    return with_blocking_future(
+      osd.get_or_create_pg(
+	pgid, evt.get_epoch_sent(), std::move(evt.create_info)));
+  });
+}
+
+seastar::future<Ref<PG>> LocalPeeringEvent::get_pg() {
+  return seastar::make_ready_future<Ref<PG>>(pg);
+}
+
+LocalPeeringEvent::~LocalPeeringEvent() {}
 
 }

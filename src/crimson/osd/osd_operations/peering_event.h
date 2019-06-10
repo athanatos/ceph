@@ -10,17 +10,31 @@
 #include "osd/osd_types.h"
 #include "osd/PGPeeringEvent.h"
 #include "osd/PeeringState.h"
-#include "crimson/osd/pg.h"
 
 namespace ceph::osd {
 
 class OSD;
+class ShardServices;
+class PG;
 
 class PeeringEvent : public OperationT<PeeringEvent> {
 public:
   static constexpr OperationTypeCode type = OperationTypeCode::peering_event;
 
+  class PGPipeline {
+    OrderedPipelinePhase await_map = {
+      "PeeringEvent::PGPipeline::await_map"
+    };
+    OrderedPipelinePhase process = {
+      "PeeringEvent::PGPipeline::process"
+    };
+    friend class PeeringEvent;
+  };
+
 protected:
+  OrderedPipelinePhase::Handle handle;
+  PGPipeline &pp(PG &pg);
+
   ShardServices &shard_services;
   PeeringCtx ctx;
   pg_shard_t from;
@@ -67,18 +81,29 @@ protected:
   seastar::future<Ref<PG>> get_pg() final;
 
 public:
+  class ConnectionPipeline {
+    OrderedPipelinePhase await_map = {
+      "PeeringRequest::ConnectionPipeline::await_map"
+    };
+    OrderedPipelinePhase get_pg = {
+      "PeeringRequest::ConnectionPipeline::get_pg"
+    };
+    friend class RemotePeeringEvent;
+  };
+
   template <typename... Args>
   RemotePeeringEvent(OSD &osd, Args&&... args) :
     PeeringEvent(std::forward<Args>(args)...),
     osd(osd)
   {}
+
+private:
+  ConnectionPipeline &cp();
 };
 
 class LocalPeeringEvent final : public PeeringEvent {
 protected:
-  seastar::future<Ref<PG>> get_pg() final {
-    return seastar::make_ready_future<Ref<PG>>(pg);
-  }
+  seastar::future<Ref<PG>> get_pg() final;
 
   Ref<PG> pg;
 
@@ -88,6 +113,8 @@ public:
     PeeringEvent(std::forward<Args>(args)...),
     pg(pg)
   {}
+
+  virtual ~LocalPeeringEvent();
 };
 
 
