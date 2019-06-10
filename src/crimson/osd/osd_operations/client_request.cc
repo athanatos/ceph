@@ -47,6 +47,7 @@ seastar::future<> ClientRequest::start()
 {
   logger().debug("{}: start", *this);
 
+  IRef ref = this;
   with_blocking_future(handle.enter(cp().await_map))
     .then([this]() {
       return with_blocking_future(osd.osdmap_gate.wait_for_map(m->get_map_epoch()));
@@ -54,8 +55,9 @@ seastar::future<> ClientRequest::start()
       return with_blocking_future(handle.enter(cp().get_pg));
     }).then([this] {
       return with_blocking_future(osd.wait_for_pg(m->get_spg()));
-    }).then([this](Ref<PG> pg) {
-      return seastar::do_with(std::move(pg), [this](auto pg) {
+    }).then([this, ref=std::move(ref)](Ref<PG> pg) {
+      return seastar::do_with(
+	std::move(pg), std::move(ref), [this](auto pg, auto op) {
 	return with_blocking_future(
 	  handle.enter(pp(*pg).await_map)
 	).then([this, pg] {

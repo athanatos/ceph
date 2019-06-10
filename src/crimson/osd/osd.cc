@@ -641,6 +641,7 @@ seastar::future<Ref<PG>> OSD::handle_pg_create_info(
 	  pg_map.pg_created(info->pgid, pg);
 
 	  return seastar::when_all_succeed(
+	    advance_pg_to(pg, osdmap->get_epoch()),
 	    pg->get_need_up_thru() ? _send_alive() : seastar::now(),
 	    shard_services.dispatch_context(
 	      pg->get_collection_ref(),

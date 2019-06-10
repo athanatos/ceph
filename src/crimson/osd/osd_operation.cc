@@ -58,9 +58,10 @@ void OrderedPipelinePhase::Handle::exit()
   }
 }
 
-blocking_future<> OrderedPipelinePhase::Handle::enter(OrderedPipelinePhase &new_phase)
+blocking_future<> OrderedPipelinePhase::Handle::enter(
+  OrderedPipelinePhase &new_phase)
 {
-  auto fut = phase->mutex.lock();
+  auto fut = new_phase.mutex.lock();
   exit();
   phase = &new_phase;
   return new_phase.get_blocking_future(std::move(fut));
