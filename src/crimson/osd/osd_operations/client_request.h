@@ -10,15 +10,35 @@
 class MOSDOp;
 
 namespace ceph::osd {
+class PG;
 class OSD;
 
 class ClientRequest final : public OperationT<ClientRequest> {
   OSD &osd;
   ceph::net::ConnectionRef conn;
   Ref<MOSDOp> m;
-  OrderedPipelinePhase handle;
-  
+  OrderedPipelinePhase::Handle handle;
+
 public:
+  class ConnectionPipeline {
+    OrderedPipelinePhase await_map = {
+      "ClientRequest::ConnectionPipeline::await_map"
+    };
+    OrderedPipelinePhase get_pg = {
+      "ClientRequest::ConnectionPipeline::get_pg"
+    };
+    friend class ClientRequest;
+  };
+  class PGPipeline {
+    OrderedPipelinePhase await_map = {
+      "ClientRequest::PGPipeline::await_map"
+    };
+    OrderedPipelinePhase process = {
+      "ClientRequest::PGPipeline::process"
+    };
+    friend class ClientRequest;
+  };
+
   static constexpr OperationTypeCode type = OperationTypeCode::client_request;
 
   ClientRequest(OSD &osd, ceph::net::ConnectionRef, Ref<MOSDOp> &&m);
@@ -26,6 +46,10 @@ public:
   void print(std::ostream &) const final;
   void dump_detail(Formatter *f) const final;
   seastar::future<> start();
+
+private:
+  ConnectionPipeline &cp();
+  PGPipeline &pp(PG &pg);
 };
 
 }

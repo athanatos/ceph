@@ -33,25 +33,40 @@ void ClientRequest::dump_detail(Formatter *f) const
 {
 }
 
+ClientRequest::ConnectionPipeline &ClientRequest::cp()
+{
+  return get_osd_priv(conn.get()).client_request_conn_pipeline;
+}
+
+ClientRequest::PGPipeline &ClientRequest::pp(PG &pg)
+{
+  return pg.client_request_pg_pipeline;
+}
+
 seastar::future<> ClientRequest::start()
 {
   logger().debug("{}: start", *this);
 
-  with_blocking_future(handle.enter(get_osd_priv(conn.get()).connection_to_map))
+  with_blocking_future(handle.enter(cp().await_map))
     .then([this]() {
       return with_blocking_future(osd.osdmap_gate.wait_for_map(m->get_map_epoch()));
     }).then([this](epoch_t epoch) {
-      return with_blocking_future(
-	handle.enter(get_osd_priv(conn.get()).connection_to_map));
-    }).then([this](epoch_t epoch) {
+      return with_blocking_future(handle.enter(cp().get_pg));
+    }).then([this] {
       return with_blocking_future(osd.wait_for_pg(m->get_spg()));
     }).then([this](Ref<PG> pg) {
-      return with_blocking_future(
-	pg->osdmap_gate.wait_for_map(m->get_map_epoch())).then([pg](auto) {
-	  return pg;
+      return seastar::do_with(std::move(pg), [this](auto pg) {
+	return with_blocking_future(
+	  handle.enter(pp(*pg).await_map)
+	).then([this, pg] {
+	  return with_blocking_future(
+	    pg->osdmap_gate.wait_for_map(m->get_map_epoch()));
+	}).then([this, pg] (auto) {
+	  return with_blocking_future(handle.enter(pp(*pg).process));
+	}).then([this, pg] {
+	  return pg->handle_op(conn.get(), std::move(m));
 	});
-    }).then([this](Ref<PG> pg) {
-      pg->handle_op(conn.get(), std::move(m));
+      });
     });
   return seastar::make_ready_future();
 }

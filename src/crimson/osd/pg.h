@@ -19,6 +19,7 @@
 #include "osd/PeeringState.h"
 
 #include "crimson/common/type_helpers.h"
+#include "crimson/osd/osd_operations/client_request.h"
 #include "crimson/osd/shard_services.h"
 #include "crimson/osd/osdmap_gate.h"
 
@@ -50,6 +51,8 @@ class PG : public boost::intrusive_ref_counter<
 {
   using ec_profile_t = std::map<std::string,std::string>;
   using cached_map_t = boost::local_shared_ptr<const OSDMap>;
+
+  ClientRequest::PGPipeline client_request_pg_pipeline;
 
   spg_t pgid;
   pg_shard_t pg_whoami;

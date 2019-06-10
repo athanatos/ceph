@@ -5,23 +5,19 @@
 
 #include "crimson/net/Connection.h"
 #include "crimson/osd/osd_operation.h"
+#include "crimson/osd/osd_operations/client_request.h"
 
 namespace ceph::osd {
 
 struct OSDConnectionPriv : public ceph::net::Connection::priv {
-  OrderedPipelinePhase connection_to_map = {
-    "OSDConnectionPriv::connection_to_map"
-  };
-  OrderedPipelinePhase map_to_pg {
-    "OSDConnectionPriv::map_to_pg"
-  };
+  ClientRequest::ConnectionPipeline client_request_conn_pipeline;
 };
 
 OSDConnectionPriv &get_osd_priv(ceph::net::Connection *conn) {
-  if (!conn->get_priv()) {
+  if (!conn->has_priv()) {
     conn->set_priv(std::make_unique<OSDConnectionPriv>());
   }
-  return *conn->get_priv();
+  return static_cast<OSDConnectionPriv&>(conn->get_priv());
 }
 
 }
