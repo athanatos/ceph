@@ -83,21 +83,21 @@ class Connection : public seastar::enable_shared_from_this<Connection> {
     return shared_from_this();
   }
 
-  struct priv {
-    virtual ~priv() = default;
+  struct user_private_t {
+    virtual ~user_private_t() = default;
   };
 private:
-  unique_ptr<priv> conn_priv;
+  unique_ptr<user_private_t> user_private;
 public:
-  bool has_priv() const {
-    return conn_priv != nullptr;
+  bool has_user_private() const {
+    return user_private != nullptr;
   }
-  void set_priv(unique_ptr<priv> new_priv) {
-    conn_priv = std::move(new_priv);
+  void set_user_private(unique_ptr<user_private_t> new_user_private) {
+    user_private = std::move(user_private);
   }
-  priv &get_priv() {
-    ceph_assert(conn_priv);
-    return *conn_priv;
+  user_private_t &get_user_private() {
+    ceph_assert(user_private);
+    return *user_private;
   }
 };
 using ConnectionRef = seastar::shared_ptr<Connection>;

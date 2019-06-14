@@ -10,16 +10,16 @@
 
 namespace ceph::osd {
 
-struct OSDConnectionPriv : public ceph::net::Connection::priv {
+struct OSDConnectionPriv : public ceph::net::Connection::user_private_t {
   ClientRequest::ConnectionPipeline client_request_conn_pipeline;
   RemotePeeringEvent::ConnectionPipeline peering_request_conn_pipeline;
 };
 
 static OSDConnectionPriv &get_osd_priv(ceph::net::Connection *conn) {
-  if (!conn->has_priv()) {
-    conn->set_priv(std::make_unique<OSDConnectionPriv>());
+  if (!conn->has_user_private()) {
+    conn->set_user_private(std::make_unique<OSDConnectionPriv>());
   }
-  return static_cast<OSDConnectionPriv&>(conn->get_priv());
+  return static_cast<OSDConnectionPriv&>(conn->get_user_private());
 }
 
 }

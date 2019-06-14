@@ -939,7 +939,7 @@ seastar::future<> OSD::advance_pg_to(Ref<PG> pg, epoch_t to)
 	[this, pg, &rctx](epoch_t next_epoch) {
 	  return get_map(next_epoch).then(
 	    [pg, this, &rctx] (cached_map_t&& next_map) {
-	      return pg->handle_advance_map(next_map, rctx);
+	      pg->handle_advance_map(next_map, rctx);
 	    });
 	}).then([this, &rctx, pg] {
 	  pg->handle_activate_map(rctx);

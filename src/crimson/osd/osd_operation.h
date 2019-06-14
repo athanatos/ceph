@@ -7,6 +7,8 @@
 #include <seastar/core/future.hh>
 
 #include <vector>
+#include <array>
+#include <algorithm>
 #include <set>
 #include <boost/intrusive/list.hpp>
 #include <boost/intrusive_ptr.hpp>
@@ -28,6 +30,11 @@ static constexpr const char* const OP_NAMES[] = {
   "peering_event",
   "compound_peering_request"
 };
+
+// prevent the addition of OperationTypeCode-s with no matching OP_NAMES entry:
+static_assert(
+  (sizeof(OP_NAMES)/sizeof(OP_NAMES[0])) ==
+  static_cast<int>(OperationTypeCode::last_op));
 
 class OperationRegistry;
 
@@ -63,7 +70,7 @@ protected:
 
 public:
   template <typename... T>
-  blocking_future<T...> get_blocking_future(seastar::future<T...> &&f) {
+  blocking_future<T...> make_blocking_future(seastar::future<T...> &&f) {
     return blocking_future(this, std::move(f));
   }
 
@@ -89,7 +96,7 @@ class Operation : public boost::intrusive_ref_counter<
   friend class OperationRegistry;
   registry_hook_t registry_hook;
 
-  std::set<Blocker*> blockers;
+  std::vector<Blocker*> blockers;
   uint64_t id = 0;
   void set_id(uint64_t in_id) {
     id = in_id;
@@ -107,11 +114,14 @@ public:
   virtual void print(std::ostream &) const = 0;
 
   void add_blocker(Blocker *b) {
-    blockers.insert(b);
+    blockers.push_back(b);
   }
 
   void clear_blocker(Blocker *b) {
-    blockers.erase(b);
+    auto iter = std::find(blockers.begin(), blockers.end(), b);
+    if (iter != blockers.end()) {
+      blockers.erase(iter);
+    }
   }
 
   template <typename... T>
@@ -168,11 +178,16 @@ class OperationRegistry {
     op_list_member_option,
     boost::intrusive::constant_time_size<false>>;
 
-  std::vector<op_list> registries = std::vector<op_list>(
-    static_cast<int>(OperationTypeCode::last_op));
+  std::array<
+    op_list,
+    static_cast<int>(OperationTypeCode::last_op)
+  > registries;
 
-  std::vector<uint64_t> op_id_counters = std::vector<uint64_t>(
-    static_cast<int>(OperationTypeCode::last_op), 0);
+  std::array<
+    uint64_t,
+    static_cast<int>(OperationTypeCode::last_op)
+  > op_id_counters = {0};
+
 public:
   template <typename T, typename... Args>
   typename T::IRef create_operation(Args&&... args) {

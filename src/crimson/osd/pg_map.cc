@@ -32,13 +32,14 @@ std::pair<blocking_future<Ref<PG>>, bool> PGMap::get_pg(spg_t pgid, bool wait)
   } else {
     auto &state = pgs_creating.emplace(pgid, pgid).first->second;
     return make_pair(
-      state.get_blocking_future(state.promise.get_shared_future()),
+      state.make_blocking_future(state.promise.get_shared_future()),
       state.creating);
   }
 }
 
 void PGMap::set_creating(spg_t pgid)
 {
+  logger().debug("Creating {}", pgid);
   ceph_assert(pgs.count(pgid) == 0);
   auto pg = pgs_creating.find(pgid);
   ceph_assert(pg != pgs_creating.end());
@@ -48,6 +49,7 @@ void PGMap::set_creating(spg_t pgid)
 
 void PGMap::pg_created(spg_t pgid, Ref<PG> pg)
 {
+  logger().debug("Created {}", pgid);
   ceph_assert(!pgs.count(pgid));
   pgs.emplace(pgid, pg);
 

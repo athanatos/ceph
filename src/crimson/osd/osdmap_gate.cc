@@ -30,13 +30,13 @@ blocking_future<epoch_t> OSDMapGate::wait_for_map(epoch_t epoch)
       epoch, make_pair(blocker_type, epoch)).first->second;
     auto fut = blocker.promise.get_shared_future();
     if (shard_services) {
-      return blocker.get_blocking_future(
+      return blocker.make_blocking_future(
 	(*shard_services).get().osdmap_subscribe(current, true).then(
 	  [fut=std::move(fut)]() mutable {
 	    return std::move(fut);
 	  }));
     } else {
-      return blocker.get_blocking_future(std::move(fut));
+      return blocker.make_blocking_future(std::move(fut));
     }
   }
 }
