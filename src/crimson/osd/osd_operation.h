@@ -48,7 +48,7 @@ template <typename... T>
 class blocking_future {
   friend class Operation;
   friend class Blocker;
-  Blocker *blocker = nullptr;
+  Blocker *blocker;
   seastar::future<T...> fut;
   blocking_future(Blocker *b, seastar::future<T...> &&f)
     : blocker(b), fut(std::move(f)) {}
