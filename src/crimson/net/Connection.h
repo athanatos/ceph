@@ -100,7 +100,6 @@ public:
     return *user_private;
   }
 };
-using ConnectionRef = seastar::shared_ptr<Connection>;
 
 inline ostream& operator<<(ostream& out, const Connection& conn) {
   out << "[";
