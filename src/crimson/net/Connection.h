@@ -93,7 +93,7 @@ public:
     return user_private != nullptr;
   }
   void set_user_private(unique_ptr<user_private_t> new_user_private) {
-    user_private = std::move(user_private);
+    user_private = std::move(new_user_private);
   }
   user_private_t &get_user_private() {
     ceph_assert(user_private);
