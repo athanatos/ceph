@@ -25,6 +25,7 @@ BLUESTORE_CONF = """
 	# log inside fio_dir
 	log file = {output_dir}/log
         bluestore_tracing = true
+        event_tracing = true
 """
 
 BLUESTORE_FIO = """
