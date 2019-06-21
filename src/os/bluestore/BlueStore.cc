@@ -40,6 +40,16 @@
 #include "common/blkdev.h"
 #include "common/numa.h"
 
+#if defined(WITH_LTTNG) && defined(WITH_EVENTTRACE)
+#define TRACEPOINT_DEFINE
+#define TRACEPOINT_PROBE_DYNAMIC_LINKAGE
+#include "tracing/bluestore.h"	// 
+#undef TRACEPOINT_PROBE_DYNAMIC_LINKAGE
+#undef TRACEPOINT_DEFINE
+#else
+#define tracepoint(...)
+#endif
+
 #define dout_context cct
 #define dout_subsys ceph_subsys_bluestore
 
@@ -13528,6 +13538,28 @@ void BlueStore::log_latency_fn(
   LOG_LATENCY_FN(logger, cct, idx, l, fn);
 }
 
+
+utime_t BlueStore::TransContext::log_state_latency(
+  PerfCounters *logger, int state)
+{
+  utime_t lat, now = ceph_clock_now();
+  lat = now - last_stamp;
+  logger->tinc(state, lat);
+#if defined(WITH_LTTNG) && defined(WITH_EVENTTRACE)
+  if (state >= l_bluestore_state_prepare_lat && state <= l_bluestore_state_done_lat) {
+    double usecs = (now.to_nsec()-last_stamp.to_nsec())/1000;
+    OID_ELAPSED("", usecs, get_state_latency_name(state));
+    tracepoint(
+      bluestore,
+      transaction_state_duration,
+      seq,
+      state,
+      usecs);
+  }
+#endif
+  last_stamp = now;
+  return lat;
+}
 
 // DB key value Histogram
 #define KEY_SLAB 32

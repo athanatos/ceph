@@ -1606,19 +1606,7 @@ public:
     }
 #endif
 
-    utime_t log_state_latency(PerfCounters *logger, int state) {
-      utime_t lat, now = ceph_clock_now();
-      lat = now - last_stamp;
-      logger->tinc(state, lat);
-#if defined(WITH_LTTNG) && defined(WITH_EVENTTRACE)
-      if (state >= l_bluestore_state_prepare_lat && state <= l_bluestore_state_done_lat) {
-        double usecs = (now.to_nsec()-last_stamp.to_nsec())/1000;
-        OID_ELAPSED("", usecs, get_state_latency_name(state));
-      }
-#endif
-      last_stamp = now;
-      return lat;
-    }
+    utime_t log_state_latency(PerfCounters *logger, int state);
 
     CollectionRef ch;
     OpSequencerRef osr;  // this should be ch->osr
