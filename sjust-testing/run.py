@@ -119,6 +119,11 @@ def setup_start_lttng(conf):
         '--session', 'fio-bluestore',
         '--userspace', 'eventtrace:oid_elapsed'
     ])
+    subprocess.run([
+        'lttng', 'enable-event',
+        '--session', 'fio-bluestore',
+        '--userspace', 'bluestore:transaction_state_duration'
+    ])
     subprocess.run(['lttng', 'start', 'fio-bluestore'])
 
 def stop_destroy_lttng(conf):
