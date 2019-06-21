@@ -32,7 +32,7 @@ void TracepointProvider::verify_config(const ConfigProxy& conf) {
     return;
   }
 
-  char buf[50];
+  char buf[10];
   char *pbuf = buf;
   if (conf.get_val(m_config_keys[0], &pbuf, sizeof(buf)) != 0 ||
       strncmp(buf, "true", 5) != 0) {
