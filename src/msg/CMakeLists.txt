@@ -36,6 +36,10 @@ if(HAVE_RDMA)
     async/rdma/RDMAStack.cc)
 endif()
 
+if(WITH_LTTNG AND WITH_EVENTTRACE)
+  add_definitions("-DWITH_EVENTTRACE")
+endif()
+
 add_library(common-msg-objs OBJECT ${msg_srcs})
 
 if(WITH_DPDK)
