@@ -367,7 +367,7 @@ Engine::Engine(thread_data* td)
 		    CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
   common_init_finish(g_ceph_context);
 
-  //TracepointProvider::initialize<bluestore_tracepoint_traits>(g_ceph_context);
+  TracepointProvider::initialize<bluestore_tracepoint_traits>(g_ceph_context);
 
   // create the ObjectStore
   os.reset(ObjectStore::create(g_ceph_context,
