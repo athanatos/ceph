@@ -25,7 +25,6 @@ BLUESTORE_CONF = """
 	# log inside fio_dir
 	log file = {output_dir}/log
         bluestore_tracing = true
-        event_tracing = true
 """
 
 BLUESTORE_FIO = """
@@ -114,11 +113,6 @@ def setup_start_lttng(conf):
         'lttng', 'create', 'fio-bluestore',
         '--output', tracedir
         ])
-    subprocess.run([
-        'lttng', 'enable-event',
-        '--session', 'fio-bluestore',
-        '--userspace', 'eventtrace:oid_elapsed'
-    ])
     subprocess.run([
         'lttng', 'enable-event',
         '--session', 'fio-bluestore',
