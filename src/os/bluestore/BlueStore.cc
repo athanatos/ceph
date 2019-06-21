@@ -10255,7 +10255,7 @@ void BlueStore::_osr_attach(Collection *c)
     std::lock_guard l(zombie_osr_lock);
     auto p = zombie_osr_set.find(c->cid);
     if (p == zombie_osr_set.end()) {
-      c->osr = new OpSequencer(this, c->cid);
+      c->osr = new OpSequencer(this, next_sequencer_id++, c->cid);
       ldout(cct, 10) << __func__ << " " << c->cid
 		     << " fresh osr " << c->osr << dendl;
     } else {
@@ -13552,6 +13552,7 @@ utime_t BlueStore::TransContext::log_state_latency(
     tracepoint(
       bluestore,
       transaction_state_duration,
+      osr->get_sequencer_id(),
       seq,
       state,
       usecs);

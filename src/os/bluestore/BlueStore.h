@@ -1745,12 +1745,18 @@ public:
 
     std::atomic_bool zombie = {false};    ///< in zombie_osr set (collection going away)
 
-    OpSequencer(BlueStore *store, const coll_t& c)
+    const uint32_t sequencer_id;
+
+    OpSequencer(BlueStore *store, uint32_t sequencer_id, const coll_t& c)
       : RefCountedObject(store->cct, 0),
-	store(store), cid(c) {
+	store(store), cid(c), sequencer_id(sequencer_id) {
     }
     ~OpSequencer() {
       ceph_assert(q.empty());
+    }
+
+    uint32_t get_sequencer_id() const {
+      return sequencer_id;
     }
 
     void queue_new(TransContext *txc) {
@@ -1908,6 +1914,7 @@ private:
 
   /// protect zombie_osr_set
   ceph::mutex zombie_osr_lock = ceph::make_mutex("BlueStore::zombie_osr_lock");
+  uint32_t next_sequencer_id = 0;
   std::map<coll_t,OpSequencerRef> zombie_osr_set; ///< set of OpSequencers for deleted collections
 
   std::atomic<uint64_t> nid_last = {0};
