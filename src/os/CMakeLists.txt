@@ -127,4 +127,5 @@ endif()
 
 if(WITH_LTTNG AND WITH_EVENTTRACE)
   add_dependencies(os eventtrace_tp)
+  add_definitions("-DWITH_EVENTTRACE")
 endif()

@@ -6,4 +6,5 @@ set(osdc_files
 add_library(osdc STATIC ${osdc_files})
 if(WITH_LTTNG AND WITH_EVENTTRACE)
   add_dependencies(osdc eventtrace_tp)
+  add_definitions("-DWITH_EVENTTRACE")
 endif()

@@ -332,6 +332,12 @@ set(libcommon_files
   ${mds_files})
 set_source_files_properties(ceph_ver.c
   APPEND PROPERTY OBJECT_DEPENDS ${CMAKE_BINARY_DIR}/src/include/ceph_ver.h)
+
+if(WITH_LTTNG AND WITH_EVENTTRACE)
+  message(STATUS " Using EventTrace class.")
+  add_definitions("-DWITH_EVENTTRACE")
+endif()
+
 add_library(common-objs OBJECT ${libcommon_files})
 
 CHECK_C_COMPILER_FLAG("-fvar-tracking-assignments" HAS_VTA)

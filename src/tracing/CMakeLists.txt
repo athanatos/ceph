@@ -60,5 +60,6 @@ endif()
 if(WITH_LTTNG AND WITH_EVENTTRACE)
   add_tracing_library(eventtrace_tp eventtrace.tp 1.0.0)
   install(TARGETS eventtrace_tp DESTINATION ${CMAKE_INSTALL_LIBDIR})
+  add_definitions("-DWITH_EVENTTRACE")
 endif()
 
