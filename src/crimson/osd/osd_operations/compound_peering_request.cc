@@ -84,7 +84,7 @@ std::vector<OperationRef> handle_pg_create(
 	q->second.second,
 	q->second.first);
     } else {
-      auto op = osd.get_shard_services().start_operation<PeeringSubEvent>(
+      auto [op, fut] = osd.get_shard_services().start_operation<PeeringSubEvent>(
 	state,
 	osd,
 	conn,
@@ -130,7 +130,7 @@ std::vector<OperationRef> handle_pg_notify(
       pg_notify.info.history,
       past_intervals,
       false};
-    auto op = osd.get_shard_services().start_operation<PeeringSubEvent>(
+    auto [op, fut] = osd.get_shard_services().start_operation<PeeringSubEvent>(
       state,
       osd,
       conn,
@@ -164,7 +164,7 @@ std::vector<OperationRef> handle_pg_info(
     MInfoRec info{pg_shard_t{from, pg_notify.from},
 		  pg_notify.info,
 		  pg_notify.epoch_sent};
-    auto op = osd.get_shard_services().start_operation<PeeringSubEvent>(
+    auto [op, fut] = osd.get_shard_services().start_operation<PeeringSubEvent>(
 	state,
 	osd,
 	conn,
@@ -212,7 +212,7 @@ std::vector<OperationRef> handle_pg_query(
     MQuery query{pgid, pg_shard_t{from, pg_query.from},
 		 pg_query, pg_query.epoch_sent};
     logger().debug("handle_pg_query on {} from {}", pgid, from);
-    auto op = osd.get_shard_services().start_operation<QuerySubEvent>(
+    auto [op, fut] = osd.get_shard_services().start_operation<QuerySubEvent>(
       state,
       osd,
       conn,
@@ -305,7 +305,7 @@ seastar::future<> CompoundPeeringRequest::start()
   add_blocker(blocker.get());
   IRef ref = this;
   logger().info("{}: about to fork future", *this);
-  state->promise.get_future().then(
+  return state->promise.get_future().then(
     [this, blocker=std::move(blocker)](auto &&ctx) {
       clear_blocker(blocker.get());
       logger().info("{}: sub events complete", *this);
@@ -313,9 +313,6 @@ seastar::future<> CompoundPeeringRequest::start()
     }).then([this, ref=std::move(ref)] {
       logger().info("{}: complete", *this);
     });
-
-  logger().info("{}: forked, returning", *this);
-  return seastar::now();
 }
 
 } // namespace ceph::osd
