@@ -84,24 +84,24 @@ std::vector<OperationRef> handle_pg_create(
 	q->second.second,
 	q->second.first);
     } else {
-      [[maybe_unused]] auto [op, fut] =
-	osd.get_shard_services().start_operation<PeeringSubEvent>(
-	state,
-	osd,
-	conn,
-	osd.get_shard_services(),
-	pg_shard_t(),
-	pgid,
-	m->epoch,
-	m->epoch,
-	NullEvt(),
-	true,
-	new PGCreateInfo(
+      auto op = osd.get_shard_services().start_operation<PeeringSubEvent>(
+	  state,
+	  osd,
+	  conn,
+	  osd.get_shard_services(),
+	  pg_shard_t(),
 	  pgid,
 	  m->epoch,
-	  q->second.first,
-	  q->second.second,
-	  true));
+	  m->epoch,
+	  NullEvt(),
+	  true,
+	  new PGCreateInfo(
+	    pgid,
+	    m->epoch,
+	    q->second.first,
+	    q->second.second,
+	    true)).first;
+      ret.push_back(op);
     }
   }
   return ret;
@@ -131,8 +131,7 @@ std::vector<OperationRef> handle_pg_notify(
       pg_notify.info.history,
       past_intervals,
       false};
-    [[maybe_unused]] auto [op, fut] =
-      osd.get_shard_services().start_operation<PeeringSubEvent>(
+    auto op = osd.get_shard_services().start_operation<PeeringSubEvent>(
       state,
       osd,
       conn,
@@ -143,8 +142,7 @@ std::vector<OperationRef> handle_pg_notify(
       pg_notify.query_epoch,
       notify,
       true, // requires_pg
-      create_info);
-    op->start();
+      create_info).first;
     ret.push_back(op);
   }
   return ret;
@@ -166,8 +164,7 @@ std::vector<OperationRef> handle_pg_info(
     MInfoRec info{pg_shard_t{from, pg_notify.from},
 		  pg_notify.info,
 		  pg_notify.epoch_sent};
-    [[maybe_unused]] auto [op, fut] =
-      osd.get_shard_services().start_operation<PeeringSubEvent>(
+    auto op = osd.get_shard_services().start_operation<PeeringSubEvent>(
 	state,
 	osd,
 	conn,
@@ -176,7 +173,7 @@ std::vector<OperationRef> handle_pg_info(
 	pgid,
 	pg_notify.epoch_sent,
 	pg_notify.query_epoch,
-	std::move(info));
+	std::move(info)).first;
     ret.push_back(op);
   }
   return ret;
@@ -215,8 +212,7 @@ std::vector<OperationRef> handle_pg_query(
     MQuery query{pgid, pg_shard_t{from, pg_query.from},
 		 pg_query, pg_query.epoch_sent};
     logger().debug("handle_pg_query on {} from {}", pgid, from);
-    [[maybe_unused]] auto [op, fut] =
-      osd.get_shard_services().start_operation<QuerySubEvent>(
+    auto op = osd.get_shard_services().start_operation<QuerySubEvent>(
 	state,
 	osd,
 	conn,
@@ -225,7 +221,7 @@ std::vector<OperationRef> handle_pg_query(
 	pgid,
 	pg_query.epoch_sent,
 	pg_query.epoch_sent,
-	std::move(query));
+	std::move(query)).first;
     ret.push_back(op);
   }
   return ret;
