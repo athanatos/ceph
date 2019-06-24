@@ -84,7 +84,8 @@ std::vector<OperationRef> handle_pg_create(
 	q->second.second,
 	q->second.first);
     } else {
-      auto [op, fut] = osd.get_shard_services().start_operation<PeeringSubEvent>(
+      [[maybe_unused]] auto [op, fut] =
+	osd.get_shard_services().start_operation<PeeringSubEvent>(
 	state,
 	osd,
 	conn,
@@ -130,7 +131,8 @@ std::vector<OperationRef> handle_pg_notify(
       pg_notify.info.history,
       past_intervals,
       false};
-    auto [op, fut] = osd.get_shard_services().start_operation<PeeringSubEvent>(
+    [[maybe_unused]] auto [op, fut] =
+      osd.get_shard_services().start_operation<PeeringSubEvent>(
       state,
       osd,
       conn,
@@ -164,7 +166,8 @@ std::vector<OperationRef> handle_pg_info(
     MInfoRec info{pg_shard_t{from, pg_notify.from},
 		  pg_notify.info,
 		  pg_notify.epoch_sent};
-    auto [op, fut] = osd.get_shard_services().start_operation<PeeringSubEvent>(
+    [[maybe_unused]] auto [op, fut] =
+      osd.get_shard_services().start_operation<PeeringSubEvent>(
 	state,
 	osd,
 	conn,
@@ -212,16 +215,17 @@ std::vector<OperationRef> handle_pg_query(
     MQuery query{pgid, pg_shard_t{from, pg_query.from},
 		 pg_query, pg_query.epoch_sent};
     logger().debug("handle_pg_query on {} from {}", pgid, from);
-    auto [op, fut] = osd.get_shard_services().start_operation<QuerySubEvent>(
-      state,
-      osd,
-      conn,
-      osd.get_shard_services(),
-      pg_shard_t(from, pg_query.from),
-      pgid,
-      pg_query.epoch_sent,
-      pg_query.epoch_sent,
-      std::move(query));
+    [[maybe_unused]] auto [op, fut] =
+      osd.get_shard_services().start_operation<QuerySubEvent>(
+	state,
+	osd,
+	conn,
+	osd.get_shard_services(),
+	pg_shard_t(from, pg_query.from),
+	pgid,
+	pg_query.epoch_sent,
+	pg_query.epoch_sent,
+	std::move(query));
     ret.push_back(op);
   }
   return ret;
