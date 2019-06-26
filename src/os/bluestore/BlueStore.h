@@ -1612,7 +1612,7 @@ public:
     OpSequencerRef osr;  // this should be ch->osr
     boost::intrusive::list_member_hook<> sequencer_item;
 
-    uint64_t bytes = 0, cost = 0;
+    uint64_t bytes = 0, ios = 0, cost = 0;
 
     set<OnodeRef> onodes;     ///< these need to be updated/written
     set<OnodeRef> modified_objects;  ///< objects we modified (and need a ref)
@@ -1679,6 +1679,20 @@ public:
       store->txc_aio_finish(this);
     }
   };
+
+
+  class BlueStoreThrottle {
+    std::atomic_int pending_bytes = {0};
+    std::atomic_int pending_ios = {0};
+
+    std::atomic_int pending_kv = {0};
+  public:
+    void start_transaction(TransContext &txc);
+    void complete_kv(TransContext &txc) {
+      pending_kv -= 1;
+    }
+    void complete(TransContext &txc);
+  } bsthrottle;
 
   typedef boost::intrusive::list<
     TransContext,

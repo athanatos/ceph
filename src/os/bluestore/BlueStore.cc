@@ -9810,6 +9810,7 @@ void BlueStore::_txc_calc_cost(TransContext *txc)
   auto ios = 1 + txc->ioc.get_num_ios();
   auto cost = throttle_cost_per_io.load();
   txc->cost = ios * cost + txc->bytes;
+  txc->ios = ios;
   dout(10) << __func__ << " " << txc << " cost " << txc->cost << " ("
 	   << ios << " ios * " << cost << " + " << txc->bytes
 	   << " bytes)" << dendl;
@@ -10116,6 +10117,7 @@ void BlueStore::_txc_applied_kv(TransContext *txc)
 void BlueStore::_txc_committed_kv(TransContext *txc)
 {
   dout(20) << __func__ << " txc " << txc << dendl;
+  bsthrottle.complete_kv(*txc);
   {
     std::lock_guard l(txc->osr->qlock);
     txc->state = TransContext::STATE_KV_DONE;
@@ -10213,7 +10215,8 @@ void BlueStore::_txc_finish(TransContext *txc)
 	       << dendl;
     }
   }
- }
+  bsthrottle.complete(*txc);
+}
 
 void BlueStore::_txc_release_alloc(TransContext *txc)
 {
@@ -11004,6 +11007,7 @@ int BlueStore::queue_transactions(
     _txc_add_transaction(txc, &(*p));
   }
   _txc_calc_cost(txc);
+  bsthrottle.start_transaction(*txc);
 
   _txc_write_nodes(txc, txc->t);
 
@@ -13560,6 +13564,43 @@ utime_t BlueStore::TransContext::log_state_latency(
 #endif
   last_stamp = now;
   return lat;
+}
+
+void BlueStore::BlueStoreThrottle::start_transaction(TransContext &txc)
+{
+  pending_bytes += txc.bytes;
+  pending_ios += txc.ios;
+  pending_kv += 1;
+
+#if defined(WITH_LTTNG) && defined(WITH_EVENTTRACE)
+  tracepoint(
+    bluestore,
+    transaction_initial_state,
+    txc.osr->get_sequencer_id(),
+    txc.seq,
+    txc.bytes,
+    txc.ios,
+    pending_bytes.load(),
+    pending_ios.load(),
+    pending_kv.load());
+#endif
+}
+
+void BlueStore::BlueStoreThrottle::complete(TransContext &txc)
+{
+  pending_bytes -= txc.bytes;
+  pending_ios -= txc.ios;
+
+#if defined(WITH_LTTNG) && defined(WITH_EVENTTRACE)
+  utime_t now = ceph_clock_now();
+  double usecs = (now.to_nsec()-txc.start.to_nsec())/1000;
+  tracepoint(
+    bluestore,
+    transaction_total_duration,
+    txc.osr->get_sequencer_id(),
+    txc.seq,
+    usecs);
+#endif
 }
 
 // DB key value Histogram
