@@ -206,94 +206,24 @@ def do_run(base, runs):
         d(full_config, get_full_config(full_config['output_dir']))
     return orig_output_dir
 
-def summarize(directory, p):
-    contents = os.listdir(directory)
-    if 'ceph.conf' in contents:
-        contents = [directory]
-    else:
-        contents = [(x, os.path.join(directory, x)) for x in contents]
 
-    ret = []
-    for name, subdir in contents:
-        fio_output = {}
-        with open(get_fio_output(subdir)) as f:
-            fio_output = json.load(f)
-        perf_output = {}
-        with open(os.path.join(subdir, 'perf_counters.json')) as f:
-            perf_output = json.load(f)
-        with open(get_base_config(subdir)) as f:
-            base_config = json.load(f)
-        ret.append(p(name, base_config, fio_output, perf_output))
-    return ret
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--run', type=str,
+                       help='path to config file')
+    args = parser.parse_args()
 
-def project(name, config, fio_stats, perf_stats):
-    def f(op):
-        return {
-            'iops_min': op['iops_min'],
-            'iops_max': op['iops_max'],
-            'iops_mean': op['iops_mean'],
-            'clat_min_ns': op['clat_ns']['min'],
-            'clat_max_ns': op['clat_ns']['max'],
-            'clat_mean_ns': op['clat_ns']['mean'],
-            'clat_median_ns': op['clat_ns']['percentile']['50.000000'],
-            'clat_99.9_ns': op['clat_ns']['percentile']['99.900000'],
-            'slat_min_ns': op['slat_ns']['min'],
-            'slat_max_ns': op['slat_ns']['max'],
-            'slat_mean_ns': op['slat_ns']['mean'],
-        }
-    fio = dict(((op, f(fio_stats['jobs'][1][op])) for op in ['read', 'write']))
-
-    wanted_perf = [
-        'commit_lat',
-        'kv_commit_lat',
-        'kv_final_lat',
-        'kv_flush_lat',
-        'kv_sync_lat',
-        'state_deferred_aio_wait_lat',
-        'state_deferred_cleanup_lat',
-        'state_deferred_queued_lat',
-        'state_kv_committing_lat'
-        ]
-
-    perf = {
-        k: v['avgtime'] for k, v in
-        filter(lambda x: '_lat' in x[0],
-               perf_stats['perfcounter_collection']['bluestore'].items())
-        }
-
-    return {
-        'fio': fio,
-        'config': config,
-        'name': name,
-        'perf': perf,
-        }
-
-import argparse
-parser = argparse.ArgumentParser()
-group = parser.add_mutually_exclusive_group(required=True)
-group.add_argument('--summarize', type=str,
-                   help='generate json summary of results')
-group.add_argument('--run', type=str,
-                   help='path to config file')
-args = parser.parse_args()
-
-if args.summarize:
-    try:
-        json.dump(summarize(args.summarize, project), sys.stdout,
-                  sort_keys=True, indent=2)
-    except Exception as e:
-        print("Unable to summarize {dir}, exception {e}".format(
-            dir=args.summarize,
-            e=e))
-elif args.run:
-    try:
-        conf = {}
-        with open(args.run) as f:
-            conf = json.load(f)
-        base = DEFAULT
-        base.update(conf.get('base', {}))
-        do_run(base, conf['runs'])
-    except Exception as e:
-        print("Unable to run config {conf}, exception {e}".format(
-            conf=args.run,
+    if args.run:
+        try:
+            conf = {}
+            with open(args.run) as f:
+                conf = json.load(f)
+                base = DEFAULT
+                base.update(conf.get('base', {}))
+                do_run(base, conf['runs'])
+        except Exception as e:
+            print("Unable to run config {conf}, exception {e}".format(
+                conf=args.run,
             e=e))
