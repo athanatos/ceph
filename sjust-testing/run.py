@@ -113,7 +113,7 @@ def setup_start_lttng(conf):
         'lttng', 'create', 'fio-bluestore',
         '--output', tracedir
         ])
-    for event in ['state_duration', 'total_duraction', 'initial_state']:
+    for event in ['state_duration', 'total_duration', 'initial_state']:
         subprocess.run([
             'lttng', 'enable-event',
             '--session', 'fio-bluestore',
