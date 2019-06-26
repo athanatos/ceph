@@ -87,7 +87,7 @@ class Write(object):
             'initial_params': self.__initial_params
         }
 
-def events_to_structured(trace):
+def iterate_structured_trace(trace):
     live = {}
     for event in trace.events:
         eid = event_id(event)
@@ -97,15 +97,19 @@ def events_to_structured(trace):
             yield live[eid].to_primitive()
             del live[eid]
 
+    for event in events_to_structured(trace):
+        yield f(event)
+
 def dump_structured_trace(tdir, fd):
     trace = open_trace(tdir)
-    for p in events_to_structured(trace):
+    for p in iterate_structured_trace(trace):
         json.dump(p, fd, sort_keys=True, indent=2)
 
-import argparse
-parser = argparse.ArgumentParser()
-parser.add_argument('--dump-structured-trace', type=str,
-                    help='generate json dump of writes')
-args = parser.parse_args()
-
-dump_structured_trace(args.dump_structured_trace, sys.stdout)
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dump-structured-trace', type=str,
+                        help='generate json dump of writes')
+    args = parser.parse_args()
+    
+    dump_structured_trace(args.dump_structured_trace, sys.stdout)
