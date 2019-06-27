@@ -79,7 +79,7 @@ def to_arrays(pfeats, events):
     for _, _, _, l in arrays:
         l[-1] = l[-1][:last_size]
         
-    return dict(((feat, np.ravel(l)) for feat, _, _, l in arrays))
+    return dict(((feat, np.concatenate(l).ravel()) for feat, _, _, l in arrays))
 
 TO_GRAPH = [
     [('time', 'latency'), ('transaction_bytes', 'latency')],
