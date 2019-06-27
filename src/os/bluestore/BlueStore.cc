@@ -13586,6 +13586,21 @@ void BlueStore::BlueStoreThrottle::start_transaction(TransContext &txc)
 #endif
 }
 
+void BlueStore::BlueStoreThrottle::complete_kv(TransContext &txc) {
+  pending_kv -= 1;
+
+#if defined(WITH_LTTNG) && defined(WITH_EVENTTRACE)
+  utime_t now = ceph_clock_now();
+  double usecs = (now.to_nsec()-txc.start.to_nsec())/1000;
+  tracepoint(
+    bluestore,
+    transaction_commit_latency,
+    txc.osr->get_sequencer_id(),
+    txc.seq,
+    usecs);
+#endif
+}
+
 void BlueStore::BlueStoreThrottle::complete(TransContext &txc)
 {
   pending_bytes -= txc.bytes;

@@ -1688,9 +1688,7 @@ public:
     std::atomic_int pending_kv = {0};
   public:
     void start_transaction(TransContext &txc);
-    void complete_kv(TransContext &txc) {
-      pending_kv -= 1;
-    }
+    void complete_kv(TransContext &txc);
     void complete(TransContext &txc);
   } bsthrottle;
 

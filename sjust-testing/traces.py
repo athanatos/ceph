@@ -130,6 +130,7 @@ class Write(object):
         self.__state_durations = {}
         self.__start = None
         self.__duration = None
+        self.__commit_latency = None
         self.__initial_params = {}
 
     def consume_event(self, event):
@@ -149,6 +150,10 @@ class Write(object):
         elif event.name == 'bluestore:transaction_total_duration':
             assert self.__duration is None
             self.__duration = event['elapsed'] / 1000000.0
+            return True
+        elif event.name == 'bluestore:transaction_commit_latency':
+            assert self.__commit_latency is None
+            self.__commit_latency = event['elapsed'] / 1000000.0
             return True
         elif event.name == 'bluestore:transaction_state_duration':
             self.__state_durations[get_state_name(event['state'])] = \
@@ -175,6 +180,9 @@ class Write(object):
 
     def get_duration(self):
         return self.__duration
+
+    def get_latency(self):
+        return self.__commit_latency
 
     def get_param(self, param):
         assert param in self.__initial_params

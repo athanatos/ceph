@@ -26,6 +26,19 @@ TRACEPOINT_EVENT(bluestore, transaction_total_duration,
     )
 )
 
+TRACEPOINT_EVENT(bluestore, transaction_commit_latency,
+    TP_ARGS(
+        uint32_t, sequencer_id,
+        uint64_t, tid,
+        double, elapsed),
+    TP_FIELDS(
+        ctf_integer(uint32_t, sequencer_id, sequencer_id)
+        ctf_integer(uint64_t, tid, tid)
+        ctf_float(double, elapsed, elapsed)
+    )
+)
+
+
 TRACEPOINT_EVENT(bluestore, transaction_initial_state,
     TP_ARGS(
         uint32_t, sequencer_id,

@@ -6,7 +6,8 @@ from traces import get_state_names
 
 FEATURES = {
       'time': (lambda e: e.get_start(), float, 's')
-    , 'latency': (lambda e: e.get_duration(), float, 's')
+    , 'duration': (lambda e: e.get_duration(), float, 's')
+    , 'latency': (lambda e: e.get_latency(), float, 's')
     , 'transaction_bytes': (lambda e: e.get_param('transaction_bytes'), int, 'bytes')
     , 'transaction_ios': (lambda e: e.get_param('transaction_ios'), int, 'ios')
     , 'total_pending_bytes': (lambda e: e.get_param('total_pending_bytes'), int,
@@ -17,7 +18,7 @@ FEATURES = {
 
 for state in get_state_names():
     name = 'state_' + state + '_duration'
-    FEATURES[name] = (name, float, lambda e: e.get_state_duration(state))
+    FEATURES[name] = ((lambda s: lambda e: e.get_state_duration(s))(state), float, 's')
 
 def generate_throughput(t):
     pass
@@ -82,8 +83,8 @@ def to_arrays(pfeats, events):
     return dict(((feat, np.concatenate(l).ravel()) for feat, _, _, l in arrays))
 
 TO_GRAPH = [
-    [('time', 'latency'), ('transaction_bytes', 'latency')],
-    [('total_pending_deferred', 'latency'), ('transaction_bytes', 'latency')]
+    [('time', 'latency'), ('total_pending_deferred', 'latency')],
+    [('state_kv_queued_duration', 'latency'), ('state_deferred_queued_duration', 'latency')]
 ]
 
 def graph(events):
