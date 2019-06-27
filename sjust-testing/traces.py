@@ -137,6 +137,10 @@ class Write(object):
         if event.name == 'bluestore:transaction_initial_state':
             assert self.__start is None
             self.__initial_params = filter_initial(event)
+            if self.__initial_params['transaction_bytes'] > 30000:
+                print("Got invalid event {}".format(event))
+                
+            assert self.__initial_params['transaction_bytes'] < 30000
             if Write.start is None:
                 Write.start = event.timestamp
             else:
