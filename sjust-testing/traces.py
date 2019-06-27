@@ -4,6 +4,9 @@ import babeltrace
 import sys
 import json
 import os
+import subprocess
+import re
+import datetime
 
 def get_state_name(state):
     return {
@@ -20,28 +23,100 @@ def get_state_name(state):
         29: "done"
     }[state]
 
+TYPE_MAP = {
+    'sequencer_id': int,
+    'tid': int,
+    'elapsed': float,
+    'state': int,
+    'transaction_bytes': int,
+    'transaction_ios': int,
+    'total_pending_ios': int,
+    'total_pending_bytes': int,
+    'total_pending_kv': int
+    }
+
+def get_type(field):
+    if field == 'elapsed':
+        return float
+    else:
+        return int
+
+def event_id(event):
+    #assert 'sequencer_id' in event.keys()
+    #assert 'tid' in event.keys()
+    return (event['sequencer_id'], event['tid'])
+
 def open_trace(rdir):
     tdir_prefix = os.path.join(rdir, 'trace/ust/uid')
     uid = os.listdir(tdir_prefix)[0]
     ret = babeltrace.TraceCollection()
     ret.add_trace(os.path.join(tdir_prefix, uid, '64-bit'), 'ctf')
-    return ret
+    return ret.events
 
-def event_id(event):
-    assert 'sequencer_id' in event.keys()
-    assert 'tid' in event.keys()
-    return (event['sequencer_id'], event['tid'])
+class Event(object):
+    def __init__(self, name, timestamp, properties):
+        self.name = name
+        self.timestamp = timestamp
+        self.__properties = properties
+
+    def __getitem__(self, key):
+        return self.__properties.get(key)
+
+    def __str__(self):
+        return "Event(name: {name}, timestamp: {timestamp}, {properties})".format(
+            name=self.name,
+            timestamp=self.timestamp,
+            properties=self.__properties)
+
+DATE = '(\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d\d\d\d\d\d\d\d\d)'
+OFFSET = '\(\+(\?\.\?+|\d\.\d\d\d\d\d\d\d\d\d)\)'
+NAME = 'bluestore:[a-z_]*'
+PAIRS = '{((?: [a-z_]+ = [0-9.e+]+[ ,])+)}'
+RE = re.compile(
+    '\[' + DATE + '\] [a-z0-9]* (?P<name>' + NAME + '): { \d* }, ' + PAIRS
+    )
+def parse(line):
+    res = RE.match(line)
+    if not res:
+        print(line)
+    assert res
+    groups = res.groups()
+    start = datetime.datetime.strptime(groups[0][:-3], "%Y-%m-%d %H:%M:%S.%f")
+    name = groups[1]
+    props = {}
+    for pair in (x.strip() for x in groups[2].split(',')):
+        k, v = pair.split('=')
+        k = k.strip()
+        props[k] = get_type(k)(v.strip())
+    return Event(name, start.timestamp(), props)
+
+def test():
+    test = '[20:01:49.773714486] (+?.?????????) incerta05 bluestore:transaction_initial_state: { 22 }, { sequencer_id = 1, tid = 1, transaction_bytes = 399, transaction_ios = 1, total_pending_bytes = 399, total_pending_ios = 1, total_pending_kv = 1 }'
+    test2 = '[20:01:49.774633030] (+0.000918544) incerta05 bluestore:transaction_state_duration: { 22 }, { sequencer_id = 1, tid = 1, state = 19, elapsed = 4859 }'
+    parse(test)
+    parse(test2)
+
+def open_trace(rdir):
+    tdir_prefix = os.path.join(rdir, 'trace/')
+    CMD = ['babeltrace', '--no-delta', '--clock-date', '-n', 'payload',
+           tdir_prefix]
+    proc = subprocess.Popen(
+        CMD,
+        bufsize=524288,
+        stdout=subprocess.PIPE,
+        stderr=sys.stderr)
+    for line in proc.stdout.readlines():
+        yield parse(line.decode("utf-8"))
 
 def filter_initial(event):
-    not_initial = frozenset([
-        'cpu_id', 'stream_id', 'id', 'events_discarded',
-        'timestamp_end', 'packet_size', 'sequencer_id', 'packet_seq_num',
-        'uuid', 'content_size', 'stream_instance_id',
-        'v', 'timestamp_begin', 'tid', 'magic'])
-    return dict((
-        (k, event[k]) for k in
-        filter(lambda x: x not in not_initial, event.keys())
-    ))
+    initial = [
+        'transaction_bytes',
+        'transaction_ios',
+        'total_pending_ios',
+        'total_pending_bytes',
+        'total_pending_kv'
+        ]
+    return dict(((k, event[k]) for k in initial))
 
 class Write(object):
     start = None
@@ -53,15 +128,14 @@ class Write(object):
         self.__initial_params = {}
 
     def consume_event(self, event):
-        assert event_id(event) == self.__id
+        #assert event_id(event) == self.__id
         if event.name == 'bluestore:transaction_initial_state':
             assert self.__start is None
             self.__initial_params = filter_initial(event)
             if Write.start is None:
                 Write.start = event.timestamp
-                self.__start = 0
             else:
-                self.__start = (event.timestamp - Write.start) / (1000000000.0)
+                self.__start = event.timestamp - Write.start
             return False
         elif event.name == 'bluestore:transaction_total_duration':
             assert self.__duration is None
@@ -72,7 +146,7 @@ class Write(object):
                 event['elapsed']
             return False
         else:
-            assert False, "{} not a valid event".format(event.name)
+            assert False, "{} not a valid event".format(event)
             return True
             
     def to_primitive(self):
@@ -87,23 +161,36 @@ class Write(object):
             'initial_params': self.__initial_params
         }
 
+    def get_start(self):
+        return self.__start
+
+    def get_duration(self):
+        return self.__duration
+
+    def get_param(self, param):
+        assert param in self.__initial_params
+        return self.__initial_params[param]
+
+    def get_state_duraction(self, state):
+        assert state in self.__state_durations
+        return self.__state_durations[state]
+
 def iterate_structured_trace(trace):
     live = {}
-    for event in trace.events:
+    count = 0
+    for event in trace:
         eid = event_id(event)
         if eid not in live:
             live[eid] = Write(eid)
         if live[eid].consume_event(event):
-            yield live[eid].to_primitive()
+            count += 1
+            yield live[eid]
             del live[eid]
-
-    for event in events_to_structured(trace):
-        yield f(event)
 
 def dump_structured_trace(tdir, fd):
     trace = open_trace(tdir)
     for p in iterate_structured_trace(trace):
-        json.dump(p, fd, sort_keys=True, indent=2)
+        json.dump(p.to_primitive(), fd, sort_keys=True, indent=2)
 
 if __name__ == "__main__":
     import argparse
