@@ -143,7 +143,7 @@ class Write(object):
             return True
         elif event.name == 'bluestore:transaction_state_duration':
             self.__state_durations[get_state_name(event['state'])] = \
-                event['elapsed']
+                event['elapsed'] / 1000000.0
             return False
         else:
             assert False, "{} not a valid event".format(event)
@@ -171,9 +171,8 @@ class Write(object):
         assert param in self.__initial_params
         return self.__initial_params[param]
 
-    def get_state_duraction(self, state):
-        assert state in self.__state_durations
-        return self.__state_durations[state]
+    def get_state_duration(self, state):
+        return self.__state_durations.get(state, 0)
 
 def iterate_structured_trace(trace):
     live = {}
