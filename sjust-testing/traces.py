@@ -8,20 +8,25 @@ import subprocess
 import re
 import datetime
 
+STATES = {
+    19: "prepare",
+    20: "aio_wait",
+    21: "io_done",
+    22: "kv_queued",
+    23: "kv_submitted",
+    24: "kv_done",
+    25: "deferred_queued",
+    26: "deferred_cleanup",
+    27: "deferred_done",
+    28: "finishing",
+    29: "done"
+}
+
 def get_state_name(state):
-    return {
-        19: "prepare",
-        20: "aio_wait",
-        21: "io_done",
-        22: "kv_queued",
-        23: "kv_submitted",
-        24: "kv_done",
-        25: "deferred_queued",
-        26: "deferred_cleanup",
-        27: "deferred_done",
-        28: "finishing",
-        29: "done"
-    }[state]
+    return STATES[state]
+
+def get_state_names():
+    return [x[1] for x in STATES.items()]
 
 TYPE_MAP = {
     'sequencer_id': int,
