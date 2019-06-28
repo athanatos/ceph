@@ -84,7 +84,8 @@ def to_arrays(pfeats, events):
 
 TO_GRAPH = [
     [('time', 'latency'), ('total_pending_deferred', 'latency')],
-    [('state_kv_queued_duration', 'latency'), ('state_deferred_queued_duration', 'latency')]
+    [('state_kv_queued_duration', 'latency'), ('total_pending_kv', 'latency')],
+    [('total_pending_kv', 'state_kv_queued_duration'), ('state_kv_submitted_duration', 'latency')]
 ]
 
 def graph(events):
@@ -104,6 +105,6 @@ def graph(events):
             yunit = get_unit(yname)
             ax.set_xlabel("{name} ({unit})".format(name=xname, unit=xunit))
             ax.set_ylabel("{name} ({unit})".format(name=yname, unit=yunit))
-            ax.scatter(arrays[xname], arrays[yname])
+            ax.scatter(arrays[xname], arrays[yname], s=3)
 
     plt.show()

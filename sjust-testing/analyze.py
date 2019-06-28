@@ -22,6 +22,8 @@ group.add_argument('--iterate-traces', type=str,
                    help='graph trace')
 parser.add_argument('--limit', type=int,
                     help='limit')
+parser.add_argument('--drop-first', type=float,
+                    help='drop')
 args = parser.parse_args()
 
 def iterate(path):
@@ -35,6 +37,8 @@ elif args.graph_trace:
     events = iterate_structured_trace(open_trace(args.graph_trace))
     if args.limit:
         events = itertools.islice(events, args.limit)
+    if args.drop_first:
+        events = itertools.dropwhile(lambda x: x.get_start() < args.drop_first, events)
     graph(events)
 elif args.iterate_traces:
     cProfile.run('iterate("' + args.iterate_traces + '")')

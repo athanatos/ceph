@@ -144,6 +144,7 @@ class Write(object):
             assert self.__initial_params['transaction_bytes'] < 30000
             if Write.start is None:
                 Write.start = event.timestamp
+                self.__start = 0
             else:
                 self.__start = event.timestamp - Write.start
             return False
@@ -154,7 +155,7 @@ class Write(object):
         elif event.name == 'bluestore:transaction_commit_latency':
             assert self.__commit_latency is None
             self.__commit_latency = event['elapsed'] / 1000000.0
-            return True
+            return False
         elif event.name == 'bluestore:transaction_state_duration':
             self.__state_durations[get_state_name(event['state'])] = \
                 event['elapsed'] / 1000000.0
@@ -176,6 +177,7 @@ class Write(object):
         }
 
     def get_start(self):
+        assert self.__start is not None
         return self.__start
 
     def get_duration(self):
@@ -185,6 +187,8 @@ class Write(object):
         return self.__commit_latency
 
     def get_param(self, param):
+        if param not in self.__initial_params:
+            print("{} not in {}".format(param, self.__initial_params))
         assert param in self.__initial_params
         return self.__initial_params[param]
 
