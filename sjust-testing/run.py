@@ -58,6 +58,7 @@ perf_output_file={output_dir}/perf_counters.json
 
 rw=randwrite
 iodepth={qd}
+iodepth_low={qdl}
 
 time_based=1
 runtime={runtime}s
@@ -77,12 +78,19 @@ DEFAULT = {
     'output_dir': os.path.join('./output',time.strftime('%Y-%m-%d-%H:%M:%S')),
     'lib': '../build/lib',
     'target_dir': '/mnt/sjust/run',
-    'qd': None,
+    'qd': 16,
     'runtime': 10,
     'bs': 4,
     'fio_bin': '../build/bin/fio',
-    'lttng': True
+    'lttng': True,
+    'qdl': 0
 }
+
+def doformat(conf, template):
+    c = conf.copy()
+    if c.get('qdl', None) is None:
+        c['qdl'] = c['qd']
+    return template.format(c)
 
 def get_fio_fn(base):
     return os.path.join(base, 'bluestore.fio')
@@ -101,7 +109,7 @@ def write_conf(conf):
     ceph_fn = get_ceph_fn(conf['output_dir'])
     for fn, template in [(fio_fn, BLUESTORE_FIO), (ceph_fn, BLUESTORE_CONF)]:
         with open(fn, 'w') as f:
-            f.write(template.format(**conf))
+            f.write(doformat(conf, template)
     return fio_fn
 
 def setup_start_lttng(conf):
