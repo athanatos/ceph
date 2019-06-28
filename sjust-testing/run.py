@@ -83,7 +83,7 @@ DEFAULT = {
     'bs': 4,
     'fio_bin': '../build/bin/fio',
     'lttng': True,
-    'qdl': 0
+    'qdl': None
 }
 
 def doformat(conf, template):
@@ -225,14 +225,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.run:
-        try:
-            conf = {}
-            with open(args.run) as f:
-                conf = json.load(f)
-                base = DEFAULT
-                base.update(conf.get('base', {}))
-                do_run(base, conf['runs'])
-        except Exception as e:
-            print("Unable to run config {conf}, exception {e}".format(
-                conf=args.run,
-            e=e))
+        conf = {}
+        with open(args.run) as f:
+            conf = json.load(f)
+            base = DEFAULT
+            base.update(conf.get('base', {}))
+            do_run(base, conf['runs'])
