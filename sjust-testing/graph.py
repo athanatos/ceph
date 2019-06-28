@@ -25,11 +25,11 @@ def generate_throughput(t):
 
 SECONDARY_FEATURES = {
     'throughput': (('time'), 's', generate_throughput),
-    'kv_queued_and_submitted': (
-        ('state_kv_submitted_duration', 'state_kv_queued_duration'),
+    'prepare_kv_queued_and_submitted': (
+        ('state_prepare_duration', 'state_kv_submitted_duration', 'state_kv_queued_duration'),
         's',
         float,
-        lambda x, y: x + y),
+        lambda x, y, z: x + y + z),
     'total_pending_deferred': (
         ('total_pending_ios', 'total_pending_kv'),
         'ios',
@@ -101,7 +101,9 @@ def to_arrays(pfeats, events):
 TO_GRAPH = [
     [('time', 'latency'), ('total_pending_deferred', 'latency')],
     [('total_pending_ios', 'latency'), ('state_kv_queued_duration', 'latency')],
-    [('kv_queued_and_submitted', 'latency'), ('state_kv_submitted_duration', 'latency')]
+    [('prepare_kv_queued_and_submitted', 'latency'), ('state_kv_submitted_duration', 'latency')],
+    [('total_pending_kv', 'latency'), ('state_prepare_duration', 'latency')],
+    [('total_pending_deferred', 'state_prepare_duration'), ('total_pending_kv', 'state_prepare_duration')]
 ]
 
 def graph(events):

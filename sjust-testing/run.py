@@ -25,6 +25,7 @@ BLUESTORE_CONF = """
 	# log inside fio_dir
 	log file = {output_dir}/log
         bluestore_tracing = true
+        bluestore_throttle_bytes = 0
 """
 
 BLUESTORE_FIO = """
