@@ -90,7 +90,7 @@ def doformat(conf, template):
     c = conf.copy()
     if c.get('qdl', None) is None:
         c['qdl'] = c['qd']
-    return template.format(c)
+    return template.format(**c)
 
 def get_fio_fn(base):
     return os.path.join(base, 'bluestore.fio')
