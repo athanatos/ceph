@@ -109,7 +109,7 @@ def write_conf(conf):
     ceph_fn = get_ceph_fn(conf['output_dir'])
     for fn, template in [(fio_fn, BLUESTORE_FIO), (ceph_fn, BLUESTORE_CONF)]:
         with open(fn, 'w') as f:
-            f.write(doformat(conf, template)
+            f.write(doformat(conf, template))
     return fio_fn
 
 def setup_start_lttng(conf):
