@@ -7,37 +7,51 @@ import itertools
 import argparse
 import sys
 
-from summarize import summarize
+from summarize import dump_target, generate_summary
 from traces import open_trace, iterate_structured_trace
 from graph import graph
-import cProfile
 
 parser = argparse.ArgumentParser()
-group = parser.add_mutually_exclusive_group(required=True)
-group.add_argument('--summarize', type=str,
-                   help='summarize results')
-group.add_argument('--graph-trace', type=str,
-                   help='graph trace')
-group.add_argument('--iterate-traces', type=str,
-                   help='graph trace')
-parser.add_argument('--limit', type=int,
-                    help='limit')
+parser.add_argument('target', metavar='T', type=str, help='target results directory')
+parser.add_argument('--match', type=str, help='json for matching', default='{}')
+parser.add_argument('--output', type=str, help='output directory')
+parser.add_argument('--generate-graphs', type=bool, help='generate graphs')
 parser.add_argument('--drop-first', type=float,
                     help='drop', default=10.0)
+parser.add_argument('--drop-after', type=float,
+                    help='drop')
+
+
+def get_targets(directory):
+    contents = os.listdir(directory)
+    if 'ceph.conf' in contents:
+        return [directory]
+    else:
+        return [(x, os.path.join(directory, x)) for x in contents]
+
+
 args = parser.parse_args()
 
-def iterate(path):
-    for _ in iterate_structured_trace(open_trace(path)):
-        pass
+match = json.loads(args.match)
+targets = get_targets(args.target)
+projected = [dump_target(name, target) for name, target in targets]
 
-if args.summarize:
-    summarize(args.summarize, sys.stdout)
-elif args.graph_trace:
-    events = iterate_structured_trace(open_trace(args.graph_trace))
-    if args.drop_first:
-        events = itertools.dropwhile(lambda x: x.get_start() < args.drop_first, events)
-    if args.limit:
-        events = itertools.islice(events, args.limit)
-    graph(events)
-elif args.iterate_traces:
-    cProfile.run('iterate("' + args.iterate_traces + '")')
+def do_filter(match, input):
+    def cond(x):
+        return all(x[1]['config'].get(k) == v for k, v in match.items())
+    return filter(cond, input)
+
+filtered_targets, filtered = zip(*do_filter(match, zip(targets, projected)))
+
+summary = generate_summary(filtered, match)
+
+if args.generate_graphs:
+    for target in filtered_targets:
+        events = iterate_structured_trace(open_trace(target))
+        if args.drop_first:
+            events = itertools.dropwhile(lambda x: x.get_start() < args.drop_first, events)
+        if args.drop_after:
+            events = itertools.takewhile(lambda x: x.get_start() > args.drop_after, events)
+        graph(events)
+
+json.dump(summary, sys.stdout, sort_keys=True, indent=2)

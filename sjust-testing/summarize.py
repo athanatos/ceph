@@ -4,25 +4,12 @@ import os
 import json
 from run import get_fio_output, get_base_config
 
-def dump(directory, p):
-    contents = os.listdir(directory)
-    if 'ceph.conf' in contents:
-        contents = [directory]
-    else:
-        contents = [(x, os.path.join(directory, x)) for x in contents]
-
-    ret = []
-    for name, subdir in contents:
-        fio_output = {}
-        with open(get_fio_output(subdir)) as f:
-            fio_output = json.load(f)
-        perf_output = {}
-        with open(os.path.join(subdir, 'perf_counters.json')) as f:
-            perf_output = json.load(f)
-        with open(get_base_config(subdir)) as f:
-            base_config = json.load(f)
-        ret.append(p(name, base_config, fio_output, perf_output))
-    return ret
+def populate_args(parser):
+    parser.add_argument('target', metavar='T', type=str, help='target results directory')
+    parser.add_argument('--match', type=str, help='json for matching', default='{}')
+    parser.add_argument('--output', type=str, help='output directory')
+    parser.add_argument('--generate-graphs', type=bool, help='generate graphs')
+    parser.set_default(func=summarize)
 
 def project(name, config, fio_stats, perf_stats):
     def f(op):
@@ -66,21 +53,18 @@ def project(name, config, fio_stats, perf_stats):
         'perf': perf,
         }
 
-def summarize(directory, outfd):
-    match = {
-        'target_device': 'hdd',
-        'bs': 4
-    }
+def dump_target(name, directory):
+    fio_output = {}
+    with open(get_fio_output(directory)) as f:
+        fio_output = json.load(f)
+    perf_output = {}
+    with open(os.path.join(directory, 'perf_counters.json')) as f:
+        perf_output = json.load(f)
+    with open(get_base_config(directory)) as f:
+        base_config = json.load(f)
+    return project(name, base_config, fio_output, perf_output)
 
-    projected = dump(directory, project)
-
-    def do_filter(match, input):
-        def cond(x):
-            return all(x['config'].get(k) == v for k, v in match.items())
-        return filter(cond, input)
-
-    filtered = do_filter(match, projected)
-
+def generate_summary(filtered, match):
     def config_to_frozen(config, match):
         ret = dict(filter(lambda x: x[0] not in match, config.items()))
         if 'run' in ret:
@@ -117,7 +101,7 @@ def summarize(directory, outfd):
         return ret
 
     def sort_by(f, input):
-        return [v for (k, v) in sorted(map(lambda x: (f(x), x), input))]
+        return [v for (_, _, v) in sorted(map(lambda x: (f(x[0]), x[1], x[0]), zip(input, range(len(input)))))]
 
     def project_group(group):
         perfs = union_top_n(group['runs'])
@@ -128,6 +112,5 @@ def summarize(directory, outfd):
                 list(map(project_run(perfs), group['runs'])))
         }
         
-    output = sort_by(lambda x: x['config']['qd'], list(map(project_group, grouped)))
+    return sort_by(lambda x: x['config']['qd'], list(map(project_group, grouped)))
 
-    json.dump(output, outfd, sort_keys=True, indent=2)
