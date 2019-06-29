@@ -46,12 +46,12 @@ filtered_targets, filtered = zip(*do_filter(match, zip(targets, projected)))
 summary = generate_summary(filtered, match)
 
 if args.generate_graphs:
-    for target in filtered_targets:
-        events = iterate_structured_trace(open_trace(target))
+    for name, path in filtered_targets:
+        events = iterate_structured_trace(open_trace(path))
         if args.drop_first:
             events = itertools.dropwhile(lambda x: x.get_start() < args.drop_first, events)
         if args.drop_after:
-            events = itertools.takewhile(lambda x: x.get_start() > args.drop_after, events)
+            events = itertools.takewhile(lambda x: x.get_start() < args.drop_after, events)
         graph(events)
 
 json.dump(summary, sys.stdout, sort_keys=True, indent=2)
