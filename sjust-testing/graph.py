@@ -1,8 +1,11 @@
 #!env python3
 
 import numpy as np
-import matplotlib.pyplot as plt
+import matplotlib
+import matplotlib.figure
 from traces import get_state_names
+import matplotlib.backends
+import matplotlib.backends.backend_pdf as backend
 
 FEATURES = {
       'time': (lambda e: e.get_start(), float, 's')
@@ -106,7 +109,10 @@ TO_GRAPH = [
     [('total_pending_deferred', 'state_prepare_duration'), ('total_pending_kv', 'state_prepare_duration')]
 ]
 
-def graph(events):
+FONTSIZE=4
+matplotlib.rcParams.update({'font.size': FONTSIZE})
+
+def graph(events, name, path):
     pfeat, feat_to_array = get_features(TO_GRAPH)
 
     cols = to_arrays(pfeat, events)
@@ -119,16 +125,39 @@ def graph(events):
     for feat, arr in arrays.items():
         print(feat, arr.dtype)
 
-    fig, axs = plt.subplots(nrows=len(TO_GRAPH), ncols=len(TO_GRAPH[0]))
+    fig = matplotlib.figure.Figure()
+    fig.suptitle(name)
+    fig.set_figwidth(8)
+    fig.set_figheight(11)
 
-    for nrow in range(len(TO_GRAPH)):
-        for ncol in range(len(TO_GRAPH[0])):
-            ax = axs[nrow][ncol]
+    rows = len(TO_GRAPH)
+    cols = len(TO_GRAPH[0])
+    for nrow in range(rows):
+        for ncol in range(cols):
+            index = (nrow * cols) + ncol + 1
+            ax = fig.add_subplot(rows, cols, index)
             xname, yname = TO_GRAPH[nrow][ncol]
             xunit = get_unit(xname)
             yunit = get_unit(yname)
-            ax.set_xlabel("{name} ({unit})".format(name=xname, unit=xunit))
-            ax.set_ylabel("{name} ({unit})".format(name=yname, unit=yunit))
+            ax.set_xlabel(
+                "{name} ({unit})".format(name=xname, unit=xunit),
+                fontsize=FONTSIZE
+            )
+            ax.set_ylabel(
+                "{name} ({unit})".format(name=yname, unit=yunit),
+                fontsize=FONTSIZE)
             ax.plot(arrays[xname], arrays[yname], '.')
 
-    plt.show()
+    fig.subplots_adjust(left=0.05, right=0.98, bottom=0.03, top=0.95)
+
+    if path is not None:
+        fig.set_canvas(backend.FigureCanvas(fig))
+        fig.savefig(
+            path,
+            #bbox_inches='tight',
+            orientation='portrait',
+            papertype='letter',
+            format='pdf')
+    else:
+        import matplotlib.pyplot as plt
+        plt.show()

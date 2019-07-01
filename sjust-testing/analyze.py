@@ -6,6 +6,7 @@ import sys
 import itertools
 import argparse
 import sys
+import subprocess
 
 from summarize import dump_target, generate_summary
 from traces import open_trace, iterate_structured_trace
@@ -25,7 +26,7 @@ parser.add_argument('--drop-after', type=float,
 def get_targets(directory):
     contents = os.listdir(directory)
     if 'ceph.conf' in contents:
-        return [directory]
+        return [(os.path.basename(directory), directory)]
     else:
         return [(x, os.path.join(directory, x)) for x in contents]
 
@@ -45,6 +46,11 @@ filtered_targets, filtered = zip(*do_filter(match, zip(targets, projected)))
 
 summary = generate_summary(filtered, match)
 
+graph_filename = lambda x: None
+if args.output:
+    subprocess.run(['mkdir', '-p', args.output], check=False)
+    graph_filename = lambda x: os.path.join(args.output, x + '.pdf')
+
 if args.generate_graphs:
     for name, path in filtered_targets:
         events = iterate_structured_trace(open_trace(path))
@@ -52,6 +58,7 @@ if args.generate_graphs:
             events = itertools.dropwhile(lambda x: x.get_start() < args.drop_first, events)
         if args.drop_after:
             events = itertools.takewhile(lambda x: x.get_start() < args.drop_after, events)
-        graph(events)
+            
+        graph(events, name, graph_filename(name))
 
 json.dump(summary, sys.stdout, sort_keys=True, indent=2)
