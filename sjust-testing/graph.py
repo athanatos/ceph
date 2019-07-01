@@ -146,7 +146,9 @@ def graph(events, name, path):
             ax.set_ylabel(
                 "{name} ({unit})".format(name=yname, unit=yunit),
                 fontsize=FONTSIZE)
-            ax.plot(arrays[xname], arrays[yname], '.')
+            ax.plot(
+                arrays[xname], arrays[yname], '.', markersize=0.4,
+                rasterized=True)
 
     fig.subplots_adjust(left=0.05, right=0.98, bottom=0.03, top=0.95)
 
@@ -154,7 +156,7 @@ def graph(events, name, path):
         fig.set_canvas(backend.FigureCanvas(fig))
         fig.savefig(
             path,
-            #bbox_inches='tight',
+            dpi=600,
             orientation='portrait',
             papertype='letter',
             format='pdf')

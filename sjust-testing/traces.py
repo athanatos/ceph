@@ -198,6 +198,7 @@ class Write(object):
 def iterate_structured_trace(trace):
     live = {}
     count = 0
+    Write.start = None
     for event in trace:
         eid = event_id(event)
         if eid not in live:
