@@ -23,11 +23,27 @@ for state in get_state_names():
     name = 'state_' + state + '_duration'
     FEATURES[name] = ((lambda s: lambda e: e.get_state_duration(s))(state), float, 's')
 
-def generate_throughput(t):
-    pass
+def generate_throughput(start, d):
+    P = 1.0
+    finish = start + d
+    tp = np.empty_like(start)
+    fi = 0
+    for i in range(len(start)):
+        while finish[fi] < start[i]:
+            fi += 1
+        count = 0
+        while fi + count < len(finish) and finish[fi + count] < start[i] + P:
+            count += 1
+        if count >= len(finish) - fi:
+            count = len(finish) - fi - 1
+        if finish[fi + count] - start[i] == 0:
+            tp[i] = 0
+        else:
+            tp[i] = count / (finish[fi + count] - start[i])
+    return tp
 
 SECONDARY_FEATURES = {
-    'throughput': (('time'), 's', generate_throughput),
+    'throughput': (('time', 'duration'), 'iops', float, generate_throughput),
     'prepare_kv_queued_and_submitted': (
         ('state_prepare_duration', 'state_kv_submitted_duration', 'state_kv_queued_duration'),
         's',
@@ -104,7 +120,7 @@ def to_arrays(pfeats, events):
 TO_GRAPH = [
     [('time', 'latency'), ('total_pending_deferred', 'latency')],
     [('total_pending_ios', 'latency'), ('state_kv_queued_duration', 'latency')],
-    [('prepare_kv_queued_and_submitted', 'latency'), ('state_kv_submitted_duration', 'latency')],
+    [('throughput', 'latency'), ('state_kv_submitted_duration', 'latency')],
     [('total_pending_kv', 'latency'), ('state_prepare_duration', 'latency')],
     [('total_pending_deferred', 'state_prepare_duration'), ('total_pending_kv', 'state_prepare_duration')]
 ]
