@@ -197,6 +197,10 @@ public:
     return logger;
   }
 
+  bool get_property(
+    const std::string &property,
+    uint64_t *out) final;
+
   int64_t estimate_prefix_size(const string& prefix) override;
 
   struct  RocksWBHandler: public rocksdb::WriteBatch::Handler {

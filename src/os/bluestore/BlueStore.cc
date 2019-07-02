@@ -11007,7 +11007,9 @@ int BlueStore::queue_transactions(
     _txc_add_transaction(txc, &(*p));
   }
   _txc_calc_cost(txc);
-  bsthrottle.start_transaction(*txc);
+  bsthrottle.start_transaction(
+    *db,
+    *txc);
 
   _txc_write_nodes(txc, txc->t);
 
@@ -13566,13 +13568,28 @@ utime_t BlueStore::TransContext::log_state_latency(
   return lat;
 }
 
-void BlueStore::BlueStoreThrottle::start_transaction(TransContext &txc)
+void BlueStore::BlueStoreThrottle::start_transaction(
+  KeyValueDB &db,
+  TransContext &txc)
 {
   pending_bytes += txc.bytes;
   pending_ios += txc.ios;
   pending_kv += 1;
 
 #if defined(WITH_LTTNG) && defined(WITH_EVENTTRACE)
+  uint64_t rocksdb_base_level,
+    rocksdb_estimate_pending_compaction_bytes,
+    rocksdb_cur_size_all_mem_tables;
+  db.get_property(
+    "rocksdb.base-level",
+    &rocksdb_base_level);
+  db.get_property(
+    "rocksdb.estimate-pending-compaction-bytes",
+    &rocksdb_estimate_pending_compaction_bytes);
+  db.get_property(
+    "rocksdb.cur-size-all-mem-tables",
+    &rocksdb_cur_size_all_mem_tables);
+  
   tracepoint(
     bluestore,
     transaction_initial_state,
@@ -13582,7 +13599,10 @@ void BlueStore::BlueStoreThrottle::start_transaction(TransContext &txc)
     txc.ios,
     pending_bytes.load(),
     pending_ios.load(),
-    pending_kv.load());
+    pending_kv.load(),
+    rocksdb_base_level,
+    rocksdb_estimate_pending_compaction_bytes,
+    rocksdb_cur_size_all_mem_tables);
 #endif
 }
 

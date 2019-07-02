@@ -165,7 +165,7 @@ def graph(events, name, path):
                 arrays[xname], arrays[yname], '.', markersize=0.4,
                 rasterized=True)
 
-    fig.subplots_adjust(left=0.05, right=0.98, bottom=0.03, top=0.95)
+    fig.subplots_adjust(left=0.08, right=0.98, bottom=0.03, top=0.95)
 
     if path is not None:
         fig.set_canvas(backend.FigureCanvas(fig))

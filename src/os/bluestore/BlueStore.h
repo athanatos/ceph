@@ -1687,7 +1687,9 @@ public:
 
     std::atomic_int pending_kv = {0};
   public:
-    void start_transaction(TransContext &txc);
+    void start_transaction(
+      KeyValueDB &db,
+      TransContext &txc);
     void complete_kv(TransContext &txc);
     void complete(TransContext &txc);
   } bsthrottle;

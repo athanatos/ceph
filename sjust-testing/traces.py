@@ -37,7 +37,10 @@ TYPE_MAP = {
     'transaction_ios': int,
     'total_pending_ios': int,
     'total_pending_bytes': int,
-    'total_pending_kv': int
+    'total_pending_kv': int,
+    'rocksdb_base_level': int,
+    'rocksdb_estimate_pending_compaction_bytes': int,
+    'rocksdb_cur_size_all_mem_tables': int
     }
 
 def get_type(field):
