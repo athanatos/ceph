@@ -118,14 +118,13 @@ def to_arrays(pfeats, events):
     return dict(((feat, np.concatenate(l).ravel()) for feat, _, _, l in arrays))
 
 TO_GRAPH = [
-    [('time', 'latency'), ('total_pending_deferred', 'latency')],
-    [('total_pending_ios', 'latency'), ('state_kv_queued_duration', 'latency')],
-    [('throughput', 'latency'), ('state_kv_submitted_duration', 'latency')],
-    [('total_pending_kv', 'latency'), ('state_prepare_duration', 'latency')],
-    [('total_pending_deferred', 'state_prepare_duration'), ('total_pending_kv', 'state_prepare_duration')]
+    [('time', 'latency'), ('time', 'throughput'), ('throughput', 'latency')],
+    [('state_kv_queued_duration', 'latency'), ('state_prepare_duration', 'latency'), ('total_pending_kv', 'state_prepare_duration')],
+    [('total_pending_kv', 'latency'), ('total_pending_ios', 'latency'), ('total_pending_deferred', 'latency')],
+    [('total_pending_kv', 'throughput'), ('total_pending_ios', 'throughput'), ('total_pending_deferred', 'throughput')]
 ]
 
-FONTSIZE=4
+FONTSIZE=6
 matplotlib.rcParams.update({'font.size': FONTSIZE})
 
 def graph(events, name, path):
@@ -172,7 +171,7 @@ def graph(events, name, path):
         fig.set_canvas(backend.FigureCanvas(fig))
         fig.savefig(
             path,
-            dpi=600,
+            dpi=1200,
             orientation='portrait',
             papertype='letter',
             format='pdf')
