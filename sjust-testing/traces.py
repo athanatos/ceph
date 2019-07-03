@@ -205,7 +205,7 @@ def iterate_structured_trace(trace):
     live = {}
     count = 0
     Write.start = None
-    last = -1
+    last = 0.0
     for event in trace:
         eid = event_id(event)
         if eid not in live:
@@ -215,7 +215,9 @@ def iterate_structured_trace(trace):
             y = live[eid]
             del live[eid]
             if y.get_start() > last + 10:
-                print("Yielding event {}", y.get_start())
+                last = y.get_start()
+                print("Trace processed up to {}s".format(int(y.get_start())))
+            yield y
 
 def dump_structured_trace(tdir, fd):
     trace = open_trace(tdir)

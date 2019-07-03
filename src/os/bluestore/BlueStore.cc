@@ -13576,48 +13576,52 @@ void BlueStore::BlueStoreThrottle::start_transaction(
   pending_ios += txc.ios;
   pending_kv += 1;
 
-#if defined(WITH_LTTNG) && defined(WITH_EVENTTRACE)
-  uint64_t rocksdb_base_level,
-    rocksdb_estimate_pending_compaction_bytes,
-    rocksdb_cur_size_all_mem_tables;
-  db.get_property(
-    "rocksdb.base-level",
-    &rocksdb_base_level);
-  db.get_property(
-    "rocksdb.estimate-pending-compaction-bytes",
-    &rocksdb_estimate_pending_compaction_bytes);
-  db.get_property(
-    "rocksdb.cur-size-all-mem-tables",
-    &rocksdb_cur_size_all_mem_tables);
+#if defined(WITH_LTTNG)
+  if (enable_tracing) {
+    uint64_t rocksdb_base_level,
+      rocksdb_estimate_pending_compaction_bytes,
+      rocksdb_cur_size_all_mem_tables;
+    db.get_property(
+      "rocksdb.base-level",
+      &rocksdb_base_level);
+    db.get_property(
+      "rocksdb.estimate-pending-compaction-bytes",
+      &rocksdb_estimate_pending_compaction_bytes);
+    db.get_property(
+      "rocksdb.cur-size-all-mem-tables",
+      &rocksdb_cur_size_all_mem_tables);
   
-  tracepoint(
-    bluestore,
-    transaction_initial_state,
-    txc.osr->get_sequencer_id(),
-    txc.seq,
-    txc.bytes,
-    txc.ios,
-    pending_bytes.load(),
-    pending_ios.load(),
-    pending_kv.load(),
-    rocksdb_base_level,
-    rocksdb_estimate_pending_compaction_bytes,
-    rocksdb_cur_size_all_mem_tables);
+    tracepoint(
+      bluestore,
+      transaction_initial_state,
+      txc.osr->get_sequencer_id(),
+      txc.seq,
+      txc.bytes,
+      txc.ios,
+      pending_bytes.load(),
+      pending_ios.load(),
+      pending_kv.load(),
+      rocksdb_base_level,
+      rocksdb_estimate_pending_compaction_bytes,
+      rocksdb_cur_size_all_mem_tables);
+  }
 #endif
 }
 
 void BlueStore::BlueStoreThrottle::complete_kv(TransContext &txc) {
   pending_kv -= 1;
 
-#if defined(WITH_LTTNG) && defined(WITH_EVENTTRACE)
-  utime_t now = ceph_clock_now();
-  double usecs = (now.to_nsec()-txc.start.to_nsec())/1000;
-  tracepoint(
-    bluestore,
-    transaction_commit_latency,
-    txc.osr->get_sequencer_id(),
-    txc.seq,
-    usecs);
+#if defined(WITH_LTTNG)
+  if (enable_tracing) {
+    utime_t now = ceph_clock_now();
+    double usecs = (now.to_nsec()-txc.start.to_nsec())/1000;
+    tracepoint(
+      bluestore,
+      transaction_commit_latency,
+      txc.osr->get_sequencer_id(),
+      txc.seq,
+      usecs);
+  }
 #endif
 }
 
@@ -13627,14 +13631,16 @@ void BlueStore::BlueStoreThrottle::complete(TransContext &txc)
   pending_ios -= txc.ios;
 
 #if defined(WITH_LTTNG) && defined(WITH_EVENTTRACE)
-  utime_t now = ceph_clock_now();
-  double usecs = (now.to_nsec()-txc.start.to_nsec())/1000;
-  tracepoint(
-    bluestore,
-    transaction_total_duration,
-    txc.osr->get_sequencer_id(),
-    txc.seq,
-    usecs);
+  if (enable_tracing) {
+    utime_t now = ceph_clock_now();
+    double usecs = (now.to_nsec()-txc.start.to_nsec())/1000;
+    tracepoint(
+      bluestore,
+      transaction_total_duration,
+      txc.osr->get_sequencer_id(),
+      txc.seq,
+      usecs);
+  }
 #endif
 }
 

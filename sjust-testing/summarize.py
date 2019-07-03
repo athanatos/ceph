@@ -26,7 +26,7 @@ def project(name, config, fio_stats, perf_stats):
             'slat_max_ns': op['slat_ns']['max'],
             'slat_mean_ns': op['slat_ns']['mean'],
         }
-    fio = dict(((op, f(fio_stats['jobs'][1][op])) for op in ['read', 'write']))
+    fio = dict(((op, f(fio_stats['jobs'][0][op])) for op in ['read', 'write']))
 
     wanted_perf = [
         'commit_lat',

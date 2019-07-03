@@ -108,7 +108,6 @@ def to_arrays(pfeats, events):
     for event in events:
         if (count % SIZE == 0):
             for pfeat, _, dtype, l in arrays:
-                if count == 0: print(pfeat, dtype)
                 l.append(np.zeros(SIZE, dtype=dtype))
 
         offset = count % SIZE
@@ -138,13 +137,9 @@ def graph(events, name, path):
 
     cols = to_arrays(pfeat, events)
 
-    for feat, arr in cols.items():
-        print(feat, arr.dtype)
+    print("Generated arrays")
 
     arrays = dict(((feat, t(cols)) for feat, t in feat_to_array.items()))
-
-    for feat, arr in arrays.items():
-        print(feat, arr.dtype)
 
     fig = matplotlib.figure.Figure()
     fig.suptitle(name)
@@ -170,11 +165,13 @@ def graph(events, name, path):
             ax.plot(
                 arrays[xname], arrays[yname], '.', markersize=0.4,
                 rasterized=True)
+            print("Generated subplot ({}, {})".format(xname, yname))
 
     fig.subplots_adjust(left=0.08, right=0.98, bottom=0.03, top=0.95)
 
     if path is not None:
         fig.set_canvas(backend.FigureCanvas(fig))
+        print("Generating image")
         fig.savefig(
             path,
             dpi=1200,
