@@ -69,9 +69,6 @@ nr_files=256
 size=4m
 bs={bs}k
 
-[warmup]
-rw=randwrite
-
 [write]
 rw=randwrite
 """
