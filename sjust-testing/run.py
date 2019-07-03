@@ -21,6 +21,7 @@ BLUESTORE_CONF = """
 	# use directory= option from fio job file
 	osd data = {target_dir}
 	osd journal = {target_dir}/journal
+        bluestore block path = {block_device}
 
 	# log inside fio_dir
 	log file = {output_dir}/log
@@ -91,6 +92,7 @@ def doformat(conf, template):
     c = conf.copy()
     if c.get('qdl', None) is None:
         c['qdl'] = c['qd']
+    assert 'block_device' is in c
     return template.format(**c)
 
 def get_fio_fn(base):
@@ -183,9 +185,8 @@ def generate_name_full_config(base, run):
         'target_device' in full_config.keys()):
         assert('devices' in full_config.keys())
         assert('target_device' in full_config.keys())
-        full_config['target_dir'] = os.path.join(
-            full_config['devices'][full_config['target_device']],
-            'target')
+        full_config['block_device'] = \
+            full_config['devices'][full_config['target_device']]
     name = "-".join(
         "{name}({val})".format(name=name, val=val)
         for name, val in run.items())

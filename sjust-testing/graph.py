@@ -17,6 +17,12 @@ FEATURES = {
                               'bytes')
     , 'total_pending_ios': (lambda e: e.get_param('total_pending_ios'), int, 'ios')
     , 'total_pending_kv': (lambda e: e.get_param('total_pending_kv'), int, 'ios')
+    , 'rocksdb_base_level': (
+        lambda e: e.get_param('rocksdb_base_level'), int, 'ios')
+    , 'rocksdb_estimate_pending_compaction_bytes': (
+        lambda e: e.get_param('rocksdb_estimate_pending_compaction_bytes'), int, 'ios')
+    , 'rocksdb_cur_size_all_mem_tables': (
+        lambda e: e.get_param('rocksdb_cur_size_all_mem_tables'), int, 'ios')
 }
 
 for state in get_state_names():
@@ -119,7 +125,7 @@ def to_arrays(pfeats, events):
 
 TO_GRAPH = [
     [('time', 'latency'), ('time', 'throughput'), ('throughput', 'latency')],
-    [('state_kv_queued_duration', 'latency'), ('state_prepare_duration', 'latency'), ('total_pending_kv', 'state_prepare_duration')],
+    [('rocksdb_base_level', 'latency'), ('rocksdb_estimate_pending_compaction_bytes', 'latency'), ('rocksdb_cur_size_all_mem_tables', 'latency')],
     [('total_pending_kv', 'latency'), ('total_pending_ios', 'latency'), ('total_pending_deferred', 'latency')],
     [('total_pending_kv', 'throughput'), ('total_pending_ios', 'throughput'), ('total_pending_deferred', 'throughput')]
 ]

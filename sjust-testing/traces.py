@@ -122,8 +122,11 @@ def filter_initial(event):
         'transaction_ios',
         'total_pending_ios',
         'total_pending_bytes',
-        'total_pending_kv'
-        ]
+        'total_pending_kv',
+        'rocksdb_base_level',
+        'rocksdb_estimate_pending_compaction_bytes',
+        'rocksdb_cur_size_all_mem_tables',
+    ]
     return dict(((k, event[k]) for k in initial))
 
 class Write(object):

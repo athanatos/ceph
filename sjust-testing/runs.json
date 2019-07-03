@@ -1,9 +1,10 @@
 {
 	"base": {
 		"runtime": 300,
+		"target_directory": "/mnt/sjust/bluestore",
 		"devices": {
-			"nvme": "/mnt/sjust/nvme",
-			"hdd": "/mnt/sjust/hdd"
+			"nvme": "/dev/nvme1n1p4",
+			"hdd": "/dev/sdh2"
 		}
 	},
 	"runs": {
