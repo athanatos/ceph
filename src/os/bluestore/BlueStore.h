@@ -1572,7 +1572,7 @@ public:
 
     state_t state = STATE_PREPARE;
 
-    static const char *get_state_name() {
+    const char *get_state_name() {
       switch (state) {
       case STATE_PREPARE: return "prepare";
       case STATE_AIO_WAIT: return "aio_wait";
@@ -1590,7 +1590,7 @@ public:
     }
 
 #if defined(WITH_LTTNG)
-    static const char *get_state_latency_name(int state) {
+    const char *get_state_latency_name(int state) {
       switch (state) {
       case l_bluestore_state_prepare_lat: return "prepare";
       case l_bluestore_state_aio_wait_lat: return "aio_wait";

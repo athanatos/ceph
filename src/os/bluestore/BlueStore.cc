@@ -13559,7 +13559,7 @@ utime_t BlueStore::BlueStoreThrottle::log_state_latency(
       state >= l_bluestore_state_prepare_lat &&
       state <= l_bluestore_state_done_lat) {
     double usecs = lat.to_nsec() / 1000.0;
-    OID_ELAPSED("", usecs, get_state_latency_name(state));
+    OID_ELAPSED("", usecs, txc.get_state_latency_name(state));
     tracepoint(
       bluestore,
       transaction_state_duration,
