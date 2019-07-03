@@ -9858,7 +9858,7 @@ void BlueStore::_txc_state_proc(TransContext *txc)
 	     << " " << txc->get_state_name() << dendl;
     switch (txc->state) {
     case TransContext::STATE_PREPARE:
-      txc->log_state_latency(logger, l_bluestore_state_prepare_lat);
+      bsthrottle.log_state_latency(*txc, logger, l_bluestore_state_prepare_lat);
       if (txc->ioc.has_pending_aios()) {
 	txc->state = TransContext::STATE_AIO_WAIT;
 	txc->had_ios = true;
@@ -9869,7 +9869,8 @@ void BlueStore::_txc_state_proc(TransContext *txc)
 
     case TransContext::STATE_AIO_WAIT:
       {
-	utime_t lat = txc->log_state_latency(logger, l_bluestore_state_aio_wait_lat);
+	utime_t lat = bsthrottle.log_state_latency(
+	  *txc, logger, l_bluestore_state_aio_wait_lat);
 	if (lat >= cct->_conf->bluestore_log_op_age) {
 	  dout(0) << __func__ << " slow aio_wait, txc = " << txc
 		  << ", latency = " << lat
@@ -9885,7 +9886,7 @@ void BlueStore::_txc_state_proc(TransContext *txc)
       if (txc->had_ios) {
 	++txc->osr->txc_with_unstable_io;
       }
-      txc->log_state_latency(logger, l_bluestore_state_io_done_lat);
+      bsthrottle.log_state_latency(*txc, logger, l_bluestore_state_io_done_lat);
       txc->state = TransContext::STATE_KV_QUEUED;
       if (cct->_conf->bluestore_sync_submit_transaction) {
 	if (txc->last_nid >= nid_max ||
@@ -9933,7 +9934,7 @@ void BlueStore::_txc_state_proc(TransContext *txc)
       // ** fall-thru **
 
     case TransContext::STATE_KV_DONE:
-      txc->log_state_latency(logger, l_bluestore_state_kv_done_lat);
+      bsthrottle.log_state_latency(*txc, logger, l_bluestore_state_kv_done_lat);
       if (txc->deferred_txn) {
 	txc->state = TransContext::STATE_DEFERRED_QUEUED;
 	_deferred_queue(txc);
@@ -9943,12 +9944,12 @@ void BlueStore::_txc_state_proc(TransContext *txc)
       break;
 
     case TransContext::STATE_DEFERRED_CLEANUP:
-      txc->log_state_latency(logger, l_bluestore_state_deferred_cleanup_lat);
+      bsthrottle.log_state_latency(*txc, logger, l_bluestore_state_deferred_cleanup_lat);
       txc->state = TransContext::STATE_FINISHING;
       // ** fall-thru **
 
     case TransContext::STATE_FINISHING:
-      txc->log_state_latency(logger, l_bluestore_state_finishing_lat);
+      bsthrottle.log_state_latency(*txc, logger, l_bluestore_state_finishing_lat);
       _txc_finish(txc);
       return;
 
@@ -10129,7 +10130,7 @@ void BlueStore::_txc_committed_kv(TransContext *txc)
       finisher.queue(txc->oncommits);
     }
   }
-  txc->log_state_latency(logger, l_bluestore_state_kv_committing_lat);
+  bsthrottle.log_state_latency(*txc, logger, l_bluestore_state_kv_committing_lat);
   LOG_LATENCY_FN(logger, cct, 
               l_bluestore_commit_lat,
               ceph::make_timespan(ceph_clock_now() - txc->start),
@@ -10198,7 +10199,7 @@ void BlueStore::_txc_finish(TransContext *txc)
     auto txc = &releasing_txc.front();
     _txc_release_alloc(txc);
     releasing_txc.pop_front();
-    txc->log_state_latency(logger, l_bluestore_state_done_lat);
+    bsthrottle.log_state_latency(*txc, logger, l_bluestore_state_done_lat);
     delete txc;
   }
 
@@ -10549,7 +10550,7 @@ void BlueStore::_kv_sync_thread()
 
       for (auto txc : kv_committing) {
 	if (txc->state == TransContext::STATE_KV_QUEUED) {
-	  txc->log_state_latency(logger, l_bluestore_state_kv_queued_lat);
+	  bsthrottle.log_state_latency(*txc, logger, l_bluestore_state_kv_queued_lat);
 	  int r = cct->_conf->bluestore_debug_omit_kv_commit ? 0 : db->submit_transaction(txc->t);
 	  ceph_assert(r == 0);
 	  _txc_applied_kv(txc);
@@ -10562,7 +10563,7 @@ void BlueStore::_kv_sync_thread()
 
 	} else {
 	  ceph_assert(txc->state == TransContext::STATE_KV_SUBMITTED);
-	  txc->log_state_latency(logger, l_bluestore_state_kv_queued_lat);
+	  bsthrottle.log_state_latency(*txc, logger, l_bluestore_state_kv_queued_lat);
 	}
 	if (txc->had_ios) {
 	  --txc->osr->txc_with_unstable_io;
@@ -10831,7 +10832,7 @@ void BlueStore::_deferred_submit_unlock(OpSequencer *osr)
   deferred_lock.unlock();
 
   for (auto& txc : b->txcs) {
-    txc.log_state_latency(logger, l_bluestore_state_deferred_queued_lat);
+    bsthrottle.log_state_latency(txc, logger, l_bluestore_state_deferred_queued_lat);
   }
   uint64_t start = 0, pos = 0;
   bufferlist bl;
@@ -10906,7 +10907,7 @@ void BlueStore::_deferred_aio_finish(OpSequencer *osr)
       std::lock_guard l2(osr->qlock);
       for (auto& i : b->txcs) {
 	TransContext *txc = &i;
-	txc->log_state_latency(logger, l_bluestore_state_deferred_aio_wait_lat);
+	bsthrottle.log_state_latency(*txc, logger, l_bluestore_state_deferred_aio_wait_lat);
 	txc->state = TransContext::STATE_DEFERRED_CLEANUP;
 	costs += txc->cost;
       }
@@ -13547,15 +13548,17 @@ void BlueStore::log_latency_fn(
 }
 
 
-utime_t BlueStore::TransContext::log_state_latency(
-  PerfCounters *logger, int state)
+utime_t BlueStore::BlueStoreThrottle::log_state_latency(
+  TransContext &txc, PerfCounters *logger, int state)
 {
   utime_t lat, now = ceph_clock_now();
-  lat = now - last_stamp;
+  lat = now - txc.last_stamp;
   logger->tinc(state, lat);
-#if defined(WITH_LTTNG) && defined(WITH_EVENTTRACE)
-  if (state >= l_bluestore_state_prepare_lat && state <= l_bluestore_state_done_lat) {
-    double usecs = (now.to_nsec()-last_stamp.to_nsec())/1000;
+#if defined(WITH_LTTNG)
+  if (should_trace(txc) &&
+      state >= l_bluestore_state_prepare_lat &&
+      state <= l_bluestore_state_done_lat) {
+    double usecs = lat.to_nsec() / 1000.0;
     OID_ELAPSED("", usecs, get_state_latency_name(state));
     tracepoint(
       bluestore,
@@ -13566,7 +13569,7 @@ utime_t BlueStore::TransContext::log_state_latency(
       usecs);
   }
 #endif
-  last_stamp = now;
+  txc.last_stamp = now;
   return lat;
 }
 

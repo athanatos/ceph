@@ -5421,7 +5421,7 @@ std::vector<Option> get_global_options() {
 
     Option("bluestore_tracing", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
     .set_default(false)
-    .set_description("Enable bluestore lttng tracing."),
+    .set_description("Enable bluestore event tracing."),
 
     Option("bluestore_throttle_trace_ratio", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
     .set_default(0)
