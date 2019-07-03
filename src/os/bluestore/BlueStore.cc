@@ -3963,6 +3963,7 @@ void BlueStore::handle_discard(interval_set<uint64_t>& to_release)
 
 BlueStore::BlueStore(CephContext *cct, const string& path)
   : ObjectStore(cct, path),
+    bsthrottle(cct->_conf.get_val<double>("bluestore_throttle_trace_ratio")),
     throttle_bytes(cct, "bluestore_throttle_bytes",
 		   cct->_conf->bluestore_throttle_bytes),
     throttle_deferred_bytes(cct, "bluestore_throttle_deferred_bytes",
@@ -13577,7 +13578,7 @@ void BlueStore::BlueStoreThrottle::start_transaction(
   pending_kv += 1;
 
 #if defined(WITH_LTTNG)
-  if (enable_tracing) {
+  if (should_trace(txc)) {
     uint64_t rocksdb_base_level,
       rocksdb_estimate_pending_compaction_bytes,
       rocksdb_cur_size_all_mem_tables;
@@ -13612,7 +13613,7 @@ void BlueStore::BlueStoreThrottle::complete_kv(TransContext &txc) {
   pending_kv -= 1;
 
 #if defined(WITH_LTTNG)
-  if (enable_tracing) {
+  if (should_trace(txc)) {
     utime_t now = ceph_clock_now();
     double usecs = (now.to_nsec()-txc.start.to_nsec())/1000;
     tracepoint(
@@ -13630,8 +13631,8 @@ void BlueStore::BlueStoreThrottle::complete(TransContext &txc)
   pending_bytes -= txc.bytes;
   pending_ios -= txc.ios;
 
-#if defined(WITH_LTTNG) && defined(WITH_EVENTTRACE)
-  if (enable_tracing) {
+#if defined(WITH_LTTNG)
+  if (should_trace(txc)) {
     utime_t now = ceph_clock_now();
     double usecs = (now.to_nsec()-txc.start.to_nsec())/1000;
     tracepoint(

@@ -32,6 +32,7 @@
 #include "include/ceph_assert.h"
 #include "include/unordered_map.h"
 #include "include/mempool.h"
+#include "include/hash.h"
 #include "common/bloom_filter.hpp"
 #include "common/Finisher.h"
 #include "common/Throttle.h"
@@ -1588,7 +1589,7 @@ public:
       return "???";
     }
 
-#if defined(WITH_LTTNG) && defined(WITH_EVENTTRACE)
+#if defined(WITH_LTTNG)
     const char *get_state_latency_name(int state) {
       switch (state) {
       case l_bluestore_state_prepare_lat: return "prepare";
@@ -1682,11 +1683,19 @@ public:
 
 
   class BlueStoreThrottle {
+    const int trace_threshold;
     std::atomic_int pending_bytes = {0};
     std::atomic_int pending_ios = {0};
 
     std::atomic_int pending_kv = {0};
+
+    static bool should_trace(TransContext &txc) {
+      return (rjhash64(txc.osr->get_sequencer_id() ^ txc.seq) % 1000) > trace_threshold;
+    }
+
   public:
+    BlueStoreThrottle(double ratio) : trace_threshold(ratio * 1000) {}
+
     void start_transaction(
       KeyValueDB &db,
       TransContext &txc);
