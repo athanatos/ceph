@@ -1694,7 +1694,8 @@ public:
   public:
     BlueStoreThrottle(double ratio) : trace_threshold(ratio * 1000) {}
 
-    utime_t log_state_latency(PerfCounters *logger, int state);
+    utime_t log_state_latency(
+      TransContext &txc, PerfCounters *logger, int state);
     void start_transaction(
       KeyValueDB &db,
       TransContext &txc);
