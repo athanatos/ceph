@@ -5423,7 +5423,7 @@ std::vector<Option> get_global_options() {
     .set_default(false)
     .set_description("Enable bluestore lttng tracing."),
 
-    Option("bluestore_throttle_trace_ratio", Option::TYPE_DOUBLE, Option::LEVEL_ADVANCED)
+    Option("bluestore_throttle_trace_ratio", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
     .set_default(0)
     .set_description(""),
 
