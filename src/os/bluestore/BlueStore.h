@@ -1683,7 +1683,7 @@ public:
 
 
   class BlueStoreThrottle {
-    const int trace_threshold;
+    const unsigned trace_threshold;
     std::atomic_int pending_bytes = {0};
     std::atomic_int pending_ios = {0};
 
