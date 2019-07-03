@@ -92,7 +92,7 @@ def doformat(conf, template):
     c = conf.copy()
     if c.get('qdl', None) is None:
         c['qdl'] = c['qd']
-    assert 'block_device' is in c
+    assert 'block_device' in c
     return template.format(**c)
 
 def get_fio_fn(base):
