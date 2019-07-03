@@ -1690,7 +1690,7 @@ public:
     std::atomic_int pending_kv = {0};
 
     bool should_trace(TransContext &txc) {
-      return (rjhash64(txc.osr->get_sequencer_id() ^ txc.seq) % 1000) > trace_threshold;
+      return (rjhash64(txc.osr->get_sequencer_id() ^ txc.seq) % 1000) < trace_threshold;
     }
 
   public:
