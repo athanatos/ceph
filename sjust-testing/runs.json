@@ -3,7 +3,7 @@
 		"runtime": 300,
 		"target_dir": "/mnt/sjust/bluestore",
 		"devices": {
-			"nvme": "/dev/nvme1n1p4",
+			"nvme": "/dev/nvme0n1p3",
 			"hdd": "/dev/sdh2"
 		}
 	},
