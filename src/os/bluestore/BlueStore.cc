@@ -13563,7 +13563,7 @@ utime_t BlueStore::BlueStoreThrottle::log_state_latency(
     tracepoint(
       bluestore,
       transaction_state_duration,
-      osr->get_sequencer_id(),
+      txc.osr->get_sequencer_id(),
       seq,
       state,
       usecs);
