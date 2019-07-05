@@ -22,7 +22,6 @@
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
-#include <chrono>
 
 #include <boost/intrusive/list.hpp>
 #include <boost/intrusive/unordered_set.hpp>
@@ -1688,7 +1687,7 @@ public:
 
   class BlueStoreThrottle {
     constexpr static int NUM_TO_TRACK = 1024;
-    constexpr static utime_t SMOTHING_PERIOD = {1s};
+    constexpr static double SMOOTHING_PERIOD = 1.0;
 
     const double trace_rate;
     std::atomic_int pending_bytes = {0};
@@ -1697,8 +1696,8 @@ public:
     std::atomic_int pending_kv = {0};
 
     
-    std::atomic_double throughput = {0};
-    boost::circular_buffer<utime_t> commit_times(NUM_TO_TRACK);
+    std::atomic<double> throughput = {0};
+    boost::circular_buffer<utime_t> commit_times;
 
 
 #if defined(WITH_LTTNG)
@@ -1714,7 +1713,8 @@ public:
 #endif
 
   public:
-    BlueStoreThrottle(double rate) : trace_rate(rate) {}
+    BlueStoreThrottle(double rate) :
+      trace_rate(rate), commit_times(NUM_TO_TRACK) {}
 
     utime_t log_state_latency(
       TransContext &txc, PerfCounters *logger, int state);

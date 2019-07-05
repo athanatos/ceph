@@ -13555,7 +13555,7 @@ utime_t BlueStore::BlueStoreThrottle::log_state_latency(
   lat = now - txc.last_stamp;
   logger->tinc(state, lat);
 #if defined(WITH_LTTNG)
-  if (should_trace(txc) &&
+  if (txc.tracing &&
       state >= l_bluestore_state_prepare_lat &&
       state <= l_bluestore_state_done_lat) {
     double usecs = lat.to_nsec() / 1000.0;
@@ -13608,8 +13608,8 @@ void BlueStore::BlueStoreThrottle::start_transaction(
       pending_bytes.load(),
       pending_ios.load(),
       pending_kv.load(),
-      throuthput.load,
-      weight,
+      //throuthput.load,
+      //weight,
       rocksdb_base_level,
       rocksdb_estimate_pending_compaction_bytes,
       rocksdb_cur_size_all_mem_tables);
@@ -13624,12 +13624,12 @@ void BlueStore::BlueStoreThrottle::complete_kv(TransContext &txc) {
   utime_t now = ceph_clock_now();
   while (commit_times.size() > 0 &&
 	 (commit_times.size() == commit_times.max_size() ||
-	  now - commit_times.front() > SMOOTHING_PERIOD)) {
+	  ((double)(now - commit_times.front())) > SMOOTHING_PERIOD)) {
     commit_times.pop_front();
   }
   commit_times.push_back(now);
-  auto period = commit_times.front() - commit_times.back();
-  throughput = period > 0 ? (period / commit_times.size());
+  auto period = ((double)(commit_times.front() - commit_times.back()));
+  throughput = period > 0 ? (period / commit_times.size()) : 0;
 
 #if defined(WITH_LTTNG)
   if (txc.tracing) {
