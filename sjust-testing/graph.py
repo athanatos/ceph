@@ -83,22 +83,22 @@ def get_dtype(feat):
 
 
 def get_features(to_graph):
+    raw = set(sum(([x, y] for x, y in to_graph))) + set(['weight'])
     s = set()
     gmap = {}
-    for row in to_graph:
-        for g in row:
-            for ax in g:
-                if ax in FEATURES:
-                    s.add(ax)
-                    gmap[ax] = (lambda name: (lambda x: x[name]))(ax)
-                elif ax in SECONDARY_FEATURES:
-                    pfeat = list(SECONDARY_FEATURES[ax][0])
-                    for f in pfeat:
-                        s.add(f)
-                    gmap[ax] = (lambda name, pf: lambda x: SECONDARY_FEATURES[name][3](
-                        *[x[feat] for feat in pf]))(ax, pfeat)
-                else:
-                    assert False, "Invalid feature {}".format(ax)
+    for g in raw:
+        for ax in g:
+            if ax in FEATURES:
+                s.add(ax)
+                gmap[ax] = (lambda name: (lambda x: x[name]))(ax)
+            elif ax in SECONDARY_FEATURES:
+                pfeat = list(SECONDARY_FEATURES[ax][0])
+                for f in pfeat:
+                    s.add(f)
+                gmap[ax] = (lambda name, pf: lambda x: SECONDARY_FEATURES[name][3](
+                    *[x[feat] for feat in pf]))(ax, pfeat)
+            else:
+                assert False, "Invalid feature {}".format(ax)
     return s, gmap
 
 def to_arrays(pfeats, events):
@@ -151,6 +151,7 @@ def graph(events, name, path):
 
     rows = len(TO_GRAPH)
     cols = len(TO_GRAPH[0])
+    weight = arrays['weight']
     for nrow in range(rows):
         for ncol in range(cols):
             index = (nrow * cols) + ncol + 1
@@ -162,7 +163,7 @@ def graph(events, name, path):
             x = arrays[xname]
             y = arrays[yname]
             
-            bins, x_e, y_e = np.histogram2d(x, y, bins=100)
+            bins, x_e, y_e = np.histogram2d(x, y, bins=100, weight=weight)
             z = interpolate.interpn(
                 (0.5*(x_e[1:] + x_e[:-1]) , 0.5*(y_e[1:]+y_e[:-1])),
                 bins,

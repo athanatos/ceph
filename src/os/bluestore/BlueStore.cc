@@ -13582,8 +13582,8 @@ void BlueStore::BlueStoreThrottle::start_transaction(
   pending_kv += 1;
 
 #if defined(WITH_LTTNG)
-  double weight = get_weight();
-  if (should_trace(txc, weight)) {
+  double threshold = get_threshold();
+  if (should_trace(txc, threshold)) {
     txc.tracing = true;
     uint64_t rocksdb_base_level,
       rocksdb_estimate_pending_compaction_bytes,
@@ -13608,8 +13608,14 @@ void BlueStore::BlueStoreThrottle::start_transaction(
       pending_bytes.load(),
       pending_ios.load(),
       pending_kv.load(),
-      //throuthput.load,
-      //weight,
+      throughput.load(),
+      1.0/threshold);
+
+    tracepoint(
+      bluestore,
+      transaction_initial_state_rocksdb,
+      txc.osr->get_sequencer_id(),
+      txc.seq,
       rocksdb_base_level,
       rocksdb_estimate_pending_compaction_bytes,
       rocksdb_cur_size_all_mem_tables);

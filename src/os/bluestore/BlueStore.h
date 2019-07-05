@@ -1701,12 +1701,12 @@ public:
 
 
 #if defined(WITH_LTTNG)
-    double get_weight() {
-      return (trace_rate / throughput.load());
+    double get_threshold() {
+      return std::min((trace_rate / throughput.load()), 1.0);
     }
 
-    bool should_trace(TransContext &txc, double weight) {
-      unsigned trace_threshold = 1000 * weight;
+    bool should_trace(TransContext &txc, double threshold) {
+      unsigned trace_threshold = 1000 * threshold;
       return ((rjhash64(txc.osr->get_sequencer_id() ^ txc.seq) % 1000) <
 	      trace_threshold);
     }

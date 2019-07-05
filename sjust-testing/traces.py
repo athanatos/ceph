@@ -127,6 +127,11 @@ def filter_initial(event):
         'total_pending_kv',
         'throughput',
         'weight',
+    ]
+    return dict(((k, event[k]) for k in initial))
+
+def filter_initial_rocksdb(event):
+    initial = [
         'rocksdb_base_level',
         'rocksdb_estimate_pending_compaction_bytes',
         'rocksdb_cur_size_all_mem_tables',
@@ -157,6 +162,9 @@ class Write(object):
                 self.__start = 0
             else:
                 self.__start = event.timestamp - Write.start
+            return False
+        elif event.name == 'bluestore:transaction_initial_state_rocksdb':
+            self.__initial_params.update(filter_initial_rocksdb(event))
             return False
         elif event.name == 'bluestore:transaction_total_duration':
             assert self.__duration is None
