@@ -8,8 +8,8 @@
 		}
 	},
 	"runs": {
-	  "qd": [128],
-		"qdl": [2],
+	  "qd": [512],
+		"qdl": [1],
 	  "bs": [4],
 		"target_device": ["hdd", "nvme"],
 		"run": [0]
