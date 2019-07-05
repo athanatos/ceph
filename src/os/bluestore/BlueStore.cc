@@ -3963,7 +3963,7 @@ void BlueStore::handle_discard(interval_set<uint64_t>& to_release)
 
 BlueStore::BlueStore(CephContext *cct, const string& path)
   : ObjectStore(cct, path),
-    bsthrottle(cct->_conf.get_val<double>("bluestore_throttle_trace_ratio")),
+    bsthrottle(cct->_conf.get_val<double>("bluestore_throttle_trace_rate")),
     throttle_bytes(cct, "bluestore_throttle_bytes",
 		   cct->_conf->bluestore_throttle_bytes),
     throttle_deferred_bytes(cct, "bluestore_throttle_deferred_bytes",
