@@ -48,6 +48,8 @@ TRACEPOINT_EVENT(bluestore, transaction_initial_state,
 	uint64_t, total_pending_bytes,
 	uint64_t, total_pending_ios,
 	uint64_t, total_pending_kv,
+	double, throughput,
+	double, weight,
 	uint64_t, rocksdb_base_level,
 	uint64_t, rocksdb_estimate_pending_compaction_bytes,
 	uint64_t, rocksdb_cur_size_all_mem_tables),
@@ -59,6 +61,8 @@ TRACEPOINT_EVENT(bluestore, transaction_initial_state,
         ctf_integer(uint64_t, total_pending_bytes, total_pending_bytes)
         ctf_integer(uint64_t, total_pending_ios, total_pending_ios)
         ctf_integer(uint64_t, total_pending_kv, total_pending_kv)
+        ctf_float(double, throughput, throughput)
+        ctf_float(double, weight, weight)
 	ctf_integer(uint64_t, rocksdb_base_level, rocksdb_base_level)
 	ctf_integer(uint64_t, rocksdb_estimate_pending_compaction_bytes, rocksdb_estimate_pending_compaction_bytes)
 	ctf_integer(uint64_t, rocksdb_cur_size_all_mem_tables, rocksdb_cur_size_all_mem_tables)

@@ -22,12 +22,14 @@
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
+#include <chrono>
 
 #include <boost/intrusive/list.hpp>
 #include <boost/intrusive/unordered_set.hpp>
 #include <boost/intrusive/set.hpp>
 #include <boost/functional/hash.hpp>
 #include <boost/dynamic_bitset.hpp>
+#include <boost/circular_buffer.hpp>
 
 #include "include/ceph_assert.h"
 #include "include/unordered_map.h"
@@ -1639,6 +1641,10 @@ public:
     uint64_t last_nid = 0;     ///< if non-zero, highest new nid we allocated
     uint64_t last_blobid = 0;  ///< if non-zero, highest new blobid we allocated
 
+#if defined(WITH_LTTNG)
+    bool tracing = false;
+#endif
+
     explicit TransContext(CephContext* cct, Collection *c, OpSequencer *o,
 			  list<Context*> *on_commits)
       : ch(c),
@@ -1681,18 +1687,34 @@ public:
 
 
   class BlueStoreThrottle {
-    const unsigned trace_threshold;
+    constexpr static int NUM_TO_TRACK = 1024;
+    constexpr static utime_t SMOTHING_PERIOD = {1s};
+
+    const double trace_rate;
     std::atomic_int pending_bytes = {0};
     std::atomic_int pending_ios = {0};
 
     std::atomic_int pending_kv = {0};
 
-    bool should_trace(TransContext &txc) {
-      return (rjhash64(txc.osr->get_sequencer_id() ^ txc.seq) % 1000) < trace_threshold;
+    
+    std::atomic_double throughput = {0};
+    boost::circular_buffer<utime_t> commit_times(NUM_TO_TRACK);
+
+
+#if defined(WITH_LTTNG)
+    double get_weight() {
+      return (trace_rate / throughput.load());
     }
 
+    bool should_trace(TransContext &txc, double weight) {
+      unsigned trace_threshold = 1000 * weight;
+      return ((rjhash64(txc.osr->get_sequencer_id() ^ txc.seq) % 1000) <
+	      trace_threshold);
+    }
+#endif
+
   public:
-    BlueStoreThrottle(double ratio) : trace_threshold(ratio * 1000) {}
+    BlueStoreThrottle(double rate) : trace_rate(rate) {}
 
     utime_t log_state_latency(
       TransContext &txc, PerfCounters *logger, int state);

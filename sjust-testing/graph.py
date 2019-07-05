@@ -6,6 +6,7 @@ import matplotlib.figure
 from traces import get_state_names
 import matplotlib.backends
 import matplotlib.backends.backend_pdf as backend
+from scipy import interpolate
 
 FEATURES = {
       'time': (lambda e: e.get_start(), float, 's')
@@ -16,6 +17,9 @@ FEATURES = {
     , 'total_pending_bytes': (lambda e: e.get_param('total_pending_bytes'), int,
                               'bytes')
     , 'total_pending_ios': (lambda e: e.get_param('total_pending_ios'), int, 'ios')
+    , 'total_pending_kv': (lambda e: e.get_param('total_pending_kv'), int, 'ios')
+    , 'weight': (lambda e: e.get_param('weight'), float, 'ratio')
+    , 'throughput': (lambda e: e.get_param('throughput'), float, 'iops')
     , 'total_pending_kv': (lambda e: e.get_param('total_pending_kv'), int, 'ios')
     , 'rocksdb_base_level': (
         lambda e: e.get_param('rocksdb_base_level'), int, 'ios')
@@ -49,7 +53,6 @@ def generate_throughput(start, d):
     return tp
 
 SECONDARY_FEATURES = {
-    'throughput': (('time', 'duration'), 'iops', float, generate_throughput),
     'prepare_kv_queued_and_submitted': (
         ('state_prepare_duration', 'state_kv_submitted_duration', 'state_kv_queued_duration'),
         's',
@@ -155,6 +158,20 @@ def graph(events, name, path):
             xname, yname = TO_GRAPH[nrow][ncol]
             xunit = get_unit(xname)
             yunit = get_unit(yname)
+
+            x = arrays[xname]
+            y = arrays[yname]
+            
+            bins, x_e, y_e = np.histogram2d(x, y, bins=100)
+            z = interpolate.interpn(
+                (0.5*(x_e[1:] + x_e[:-1]) , 0.5*(y_e[1:]+y_e[:-1])),
+                bins,
+                np.vstack([x,y]).T,
+                method = "splinef2d",
+                bounds_error = False)
+
+            idx = z.argsort()
+            
             ax.set_xlabel(
                 "{name} ({unit})".format(name=xname, unit=xunit),
                 fontsize=FONTSIZE
@@ -162,8 +179,8 @@ def graph(events, name, path):
             ax.set_ylabel(
                 "{name} ({unit})".format(name=yname, unit=yunit),
                 fontsize=FONTSIZE)
-            ax.plot(
-                arrays[xname], arrays[yname], '.', markersize=0.4,
+            ax.scatter(
+                x[idx], y[idx], c=z[idx], s=1,
                 rasterized=True)
             print("Generated subplot ({}, {})".format(xname, yname))
 

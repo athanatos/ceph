@@ -13582,7 +13582,9 @@ void BlueStore::BlueStoreThrottle::start_transaction(
   pending_kv += 1;
 
 #if defined(WITH_LTTNG)
-  if (should_trace(txc)) {
+  double weight = get_weight();
+  if (should_trace(txc, weight)) {
+    txc.tracing = true;
     uint64_t rocksdb_base_level,
       rocksdb_estimate_pending_compaction_bytes,
       rocksdb_cur_size_all_mem_tables;
@@ -13606,6 +13608,8 @@ void BlueStore::BlueStoreThrottle::start_transaction(
       pending_bytes.load(),
       pending_ios.load(),
       pending_kv.load(),
+      throuthput.load,
+      weight,
       rocksdb_base_level,
       rocksdb_estimate_pending_compaction_bytes,
       rocksdb_cur_size_all_mem_tables);
@@ -13616,9 +13620,19 @@ void BlueStore::BlueStoreThrottle::start_transaction(
 void BlueStore::BlueStoreThrottle::complete_kv(TransContext &txc) {
   pending_kv -= 1;
 
+  // protected by kv_finish lock
+  utime_t now = ceph_clock_now();
+  while (commit_times.size() > 0 &&
+	 (commit_times.size() == commit_times.max_size() ||
+	  now - commit_times.front() > SMOOTHING_PERIOD)) {
+    commit_times.pop_front();
+  }
+  commit_times.push_back(now);
+  auto period = commit_times.front() - commit_times.back();
+  throughput = period > 0 ? (period / commit_times.size());
+
 #if defined(WITH_LTTNG)
-  if (should_trace(txc)) {
-    utime_t now = ceph_clock_now();
+  if (txc.tracing) {
     double usecs = (now.to_nsec()-txc.start.to_nsec())/1000;
     tracepoint(
       bluestore,
@@ -13636,7 +13650,7 @@ void BlueStore::BlueStoreThrottle::complete(TransContext &txc)
   pending_ios -= txc.ios;
 
 #if defined(WITH_LTTNG)
-  if (should_trace(txc)) {
+  if (txc.tracing) {
     utime_t now = ceph_clock_now();
     double usecs = (now.to_nsec()-txc.start.to_nsec())/1000;
     tracepoint(

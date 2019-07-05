@@ -5423,7 +5423,7 @@ std::vector<Option> get_global_options() {
     .set_default(false)
     .set_description("Enable bluestore event tracing."),
 
-    Option("bluestore_throttle_trace_ratio", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
+    Option("bluestore_throttle_trace_rate", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
     .set_default(0)
     .set_description(""),
 

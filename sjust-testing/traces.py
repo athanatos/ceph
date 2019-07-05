@@ -38,6 +38,8 @@ TYPE_MAP = {
     'total_pending_ios': int,
     'total_pending_bytes': int,
     'total_pending_kv': int,
+    'throughput': float,
+    'weight': float,
     'rocksdb_base_level': int,
     'rocksdb_estimate_pending_compaction_bytes': int,
     'rocksdb_cur_size_all_mem_tables': int
@@ -123,6 +125,8 @@ def filter_initial(event):
         'total_pending_ios',
         'total_pending_bytes',
         'total_pending_kv',
+        'throughput',
+        'weight',
         'rocksdb_base_level',
         'rocksdb_estimate_pending_compaction_bytes',
         'rocksdb_cur_size_all_mem_tables',
