@@ -162,7 +162,7 @@ def graph(events, name, path):
             x = arrays[xname]
             y = arrays[yname]
             
-            bins, x_e, y_e = np.histogram2d(x, y, bins=100, weight=weight)
+            bins, x_e, y_e = np.histogram2d(x, y, bins=100, weights=weight)
             z = interpolate.interpn(
                 (0.5*(x_e[1:] + x_e[:-1]) , 0.5*(y_e[1:]+y_e[:-1])),
                 bins,

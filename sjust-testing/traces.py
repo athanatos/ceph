@@ -46,10 +46,7 @@ TYPE_MAP = {
     }
 
 def get_type(field):
-    if field == 'elapsed':
-        return float
-    else:
-        return int
+    return TYPE_MAP.get(field)
 
 def event_id(event):
     #assert 'sequencer_id' in event.keys()
