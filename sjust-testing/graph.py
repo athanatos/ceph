@@ -83,22 +83,21 @@ def get_dtype(feat):
 
 
 def get_features(to_graph):
-    raw = set(sum(([x, y] for x, y in to_graph))) + set(['weight'])
+    raw = set([ax for row in to_graph for g in row for ax in g] + ['weight'])
     s = set()
     gmap = {}
-    for g in raw:
-        for ax in g:
-            if ax in FEATURES:
-                s.add(ax)
-                gmap[ax] = (lambda name: (lambda x: x[name]))(ax)
-            elif ax in SECONDARY_FEATURES:
-                pfeat = list(SECONDARY_FEATURES[ax][0])
-                for f in pfeat:
-                    s.add(f)
-                gmap[ax] = (lambda name, pf: lambda x: SECONDARY_FEATURES[name][3](
-                    *[x[feat] for feat in pf]))(ax, pfeat)
-            else:
-                assert False, "Invalid feature {}".format(ax)
+    for ax in raw:
+        if ax in FEATURES:
+            s.add(ax)
+            gmap[ax] = (lambda name: (lambda x: x[name]))(ax)
+        elif ax in SECONDARY_FEATURES:
+            pfeat = list(SECONDARY_FEATURES[ax][0])
+            for f in pfeat:
+                s.add(f)
+            gmap[ax] = (lambda name, pf: lambda x: SECONDARY_FEATURES[name][3](
+                *[x[feat] for feat in pf]))(ax, pfeat)
+        else:
+            assert False, "Invalid feature {}".format(ax)
     return s, gmap
 
 def to_arrays(pfeats, events):
@@ -120,7 +119,7 @@ def to_arrays(pfeats, events):
         count += 1
 
     last_size = count % SIZE
-    for _, _, _, l in arrays:
+    for name, _, _, l in arrays:
         l[-1] = l[-1][:last_size]
         
     return dict(((feat, np.concatenate(l).ravel()) for feat, _, _, l in arrays))
