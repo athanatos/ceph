@@ -1,6 +1,6 @@
 {
 	"base": {
-		"runtime": 120,
+		"runtime": 240,
 		"target_dir": "/mnt/sjust/bluestore",
 		"devices": {
 			"nvme": "/dev/nvme0n1p3",
@@ -11,7 +11,7 @@
 	  "qd": [512],
 		"qdl": [1],
 	  "bs": [4],
-		"target_device": ["hdd"],
+		"target_device": ["hdd", "nvme"],
 		"run": [0]
 	}
 }
