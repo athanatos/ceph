@@ -13630,11 +13630,11 @@ void BlueStore::BlueStoreThrottle::complete_kv(TransContext &txc) {
   utime_t now = ceph_clock_now();
   while (commit_times.size() > 0 &&
 	 (commit_times.size() == commit_times.max_size() ||
-	  ((double)(now - commit_times.front())) > SMOOTHING_PERIOD)) {
+	  ((double)now - (double)commit_times.front()) > SMOOTHING_PERIOD)) {
     commit_times.pop_front();
   }
   commit_times.push_back(now);
-  double period = ((double)commit_times.back() - commit_times.front()));
+  double period = ((double)commit_times.back() - (double)commit_times.front());
   throughput = period > 0 ? ((double)commit_times.size() / period) : 0;
 
 #if defined(WITH_LTTNG)
