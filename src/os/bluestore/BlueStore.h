@@ -1686,7 +1686,7 @@ public:
 
 
   class BlueStoreThrottle {
-    constexpr static int NUM_TO_TRACK = 1024;
+    constexpr static int NUM_TO_TRACK = 10000;
     constexpr static double SMOOTHING_PERIOD = 1.0;
 
     const double trace_rate;

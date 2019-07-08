@@ -13634,8 +13634,8 @@ void BlueStore::BlueStoreThrottle::complete_kv(TransContext &txc) {
     commit_times.pop_front();
   }
   commit_times.push_back(now);
-  auto period = ((double)(commit_times.front() - commit_times.back()));
-  throughput = period > 0 ? (commit_times.size() / period) : 0;
+  double period = ((double)commit_times.back() - commit_times.front()));
+  throughput = period > 0 ? ((double)commit_times.size() / period) : 0;
 
 #if defined(WITH_LTTNG)
   if (txc.tracing) {
