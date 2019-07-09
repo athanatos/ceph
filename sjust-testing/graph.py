@@ -82,11 +82,10 @@ def get_dtype(feat):
         assert False, "{} isn't a valid feature".format(feat)
 
 
-def get_features(to_graph):
-    raw = set([ax for row in to_graph for g in row for ax in g] + ['weight'])
+def get_features(features):
     s = set()
     gmap = {}
-    for ax in raw:
+    for ax in features:
         if ax in FEATURES:
             s.add(ax)
             gmap[ax] = (lambda name: (lambda x: x[name]))(ax)
@@ -124,24 +123,100 @@ def to_arrays(pfeats, events):
         
     return dict(((feat, np.concatenate(l).ravel()) for feat, _, _, l in arrays))
 
+class Graph(object):
+    def sources(self):
+        pass
+
+    def graph(self, ax, *sources):
+        pass
+
+    def name(self):
+        pass
+
+class Scatter(Graph):
+    def __init__(self, x, y):
+        self.__sources = [x, y]
+        self.__xname = x
+        self.__yname = y
+        self.__xunit = get_unit(x)
+        self.__yunit = get_unit(y)
+
+    def sources(self):
+        return ['weight', self.__xname, self.__yname]
+
+    def graph(self, ax, w, x, y):
+        bins, x_e, y_e = np.histogram2d(x, y, bins=100, weights=w)
+        z = interpolate.interpn(
+            (0.5*(x_e[1:] + x_e[:-1]) , 0.5*(y_e[1:]+y_e[:-1])),
+            bins,
+            np.vstack([x,y]).T,
+            method = "splinef2d",
+            bounds_error = False)
+
+        idx = z.argsort()
+            
+        ax.set_xlabel(
+            "{name} ({unit})".format(name=self.__xname, unit=self.__xunit),
+            fontsize=FONTSIZE
+        )
+        ax.set_ylabel(
+            "{name} ({unit})".format(name=self.__yname, unit=self.__yunit),
+            fontsize=FONTSIZE)
+        ax.scatter(
+            x[idx], y[idx], c=z[idx], s=1,
+            rasterized=True)
+
+    def name(self):
+        return "Scatter({}, {})".format(self.__xname, self.__yname)
+
+
+class Histogram(Graph):
+    def __init__(self, p):
+        self.__param = p
+        self.__unit = get_unit(p)
+        
+    def sources(self):
+        return ['weight', self.__param]
+
+    def graph(self, ax, w, p):
+        ax.set_xlabel(
+            "{name} ({unit})".format(name=self.__param, unit=self.__unit),
+            fontsize=FONTSIZE
+        )
+        ax.set_ylabel(
+            "N",
+            fontsize=FONTSIZE)
+        ax.hist(p, weights=w, bins=100)
+
+    def name(self):
+        return "Histogram({})".format(self.__param)
+
 TO_GRAPH = [
-    [('time', 'latency'), ('time', 'throughput'), ('throughput', 'latency')],
-    [('rocksdb_base_level', 'latency'), ('rocksdb_estimate_pending_compaction_bytes', 'latency'), ('rocksdb_cur_size_all_mem_tables', 'latency')],
-    [('total_pending_kv', 'latency'), ('total_pending_ios', 'latency'), ('total_pending_deferred', 'latency')],
-    [('total_pending_kv', 'throughput'), ('total_pending_ios', 'throughput'), ('total_pending_deferred', 'throughput')]
+    [Scatter(*x) for x in [('time', 'latency'), ('time', 'throughput'), ('throughput', 'latency')]],
+    [Histogram(x) for x in ['latency', 'throughput', 'total_pending_kv']],
+    [Scatter(x, 'latency') for x in ['total_pending_kv', 'total_pending_ios', 'total_pending_deferred']],
+    [Scatter(x, 'throughput') for x in ['total_pending_kv', 'total_pending_ios', 'total_pending_deferred']],
 ]
 
 FONTSIZE=6
 matplotlib.rcParams.update({'font.size': FONTSIZE})
 
-def graph(events, name, path):
-    pfeat, feat_to_array = get_features(TO_GRAPH)
+def graph(events, name, path, mask_params=None, masker=None):
+    if mask_params is None:
+        mask_params = []
+    features = set([ax for row in TO_GRAPH for g in row for ax in g.sources()]
+                   + mask_params)
+    pfeat, feat_to_array = get_features(features)
 
     cols = to_arrays(pfeat, events)
 
     print("Generated arrays")
 
     arrays = dict(((feat, t(cols)) for feat, t in feat_to_array.items()))
+
+    if masker is not None:
+        mask = masker(*[arrays[x] for x in mask_params])
+        arrays = dict(((feat, ar[mask]) for feat, ar in arrays.items()))
 
     fig = matplotlib.figure.Figure()
     fig.suptitle(name)
@@ -150,39 +225,16 @@ def graph(events, name, path):
 
     rows = len(TO_GRAPH)
     cols = len(TO_GRAPH[0])
-    weight = arrays['weight']
     for nrow in range(rows):
         for ncol in range(cols):
             index = (nrow * cols) + ncol + 1
             ax = fig.add_subplot(rows, cols, index)
-            xname, yname = TO_GRAPH[nrow][ncol]
-            xunit = get_unit(xname)
-            yunit = get_unit(yname)
+            grapher = TO_GRAPH[nrow][ncol]
+            grapher.graph(
+                ax,
+                *[arrays.get(n) for n in grapher.sources()])
 
-            x = arrays[xname]
-            y = arrays[yname]
-            
-            bins, x_e, y_e = np.histogram2d(x, y, bins=100, weights=weight)
-            z = interpolate.interpn(
-                (0.5*(x_e[1:] + x_e[:-1]) , 0.5*(y_e[1:]+y_e[:-1])),
-                bins,
-                np.vstack([x,y]).T,
-                method = "splinef2d",
-                bounds_error = False)
-
-            idx = z.argsort()
-            
-            ax.set_xlabel(
-                "{name} ({unit})".format(name=xname, unit=xunit),
-                fontsize=FONTSIZE
-            )
-            ax.set_ylabel(
-                "{name} ({unit})".format(name=yname, unit=yunit),
-                fontsize=FONTSIZE)
-            ax.scatter(
-                x[idx], y[idx], c=z[idx], s=1,
-                rasterized=True)
-            print("Generated subplot ({}, {})".format(xname, yname))
+            print("Generated subplot {}".format(grapher.name()))
 
     fig.subplots_adjust(left=0.08, right=0.98, bottom=0.03, top=0.95)
 

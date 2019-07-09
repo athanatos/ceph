@@ -13587,7 +13587,12 @@ void BlueStore::BlueStoreThrottle::start_transaction(
     txc.tracing = true;
     uint64_t rocksdb_base_level,
       rocksdb_estimate_pending_compaction_bytes,
-      rocksdb_cur_size_all_mem_tables;
+      rocksdb_cur_size_all_mem_tables,
+      rocksdb_compaction_pending,
+      rocksdb_mem_table_flush_pending,
+      rocksdb_num_running_compactions,
+      rocksdb_num_running_flushes,
+      rocksdb_actual_delayed_write_rate;
     db.get_property(
       "rocksdb.base-level",
       &rocksdb_base_level);
@@ -13597,6 +13602,22 @@ void BlueStore::BlueStoreThrottle::start_transaction(
     db.get_property(
       "rocksdb.cur-size-all-mem-tables",
       &rocksdb_cur_size_all_mem_tables);
+    db.get_property(
+      "rocksdb.compaction-pending",
+      &rocksdb_compaction_pending);
+    db.get_property(
+      "rocksdb.mem-table-flush-pending",
+      &rocksdb_mem_table_flush_pending);
+    db.get_property(
+      "rocksdb.num-running-compactions",
+      &rocksdb_num_running_compactions);
+    db.get_property(
+      "rocksdb.num-running-flushes",
+      &rocksdb_num_running_flushes);
+    db.get_property(
+      "rocksdb.actual-delayed-write-rate",
+      &rocksdb_actual_delayed_write_rate);
+
   
     tracepoint(
       bluestore,
@@ -13618,7 +13639,12 @@ void BlueStore::BlueStoreThrottle::start_transaction(
       txc.seq,
       rocksdb_base_level,
       rocksdb_estimate_pending_compaction_bytes,
-      rocksdb_cur_size_all_mem_tables);
+      rocksdb_cur_size_all_mem_tables,
+      rocksdb_compaction_pending,
+      rocksdb_mem_table_flush_pending,
+      rocksdb_num_running_compactions,
+      rocksdb_num_running_flushes,
+      rocksdb_actual_delayed_write_rate);
   }
 #endif
 }
