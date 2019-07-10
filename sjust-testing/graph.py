@@ -17,6 +17,7 @@ FEATURES = {
     , 'total_pending_bytes': (lambda e: e.get_param('total_pending_bytes'), int,
                               'bytes')
     , 'total_pending_ios': (lambda e: e.get_param('total_pending_ios'), int, 'ios')
+    , 'total_pending_deferred_ios': (lambda e: e.get_param('total_pending_deferred_ios'), int, 'ios')
     , 'total_pending_kv': (lambda e: e.get_param('total_pending_kv'), int, 'ios')
     , 'weight': (lambda e: e.get_param('weight'), float, 'ratio')
     , 'throughput': (lambda e: e.get_param('throughput'), float, 'iops')
@@ -55,11 +56,6 @@ SECONDARY_FEATURES = {
         's',
         float,
         lambda x, y, z: x + y + z),
-    'total_pending_deferred': (
-        ('total_pending_ios', 'total_pending_kv'),
-        'ios',
-        int,
-        lambda s, t: s - t)
 }
 
 def get_unit(feat):
@@ -196,18 +192,22 @@ TO_GRAPH = [
     [Histogram(x) for x in
      ['latency', 'throughput', 'total_pending_kv']],
     [Scatter(x, 'latency') for x in
-     ['total_pending_kv', 'total_pending_ios', 'total_pending_deferred']],
-    #[Scatter('time', x) for x in
-    [Histogram(x) for x in
-     ['total_pending_kv', 'total_pending_deferred',
+     ['total_pending_kv', 'total_pending_ios', 'total_pending_deferred_ios']],
+    [Scatter('time', x) for x in
+     ['total_pending_kv', 'total_pending_deferred_ios',
       'state_deferred_queued_duration']],
-    #[Scatter('time', 'state_' + x + '_duration') for x in
+    [Histogram(x) for x in
+     ['total_pending_kv', 'total_pending_deferred_ios',
+      'state_deferred_queued_duration']],
+    [Scatter('time', 'state_' + x + '_duration') for x in
+     ['deferred_cleanup', 'deferred_done',
+      'kv_submitted']],
     [Histogram('state_' + x + '_duration') for x in
      ['deferred_cleanup', 'deferred_done',
       'kv_submitted']],
 ]
 
-FONTSIZE=6
+FONTSIZE=3
 matplotlib.rcParams.update({'font.size': FONTSIZE})
 
 def graph(events, name, path, mask_params=None, masker=None):
@@ -254,7 +254,7 @@ def graph(events, name, path, mask_params=None, masker=None):
             path,
             dpi=1200,
             orientation='portrait',
-            papertype='letter',
+            papertype='legal',
             format='pdf')
     else:
         import matplotlib.pyplot as plt

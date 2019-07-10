@@ -47,6 +47,7 @@ TYPE_MAP = {
     'transaction_bytes': int,
     'transaction_ios': int,
     'total_pending_ios': int,
+    'total_pending_deferred_ios': int,
     'total_pending_bytes': int,
     'total_pending_kv': int,
     'throughput': float,
@@ -133,6 +134,7 @@ def filter_initial(event):
     initial = [
         'transaction_bytes',
         'transaction_ios',
+        'total_pending_deferred_ios',
         'total_pending_ios',
         'total_pending_bytes',
         'total_pending_kv',
