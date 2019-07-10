@@ -13653,7 +13653,7 @@ void BlueStore::BlueStoreThrottle::start_transaction(
 void BlueStore::BlueStoreThrottle::complete_kv(TransContext &txc) {
   pending_kv -= 1;
   pending_deferred_bytes += txc.bytes;
-  pending_deferred += txc.ios;
+  pending_deferred_ios += txc.ios;
 
   // protected by kv_finish lock
   utime_t now = ceph_clock_now();
@@ -13684,7 +13684,7 @@ void BlueStore::BlueStoreThrottle::complete(TransContext &txc)
   pending_bytes -= txc.bytes;
   pending_ios -= txc.ios;
   pending_deferred_bytes -= txc.bytes;
-  pending_deferred -= txc.ios;
+  pending_deferred_ios -= txc.ios;
 
 #if defined(WITH_LTTNG)
   if (txc.tracing) {
