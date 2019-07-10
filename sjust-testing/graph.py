@@ -141,7 +141,7 @@ class Scatter(Graph):
         return ['weight', self.__xname, self.__yname]
 
     def graph(self, ax, w, x, y):
-        bins, x_e, y_e = np.histogram2d(x, y, bins=1000, density=True, weights=w)
+        bins, x_e, y_e = np.histogram2d(x, y, bins=1000, weights=w)
         z = interpolate.interpn(
             (0.5*(x_e[1:] + x_e[:-1]) , 0.5*(y_e[1:]+y_e[:-1])),
             bins,
