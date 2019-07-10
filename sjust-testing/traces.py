@@ -28,6 +28,17 @@ def get_state_name(state):
 def get_state_names():
     return [x[1] for x in STATES.items()]
 
+ROCKSDB_FEATURES = [
+    'rocksdb_base_level',
+    'rocksdb_estimate_pending_compaction_bytes',
+    'rocksdb_cur_size_all_mem_tables',
+    'rocksdb_compaction_pending',
+    'rocksdb_mem_table_flush_pending',
+    'rocksdb_num_running_compactions',
+    'rocksdb_num_running_flushes',
+    'rocksdb_actual_delayed_write_rate'
+]
+
 TYPE_MAP = {
     'sequencer_id': int,
     'tid': int,
@@ -39,11 +50,14 @@ TYPE_MAP = {
     'total_pending_bytes': int,
     'total_pending_kv': int,
     'throughput': float,
-    'weight': float,
-    'rocksdb_base_level': int,
-    'rocksdb_estimate_pending_compaction_bytes': int,
-    'rocksdb_cur_size_all_mem_tables': int
-    }
+    'weight': float
+}
+
+for feat in ROCKSDB_FEATURES:
+    TYPE_MAP[feat] = int
+
+def get_rocksdb_features():
+    return ROCKSDB_FEATURES
 
 def get_type(field):
     return TYPE_MAP.get(field)
@@ -128,12 +142,7 @@ def filter_initial(event):
     return dict(((k, event[k]) for k in initial))
 
 def filter_initial_rocksdb(event):
-    initial = [
-        'rocksdb_base_level',
-        'rocksdb_estimate_pending_compaction_bytes',
-        'rocksdb_cur_size_all_mem_tables',
-    ]
-    return dict(((k, event[k]) for k in initial))
+    return dict(((k, event[k]) for k in ROCKSDB_FEATURES))
 
 class Write(object):
     start = None

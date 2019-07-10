@@ -3,7 +3,7 @@
 import numpy as np
 import matplotlib
 import matplotlib.figure
-from traces import get_state_names
+from traces import get_state_names, get_rocksdb_features
 import matplotlib.backends
 import matplotlib.backends.backend_pdf as backend
 from scipy import interpolate
@@ -21,18 +21,15 @@ FEATURES = {
     , 'weight': (lambda e: e.get_param('weight'), float, 'ratio')
     , 'throughput': (lambda e: e.get_param('throughput'), float, 'iops')
     , 'total_pending_kv': (lambda e: e.get_param('total_pending_kv'), int, 'ios')
-    , 'rocksdb_base_level': (
-        lambda e: e.get_param('rocksdb_base_level'), int, 'ios')
-    , 'rocksdb_estimate_pending_compaction_bytes': (
-        lambda e: e.get_param('rocksdb_estimate_pending_compaction_bytes'), int, 'ios')
-    , 'rocksdb_cur_size_all_mem_tables': (
-        lambda e: e.get_param('rocksdb_cur_size_all_mem_tables'), int, 'ios')
 }
 
 for state in get_state_names():
     name = 'state_' + state + '_duration'
     FEATURES[name] = ((lambda s: lambda e: e.get_state_duration(s))(state), float, 's')
 
+for feat in get_rocksdb_features():
+    FEATURES[feat] = ((lambda s: lambda e: e.get_param(s))(feat), int, 'n')
+    
 def generate_throughput(start, d):
     P = 1.0
     finish = start + d
@@ -80,7 +77,6 @@ def get_dtype(feat):
         return SECONDARY_FEATURES[feat][2]
     else:
         assert False, "{} isn't a valid feature".format(feat)
-
 
 def get_features(features):
     s = set()
@@ -145,16 +141,17 @@ class Scatter(Graph):
         return ['weight', self.__xname, self.__yname]
 
     def graph(self, ax, w, x, y):
-        bins, x_e, y_e = np.histogram2d(x, y, bins=100, weights=w)
+        bins, x_e, y_e = np.histogram2d(x, y, bins=1000, density=True, weights=w)
         z = interpolate.interpn(
             (0.5*(x_e[1:] + x_e[:-1]) , 0.5*(y_e[1:]+y_e[:-1])),
             bins,
             np.vstack([x,y]).T,
-            method = "splinef2d",
+            method = "nearest",
+            fill_value = None,
             bounds_error = False)
 
         idx = z.argsort()
-            
+
         ax.set_xlabel(
             "{name} ({unit})".format(name=self.__xname, unit=self.__xunit),
             fontsize=FONTSIZE
@@ -163,7 +160,9 @@ class Scatter(Graph):
             "{name} ({unit})".format(name=self.__yname, unit=self.__yunit),
             fontsize=FONTSIZE)
         ax.scatter(
-            x[idx], y[idx], c=z[idx], s=1,
+            x[idx], y[idx],
+            c=z[idx],
+            s=1,
             rasterized=True)
 
     def name(self):
@@ -186,16 +185,24 @@ class Histogram(Graph):
         ax.set_ylabel(
             "N",
             fontsize=FONTSIZE)
-        ax.hist(p, weights=w, bins=100)
+        ax.hist(p, weights=w, bins=50)
 
     def name(self):
         return "Histogram({})".format(self.__param)
 
 TO_GRAPH = [
-    [Scatter(*x) for x in [('time', 'latency'), ('time', 'throughput'), ('throughput', 'latency')]],
-    [Histogram(x) for x in ['latency', 'throughput', 'total_pending_kv']],
-    [Scatter(x, 'latency') for x in ['total_pending_kv', 'total_pending_ios', 'total_pending_deferred']],
-    [Scatter(x, 'throughput') for x in ['total_pending_kv', 'total_pending_ios', 'total_pending_deferred']],
+    [Scatter(*x) for x in
+     [('time', 'latency'), ('time', 'throughput'), ('throughput', 'latency')]],
+    [Histogram(x) for x in
+     ['latency', 'throughput', 'total_pending_kv']],
+    [Scatter(x, 'latency') for x in
+     ['total_pending_kv', 'total_pending_ios', 'total_pending_deferred']],
+    [Scatter('time', x) for x in
+     ['total_pending_kv', 'total_pending_deferred',
+      'state_aio_wait_duration']],
+    [Scatter('time', 'state_' + x + '_duration') for x in
+     ['deferred_cleanup', 'deferred_done',
+      'kv_submitted']],
 ]
 
 FONTSIZE=6
