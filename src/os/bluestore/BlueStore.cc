@@ -13629,7 +13629,6 @@ void BlueStore::BlueStoreThrottle::start_transaction(
       pending_bytes.load(),
       pending_ios.load(),
       pending_deferred_ios.load(),
-      pending_deferred_kv.load(),
       pending_kv.load(),
       throughput.load(),
       1.0/threshold);
