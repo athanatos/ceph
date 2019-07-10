@@ -199,7 +199,7 @@ TO_GRAPH = [
      ['total_pending_kv', 'total_pending_ios', 'total_pending_deferred']],
     [Scatter('time', x) for x in
      ['total_pending_kv', 'total_pending_deferred',
-      'state_aio_wait_duration']],
+      'state_deferred_queued_duration']],
     [Scatter('time', 'state_' + x + '_duration') for x in
      ['deferred_cleanup', 'deferred_done',
       'kv_submitted']],

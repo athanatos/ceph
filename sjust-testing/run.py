@@ -28,6 +28,7 @@ BLUESTORE_CONF = """
         bluestore_tracing = true
         bluestore_throttle_trace_rate = 100.0
         bluestore_throttle_bytes = 0
+        bluestore_throttle_deferred_bytes = 0
 """
 
 BLUESTORE_FIO = """
