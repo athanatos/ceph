@@ -1692,6 +1692,8 @@ public:
     const double trace_rate;
     std::atomic_int pending_bytes = {0};
     std::atomic_int pending_ios = {0};
+    std::atomic_int pending_deferred_bytes = {0};
+    std::atomic_int pending_deferred_ios = {0};
 
     std::atomic_int pending_kv = {0};
 
