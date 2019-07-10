@@ -190,7 +190,7 @@ TO_GRAPH = [
     [Scatter(*x) for x in
      [('time', 'latency'), ('time', 'throughput'), ('throughput', 'latency')]],
     [Histogram(x) for x in
-     ['latency', 'throughput', 'total_pending_kv']],
+     ['latency', 'throughput', 'total_pending_ios']],
     [Scatter(x, 'latency') for x in
      ['total_pending_kv', 'total_pending_ios', 'total_pending_deferred_ios']],
     [Scatter('time', x) for x in
