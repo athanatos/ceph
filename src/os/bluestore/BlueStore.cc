@@ -10563,7 +10563,7 @@ void BlueStore::_kv_sync_thread()
 
 	} else {
 	  ceph_assert(txc->state == TransContext::STATE_KV_SUBMITTED);
-	  bsthrottle.log_state_latency(*txc, logger, l_bluestore_state_kv_queued_lat);
+	  ceph_assert(0 == "should be configured to be impossible");
 	}
 	if (txc->had_ios) {
 	  --txc->osr->txc_with_unstable_io;

@@ -147,7 +147,6 @@ def filter_initial_rocksdb(event):
     return dict(((k, event[k]) for k in ROCKSDB_FEATURES))
 
 class Write(object):
-    start = None
     def __init__(self, event_id):
         self.__id = event_id
         self.__state_durations = {}
@@ -156,7 +155,7 @@ class Write(object):
         self.__commit_latency = None
         self.__initial_params = {}
 
-    def consume_event(self, event):
+    def consume_event(self, event, start):
         #assert event_id(event) == self.__id
         if event.name == 'bluestore:transaction_initial_state':
             assert self.__start is None
@@ -165,11 +164,7 @@ class Write(object):
                 print("Got invalid event {}".format(event))
                 
             assert self.__initial_params['transaction_bytes'] < 30000
-            if Write.start is None:
-                Write.start = event.timestamp
-                self.__start = 0
-            else:
-                self.__start = event.timestamp - Write.start
+            self.__start = event.timestamp - start
             return False
         elif event.name == 'bluestore:transaction_initial_state_rocksdb':
             self.__initial_params.update(filter_initial_rocksdb(event))
@@ -192,6 +187,7 @@ class Write(object):
             
     def to_primitive(self):
         return {
+            'type': 'write',
             'id': {
                 'sequencer_id': self.__id[0],
                 'tid': self.__id[1],
@@ -221,23 +217,57 @@ class Write(object):
     def get_state_duration(self, state):
         return self.__state_durations.get(state, 0)
 
-def iterate_structured_trace(trace):
-    live = {}
-    count = 0
-    Write.start = None
-    last = 0.0
-    for event in trace:
+
+class Aggregator(object):
+    def check(self, event):
+        return False
+
+    def consume(self, event, start):
+        return None
+
+
+class WriteAggregator(Aggregator):
+    def __init__(self):
+        self.__live = {}
+        self.__count = 0
+
+    def check(self, event):
+        return 'bluestore:transaction_' in event.name
+
+    def consume(self, event, start):
         eid = event_id(event)
-        if eid not in live:
-            live[eid] = Write(eid)
-        if live[eid].consume_event(event):
-            count += 1
-            y = live[eid]
-            del live[eid]
-            if y.get_start() > last + 10:
-                last = y.get_start()
-                print("Trace processed up to {}s".format(int(y.get_start())))
-            yield y
+        if eid not in self.__live:
+            self.__live[eid] = Write(eid)
+
+        if self.__live[eid].consume_event(event, start):
+            self.__count += 1
+            y = self.__live[eid]
+            del self.__live[eid]
+            return y
+        else:
+            return None
+
+
+def iterate_structured_trace(trace):
+    count = 0
+    last = 0.0
+    start = None
+    aggregators = [
+        WriteAggregator()
+        ]
+    for event in trace:
+        if start is None:
+            start = event.timestamp
+        if event.timestamp > last + 10:
+            last = event.timestamp
+            print("Trace processed up to {}s".format(
+                int(event.timestamp - start)))
+        for agg in aggregators:
+            if agg.check(event):
+                ret = agg.consume(event, start)
+                if ret is not None:
+                    yield ret
+
 
 def dump_structured_trace(tdir, fd):
     trace = open_trace(tdir)
