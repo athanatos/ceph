@@ -10115,12 +10115,12 @@ void BlueStore::_txc_apply_kv(TransContext *txc, bool sync_submit_transaction)
 
 #if defined(WITH_LTTNG)
     if (txc->tracing) {
-      OID_ELAPSED("", usecs, txc.get_state_latency_name(state));
       tracepoint(
 	bluestore,
 	transaction_kv_submit_latency,
-	txc.osr->get_sequencer_id(),
-	txc.seq,
+	txc->osr->get_sequencer_id(),
+	txc->seq,
+	sync_submit_transaction,
 	((double)ceph_clock_now()) - start);
     }
 #endif
@@ -10615,9 +10615,26 @@ void BlueStore::_kv_sync_thread()
 	}
       }
 
+#if defined(WITH_LTTNG)
+      double sync_start = (double)ceph_clock_now();
+#endif
       // submit synct synchronously (block and wait for it to commit)
       int r = cct->_conf->bluestore_debug_omit_kv_commit ? 0 : db->submit_transaction_sync(synct);
       ceph_assert(r == 0);
+
+#if defined(WITH_LTTNG)
+      double sync_latency = (double)ceph_clock_now() - sync_start;
+      for (auto txc: kv_committing) {
+	if (txc->tracing) {
+	  tracepoint(
+	    bluestore,
+	    transaction_kv_sync_latency,
+	    txc->osr->get_sequencer_id(),
+	    txc->seq,
+	    sync_latency);
+	}
+      }
+#endif
 
       {
 	std::unique_lock m(kv_finalize_lock);
@@ -13576,6 +13593,7 @@ utime_t BlueStore::BlueStoreThrottle::log_state_latency(
   if (txc.tracing &&
       state >= l_bluestore_state_prepare_lat &&
       state <= l_bluestore_state_done_lat) {
+    double usecs = lat.to_nsec() / 1000.0;
     OID_ELAPSED("", usecs, txc.get_state_latency_name(state));
     tracepoint(
       bluestore,
