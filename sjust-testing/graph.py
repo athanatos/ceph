@@ -3,34 +3,13 @@
 import numpy as np
 import matplotlib
 import matplotlib.figure
-from traces import get_state_names, get_rocksdb_features
+from traces import Write
 import matplotlib.backends
 import matplotlib.backends.backend_pdf as backend
 from scipy import interpolate
 
-FEATURES = {
-      'time': (lambda e: e.get_start(), float, 's')
-    , 'duration': (lambda e: e.get_duration(), float, 's')
-    , 'latency': (lambda e: e.get_latency(), float, 's')
-    , 'transaction_bytes': (lambda e: e.get_param('transaction_bytes'), int, 'bytes')
-    , 'transaction_ios': (lambda e: e.get_param('transaction_ios'), int, 'ios')
-    , 'total_pending_bytes': (lambda e: e.get_param('total_pending_bytes'), int,
-                              'bytes')
-    , 'total_pending_ios': (lambda e: e.get_param('total_pending_ios'), int, 'ios')
-    , 'total_pending_deferred_ios': (lambda e: e.get_param('total_pending_deferred_ios'), int, 'ios')
-    , 'total_pending_kv': (lambda e: e.get_param('total_pending_kv'), int, 'ios')
-    , 'weight': (lambda e: e.get_param('weight'), float, 'ratio')
-    , 'throughput': (lambda e: e.get_param('throughput'), float, 'iops')
-    , 'total_pending_kv': (lambda e: e.get_param('total_pending_kv'), int, 'ios')
-}
+FEATURES = Write.get_features()
 
-for state in get_state_names():
-    name = 'state_' + state + '_duration'
-    FEATURES[name] = ((lambda s: lambda e: e.get_state_duration(s))(state), float, 's')
-
-for feat in get_rocksdb_features():
-    FEATURES[feat] = ((lambda s: lambda e: e.get_param(s))(feat), int, 'n')
-    
 def generate_throughput(start, d):
     P = 1.0
     finish = start + d
@@ -111,6 +90,7 @@ def to_arrays(pfeats, events):
 
     last_size = count % SIZE
     for name, _, _, l in arrays:
+        print(name)
         l[-1] = l[-1][:last_size]
         
     return dict(((feat, np.concatenate(l).ravel()) for feat, _, _, l in arrays))
@@ -188,10 +168,10 @@ class Histogram(Graph):
 
 TO_GRAPH = [
     [Scatter(*x) for x in
-     [('time', 'latency'), ('time', 'throughput'), ('throughput', 'latency')]],
+     [('time', 'commit_latency'), ('time', 'throughput'), ('throughput', 'commit_latency')]],
     [Histogram(x) for x in
-     ['latency', 'throughput', 'total_pending_ios']],
-    [Scatter(x, 'latency') for x in
+     ['commit_latency', 'throughput', 'total_pending_ios']],
+    [Scatter(x, 'commit_latency') for x in
      ['total_pending_kv', 'total_pending_ios', 'total_pending_deferred_ios']],
     [Scatter('time', x) for x in
      ['total_pending_kv', 'total_pending_deferred_ios',
