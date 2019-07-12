@@ -10631,6 +10631,9 @@ void BlueStore::_kv_sync_thread()
 	    transaction_kv_sync_latency,
 	    txc->osr->get_sequencer_id(),
 	    txc->seq,
+	    kv_committing.size(),
+	    deferred_done.size(),
+	    deferred_stable.size(),
 	    sync_latency);
 	}
       }

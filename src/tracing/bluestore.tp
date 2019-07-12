@@ -56,10 +56,16 @@ TRACEPOINT_EVENT(bluestore, transaction_kv_sync_latency,
     TP_ARGS(
         uint32_t, sequencer_id,
         uint64_t, tid,
+	uint32_t, kv_batch_size,
+	uint32_t, deferred_done_batch_size,
+	uint32_t, deferred_stable_batch_size,
         double, elapsed),
     TP_FIELDS(
         ctf_integer(uint32_t, sequencer_id, sequencer_id)
         ctf_integer(uint64_t, tid, tid)
+	ctf_integer(uint32_t, kv_batch_size, kv_batch_size)
+	ctf_integer(uint32_t, deferred_done_batch_size, deferred_done_batch_size)
+	ctf_integer(uint32_t, deferred_stable_batch_size, deferred_stable_batch_size)
         ctf_float(double, elapsed, elapsed)
     )
 )

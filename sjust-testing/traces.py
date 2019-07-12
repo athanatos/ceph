@@ -132,7 +132,12 @@ class TTotalDuration(TEvent):
 class TCommitLatency(TEvent):
     @staticmethod
     def get_param_map():
-        return { 'elapsed': ('commit_latency', float, 's') }
+        return \
+            { 'elapsed': ('commit_latency', float, 's')
+            , 'kv_batch_size': ('kv_batch_size', int, 'n') 
+            , 'deferred_done_batch_size': ('deferred_done_batch_size', int, 'n') 
+            , 'deferred_stable_batch_size': ('deferred_stable_batch_size', int, 'n') 
+            }
 
 
 class TKVSubmitLatency(TEvent):
