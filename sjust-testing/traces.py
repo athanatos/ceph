@@ -150,15 +150,15 @@ class TKVSyncLatency(TEvent):
 class TInitial(TEvent):
     @staticmethod
     def get_param_map():
-        return dict(((k, (k, t, 's')) for k, t in
-            [ ('transaction_bytes', int)
-            , ('transaction_ios', int)
-            , ('total_pending_bytes', int)
-            , ('total_pending_ios', int)
-            , ('total_pending_deferred_ios', int)
-            , ('total_pending_kv', int)
-            , ('throughput', float)
-            , ('weight', float)
+        return dict(((k, (k, t, u)) for k, t, u in
+            [ ('transaction_bytes', int, 'bytes')
+            , ('transaction_ios', int, 'ios')
+            , ('total_pending_bytes', int, 'bytes')
+            , ('total_pending_ios', int, 'ios')
+            , ('total_pending_deferred_ios', int, 'ios')
+            , ('total_pending_kv', int, 'ios')
+            , ('throughput', float, 'iops')
+            , ('weight', float, 'ratio')
             ]))
 
 
@@ -175,11 +175,6 @@ class TRocksInitial(TEvent):
             'rocksdb_num_running_flushes',
             'rocksdb_actual_delayed_write_rate'
         ]))
-
-    @staticmethod
-    def get_features():
-        return [v for k, v in TRocksInitial.get_trans_properties().items()]
-            
 
 
 DATE = '(\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d\d\d\d\d\d\d\d\d)'
@@ -232,7 +227,7 @@ class Write(object):
             'time': (lambda e: e.get_start(), float, 's')
         }
         ret.update(dict(
-            ((k, (lambda e: e.get_param(k), v[0], v[1]))
+            ((k, ((lambda k1: lambda e: e.get_param(k1))(k), v[0], v[1]))
              for k, v in TEvent.get_param_types().items())
         ))
         return ret
@@ -280,12 +275,6 @@ class Write(object):
             print("{} not in {}".format(param, self.__params))
         assert param in self.__params
         return self.__params[param]
-
-    def get_state_duration(self, state):
-        if state not in self.__state_durations:
-            print("{} not in {}".format(state, self.__state_durations))
-        assert state in self.__state_durations
-        return self.__state_durations[state]
 
 
 class Aggregator(object):

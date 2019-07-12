@@ -83,14 +83,13 @@ def to_arrays(pfeats, events):
                 l.append(np.zeros(SIZE, dtype=dtype))
 
         offset = count % SIZE
-        for _, f, _, l in arrays:
+        for name, f, _, l in arrays:
             l[-1][offset] = f(event)
 
         count += 1
 
     last_size = count % SIZE
     for name, _, _, l in arrays:
-        print(name)
         l[-1] = l[-1][:last_size]
         
     return dict(((feat, np.concatenate(l).ravel()) for feat, _, _, l in arrays))
