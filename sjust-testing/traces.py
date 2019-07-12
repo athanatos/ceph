@@ -180,7 +180,7 @@ class TRocksInitial(TEvent):
 DATE = '(\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d\d\d\d\d\d\d\d\d)'
 OFFSET = '\(\+(\?\.\?+|\d\.\d\d\d\d\d\d\d\d\d)\)'
 NAME = 'bluestore:[a-z_]*'
-PAIRS = '{((?: [a-z_]+ = [0-9.e+]+[ ,])+)}'
+PAIRS = '{((?: [a-z_]+ = [0-9.e+-]+[ ,])+)}'
 RE = re.compile(
     '\[' + DATE + '\] [a-z0-9]* (?P<name>' + NAME + '): { \d* }, ' + PAIRS
     )

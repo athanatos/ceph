@@ -125,7 +125,7 @@ def setup_start_lttng(conf):
         ])
     for event in ['state_duration', 'total_duration',
                   'initial_state', 'initial_state_rocksdb',
-                  'commit_latency']:
+                  'commit_latency', 'kv_sync_latency', 'kv_submit_latency']:
         subprocess.run([
             'lttng', 'enable-event',
             '--session', 'fio-bluestore',

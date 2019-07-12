@@ -178,12 +178,12 @@ TO_GRAPH = [
     [Histogram(x) for x in
      ['total_pending_kv', 'total_pending_deferred_ios',
       'state_deferred_queued_duration']],
-    [Scatter('time', 'state_' + x + '_duration') for x in
-     ['deferred_cleanup', 'deferred_done',
-      'kv_submitted']],
-    [Histogram('state_' + x + '_duration') for x in
-     ['deferred_cleanup', 'deferred_done',
-      'kv_submitted']],
+    [Scatter('time', x) for x in
+     ['kv_submit_latency', 'kv_sync_latency',
+      'state_kv_submitted_duration']],
+    [Histogram(x) for x in
+     ['kv_submit_latency', 'kv_sync_latency',
+      'state_kv_submitted_duration']],
 ]
 
 FONTSIZE=3
