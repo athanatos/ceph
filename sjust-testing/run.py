@@ -29,6 +29,7 @@ BLUESTORE_CONF = """
         bluestore_throttle_trace_rate = 100.0
         bluestore_throttle_bytes = 0
         bluestore_throttle_deferred_bytes = 0
+        bluestore_prefer_deferred_size_hdd = {hdd_deferred}
 """
 
 BLUESTORE_FIO = """
@@ -85,6 +86,7 @@ DEFAULT = {
     'fio_bin': '../build/bin/fio',
     'lttng': True,
     'qdl': None
+    'hdd_deferred': 32768
 }
 
 def doformat(conf, template):

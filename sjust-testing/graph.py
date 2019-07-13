@@ -35,6 +35,21 @@ SECONDARY_FEATURES = {
         's',
         float,
         lambda x, y, z: x + y + z),
+    'kv_sync_size': (
+        ('kv_batch_size', 'deferred_done_batch_size', 'deferred_stable_batch_size'),
+        'n',
+        int,
+        lambda x, y, z: x + y + z),
+    'deferred_batch_size': (
+        ('deferred_done_batch_size', 'deferred_stable_batch_size'),
+        'n',
+        int,
+        lambda x, y: x + y),
+    'committing_state': (
+        ('state_prepare_duration', 'state_kv_queued_duration', 'state_kv_submitted_duration'),
+        's',
+        int,
+        lambda x, y, z: x + y + z),
 }
 
 def get_unit(feat):
@@ -167,23 +182,20 @@ class Histogram(Graph):
 
 TO_GRAPH = [
     [Scatter(*x) for x in
-     [('time', 'commit_latency'), ('time', 'throughput'), ('throughput', 'commit_latency')]],
+     [('time', 'commit_latency'), ('time', 'throughput'), ('time', 'committing_state')]],
     [Histogram(x) for x in
-     ['commit_latency', 'throughput', 'total_pending_ios']],
-    [Scatter(x, 'commit_latency') for x in
-     ['total_pending_kv', 'total_pending_ios', 'total_pending_deferred_ios']],
+     ['commit_latency', 'kv_sync_latency', 'committing_state']],
     [Scatter('time', x) for x in
-     ['total_pending_kv', 'total_pending_deferred_ios',
-      'state_deferred_queued_duration']],
+     ['state_prepare_duration', 'state_kv_queued_duration', 'state_kv_submitted_duration']],
     [Histogram(x) for x in
-     ['total_pending_kv', 'total_pending_deferred_ios',
-      'state_deferred_queued_duration']],
+     ['state_prepare_duration', 'state_kv_queued_duration', 'state_kv_submitted_duration']],
     [Scatter('time', x) for x in
      ['kv_submit_latency', 'kv_sync_latency',
-      'state_kv_submitted_duration']],
+      'kv_sync_size']],
+    [Scatter(x, 'kv_sync_latency') for x in
+     ['kv_sync_size', 'deferred_batch_size', 'kv_batch_size']],
     [Histogram(x) for x in
-     ['kv_submit_latency', 'kv_sync_latency',
-      'state_kv_submitted_duration']],
+     ['kv_sync_size', 'deferred_batch_size', 'kv_batch_size']],
 ]
 
 FONTSIZE=3
