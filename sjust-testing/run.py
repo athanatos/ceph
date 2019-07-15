@@ -29,7 +29,9 @@ BLUESTORE_CONF = """
         bluestore_throttle_trace_rate = 100.0
         bluestore_throttle_bytes = 0
         bluestore_throttle_deferred_bytes = 0
-        bluestore_prefer_deferred_size_hdd = {hdd_deferred}
+        bluestore prefer deferred size hdd = {hdd deferred}
+        bluestore prefer deferred size ssd = {hdd deferred}
+        bluestore prefer deferred size = {hdd deferred}
 """
 
 BLUESTORE_FIO = """
