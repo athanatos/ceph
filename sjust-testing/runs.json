@@ -9,9 +9,8 @@
 	},
 	"runs": {
 	  "qd": [64],
-	  "bs": [8, 16, 64],
+	  "bs": [4],
     "target_device": ["hdd"],
-		"hdd_deferred": [0],
-    "run": [0]
+    "run": [0, 1]
 	}
 }

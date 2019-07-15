@@ -32,6 +32,10 @@ BLUESTORE_CONF = """
         bluestore prefer deferred size hdd = {hdd_deferred}
         bluestore prefer deferred size ssd = {hdd_deferred}
         bluestore prefer deferred size = {hdd_deferred}
+        rocksdb collect extended stats = true
+        rocksdb collect memory stats = true
+        rocksdb collect compaction stats = true
+        rocksdb perf = true
 """
 
 BLUESTORE_FIO = """
