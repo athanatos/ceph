@@ -23,6 +23,8 @@ BLUESTORE_CONF = """
 	osd journal = {target_dir}/journal
         bluestore block path = {block_device}
 
+        bluestore rocksdb options = compression=kNoCompression,max_write_buffer_number=4,min_write_buffer_number_to_merge=1,recycle_log_file_num=4,write_buffer_size=268435456,writable_file_max_buffer_size=0,compaction_readahead_size=2097152,stats_dump_period=10
+
 	# log inside fio_dir
 	log file = {output_dir}/log
         bluestore_tracing = true
