@@ -38,6 +38,7 @@ BLUESTORE_CONF = """
         rocksdb collect memory stats = true
         rocksdb collect compaction stats = true
         rocksdb perf = true
+        bluefs_preextend_wal_files = {preextend}
 """
 
 BLUESTORE_FIO = """
@@ -94,7 +95,8 @@ DEFAULT = {
     'fio_bin': '../build/bin/fio',
     'lttng': True,
     'qdl': None,
-    'hdd_deferred': 32768
+    'hdd_deferred': 32768,
+    'preextend': 'false'
 }
 
 def doformat(conf, template):

@@ -11,6 +11,7 @@
 	  "qd": [64],
 	  "bs": [4],
     "target_device": ["hdd"],
-    "run": [0, 1]
+    "run": [0, 1],
+		"preextend": ["true", "false"]
 	}
 }
