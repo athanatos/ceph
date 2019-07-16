@@ -11,7 +11,7 @@ BLUESTORE_CONF = """
 	debug bluestore = 0/0
 	debug bluefs = 0/0
 	debug bdev = 0/0
-	debug rocksdb = 0/0
+	debug rocksdb = 10
 	osd pool default pg num = 8
 	osd op num shards = 5
 
