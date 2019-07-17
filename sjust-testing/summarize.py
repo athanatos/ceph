@@ -16,7 +16,7 @@ def project(name, config, fio_stats, perf_stats):
         return {
             'iops_min': op['iops_min'],
             'iops_max': op['iops_max'],
-            'iops_mean': op['iops_mean'],
+            'iops': op['iops'],
             'clat_min_ns': op['clat_ns']['min'],
             'clat_max_ns': op['clat_ns']['max'],
             'clat_mean_ns': op['clat_ns']['mean'],
@@ -93,7 +93,7 @@ def generate_summary(filtered, match):
     def project_run(perfs):
         def ret(run):
             return {
-                'tp': run['fio']['write']['iops_mean'],
+                'tp': run['fio']['write']['iops'],
                 'lat': run['fio']['write']['clat_mean_ns'] / 1000000000.0,
                 'slat': run['fio']['write']['slat_mean_ns'] / 1000000000.0,
                 'perf': dict(filter(lambda x: x[0] in perfs, run['perf'].items()))
@@ -112,5 +112,5 @@ def generate_summary(filtered, match):
                 list(map(project_run(perfs), group['runs'])))
         }
         
-    return sort_by(lambda x: x['config']['qd'], list(map(project_group, grouped)))
+    return sort_by(lambda x: x['config']['bs'], list(map(project_group, grouped)))
 

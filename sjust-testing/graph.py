@@ -180,7 +180,7 @@ class Histogram(Graph):
     def name(self):
         return "Histogram({})".format(self.__param)
 
-TO_GRAPH = [
+TO_GRAPH2 = [
     [Scatter(*x) for x in
      [('time', 'commit_latency'), ('time', 'throughput'), ('time', 'committing_state')]],
     [Histogram(x) for x in
@@ -198,7 +198,17 @@ TO_GRAPH = [
      ['kv_sync_size', 'deferred_batch_size', 'kv_batch_size']],
 ]
 
-FONTSIZE=3
+TO_GRAPH = [
+    [Scatter(*x) for x in
+     [('total_pending_kv', 'throughput'),
+      ('total_pending_kv', 'commit_latency')]],
+    [Scatter(*x) for x in
+     [('throughput', 'commit_latency'),
+      ('total_pending_deferred_ios', 'commit_latency')]]
+]
+
+
+FONTSIZE=4
 matplotlib.rcParams.update({'font.size': FONTSIZE})
 
 def graph(events, name, path, mask_params=None, masker=None):
