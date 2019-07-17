@@ -156,9 +156,7 @@ class TInitial(TEvent):
     @staticmethod
     def get_param_map():
         return dict(((k, (k, t, u)) for k, t, u in
-            [ ('transaction_bytes', int, 'bytes')
-            , ('transaction_ios', int, 'ios')
-            , ('total_pending_bytes', int, 'bytes')
+            [ ('total_pending_bytes', int, 'bytes')
             , ('total_pending_ios', int, 'ios')
             , ('total_pending_deferred_ios', int, 'ios')
             , ('total_pending_kv', int, 'ios')

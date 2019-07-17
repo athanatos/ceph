@@ -86,8 +86,6 @@ TRACEPOINT_EVENT(bluestore, transaction_initial_state,
     TP_FIELDS(
         ctf_integer(uint32_t, sequencer_id, sequencer_id)
         ctf_integer(uint64_t, tid, tid)
-        ctf_integer(uint64_t, transaction_bytes, transaction_bytes)
-        ctf_integer(uint64_t, transaction_ios, transaction_ios)
         ctf_integer(uint64_t, total_pending_bytes, total_pending_bytes)
         ctf_integer(uint64_t, total_pending_ios, total_pending_ios)
         ctf_integer(uint64_t, total_pending_deferred_ios, total_pending_deferred_ios)
