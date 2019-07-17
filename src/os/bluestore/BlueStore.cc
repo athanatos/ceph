@@ -3963,7 +3963,7 @@ void BlueStore::handle_discard(interval_set<uint64_t>& to_release)
 
 BlueStore::BlueStore(CephContext *cct, const string& path)
   : ObjectStore(cct, path),
-    bsthrottle(cct->_conf.get_val<double>("bluestore_throttle_trace_rate")),
+    bsthrottle(cct),
     throttle_bytes(cct, "bluestore_throttle_bytes",
 		   cct->_conf->bluestore_throttle_bytes),
     throttle_deferred_bytes(cct, "bluestore_throttle_deferred_bytes",
@@ -3984,7 +3984,7 @@ BlueStore::BlueStore(CephContext *cct,
   const string& path,
   uint64_t _min_alloc_size)
   : ObjectStore(cct, path),
-    bsthrottle(cct->_conf.get_val<double>("bluestore_throttle_trace_ratio")),
+    bsthrottle(cct),
     throttle_bytes(cct, "bluestore_throttle_bytes",
 		   cct->_conf->bluestore_throttle_bytes),
     throttle_deferred_bytes(cct, "bluestore_throttle_deferred_bytes",
@@ -13619,6 +13619,20 @@ void BlueStore::BlueStoreThrottle::start_transaction(
   pending_ios += txc.ios;
   pending_kv += 1;
 
+  if (artificial_qds.size() && artificial_qd_period > 0) {
+    unsigned qd = artificial_qds[
+      unsigned(
+	floor(((double)ceph_clock_now() -
+	       (double)start) / artificial_qd_period)) %
+      artificial_qds.size()];
+    if (qd < pending_kv) {
+      std::unique_lock l(qd_lock);
+      while (qd < pending_ios) {
+	qd_cond.wait(l);
+      }
+    }
+  }
+
 #if defined(WITH_LTTNG)
   double threshold = get_threshold();
   if (should_trace(txc, threshold)) {
@@ -13692,6 +13706,11 @@ void BlueStore::BlueStoreThrottle::complete_kv(TransContext &txc) {
   pending_kv -= 1;
   pending_deferred_bytes += txc.bytes;
   pending_deferred_ios += txc.ios;
+
+  {
+    std::lock_guard l(qd_lock);
+    qd_cond.notify_all();
+  }
 
   // protected by kv_finish lock
   utime_t now = ceph_clock_now();

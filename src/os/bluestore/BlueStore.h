@@ -1689,13 +1689,12 @@ public:
     constexpr static int NUM_TO_TRACK = 10000;
     constexpr static double SMOOTHING_PERIOD = 1.0;
 
-    const double trace_rate;
-    std::atomic_int pending_bytes = {0};
-    std::atomic_int pending_ios = {0};
-    std::atomic_int pending_deferred_bytes = {0};
-    std::atomic_int pending_deferred_ios = {0};
+    std::atomic_uint pending_bytes = {0};
+    std::atomic_uint pending_ios = {0};
+    std::atomic_uint pending_deferred_bytes = {0};
+    std::atomic_uint pending_deferred_ios = {0};
 
-    std::atomic_int pending_kv = {0};
+    std::atomic_uint pending_kv = {0};
 
     
     std::atomic<double> throughput = {0};
@@ -1703,6 +1702,7 @@ public:
 
 
 #if defined(WITH_LTTNG)
+    const double trace_rate;
     double get_threshold() {
       return std::min((trace_rate / throughput.load()), 1.0);
     }
@@ -1713,10 +1713,34 @@ public:
 	      trace_threshold);
     }
 #endif
+    ceph::mutex qd_lock = ceph::make_mutex("BlueStore::BlueStoreThrottle::qd_lock");
+    ceph::condition_variable qd_cond;
+    double artificial_qd_period;
+    vector<unsigned> artificial_qds;
+    const utime_t start;
+
+    static vector<unsigned> parse_qd(const std::string &in) {
+      vector<unsigned> ret;
+      size_t pos = 0;
+      while (pos != std::string::npos && pos < in.size()) {
+	size_t next = in.find_first_of(",", pos);
+	ret.push_back(std::stoul(in.substr(pos, next)));
+      }
+      return ret;
+    }
 
   public:
-    BlueStoreThrottle(double rate) :
-      trace_rate(rate), commit_times(NUM_TO_TRACK) {}
+    BlueStoreThrottle(CephContext *cct) :
+#if defined(WITH_LTTNG)
+      trace_rate(cct->_conf.get_val<double>(
+		   "bluestore_throttle_trace_rate")),
+#endif
+      artificial_qd_period(cct->_conf.get_val<double>(
+		  "bluestore_throttle_artificial_qd_period")),
+      artificial_qds(
+	parse_qd(cct->_conf.get_val<string>(
+		   "bluestore_throttle_artificial_qd"))),
+      start(ceph_clock_now()) {}
 
     utime_t log_state_latency(
       TransContext &txc, PerfCounters *logger, int state);

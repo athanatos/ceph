@@ -4641,6 +4641,16 @@ std::vector<Option> get_global_options() {
     .set_flag(Option::FLAG_RUNTIME)
     .set_description("Maximum bytes read at once by deep fsck"),
 
+    Option("bluestore_throttle_artificial_qd", Option::TYPE_STR, Option::LEVEL_DEV)
+    .set_default("")
+    .set_flag(Option::FLAG_RUNTIME)
+    .set_description(""),
+
+    Option("bluestore_throttle_artificial_qd_period", Option::TYPE_FLOAT, Option::LEVEL_DEV)
+    .set_default(0.0)
+    .set_flag(Option::FLAG_RUNTIME)
+    .set_description(""),
+
     Option("bluestore_throttle_bytes", Option::TYPE_SIZE, Option::LEVEL_ADVANCED)
     .set_default(64_M)
     .set_flag(Option::FLAG_RUNTIME)
