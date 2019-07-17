@@ -90,6 +90,7 @@ DEFAULT = {
     'lib': '../build/lib',
     'target_dir': '/mnt/sjust/run',
     'qd': 16,
+    'qdl': 0,
     'runtime': 10,
     'bs': 4,
     'fio_bin': '../build/bin/fio',
@@ -101,8 +102,7 @@ DEFAULT = {
 
 def doformat(conf, template):
     c = conf.copy()
-    if c.get('qdl', None) is None:
-        c['qdl'] = c['qd']
+    c['qdl'] = max(c['qd'] - c['qdl'], 0)
     assert 'block_device' in c
     return template.format(**c)
 

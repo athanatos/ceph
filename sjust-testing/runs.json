@@ -5,13 +5,14 @@
 		"devices": {
 			"nvme": "/dev/nvme0n1p3",
 			"hdd": "/dev/sdh2"
-		}
+		},
+		"qdl": 32,
+		"preextend": "true"
 	},
 	"runs": {
-	  "qd": [32, 48, 64],
+	  "qd": [32, 128, 256, 512],
 	  "bs": [4],
     "target_device": ["hdd"],
-    "run": [0, 1],
-		"preextend": ["true", "false"]
+    "run": [0, 1]
 	}
 }
