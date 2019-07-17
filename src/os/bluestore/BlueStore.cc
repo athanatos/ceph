@@ -13615,7 +13615,6 @@ void BlueStore::BlueStoreThrottle::start_transaction(
   KeyValueDB &db,
   TransContext &txc)
 {
-  txc.start = ceph_clock_now();
   pending_bytes += txc.bytes;
   pending_ios += txc.ios;
   pending_kv += 1;
@@ -13633,6 +13632,8 @@ void BlueStore::BlueStoreThrottle::start_transaction(
       }
     }
   }
+
+  txc.start = ceph_clock_now();
 
 #if defined(WITH_LTTNG)
   double threshold = get_threshold();
