@@ -97,7 +97,6 @@ DEFAULT = {
     'bs': 4,
     'fio_bin': '../build/bin/fio',
     'lttng': True,
-    'qdl': None,
     'hdd_deferred': 32768,
     'preextend': 'false',
     'qdv': '',
