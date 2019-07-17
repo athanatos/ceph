@@ -74,8 +74,6 @@ TRACEPOINT_EVENT(bluestore, transaction_initial_state,
     TP_ARGS(
         uint32_t, sequencer_id,
         uint64_t, tid,
-	uint64_t, transaction_bytes,
-	uint64_t, transaction_ios,
 	uint64_t, total_pending_bytes,
 	uint64_t, total_pending_ios,
 	uint64_t, total_pending_deferred_ios,
