@@ -39,6 +39,8 @@ BLUESTORE_CONF = """
         rocksdb collect compaction stats = true
         rocksdb perf = true
         bluefs_preextend_wal_files = {preextend}
+        bluestore_throttle_artificial_qd = {qdv}
+        bluestore_throttle_artificial_qd_period = {qdp}
 """
 
 BLUESTORE_FIO = """
@@ -97,7 +99,9 @@ DEFAULT = {
     'lttng': True,
     'qdl': None,
     'hdd_deferred': 32768,
-    'preextend': 'false'
+    'preextend': 'false',
+    'qdv': '',
+    'qdp': 0
 }
 
 def doformat(conf, template):
