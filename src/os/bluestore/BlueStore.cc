@@ -13615,23 +13615,29 @@ void BlueStore::BlueStoreThrottle::start_transaction(
   KeyValueDB &db,
   TransContext &txc)
 {
-  pending_bytes += txc.bytes;
-  pending_ios += txc.ios;
-  pending_kv += 1;
-
+  utime_t prethrottle = ceph_clock_now();
   if (artificial_qds.size() && artificial_qd_period > 0) {
-    unsigned qd = artificial_qds[
-      unsigned(
-	floor(((double)ceph_clock_now() -
-	       (double)start) / artificial_qd_period)) %
-      artificial_qds.size()];
-    if (qd < pending_kv) {
-      std::unique_lock l(qd_lock);
-      while (qd < pending_ios) {
+    std::unique_lock l(qd_lock);
+    while (true) {
+      unsigned qd = artificial_qds[
+	unsigned(
+	  floor(((double)ceph_clock_now() -
+		 (double)start) / artificial_qd_period)) %
+	artificial_qds.size()];
+      if (qd < pending_kv + 1) {
 	qd_cond.wait(l);
+      } else {
+	pending_kv += 1;
+	break;
       }
     }
+  } else {
+    pending_kv += 1;
   }
+  double throttle_time = (double)prethrottle - (double)ceph_clock_now();
+
+  pending_bytes += txc.bytes;
+  pending_ios += txc.ios;
 
   txc.start = ceph_clock_now();
 
@@ -13685,6 +13691,7 @@ void BlueStore::BlueStoreThrottle::start_transaction(
       pending_deferred_ios.load(),
       pending_kv.load(),
       throughput.load(),
+      throttle_time,
       1.0/threshold);
 
     tracepoint(
@@ -13705,14 +13712,16 @@ void BlueStore::BlueStoreThrottle::start_transaction(
 }
 
 void BlueStore::BlueStoreThrottle::complete_kv(TransContext &txc) {
-  pending_kv -= 1;
+
+  if (artificial_qds.size() && artificial_qd_period > 0) {
+    std::lock_guard l(qd_lock);
+    pending_kv -= 1;
+    qd_cond.notify_all();
+  } else {
+    pending_kv -= 1;
+  }
   pending_deferred_bytes += txc.bytes;
   pending_deferred_ios += txc.ios;
-
-  {
-    std::lock_guard l(qd_lock);
-    qd_cond.notify_all();
-  }
 
   // protected by kv_finish lock
   utime_t now = ceph_clock_now();

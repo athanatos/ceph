@@ -163,6 +163,7 @@ class TInitial(TEvent):
             , ('total_pending_deferred_ios', int, 'ios')
             , ('total_pending_kv', int, 'ios')
             , ('throughput', float, 'iops')
+            , ('throttle_time', float, 's')
             , ('weight', float, 'ratio')
             ]))
 
