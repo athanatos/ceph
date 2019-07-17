@@ -1725,6 +1725,7 @@ public:
       while (pos != std::string::npos && pos < in.size()) {
 	size_t next = in.find_first_of(",", pos);
 	ret.push_back(std::stoul(in.substr(pos, next)));
+	pos = next;
       }
       return ret;
     }
