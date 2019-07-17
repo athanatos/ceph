@@ -1732,6 +1732,7 @@ public:
 
   public:
     BlueStoreThrottle(CephContext *cct) :
+      commit_times(NUM_TO_TRACK),
 #if defined(WITH_LTTNG)
       trace_rate(cct->_conf.get_val<double>(
 		   "bluestore_throttle_trace_rate")),

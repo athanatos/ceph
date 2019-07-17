@@ -13711,7 +13711,8 @@ void BlueStore::BlueStoreThrottle::start_transaction(
 #endif
 }
 
-void BlueStore::BlueStoreThrottle::complete_kv(TransContext &txc) {
+void BlueStore::BlueStoreThrottle::complete_kv(TransContext &txc)
+{
 
   if (artificial_qds.size() && artificial_qd_period > 0) {
     std::lock_guard l(qd_lock);
