@@ -38,7 +38,10 @@ struct Options {
   thread_data* td;
   char* conf;
   char* perf_output_file;
+  char* cycle_throttle_values;
+  char* cycle_deferred_throttle_values;
   unsigned long long
+    cycle_throttle_period,
     oi_attr_len_low,
     oi_attr_len_high,
     snapset_attr_len_low,
@@ -154,6 +157,31 @@ static std::vector<fio_option> ceph_options{
     o.help   = "Enables/disables file preallocation (touch and resize) on init";
     o.off1   = offsetof(Options, preallocate_files);
     o.def    = "1";
+  }),
+  make_option([] (fio_option& o) {
+    o.name   = "vary_bluestore_throttle";
+    o.lname  = "cycle through different throttle values";
+    o.type   = FIO_OPT_STR_STORE;
+    o.help   = "comma delimited list of throttle values",
+    o.off1   = offsetof(Options, cycle_throttle_values);
+    o.def    = 0;
+  }),
+  make_option([] (fio_option& o) {
+    o.name   = "vary_bluestore_deferred_throttle";
+    o.lname  = "cycle through different deferred throttle values";
+    o.type   = FIO_OPT_STR_STORE;
+    o.help   = "comma delimited list of throttle values",
+    o.off1   = offsetof(Options, cycle_deferred_throttle_values);
+    o.def    = 0;
+  }),
+  make_option([] (fio_option& o) {
+    o.name   = "vary_bluestore_throttle_period";
+    o.lname  = "period between different throttle values";
+    o.type   = FIO_OPT_STR_VAL;
+    o.help   = "period between different throttle values";
+    o.off1   = offsetof(Options, cycle_throttle_period);
+    o.def    = "20";
+    o.minval = 0;
   }),
   {} // fio expects a 'null'-terminated list
 };
@@ -276,6 +304,23 @@ struct Engine {
 
   // file to which to output formatted perf information
   const std::optional<std::string> perf_output_file;
+  const vector<unsigned> cycle_throttle_values;
+  const vector<unsigned> cycle_deferred_throttle_values;
+
+  static vector<unsigned> parse_throttle_str(const char *p) {
+    vector<unsigned> ret;
+    if (!p)
+      return ret;
+
+    std::string in(p);
+    size_t pos = 0;
+    while (pos != std::string::npos && pos < in.size()) {
+      size_t next = in.find_first_of(",", pos);
+      ret.push_back(std::stoul(in.substr(pos, next)));
+      pos = next == std::string::npos ? next : next + 1;
+    }
+    return ret;
+  }
 
   explicit Engine(thread_data* td);
   ~Engine();
@@ -345,7 +390,11 @@ Engine::Engine(thread_data* td)
     perf_output_file(
       static_cast<Options*>(td->eo)->perf_output_file ?
       std::make_optional(static_cast<Options*>(td->eo)->perf_output_file) :
-      std::nullopt)
+      std::nullopt),
+    cycle_throttle_values(
+      parse_throttle_str(static_cast<Options*>(td->eo)->cycle_throttle_values)),
+    cycle_deferred_throttle_values(
+      parse_throttle_str(static_cast<Options*>(td->eo)->cycle_throttle_values))
 {
   // add the ceph command line arguments
   auto o = static_cast<Options*>(td->eo);
