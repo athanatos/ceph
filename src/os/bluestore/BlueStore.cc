@@ -13624,7 +13624,7 @@ void BlueStore::BlueStoreThrottle::start_transaction(
 	  floor(((double)ceph_clock_now() -
 		 (double)start) / artificial_qd_period)) %
 	artificial_qds.size()];
-      if (qd < pending_kv + 1) {
+      if (qd < total_pending + 1) {
 	qd_cond.wait(l);
       } else {
 	pending_kv += 1;
@@ -13684,12 +13684,11 @@ void BlueStore::BlueStoreThrottle::start_transaction(
       transaction_initial_state,
       txc.osr->get_sequencer_id(),
       txc.seq,
-//      txc.bytes,
-//      txc.ios,
-      pending_bytes.load(),
-      pending_ios.load(),
-      pending_deferred_ios.load(),
-      pending_kv.load(),
+      pending_kv,
+      pending_deferred,
+      total_pending,
+      total_pending_bytes,
+      total_pending_ios,
       throughput.load(),
       throttle_time,
       1.0/threshold);
@@ -13717,12 +13716,12 @@ void BlueStore::BlueStoreThrottle::complete_kv(TransContext &txc)
   if (artificial_qds.size() && artificial_qd_period > 0) {
     std::lock_guard l(qd_lock);
     pending_kv -= 1;
+    pending_deferred += 1;
     qd_cond.notify_all();
   } else {
     pending_kv -= 1;
+    pending_deferred += 1;
   }
-  pending_deferred_bytes += txc.bytes;
-  pending_deferred_ios += txc.ios;
 
   // protected by kv_finish lock
   utime_t now = ceph_clock_now();
@@ -13749,10 +13748,18 @@ void BlueStore::BlueStoreThrottle::complete_kv(TransContext &txc)
 
 void BlueStore::BlueStoreThrottle::complete(TransContext &txc)
 {
-  pending_bytes -= txc.bytes;
-  pending_ios -= txc.ios;
-  pending_deferred_bytes -= txc.bytes;
-  pending_deferred_ios -= txc.ios;
+  if (artificial_qds.size() && artificial_qd_period > 0) {
+    std::lock_guard l(qd_lock);
+    pending_deferred -= 1;
+    total_pending -= 1;
+    qd_cond.notify_all();
+  } else {
+    total_pending -= 1;
+    pending_deferred -= 1;
+  }
+
+  total_pending_bytes -= txc.bytes;
+  total_pending_ios -= txc.ios;
 
 #if defined(WITH_LTTNG)
   if (txc.tracing) {

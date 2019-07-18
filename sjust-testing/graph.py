@@ -45,6 +45,11 @@ SECONDARY_FEATURES = {
         'n',
         int,
         lambda x, y: x + y),
+    'incomplete_ios': (
+        ('total_pending_ios', 'total_pending_deferred_ios'),
+        'n',
+        int,
+        lambda x, y: x + y),
     'committing_state': (
         ('state_prepare_duration', 'state_kv_queued_duration', 'state_kv_submitted_duration'),
         's',
@@ -202,6 +207,12 @@ TO_GRAPH = [
     [Scatter(*x) for x in
      [('total_pending_kv', 'throughput'),
       ('total_pending_kv', 'commit_latency')]],
+    [Scatter(*x) for x in
+     [('incomplete_ios', 'throughput'),
+      ('incomplete_ios', 'commit_latency')]],
+    [Scatter(*x) for x in
+     [('time', 'throughput'),
+      ('time', 'commit_latency')]],
     [Scatter(*x) for x in
      [('throughput', 'commit_latency'),
       ('total_pending_deferred_ios', 'commit_latency')]]

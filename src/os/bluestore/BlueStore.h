@@ -1689,14 +1689,13 @@ public:
     constexpr static int NUM_TO_TRACK = 10000;
     constexpr static double SMOOTHING_PERIOD = 1.0;
 
-    std::atomic_uint pending_bytes = {0};
-    std::atomic_uint pending_ios = {0};
-    std::atomic_uint pending_deferred_bytes = {0};
-    std::atomic_uint pending_deferred_ios = {0};
-
     std::atomic_uint pending_kv = {0};
+    std::atomic_uint pending_deferred = {0};
 
-    
+    std::atomic_uint total_pending = {0};
+    std::atomic_uint total_pending_bytes = {0};
+    std::atomic_uint total_pending_ios = {0};
+
     std::atomic<double> throughput = {0};
     boost::circular_buffer<utime_t> commit_times;
 
