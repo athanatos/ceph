@@ -591,19 +591,24 @@ void Job::check_throttle()
     unsigned dtvals = deferred_throttle_values.size() ? deferred_throttle_values.size() : 1;
     unsigned total = tvals * dtvals;
     if (!throttle_values.empty()) {
+      std::string val = std::to_string(throttle_values[index % tvals]);
+      std::cerr << "Setting bluestore_throttle_bytes to " << val << std::endl;
       int r = engine->cct->_conf.set_val(
 	"bluestore_throttle_bytes",
-	std::to_string(throttle_values[index % tvals]),
+	val,
 	nullptr);
       ceph_assert(r == 0);
     }
     if (!deferred_throttle_values.empty()) {
+      std::string val = std::to_string(deferred_throttle_values[index % tvals]);
+      std::cerr << "Setting bluestore_deferred_throttle_bytes to " << val << std::endl;
       int r = engine->cct->_conf.set_val(
 	"bluestore_throttle_deferred_bytes",
-	std::to_string(deferred_throttle_values[index / dtvals]),
+	val,
 	nullptr);
       ceph_assert(r == 0);
     }
+    engine->cct->_conf.apply_changes(nullptr);
     index = (index + 1) % total;
     last = ceph::mono_clock::now();
   }

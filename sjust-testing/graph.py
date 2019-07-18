@@ -55,6 +55,11 @@ SECONDARY_FEATURES = {
         's',
         int,
         lambda x, y, z: x + y + z),
+    'commit_latency_no_throttle': (
+        ('commit_latency', 'throttle_time'),
+        's',
+        int,
+        lambda x, y: x - y),
 }
 
 def get_unit(feat):
@@ -205,17 +210,17 @@ TO_GRAPH2 = [
 
 TO_GRAPH = [
     [Scatter(*x) for x in
-     [('total_pending_kv', 'throughput'),
-      ('total_pending_kv', 'commit_latency')]],
+     [('current_kv_throttle_cost', 'throughput'),
+      ('current_kv_throttle_cost', 'commit_latency_no_throttle')]],
     [Scatter(*x) for x in
-     [('incomplete_ios', 'throughput'),
-      ('incomplete_ios', 'commit_latency')]],
+     [('current_deferred_throttle_cost', 'throughput'),
+      ('current_deferred_throttle_cost', 'commit_latency_no_throttle')]],
     [Scatter(*x) for x in
      [('time', 'throughput'),
-      ('time', 'commit_latency')]],
+      ('time', 'commit_latency_no_throttle')]],
     [Scatter(*x) for x in
-     [('throughput', 'commit_latency'),
-      ('total_pending_deferred_ios', 'commit_latency')]]
+     [('throughput', 'commit_latency_no_throttle'),
+      ('current_deferred_throttle_cost', 'commit_latency_no_throttle')]]
 ]
 
 

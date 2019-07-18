@@ -159,7 +159,7 @@ class TInitial(TEvent):
             [ ('current_kv_throttle_cost', int, 'bytes')
             , ('current_deferred_throttle_cost', int, 'bytes')
             , ('pending_kv_ios', int, 'ios')
-            , ('pending_deferred_bytes', int, 'bytes')
+            , ('pending_deferred_ios', int, 'ios')
             , ('throughput', float, 'iops')
             , ('throttle_time', float, 's')
             , ('weight', float, 'ratio')
