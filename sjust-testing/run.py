@@ -105,7 +105,7 @@ DEFAULT = {
     'bluestore_throttle': [],
     'bluestore_deferred_throttle': [],
     'vary_bluestore_throttle_period': 0,
-    'tcio': 67000
+    'tcio': 670000
 }
 
 def doformat(conf, template):
@@ -113,7 +113,7 @@ def doformat(conf, template):
     c['qdl'] = max(c['qd'] - c['qdl'], 0)
     for k in ["deferred_", ""]:
         key = "bluestore_" + k + "throttle"
-        c[key] = ','.join([str(x * c['bs'] + 2*c['tcio']) for x in c[key]])
+        c[key] = ','.join([str((x * c['bs']) + 2*c['tcio']) for x in c[key]])
     assert 'block_device' in c
     return template.format(**c)
 
