@@ -472,6 +472,7 @@ struct Job {
   const vector<unsigned> deferred_throttle_values;
   std::chrono::duration<double> cycle_throttle_period;
   mono_clock::time_point last = ceph::mono_clock::zero();
+  unsigned index = 0;
 
   static vector<unsigned> parse_throttle_str(const char *p) {
     vector<unsigned> ret;
@@ -574,6 +575,32 @@ Job::~Job()
 
 void Job::check_throttle()
 {
+  if (throttle_values.empty() && deferred_throttle_values.empty())
+    return;
+
+  if (ceph::mono_clock::is_zero(last) ||
+      ((cycle_throttle_period != cycle_throttle_period.zero()) &&
+       (ceph::mono_clock::now() - last) > cycle_throttle_period)) {
+    unsigned tvals = throttle_values.size() ? throttle_values.size() : 1;
+    unsigned dtvals = deferred_throttle_values.size() ? deferred_throttle_values.size() : 1;
+    unsigned total = tvals * dtvals;
+    if (!throttle_values.empty()) {
+      int r = engine->cct->_conf.set_val(
+	"bluestore_throttle_bytes",
+	std::to_string(throttle_values[index % tvals]),
+	nullptr);
+      ceph_assert(r == 0);
+    }
+    if (!deferred_throttle_values.empty()) {
+      int r = engine->cct->_conf.set_val(
+	"bluestore_throttle_deferred_bytes",
+	std::to_string(throttle_values[index / dtvals]),
+	nullptr);
+      ceph_assert(r == 0);
+    }
+    index = (index + 1) % total;
+    last = ceph::mono_clock::now();
+  }
 }
 
 int fio_ceph_os_setup(thread_data* td)

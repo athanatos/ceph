@@ -39,8 +39,6 @@ BLUESTORE_CONF = """
         rocksdb collect compaction stats = true
         rocksdb perf = true
         bluefs_preextend_wal_files = {preextend}
-        bluestore_throttle_artificial_qd = {qdv}
-        bluestore_throttle_artificial_qd_period = {qdp}
 """
 
 BLUESTORE_FIO = """
@@ -72,6 +70,10 @@ pglog_dup_omap_len=57 # specifies duplicate PG log entry length range
 
 perf_output_file={output_dir}/perf_counters.json
 
+bluestore_throttle= {bluestore_throttle}
+bluestore_deferred_throttle= {bluestore_deferred_throttle}
+vary_bluestore_throttle_period = {vary_bluestore_throttle_period}
+
 rw=randwrite
 iodepth={qd}
 iodepth_low={qdl}
@@ -99,8 +101,9 @@ DEFAULT = {
     'lttng': True,
     'hdd_deferred': 32768,
     'preextend': 'false',
-    'qdv': '',
-    'qdp': 0
+    'bluestore_throttle': '',
+    'bluestore_deferred_throttle': '',
+    'vary_bluestore_throttle_period': 0,
 }
 
 def doformat(conf, template):
