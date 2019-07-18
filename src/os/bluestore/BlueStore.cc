@@ -13636,8 +13636,8 @@ void BlueStore::BlueStoreThrottle::start_transaction(
   }
   double throttle_time = (double)prethrottle - (double)ceph_clock_now();
 
-  pending_bytes += txc.bytes;
-  pending_ios += txc.ios;
+  total_pending_bytes += txc.bytes;
+  total_pending_ios += txc.ios;
 
   txc.start = ceph_clock_now();
 
