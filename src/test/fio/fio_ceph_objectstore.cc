@@ -480,7 +480,7 @@ struct Job {
       return ret;
 
     std::string in(p);
-    std::cout<< "throttle: " << in << std::endl;
+    std::cerr << "throttle: " << in << std::endl;
 
     size_t pos = 0;
     while (pos != std::string::npos && pos < in.size()) {
