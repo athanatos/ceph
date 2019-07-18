@@ -13627,11 +13627,13 @@ void BlueStore::BlueStoreThrottle::start_transaction(
       if (qd < total_pending + 1) {
 	qd_cond.wait(l);
       } else {
+	total_pending += 1;
 	pending_kv += 1;
 	break;
       }
     }
   } else {
+    total_pending += 1;
     pending_kv += 1;
   }
   double throttle_time = (double)prethrottle - (double)ceph_clock_now();
