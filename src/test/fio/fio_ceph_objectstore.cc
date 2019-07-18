@@ -600,7 +600,7 @@ void Job::check_throttle()
     if (!deferred_throttle_values.empty()) {
       int r = engine->cct->_conf.set_val(
 	"bluestore_throttle_deferred_bytes",
-	std::to_string(throttle_values[index / dtvals]),
+	std::to_string(deferred_throttle_values[index / dtvals]),
 	nullptr);
       ceph_assert(r == 0);
     }
