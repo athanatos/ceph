@@ -70,8 +70,8 @@ pglog_dup_omap_len=57 # specifies duplicate PG log entry length range
 
 perf_output_file={output_dir}/perf_counters.json
 
-bluestore_throttle={bluestore_throttle}
-bluestore_deferred_throttle={bluestore_deferred_throttle}
+bluestore_throttle="{bluestore_throttle}"
+bluestore_deferred_throttle="{bluestore_deferred_throttle}"
 vary_bluestore_throttle_period={vary_bluestore_throttle_period}
 
 rw=randwrite
