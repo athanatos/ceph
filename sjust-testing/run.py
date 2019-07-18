@@ -113,7 +113,7 @@ def doformat(conf, template):
     c['qdl'] = max(c['qd'] - c['qdl'], 0)
     for k in ["deferred_", ""]:
         key = "bluestore_" + k + "throttle"
-        c[key] = ','.join([str((x * c['bs']) + 2*c['tcio']) for x in c[key]])
+        c[key] = ','.join([str((x * c['bs'] * 4096) + 2*c['tcio']) for x in c[key]])
     assert 'block_device' in c
     return template.format(**c)
 
