@@ -1753,21 +1753,6 @@ public:
     void complete(TransContext &txc) {}
 #endif
 
-#if 0
-    static vector<unsigned> parse_qd(const std::string &in) {
-      vector<unsigned> ret;
-      size_t pos = 0;
-      while (pos != std::string::npos && pos < in.size()) {
-	size_t next = in.find_first_of(",", pos);
-	ret.push_back(std::stoul(in.substr(pos, next)));
-	pos = next == std::string::npos ? next : next + 1;
-      }
-      return ret;
-    }
-#endif
-
-
-
     utime_t log_state_latency(
       TransContext &txc, PerfCounters *logger, int state);
     bool try_start_transaction(
