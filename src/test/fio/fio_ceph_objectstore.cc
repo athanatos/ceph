@@ -38,8 +38,8 @@ struct Options {
   thread_data* td;
   char* conf;
   char* perf_output_file;
-  char* cycle_throttle_values;
-  char* cycle_deferred_throttle_values;
+  char* throttle_values;
+  char* deferred_throttle_values;
   unsigned long long
     cycle_throttle_period,
     oi_attr_len_low,
@@ -159,28 +159,28 @@ static std::vector<fio_option> ceph_options{
     o.def    = "1";
   }),
   make_option([] (fio_option& o) {
-    o.name   = "vary_bluestore_throttle";
-    o.lname  = "cycle through different throttle values";
+    o.name   = "bluestore_throttle";
+    o.lname  = "set bluestore throttle";
     o.type   = FIO_OPT_STR_STORE;
     o.help   = "comma delimited list of throttle values",
-    o.off1   = offsetof(Options, cycle_throttle_values);
+    o.off1   = offsetof(Options, throttle_values);
     o.def    = 0;
   }),
   make_option([] (fio_option& o) {
-    o.name   = "vary_bluestore_deferred_throttle";
-    o.lname  = "cycle through different deferred throttle values";
+    o.name   = "bluestore_deferred_throttle";
+    o.lname  = "set bluestore deferred throttle";
     o.type   = FIO_OPT_STR_STORE;
     o.help   = "comma delimited list of throttle values",
-    o.off1   = offsetof(Options, cycle_deferred_throttle_values);
+    o.off1   = offsetof(Options, deferred_throttle_values);
     o.def    = 0;
   }),
   make_option([] (fio_option& o) {
     o.name   = "vary_bluestore_throttle_period";
-    o.lname  = "period between different throttle values";
+    o.lname = "period between different throttle values";
     o.type   = FIO_OPT_STR_VAL;
-    o.help   = "period between different throttle values";
+    o.help = "set to non-zero value to periodically cycle through throttle options";
     o.off1   = offsetof(Options, cycle_throttle_period);
-    o.def    = "20";
+    o.def    = "0";
     o.minval = 0;
   }),
   {} // fio expects a 'null'-terminated list
@@ -304,23 +304,6 @@ struct Engine {
 
   // file to which to output formatted perf information
   const std::optional<std::string> perf_output_file;
-  const vector<unsigned> cycle_throttle_values;
-  const vector<unsigned> cycle_deferred_throttle_values;
-
-  static vector<unsigned> parse_throttle_str(const char *p) {
-    vector<unsigned> ret;
-    if (!p)
-      return ret;
-
-    std::string in(p);
-    size_t pos = 0;
-    while (pos != std::string::npos && pos < in.size()) {
-      size_t next = in.find_first_of(",", pos);
-      ret.push_back(std::stoul(in.substr(pos, next)));
-      pos = next == std::string::npos ? next : next + 1;
-    }
-    return ret;
-  }
 
   explicit Engine(thread_data* td);
   ~Engine();
@@ -390,11 +373,7 @@ Engine::Engine(thread_data* td)
     perf_output_file(
       static_cast<Options*>(td->eo)->perf_output_file ?
       std::make_optional(static_cast<Options*>(td->eo)->perf_output_file) :
-      std::nullopt),
-    cycle_throttle_values(
-      parse_throttle_str(static_cast<Options*>(td->eo)->cycle_throttle_values)),
-    cycle_deferred_throttle_values(
-      parse_throttle_str(static_cast<Options*>(td->eo)->cycle_throttle_values))
+      std::nullopt)
 {
   // add the ceph command line arguments
   auto o = static_cast<Options*>(td->eo);
@@ -489,6 +468,27 @@ struct Job {
   bufferptr one_for_all_data; //< preallocated buffer long enough
                               //< to use for vairious operations
 
+  const vector<unsigned> throttle_values;
+  const vector<unsigned> deferred_throttle_values;
+  std::chrono::duration<double> cycle_throttle_period;
+  mono_clock::time_point last = ceph::mono_clock::zero();
+
+  static vector<unsigned> parse_throttle_str(const char *p) {
+    vector<unsigned> ret;
+    if (!p)
+      return ret;
+
+    std::string in(p);
+    size_t pos = 0;
+    while (pos != std::string::npos && pos < in.size()) {
+      size_t next = in.find_first_of(",", pos);
+      ret.push_back(std::stoul(in.substr(pos, next)));
+      pos = next == std::string::npos ? next : next + 1;
+    }
+    return ret;
+  }
+  void check_throttle();
+
   Job(Engine* engine, const thread_data* td);
   ~Job();
 };
@@ -496,7 +496,13 @@ struct Job {
 Job::Job(Engine* engine, const thread_data* td)
   : engine(engine),
     events(td->o.iodepth),
-    unlink(td->o.unlink)
+    unlink(td->o.unlink),
+    throttle_values(
+      parse_throttle_str(static_cast<Options*>(td->eo)->throttle_values)),
+    deferred_throttle_values(
+      parse_throttle_str(static_cast<Options*>(td->eo)->deferred_throttle_values)),
+    cycle_throttle_period(
+      static_cast<Options*>(td->eo)->cycle_throttle_period)
 {
   engine->ref();
   auto o = static_cast<Options*>(td->eo);
@@ -564,6 +570,10 @@ Job::~Job()
     destroy_collections(engine->os, collections);
   }
   engine->deref();
+}
+
+void Job::check_throttle()
+{
 }
 
 int fio_ceph_os_setup(thread_data* td)
@@ -650,6 +660,8 @@ enum fio_q_status fio_ceph_os_queue(thread_data* td, io_u* u)
   auto& object = job->objects[u->file->engine_pos];
   auto& coll = object.coll;
   auto& os = job->engine->os;
+
+  job->check_throttle();
 
   if (u->ddir == DDIR_WRITE) {
     // provide a hint if we're likely to read this data back
