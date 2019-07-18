@@ -39,6 +39,7 @@ BLUESTORE_CONF = """
         rocksdb collect compaction stats = true
         rocksdb perf = true
         bluefs_preextend_wal_files = {preextend}
+        bluestore_throttle_cost_per_io = {tcio}
 """
 
 BLUESTORE_FIO = """
@@ -101,14 +102,18 @@ DEFAULT = {
     'lttng': True,
     'hdd_deferred': 32768,
     'preextend': 'false',
-    'bluestore_throttle': '',
-    'bluestore_deferred_throttle': '',
+    'bluestore_throttle': [],
+    'bluestore_deferred_throttle': [],
     'vary_bluestore_throttle_period': 0,
+    'tcio': 67000
 }
 
 def doformat(conf, template):
     c = conf.copy()
     c['qdl'] = max(c['qd'] - c['qdl'], 0)
+    for k in ["deferred_", ""]:
+        key = "bluestore_" + k + "throttle"
+        c[key] = ','.join([x * c['bs'] + 2*c['tcio'] for x in c[key]])
     assert 'block_device' in c
     return template.format(**c)
 
