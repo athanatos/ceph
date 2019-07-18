@@ -20,6 +20,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <chrono>
 #include <mutex>
 #include <condition_variable>
 
@@ -1686,21 +1687,16 @@ public:
 
 
   class BlueStoreThrottle {
+#if defined(WITH_LTTNG)
     constexpr static int NUM_TO_TRACK = 10000;
     constexpr static double SMOOTHING_PERIOD = 1.0;
 
-    std::atomic_uint pending_kv = {0};
-    std::atomic_uint pending_deferred = {0};
-
-    std::atomic_uint total_pending = {0};
-    std::atomic_uint total_pending_bytes = {0};
-    std::atomic_uint total_pending_ios = {0};
-
     std::atomic<double> throughput = {0};
-    boost::circular_buffer<utime_t> commit_times;
+    boost::circular_buffer<mono_clock::time_point> commit_times;
 
+    std::atomic_uint pending_kv_ios = {0};
+    std::atomic_uint pending_deferred_ios = {0};
 
-#if defined(WITH_LTTNG)
     const double trace_rate;
     double get_threshold() {
       return std::min((trace_rate / throughput.load()), 1.0);
@@ -1712,12 +1708,23 @@ public:
 	      trace_threshold);
     }
 #endif
-    ceph::mutex qd_lock = ceph::make_mutex("BlueStore::BlueStoreThrottle::qd_lock");
-    ceph::condition_variable qd_cond;
-    double artificial_qd_period;
-    vector<unsigned> artificial_qds;
-    const utime_t start;
 
+#if defined(WITH_LTTNG)
+    void emit_initial_tracepoint(
+      KeyValueDB &db,
+      TransContext &txc,
+      mono_clock::time_point);
+#else
+    void emit_initial_tracepoint(
+      KeyValueDB &db,
+      TransContext &txc,
+      mono_clock::time_point) {}
+#endif
+
+    Throttle throttle_bytes;           ///< submit to commit
+    Throttle throttle_deferred_bytes;  ///< submit to deferred complete
+
+#if 0
     static vector<unsigned> parse_qd(const std::string &in) {
       vector<unsigned> ret;
       size_t pos = 0;
@@ -1728,28 +1735,77 @@ public:
       }
       return ret;
     }
+#endif
+
+    template <typename T>
+    static double to_seconds(T t) {
+      return std::chrono::duration_cast<
+	std::chrono::duration<double>>(t).count();
+    }
+
 
   public:
     BlueStoreThrottle(CephContext *cct) :
-      commit_times(NUM_TO_TRACK),
 #if defined(WITH_LTTNG)
+      commit_times(NUM_TO_TRACK),
       trace_rate(cct->_conf.get_val<double>(
 		   "bluestore_throttle_trace_rate")),
 #endif
-      artificial_qd_period(cct->_conf.get_val<double>(
-		  "bluestore_throttle_artificial_qd_period")),
-      artificial_qds(
-	parse_qd(cct->_conf.get_val<string>(
-		   "bluestore_throttle_artificial_qd"))),
-      start(ceph_clock_now()) {}
+      throttle_bytes(cct, "bluestore_throttle_bytes",
+		     cct->_conf->bluestore_throttle_bytes),
+      throttle_deferred_bytes(cct, "bluestore_throttle_deferred_bytes",
+			      cct->_conf->bluestore_throttle_bytes +
+			      cct->_conf->bluestore_throttle_deferred_bytes)
+    {}
+
+#if defined(WITH_LTTNG)
+    void complete_kv(TransContext &txc);
+    void complete(TransContext &txc);
+#else
+    void complete_kv(TransContext &txc) {}
+    void complete(TransContext &txc) {}
+#endif
+
+#if 0
+    static vector<unsigned> parse_qd(const std::string &in) {
+      vector<unsigned> ret;
+      size_t pos = 0;
+      while (pos != std::string::npos && pos < in.size()) {
+	size_t next = in.find_first_of(",", pos);
+	ret.push_back(std::stoul(in.substr(pos, next)));
+	pos = next == std::string::npos ? next : next + 1;
+      }
+      return ret;
+    }
+#endif
+
+
 
     utime_t log_state_latency(
       TransContext &txc, PerfCounters *logger, int state);
-    void start_transaction(
+    bool try_start_transaction(
       KeyValueDB &db,
-      TransContext &txc);
-    void complete_kv(TransContext &txc);
-    void complete(TransContext &txc);
+      TransContext &txc,
+      mono_clock::time_point);
+    void finish_start_transaction(
+      KeyValueDB &db,
+      TransContext &txc,
+      mono_clock::time_point);
+    void release_kv_throttle(uint64_t cost) {
+      throttle_bytes.put(cost);
+    }
+    void release_deferred_throttle(uint64_t cost) {
+      throttle_deferred_bytes.put(cost);
+    }
+    bool should_submit_deferred() {
+      return throttle_deferred_bytes.past_midpoint();
+    }
+    void reset_throttle(const ConfigProxy &conf) {
+      throttle_bytes.reset_max(conf->bluestore_throttle_bytes);
+      throttle_deferred_bytes.reset_max(
+	conf->bluestore_throttle_bytes +
+	conf->bluestore_throttle_deferred_bytes);
+    }
   } bsthrottle;
 
   typedef boost::intrusive::list<
@@ -1993,9 +2049,6 @@ private:
   std::atomic<uint64_t> nid_max = {0};
   std::atomic<uint64_t> blobid_last = {0};
   std::atomic<uint64_t> blobid_max = {0};
-
-  Throttle throttle_bytes;          ///< submit to commit
-  Throttle throttle_deferred_bytes;  ///< submit to deferred complete
 
   interval_set<uint64_t> bluefs_extents;  ///< block extents owned by bluefs
   interval_set<uint64_t> bluefs_extents_reclaiming; ///< currently reclaiming

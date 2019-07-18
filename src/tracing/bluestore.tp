@@ -74,21 +74,20 @@ TRACEPOINT_EVENT(bluestore, transaction_initial_state,
     TP_ARGS(
         uint32_t, sequencer_id,
         uint64_t, tid,
-	uint64_t, pending_kv,
-	uint64_t, pending_deferred,
-	uint64_t, total_pending,
-	uint64_t, total_pending_bytes,
-	uint64_t, total_pending_ios,
+	uint64_t, current_kv_throttle_cost,
+	uint64_t, current_deferred_throttle_cost,
+	uint64_t, pending_kv_ios,
+	uint64_t, pending_deferred_ios,
 	double, throughput,
 	double, throttle_time,
 	double, weight),
     TP_FIELDS(
         ctf_integer(uint32_t, sequencer_id, sequencer_id)
         ctf_integer(uint64_t, tid, tid)
-        ctf_integer(uint64_t, pending_kv, pending_kv)
-        ctf_integer(uint64_t, pending_deferred, pending_deferred)
-        ctf_integer(uint64_t, total_pending_bytes, total_pending_bytes)
-        ctf_integer(uint64_t, total_pending_ios, total_pending_ios)
+        ctf_integer(uint64_t, current_kv_throttle_cost, current_kv_throttle_cost)
+        ctf_integer(uint64_t, current_deferred_throttle_cost, current_deferred_throttle_cost)
+        ctf_integer(uint64_t, pending_kv_ios, pending_kv_ios)
+        ctf_integer(uint64_t, pending_deferred_ios, pending_deferred_ios)
         ctf_float(double, throughput, throughput)
         ctf_float(double, throttle_time, throttle_time)
         ctf_float(double, weight, weight)
