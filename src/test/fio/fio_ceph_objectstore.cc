@@ -482,9 +482,10 @@ struct Job {
     std::string in(p);
     std::cerr << "throttle: " << in << std::endl;
 
-    size_t pos = 0;
     while (pos != std::string::npos && pos < in.size()) {
-      size_t next = in.find_first_of(",", pos);
+      if (in[pos] == "\"")
+	continue;
+      size_t next = in.find_first_of(",\"", pos);
       ret.push_back(std::stoul(in.substr(pos, next)));
       pos = next == std::string::npos ? next : next + 1;
     }
