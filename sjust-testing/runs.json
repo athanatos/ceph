@@ -1,6 +1,6 @@
 {
 	"base": {
-		"runtime": 30,
+		"runtime": 3600,
 		"target_dir": "/mnt/sjust/bluestore",
 		"devices": {
 			"nvme": "/dev/nvme0n1p3",
@@ -8,7 +8,8 @@
 		},
 		"preextend": "true",
 		"qd": 1024,
-		"bluestore_deferred_throttle": [32,64,128,256],
+		"bluestore_deferred_throttle": [16,64,128,256],
+		"bluestore_throttle": [2,8,32],
 		"vary_bluestore_throttle_period": 10
 	},
 	"runs": {
