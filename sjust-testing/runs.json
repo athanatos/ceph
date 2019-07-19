@@ -8,9 +8,9 @@
 		},
 		"preextend": "true",
 		"qd": 1024,
-		"bluestore_deferred_throttle": [16,64,128,256],
-		"bluestore_throttle": [2,8,32],
-		"vary_bluestore_throttle_period": 10
+		"bluestore_deferred_throttle": [2,8,16,32,64],
+		"bluestore_throttle": [2,4,8,16],
+		"vary_bluestore_throttle_period": 30
 	},
 	"runs": {
 	  "bs": [4],
