@@ -184,6 +184,7 @@ bool Throttle::get(int64_t c, int64_t m)
 bool Throttle::get_or_fail(int64_t c)
 {
   if (0 == max) {
+    count += c;
     return true;
   }
 
@@ -212,6 +213,7 @@ bool Throttle::get_or_fail(int64_t c)
 int64_t Throttle::put(int64_t c)
 {
   if (0 == max) {
+    count -= c;
     return 0;
   }
 
