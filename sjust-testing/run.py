@@ -153,7 +153,7 @@ def write_conf(conf):
                      (fio_populate_fn, generate_fio_populate_conf),
                      (ceph_fn, generate_ceph_conf)]:
         with open(fn, 'w') as f:
-            f.write(f(conf))
+            f.write(func(conf))
     return fio_populate_fn, fio_fn
 
 def setup_start_lttng(conf):
