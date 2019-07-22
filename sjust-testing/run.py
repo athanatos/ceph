@@ -202,7 +202,7 @@ def run_fio(conf, fn):
         '--status-interval', '10s',
         '--output', output_json,
         '--output-format', 'json+']
-    with open(get_fio_stdout(conf['output_dir']), 'w') as outf:
+    with open(get_fio_stdout(conf['output_dir']), 'a') as outf:
         subprocess.run(cmd, env=env, stdout=outf, stderr=outf)
 
 def run_conf(conf):
