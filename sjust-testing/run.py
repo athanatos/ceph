@@ -80,6 +80,9 @@ vary_bluestore_throttle_period={vary_bluestore_throttle_period}
 
 rw=randwrite
 
+create_only={create_only}
+create_on_open=false
+alloe_file_create=false
 nr_files=128000
 size=4m
 """
