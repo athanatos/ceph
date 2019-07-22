@@ -203,6 +203,7 @@ def run_fio(conf, fn):
     cmd = [
         conf['fio_bin'],
         fn,
+        '--status-interval', '10s',
         '--output', output_json,
         '--output-format', 'json+']
     with open(get_fio_stdout(conf['output_dir']), 'w') as outf:
