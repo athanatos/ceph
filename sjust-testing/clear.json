@@ -1,6 +1,6 @@
 {
   "base": {
-    "runtime": 60,
+    "runtime": 10,
     "devices": {
       "nvme": {
         "device": "/dev/nvme0n1p3",
@@ -13,32 +13,18 @@
     },
     "preextend": "true",
     "qd": 1024,
-    "bluestore_deferred_throttle": [
-      2,
-      8,
-      16,
-      32,
-      64,
-      96
-    ],
-    "bluestore_throttle": [
-      2,
-      4,
-      8,
-      16
-    ],
-    "vary_bluestore_throttle_period": 30
+    "clear_target": true
   },
   "runs": {
     "bs": [
       4
     ],
     "target_device": [
-      "hdd"
+      "hdd",
+      "nvme"
     ],
     "run": [
       0
     ]
   }
 }
-
