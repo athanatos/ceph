@@ -87,11 +87,18 @@ nr_files=128000
 size=4m
 """
 
+BLUESTORE_FIO_POPULATE = """
+[write]
+bs=4m
+rw=write
+time_based=0
+"""
+
 def generate_fio_populate_conf(conf):
     c = conf.copy()
     c['create_only'] = '1'
     assert 'block_device' in c
-    return BLUESTORE_FIO_BASE.format(**c)
+    return (BLUESTORE_FIO_BASE + BLUESTORE_FIO_POPULATE).format(**c)
 
 BLUESTORE_FIO = """
 [write]
@@ -205,11 +212,15 @@ def run_conf(conf):
     to_clear = [conf['output_dir']]
     if conf['clear_target']:
         to_clear.append(conf['target_dir'])
+
     for d in to_clear:
         subprocess.run(['rm', '-rf', d], check=False)
         subprocess.run(['mkdir', '-p', d])
     fio_conf, fio_populate_conf = write_conf(conf)
-    run_fio(conf, fio_populate_conf)
+
+    if conf['clear_target']:
+        run_fio(conf, fio_populate_conf)
+
     stop_destroy_lttng(conf)
     setup_start_lttng(conf)
     run_fio(conf, fio_conf)
