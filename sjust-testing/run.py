@@ -162,7 +162,7 @@ def write_conf(conf):
     for fn, func in [(fio_fn, generate_fio_job_conf),
                      (fio_populate_fn, generate_fio_populate_conf),
                      (ceph_fn, generate_ceph_conf)]:
-        with open(fn, 'w') as f:
+        with open(fn, 'a') as f:
             f.write(func(conf))
     return fio_fn, fio_populate_fn
 
