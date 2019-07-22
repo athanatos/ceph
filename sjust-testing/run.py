@@ -238,7 +238,9 @@ def generate_name_full_config(base, run):
         assert('devices' in full_config.keys())
         assert('target_device' in full_config.keys())
         full_config['block_device'] = \
-            full_config['devices'][full_config['target_device']]
+            full_config['devices'][full_config['target_device']]['device']
+        full_config['target_dir'] = \
+            full_config['devices'][full_config['target_device']]['target_dir']
     name = "-".join(
         "{name}({val})".format(name=name, val=val)
         for name, val in run.items())
