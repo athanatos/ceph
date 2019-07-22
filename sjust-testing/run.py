@@ -209,6 +209,8 @@ def run_conf(conf):
     if conf['clear_target']:
         to_clear.append(conf['target_dir'])
 
+    stop_destroy_lttng(conf)
+
     for d in to_clear:
         subprocess.run(['rm', '-rf', d], check=False)
         subprocess.run(['mkdir', '-p', d])
@@ -217,7 +219,6 @@ def run_conf(conf):
     if conf['clear_target']:
         run_fio(conf, fio_populate_conf)
 
-    stop_destroy_lttng(conf)
     setup_start_lttng(conf)
     run_fio(conf, fio_conf)
     stop_destroy_lttng(conf)
