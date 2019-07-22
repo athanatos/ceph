@@ -81,15 +81,15 @@ vary_bluestore_throttle_period={vary_bluestore_throttle_period}
 rw=randwrite
 
 create_only={create_only}
-create_on_open=false
-allow_file_create=false
+create_on_open=0
+allow_file_create=0
 nr_files=128000
 size=4m
 """
 
 def generate_fio_populate_conf(conf):
     c = conf.copy()
-    c['create_only'] = 'true'
+    c['create_only'] = '1'
     assert 'block_device' in c
     return BLUESTORE_FIO_BASE.format(**c)
 
@@ -105,7 +105,7 @@ rw=randwrite
 
 def generate_fio_job_conf(conf):
     c = conf.copy()
-    c['create_only'] = 'false'
+    c['create_only'] = '0'
     c['qdl'] = max(c['qd'] - c['qdl'], 0)
     for k in ["deferred_", ""]:
         key = "bluestore_" + k + "throttle"
