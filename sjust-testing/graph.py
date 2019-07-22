@@ -165,22 +165,22 @@ class Scatter(Graph):
             s=1,
             rasterized=True)
 
-        per_point = 1000
         xsortidx = x.argsort()
         xs = x[xsortidx]
         ys = y[xsortidx]
-        lines = [(x, []) for x in [50, 95]]
+        per_point = max(150, (len(xs)//50))
+        lines = [(t, c, []) for t, c in [(50, 'green'), (95, 'red')]]
         limits = []
         idx = 0
         while idx < len(xs):
-            limit = max(len(xs), idx + per_point)
+            limit = min(len(xs), idx + per_point)
             vals = ys[idx:limit]
-            limits.append((xs[idx] + xs[limit]) / 2.0)
-            for t, d in lines:
+            limits.append((xs[idx] + xs[limit - 1]) / 2.0)
+            for t, _, d in lines:
                 d.append(np.percentile(vals, t))
             idx = limit
-        for t, d in lines:
-            ax.plot(limits, d, 'go--', linewidth=2, markersize=12)
+        for t, c, d in lines:
+            ax.plot(limits, d, 'go--', linewidth=1, markersize=2, color=c)
 
     def name(self):
         return "Scatter({}, {})".format(self.__xname, self.__yname)

@@ -82,7 +82,7 @@ iodepth_low={qdl}
 time_based=1
 runtime={runtime}s
 
-nr_files=256
+nr_files=128000
 size=4m
 bs={bs}k
 
@@ -105,7 +105,8 @@ DEFAULT = {
     'bluestore_throttle': [],
     'bluestore_deferred_throttle': [],
     'vary_bluestore_throttle_period': 0,
-    'tcio': 670000
+    'tcio': 670000,
+    'clear_target': False
 }
 
 def doformat(conf, template):
@@ -167,7 +168,10 @@ def stop_destroy_lttng(conf):
     ], check=False)
 
 def run_conf(conf):
-    for d in [conf['output_dir'], conf['target_dir']]:
+    to_clear = [conf['output_dir']]
+    if conf['clear_target']:
+        to_clear.append(conf['target_dir'])
+    for d in to_clear:
         subprocess.run(['rm', '-rf', d], check=False)
         subprocess.run(['mkdir', '-p', d])
     fio_conf = write_conf(conf)
