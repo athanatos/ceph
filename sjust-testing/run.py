@@ -43,7 +43,7 @@ BLUESTORE_CONF = """
 """
 
 def generate_ceph_conf(conf):
-    return BLUESTORE_CONF.format(conf)
+    return BLUESTORE_CONF.format(**conf)
 
 BLUESTORE_FIO_BASE = """
 [global]
@@ -154,7 +154,7 @@ def write_conf(conf):
                      (ceph_fn, generate_ceph_conf)]:
         with open(fn, 'w') as f:
             f.write(func(conf))
-    return fio_populate_fn, fio_fn
+    return fio_fn, fio_populate_fn
 
 def setup_start_lttng(conf):
     if not conf.get('lttng', False):
