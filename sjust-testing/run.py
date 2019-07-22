@@ -42,7 +42,10 @@ BLUESTORE_CONF = """
         bluestore_throttle_cost_per_io = {tcio}
 """
 
-BLUESTORE_FIO = """
+def generate_ceph_conf(conf):
+    return BLUESTORE_CONF.format(conf)
+
+BLUESTORE_FIO_BASE = """
 [global]
 ioengine={lib}/libfio_ceph_objectstore.so
 
@@ -76,19 +79,37 @@ bluestore_deferred_throttle="{bluestore_deferred_throttle}"
 vary_bluestore_throttle_period={vary_bluestore_throttle_period}
 
 rw=randwrite
-iodepth={qd}
-iodepth_low={qdl}
-
-time_based=1
-runtime={runtime}s
 
 nr_files=128000
 size=4m
-bs={bs}k
+"""
 
+def generate_fio_populate_conf(conf):
+    c = conf.copy()
+    c['create_only'] = 'true'
+    assert 'block_device' in c
+    return BLUESTORE_FIO_BASE.format(**c)
+
+BLUESTORE_FIO = """
 [write]
+iodepth={qd}
+iodepth_low={qdl}
+time_based=1
+runtime={runtime}s
+bs={bs}k
 rw=randwrite
 """
+
+def generate_fio_job_conf(conf):
+    c = conf.copy()
+    c['create_only'] = 'false'
+    c['qdl'] = max(c['qd'] - c['qdl'], 0)
+    for k in ["deferred_", ""]:
+        key = "bluestore_" + k + "throttle"
+        c[key] = ','.join([str(x * ((c['bs'] * 1024) + (2 * c['tcio']))) for x in c[key]])
+    assert 'block_device' in c
+    return (BLUESTORE_FIO_BASE + BLUESTORE_FIO).format(**c)
+
 
 DEFAULT = {
     'output_dir': os.path.join('./output',time.strftime('%Y-%m-%d-%H:%M:%S')),
@@ -109,17 +130,11 @@ DEFAULT = {
     'clear_target': False
 }
 
-def doformat(conf, template):
-    c = conf.copy()
-    c['qdl'] = max(c['qd'] - c['qdl'], 0)
-    for k in ["deferred_", ""]:
-        key = "bluestore_" + k + "throttle"
-        c[key] = ','.join([str(x * ((c['bs'] * 1024) + (2 * c['tcio']))) for x in c[key]])
-    assert 'block_device' in c
-    return template.format(**c)
-
 def get_fio_fn(base):
     return os.path.join(base, 'bluestore.fio')
+
+def get_fio_populate_fn(base):
+    return os.path.join(base, 'bluestore_populate.fio')
 
 def get_ceph_fn(base):
     return os.path.join(base, 'ceph.conf')
@@ -132,11 +147,14 @@ def get_fio_stdout(base):
 
 def write_conf(conf):
     fio_fn = get_fio_fn(conf['output_dir'])
+    fio_populate_fn = get_fio_populate_fn(conf['output_dir'])
     ceph_fn = get_ceph_fn(conf['output_dir'])
-    for fn, template in [(fio_fn, BLUESTORE_FIO), (ceph_fn, BLUESTORE_CONF)]:
+    for fn, func in [(fio_fn, generate_fio_job_conf),
+                     (fio_populate_fn, generate_fio_populate_conf),
+                     (ceph_fn, generate_ceph_conf)]:
         with open(fn, 'w') as f:
-            f.write(doformat(conf, template))
-    return fio_fn
+            f.write(f(conf))
+    return fio_populate_fn, fio_fn
 
 def setup_start_lttng(conf):
     if not conf.get('lttng', False):
@@ -167,6 +185,19 @@ def stop_destroy_lttng(conf):
         'lttng', 'destroy', 'fio-bluestore'
     ], check=False)
 
+def run_fio(conf, fn):
+    env = {
+        'LD_LIBRARY_PATH': conf['lib']
+    }
+    output_json = get_fio_output(conf['output_dir'])
+    cmd = [
+        conf['fio_bin'],
+        fn,
+        '--output', output_json,
+        '--output-format', 'json+']
+    with open(get_fio_stdout(conf['output_dir']), 'w') as outf:
+        subprocess.run(cmd, env=env, stdout=outf, stderr=outf)
+
 def run_conf(conf):
     to_clear = [conf['output_dir']]
     if conf['clear_target']:
@@ -174,20 +205,11 @@ def run_conf(conf):
     for d in to_clear:
         subprocess.run(['rm', '-rf', d], check=False)
         subprocess.run(['mkdir', '-p', d])
-    fio_conf = write_conf(conf)
-    env = {
-        'LD_LIBRARY_PATH': conf['lib']
-    }
-    output_json = get_fio_output(conf['output_dir'])
-    cmd = [
-        conf['fio_bin'],
-        fio_conf,
-        '--output', output_json,
-        '--output-format', 'json+']
+    fio_conf, fio_populate_conf = write_conf(conf)
+    run_fio(conf, fio_populate_conf)
     stop_destroy_lttng(conf)
     setup_start_lttng(conf)
-    with open(get_fio_stdout(conf['output_dir']), 'w') as outf:
-        subprocess.run(cmd, env=env, stdout=outf, stderr=outf)
+    run_fio(conf, fio_conf)
     stop_destroy_lttng(conf)
 
 def get_all_config_combos(configs):
