@@ -43,7 +43,15 @@ BLUESTORE_CONF = """
 """
 
 def generate_ceph_conf(conf):
-    return BLUESTORE_CONF.format(**conf)
+    ret = BLUESTORE_CONF.format(**conf)
+    db_block = conf.get('db_block_device', None)
+    if db_block:
+        ret += "        bluestore_block_db_path = " + db_block
+    db_wal = conf.get('db_wal_device', None)
+    if db_block:
+        ret += "        bluestore_block_wal_path = " + db_block
+    return ret
+
 
 BLUESTORE_FIO_BASE = """
 [global]
@@ -106,6 +114,7 @@ def generate_fio_populate_conf(conf):
 BLUESTORE_FIO = """
 [write]
 preallocate_files=0
+check_files=1
 io_size=10000g
 bluestore_throttle="{bluestore_throttle}"
 bluestore_deferred_throttle="{bluestore_deferred_throttle}"
@@ -314,9 +323,12 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--run')
-    group.add_argument('--initialize', type=str,
-                       help='comma seperated list of devices or runs or all')
+    group.add_argument(
+        '--run', action='store_true',
+        help='execute runs in conf')
+    group.add_argument(
+        '--initialize', type=str,
+        help='comma seperated list of devices or runs or all to be initialized')
     parser.add_argument('conf', metavar='C', type=str, nargs=1,
                         help='path to config file')
     args = parser.parse_args()

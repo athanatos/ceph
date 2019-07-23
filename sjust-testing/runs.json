@@ -1,17 +1,25 @@
 {
   "base": {
-    "runtime": 3600,
+    "runtime": 600,
     "devices": {
       "nvme": {
+        "db_wal_device": "/dev/nvme0n1p2",
+        "db_block_device": "/dev/nvme0n1p3",
         "device": "/dev/nvme0n1p4",
         "target_dir": "/mnt/sjust/bluestore-nvme"
       },
       "hdd": {
         "device": "/dev/sdh2",
         "target_dir": "/mnt/sjust/bluestore-hdd"
+      },
+      "hdd_nvme_db": {
+        "db_wal_device": "/dev/nvme2n1p2",
+        "db_block_device": "/dev/nvme2n1p3",
+        "device": "/dev/sdg2",
+        "target_dir": "/mnt/sjust/bluestore-hdd"
       }
     },
-		"size": 512,
+		"size": 2,
 		"filesize": 4,
     "preextend": "true",
     "qd": 1024,
@@ -39,7 +47,8 @@
       512
     ],
     "target_device": [
-      "nvme"
+      "nvme",
+			"hdd_nvme_db"
     ],
     "run": [
       0
