@@ -165,7 +165,7 @@ static std::vector<fio_option> ceph_options{
     o.type   = FIO_OPT_BOOL;
     o.help   = "Enables/disables checking of files on init";
     o.off1   = offsetof(Options, check_files);
-    o.def    = "1";
+    o.def    = "0";
   }),
   make_option([] (fio_option& o) {
     o.name   = "bluestore_throttle";
@@ -547,6 +547,7 @@ Job::Job(Engine* engine, const thread_data* td)
 
   // create an object for each file in the job
   objects.reserve(td->o.nr_files);
+  unsigned checked = 0;
   for (uint32_t i = 0; i < td->o.nr_files; i++) {
     auto f = td->files[i];
     f->real_file_size = file_size;
@@ -565,7 +566,8 @@ Job::Job(Engine* engine, const thread_data* td)
         engine->deref();
         throw std::system_error(r, std::system_category(), "job init");
       }
-    } else if (o->check_files) {
+    }
+    if (o->check_files) {
       auto& oid = objects.back().oid;
       struct stat st;
       int r = engine->os->stat(coll.ch, oid, &st);
@@ -575,6 +577,15 @@ Job::Job(Engine* engine, const thread_data* td)
 	  r, std::system_category(), "job init -- cannot check file");
       }
     }
+    if (o->check_files || o->preallocate_files) {
+      ++checked;
+    }
+  }
+  if (o->check_files) {
+    derr << "fio_ceph_objectstore checked " << checked << " files"<< dendl;
+  }
+  if (o->preallocate_files ){
+    derr << "fio_ceph_objectstore preallocated " << checked << " files"<< dendl;
   }
 }
 
