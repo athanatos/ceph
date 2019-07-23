@@ -330,5 +330,5 @@ if __name__ == "__main__":
             base.update(conf.get('base', {}))
             if args.run:
                 do_run(base, conf['runs'])
-            else:
-                do_run(base, conf['runs'], initialize)
+            elif args.initialize:
+                do_run(base, conf['runs'], args.initialize)
