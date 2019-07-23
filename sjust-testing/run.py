@@ -81,7 +81,7 @@ filesize=4m
 BLUESTORE_FIO_POPULATE = """
 [write]
 bs=1m
-qd=16
+iodepth=16
 rw=write
 time_based=0
 """
