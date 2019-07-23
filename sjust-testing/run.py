@@ -324,7 +324,7 @@ if __name__ == "__main__":
 
     if args.run or args.initialize:
         conf = {}
-        with open(args.conf) as f:
+        with open(args.conf[0]) as f:
             conf = json.load(f)
             base = DEFAULT
             base.update(conf.get('base', {}))
