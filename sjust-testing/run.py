@@ -131,7 +131,7 @@ DEFAULT = {
     'vary_bluestore_throttle_period': 0,
     'tcio': 670000,
     'clear_target': False,
-    'size': 1
+    'size': '1g'
 }
 
 def get_fio_fn(base):
