@@ -318,9 +318,9 @@ if __name__ == "__main__":
     group.add_argument('--run')
     group.add_argument('--initialize', type=str,
                        help='comma seperated list of devices or runs or all')
-    args = parser.parse_args()
     parser.add_argument('conf', metavar='C', type=str, nargs=1,
                         help='path to config file')
+    args = parser.parse_args()
 
     if args.run or args.initialize:
         conf = {}
