@@ -39,7 +39,8 @@ BLUESTORE_CONF = """
         rocksdb collect compaction stats = true
         rocksdb perf = true
         bluefs_preextend_wal_files = {preextend}
-        bluestore_throttle_cost_per_io = {tcio}
+        bluestore_throttle_cost_per_io_hdd = {tcio_hdd}
+        bluestore_throttle_cost_per_io_ssd = {tcio_ssd}
 """
 
 def generate_ceph_conf(conf):
@@ -146,7 +147,8 @@ DEFAULT = {
     'bluestore_throttle': [],
     'bluestore_deferred_throttle': [],
     'vary_bluestore_throttle_period': 0,
-    'tcio': 670000,
+    'tcio_hdd': 670000,
+    'tcio_ssd': 4000,
     'size': 1,
     'filesize': 4
 }
