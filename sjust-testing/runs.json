@@ -17,18 +17,19 @@
     "qd": 1024,
     "bluestore_deferred_throttle": [
       2,
+			4,
       8,
       16,
       32,
-      64,
-      96
+      64
     ],
     "bluestore_throttle": [
       2,
       4,
       8,
       16,
-			32
+			32,
+			64
     ],
     "vary_bluestore_throttle_period": 30
   },
