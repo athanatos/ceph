@@ -56,7 +56,8 @@ def project(name, config, fio_stats, perf_stats):
 def dump_target(name, directory):
     fio_output = {}
     with open(get_fio_output(directory)) as f:
-        fio_output = json.load(f)
+        decoder = json.JSONDecoder()
+        fio_output, _ = decoder.raw_decode(f.read())
     perf_output = {}
     with open(os.path.join(directory, 'perf_counters.json')) as f:
         perf_output = json.load(f)
