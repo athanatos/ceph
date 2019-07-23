@@ -294,6 +294,7 @@ def do_initialize(base, runs, initialize):
     for name, base_config, full_config in [
             generate_name_full_config(base, { 'target_device': device })
             for device in devices]:
+        print(full_config)
         full_config['output_dir'] = os.path.join(full_config['output_dir'], name)
         print("Initializing {name}".format(name=name))
 
