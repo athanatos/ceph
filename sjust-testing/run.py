@@ -284,7 +284,8 @@ def do_initialize(base, runs, initialize):
     devices = set()
     if initialize == 'runs':
         devices = set([full_config['target_device'] for _, _, full_config
-                       in map(lambda x: generate_name_full_config(base, x))])
+                       in map(lambda x: generate_name_full_config(base, x),
+                              runs)])
     elif initialize == 'all':
         devices = set(base['devices'].keys())
     else:
