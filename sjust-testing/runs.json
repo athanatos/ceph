@@ -11,8 +11,8 @@
         "target_dir": "/mnt/sjust/bluestore-hdd"
       }
     },
-		"size": "4",
-		"filesize": "4",
+		"size": 4,
+		"filesize": 4,
     "preextend": "true",
     "qd": 1024,
     "bluestore_deferred_throttle": [
