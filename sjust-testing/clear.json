@@ -13,7 +13,7 @@
     },
     "preextend": "true",
     "qd": 1024,
-		"size": 1,
+		"size": "1g",
     "clear_target": true
   },
   "runs": {

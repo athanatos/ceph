@@ -12,7 +12,7 @@
       }
     },
     "preextend": "true",
-		"size": 1,
+		"size": "1g",
     "qd": 1024,
     "bluestore_deferred_throttle": [
       2,
