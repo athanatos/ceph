@@ -331,4 +331,4 @@ if __name__ == "__main__":
             if args.run:
                 do_run(base, conf['runs'])
             elif args.initialize:
-                do_run(base, conf['runs'], args.initialize)
+                do_initialize(base, conf['runs'], args.initialize)
