@@ -300,7 +300,7 @@ def do_initialize(base, runs, initialize):
 
         stop_destroy_lttng(conf)
 
-        for d in [conf['output_dir'], conf['target_dir']]:
+        for d in [full_conf['output_dir'], full_conf['target_dir']]:
             subprocess.run(['rm', '-rf', d], check=False)
             subprocess.run(['mkdir', '-p', d])
 
