@@ -1,6 +1,6 @@
 {
   "base": {
-    "runtime": 60,
+    "runtime": 7200,
     "devices": {
       "nvme": {
         "device": "/dev/nvme0n1p3",
@@ -25,13 +25,15 @@
       2,
       4,
       8,
-      16
+      16,
+			32
     ],
     "vary_bluestore_throttle_period": 30
   },
   "runs": {
     "bs": [
-      4
+      4,
+      512
     ],
     "target_device": [
       "hdd"
