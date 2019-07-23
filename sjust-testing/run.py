@@ -74,10 +74,20 @@ pglog_dup_omap_len=57 # specifies duplicate PG log entry length range
 
 perf_output_file={output_dir}/perf_counters.json
 
-nr_files=128000
-size=512g
-filesize=4m
+nr_files={nr_files}
+size={size}g
+filesize={filesize}m
 """
+
+def preprocess_fio_configs(conf):
+    c = conf.copy()
+    c['qdl'] = max(c['qd'] - c['qdl'], 0)
+    for k in ["deferred_", ""]:
+        key = "bluestore_" + k + "throttle"
+        c[key] = ','.join([str(x * ((c['bs'] * 1024) + (2 * c['tcio']))) for x in c[key]])
+    c['nr_files'] = str((conf['size'] << 30) / (conf['filesize'] << 20))
+    c['size'] = conf['size']
+    c['filesize'] = conf['filesize']
 
 BLUESTORE_FIO_POPULATE = """
 [write]
@@ -109,10 +119,6 @@ runtime={runtime}s
 
 def generate_fio_job_conf(conf):
     c = conf.copy()
-    c['qdl'] = max(c['qd'] - c['qdl'], 0)
-    for k in ["deferred_", ""]:
-        key = "bluestore_" + k + "throttle"
-        c[key] = ','.join([str(x * ((c['bs'] * 1024) + (2 * c['tcio']))) for x in c[key]])
     assert 'block_device' in c
     return (BLUESTORE_FIO_BASE + BLUESTORE_FIO).format(**c)
 
@@ -133,7 +139,8 @@ DEFAULT = {
     'bluestore_deferred_throttle': [],
     'vary_bluestore_throttle_period': 0,
     'tcio': 670000,
-    'size': '1g'
+    'size': 1,
+    'filesize': 4
 }
 
 def get_fio_fn(base):
@@ -312,7 +319,7 @@ if __name__ == "__main__":
     group.add_argument('--initialize', type=str,
                        help='comma seperated list of devices or runs or all')
     args = parser.parse_args()
-    parser.add_argument('conf', metavar='C', type=str, nargs=1
+    parser.add_argument('conf', metavar='C', type=str, nargs=1,
                         help='path to config file')
 
     if args.run or args.initialize:
