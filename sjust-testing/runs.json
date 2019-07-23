@@ -1,6 +1,6 @@
 {
   "base": {
-    "runtime": 3600,
+    "runtime": 600,
     "devices": {
       "nvme": {
         "db_wal_device": "/dev/nvme0n1p2",
@@ -19,7 +19,7 @@
         "target_dir": "/mnt/sjust/bluestore-hdd"
       }
     },
-		"size": 512,
+		"size": 2,
 		"filesize": 4,
     "preextend": "true",
     "qd": 1024,
