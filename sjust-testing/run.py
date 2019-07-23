@@ -94,6 +94,7 @@ def generate_fio_populate_conf(conf):
 
 BLUESTORE_FIO = """
 [write]
+preallocate_files=0
 io_size=10000g
 bluestore_throttle="{bluestore_throttle}"
 bluestore_deferred_throttle="{bluestore_deferred_throttle}"
@@ -132,7 +133,6 @@ DEFAULT = {
     'bluestore_deferred_throttle': [],
     'vary_bluestore_throttle_period': 0,
     'tcio': 670000,
-    'clear_target': False,
     'size': '1g'
 }
 
@@ -206,19 +206,11 @@ def run_fio(conf, fn):
         subprocess.run(cmd, env=env, stdout=outf, stderr=outf)
 
 def run_conf(conf):
-    to_clear = [conf['output_dir']]
-    if conf['clear_target']:
-        to_clear.append(conf['target_dir'])
-
     stop_destroy_lttng(conf)
 
-    for d in to_clear:
-        subprocess.run(['rm', '-rf', d], check=False)
-        subprocess.run(['mkdir', '-p', d])
+    subprocess.run(['rm', '-rf', conf['output_dir']], check=False)
+    subprocess.run(['mkdir', '-p', conf['output_dir']])
     fio_conf, fio_populate_conf = write_conf(conf)
-
-    if conf['clear_target']:
-        run_fio(conf, fio_populate_conf)
 
     setup_start_lttng(conf)
     run_fio(conf, fio_conf)
@@ -261,12 +253,13 @@ def get_base_config(base):
 def get_full_config(base):
     return os.path.join(base, 'full_config.json')
 
+def write_obj(obj, fn):
+    with open(fn, 'w') as f:
+        json.dump(obj, f, sort_keys=True, indent=2)
+
 def do_run(base, runs):
     ret = {}
     orig_output_dir = None
-    def d(obj, fn):
-        with open(fn, 'w') as f:
-            json.dump(obj, f, sort_keys=True, indent=2)
         
     for name, base_config, full_config in map(
             lambda x: generate_name_full_config(base, x),
@@ -276,23 +269,59 @@ def do_run(base, runs):
         full_config['output_dir'] = os.path.join(full_config['output_dir'], name)
         print("Running {name}".format(name=name))
         run_conf(full_config)
-        d(base_config, get_base_config(full_config['output_dir']))
-        d(full_config, get_full_config(full_config['output_dir']))
+        write_obj(base_config, get_base_config(full_config['output_dir']))
+        write_obj(full_config, get_full_config(full_config['output_dir']))
     return orig_output_dir
 
+def do_initialize(base, runs, initialize):
+    devices = set()
+    if initialize == 'runs':
+        devices = set([full_config['target_device'] for _, _, full_config
+                       in map(lambda x: generate_name_full_config(base, x))])
+    elif initialize == 'all':
+        devices = set(base['devices'].keys())
+    else:
+        devices = set(initialize.split(','))
 
+    print("Initializing devices {}".format(devices))
+    for name, base_config, full_config in [
+            generate_name_full_config(base, { 'target_device': device })
+            for device in devices]:
+        if orig_output_dir is None:
+            orig_output_dir = full_config['output_dir']
+        full_config['output_dir'] = os.path.join(full_config['output_dir'], name)
+        print("Initializing {name}".format(name=name))
+
+        stop_destroy_lttng(conf)
+
+        for d in [conf['output_dir'], conf['target_dir']]:
+            subprocess.run(['rm', '-rf', d], check=False)
+            subprocess.run(['mkdir', '-p', d])
+
+        fio_conf, fio_populate_conf = write_conf(conf)
+        run_fio(conf, fio_populate_conf)
+
+        write_obj(base_config, get_base_config(full_config['output_dir']))
+        write_obj(full_config, get_full_config(full_config['output_dir']))
+            
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--run', type=str,
-                       help='path to config file')
+    group.add_argument('--run')
+    group.add_argument('--initialize', type=str,
+                       help='comma seperated list of devices or runs or all')
     args = parser.parse_args()
+    parser.add_argument('conf', metavar='C', type=str, nargs=1
+                        help='path to config file')
 
-    if args.run:
+    if args.run or args.initialize:
         conf = {}
-        with open(args.run) as f:
+        with open(args.conf) as f:
             conf = json.load(f)
             base = DEFAULT
             base.update(conf.get('base', {}))
-            do_run(base, conf['runs'])
+            if args.run:
+                do_run(base, conf['runs'])
+            else:
+                do_run(base, conf['runs'], initialize)
