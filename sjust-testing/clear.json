@@ -1,4 +1,3 @@
-now-invalid
 {
   "base": {
     "runtime": 10,
@@ -14,6 +13,7 @@ now-invalid
     },
     "preextend": "true",
     "qd": 1024,
+		"size": 1,
     "clear_target": true
   },
   "runs": {
@@ -21,8 +21,7 @@ now-invalid
       4
     ],
     "target_device": [
-      "hdd",
-      "nvme"
+      "hdd"
     ],
     "run": [
       0

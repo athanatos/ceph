@@ -74,16 +74,16 @@ pglog_dup_omap_len=57 # specifies duplicate PG log entry length range
 
 perf_output_file={output_dir}/perf_counters.json
 
-nr_files=128000
+size={size}
 filesize=4m
 """
 
 BLUESTORE_FIO_POPULATE = """
 [write]
-bs=4m
+bs=1m
+qd=16
 rw=write
 time_based=0
-size=512g
 """
 
 def generate_fio_populate_conf(conf):
@@ -92,17 +92,16 @@ def generate_fio_populate_conf(conf):
     return (BLUESTORE_FIO_BASE + BLUESTORE_FIO_POPULATE).format(**c)
 
 BLUESTORE_FIO = """
+[write]
 bluestore_throttle="{bluestore_throttle}"
 bluestore_deferred_throttle="{bluestore_deferred_throttle}"
 vary_bluestore_throttle_period={vary_bluestore_throttle_period}
+rw=randwrite
 iodepth={qd}
 iodepth_low={qdl}
+bs={bs}k
 time_based=1
 runtime={runtime}s
-bs={bs}k
-
-[write]
-rw=randwrite
 """
 
 def generate_fio_job_conf(conf):
@@ -131,7 +130,8 @@ DEFAULT = {
     'bluestore_deferred_throttle': [],
     'vary_bluestore_throttle_period': 0,
     'tcio': 670000,
-    'clear_target': False
+    'clear_target': False,
+    'size': 1
 }
 
 def get_fio_fn(base):
