@@ -88,6 +88,8 @@ def preprocess_fio_configs(conf):
     c['nr_files'] = str((conf['size'] << 30) / (conf['filesize'] << 20))
     c['size'] = conf['size']
     c['filesize'] = conf['filesize']
+    assert 'block_device' in c
+    return c
 
 BLUESTORE_FIO_POPULATE = """
 [write]
@@ -98,8 +100,7 @@ time_based=0
 """
 
 def generate_fio_populate_conf(conf):
-    c = conf.copy()
-    assert 'block_device' in c
+    c = preprocess_fio_configs(conf)
     return (BLUESTORE_FIO_BASE + BLUESTORE_FIO_POPULATE).format(**c)
 
 BLUESTORE_FIO = """
@@ -118,8 +119,7 @@ runtime={runtime}s
 """
 
 def generate_fio_job_conf(conf):
-    c = conf.copy()
-    assert 'block_device' in c
+    c = preprocess_fio_configs(conf)
     return (BLUESTORE_FIO_BASE + BLUESTORE_FIO).format(**c)
 
 
