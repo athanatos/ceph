@@ -74,7 +74,8 @@ pglog_dup_omap_len=57 # specifies duplicate PG log entry length range
 
 perf_output_file={output_dir}/perf_counters.json
 
-size={size}
+size=512g
+nr_files=128000
 filesize=4m
 """
 

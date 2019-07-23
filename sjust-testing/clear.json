@@ -13,7 +13,6 @@
     },
     "preextend": "true",
     "qd": 1024,
-		"size": "512g",
     "clear_target": true
   },
   "runs": {
