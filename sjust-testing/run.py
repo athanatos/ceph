@@ -297,14 +297,14 @@ def do_initialize(base, runs, initialize):
         full_config['output_dir'] = os.path.join(full_config['output_dir'], name)
         print("Initializing {name}".format(name=name))
 
-        stop_destroy_lttng(conf)
+        stop_destroy_lttng(full_config)
 
         for d in [full_config['output_dir'], full_config['target_dir']]:
             subprocess.run(['rm', '-rf', d], check=False)
             subprocess.run(['mkdir', '-p', d])
 
-        fio_conf, fio_populate_conf = write_conf(conf)
-        run_fio(conf, fio_populate_conf)
+        fio_conf, fio_populate_conf = write_conf(full_config)
+        run_fio(full_config, fio_populate_conf)
 
         write_obj(base_config, get_base_config(full_config['output_dir']))
         write_obj(full_config, get_full_config(full_config['output_dir']))
