@@ -21,7 +21,6 @@ BLUESTORE_CONF = """
 	# use directory= option from fio job file
 	osd data = {target_dir}
 	osd journal = {target_dir}/journal
-        bluestore block path = {block_device}
 
         bluestore rocksdb options = compression=kNoCompression,max_write_buffer_number=4,min_write_buffer_number_to_merge=1,recycle_log_file_num=4,write_buffer_size=268435456,writable_file_max_buffer_size=0,compaction_readahead_size=2097152,stats_dump_period_sec=10
 
@@ -45,12 +44,10 @@ BLUESTORE_CONF = """
 
 def generate_ceph_conf(conf):
     ret = BLUESTORE_CONF.format(**conf)
-    db_block = conf.get('db_block_device', None)
-    if db_block:
-        ret += "        bluestore_block_db_path = " + db_block
-    db_wal = conf.get('db_wal_device', None)
-    if db_block:
-        ret += "        bluestore_block_wal_path = " + db_block
+    for k in ['block_path', 'block_wal_path', 'block_db_path']:
+        v = conf['devices'][conf['target_device']].get(k, None)
+        if v:
+            ret += "         bluestore_" + k + " = " + v
     return ret
 
 
@@ -91,13 +88,17 @@ filesize={filesize}m
 def preprocess_fio_configs(conf):
     c = conf.copy()
     c['qdl'] = max(c['qd'] - c['qdl'], 0)
+    tcio = 1
+    if conf['devices'][conf['target_device']]['device_type'] == 'hdd':
+        tcio = conf['tcio_hdd']
+    else:
+        tcio = conf['tcio_ssd']
     for k in ["deferred_", ""]:
         key = "bluestore_" + k + "throttle"
-        c[key] = ','.join([str(x * ((c['bs'] * 1024) + (2 * c['tcio']))) for x in c[key]])
+        c[key] = ','.join([str(x * ((c['bs'] * 1024) + (2 * tcio))) for x in c[key]])
     c['nr_files'] = str((conf['size'] << 30) / (conf['filesize'] << 20))
     c['size'] = conf['size']
     c['filesize'] = conf['filesize']
-    assert 'block_device' in c
     return c
 
 BLUESTORE_FIO_POPULATE = """
@@ -252,10 +253,6 @@ def generate_name_full_config(base, run):
     full_config.update(run)
     if ('devices' in full_config.keys() or
         'target_device' in full_config.keys()):
-        assert('devices' in full_config.keys())
-        assert('target_device' in full_config.keys())
-        full_config['block_device'] = \
-            full_config['devices'][full_config['target_device']]['device']
         full_config['target_dir'] = \
             full_config['devices'][full_config['target_device']]['target_dir']
     name = "-".join(
