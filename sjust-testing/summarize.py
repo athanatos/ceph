@@ -58,6 +58,7 @@ def dump_target(name, directory):
     with open(get_fio_output(directory)) as f:
         decoder = json.JSONDecoder()
         fio_output, _ = decoder.raw_decode(f.read())
+        #fio_output = json.load(f)
     perf_output = {}
     with open(os.path.join(directory, 'perf_counters.json')) as f:
         perf_output = json.load(f)

@@ -115,7 +115,6 @@ BLUESTORE_FIO = """
 [write]
 preallocate_files=0
 check_files=1
-io_size=10000g
 bluestore_throttle="{bluestore_throttle}"
 bluestore_deferred_throttle="{bluestore_deferred_throttle}"
 vary_bluestore_throttle_period={vary_bluestore_throttle_period}
@@ -215,7 +214,6 @@ def run_fio(conf, fn):
     cmd = [
         conf['fio_bin'],
         fn,
-        '--status-interval', '10s',
         '--output', output_json,
         '--output-format', 'json+']
     with open(get_fio_stdout(conf['output_dir']), 'a') as outf:
