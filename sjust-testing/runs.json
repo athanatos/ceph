@@ -38,7 +38,7 @@
       512
     ],
     "target_device": [
-      "hdd"
+      "nvme"
     ],
     "run": [
       0
