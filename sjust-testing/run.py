@@ -294,13 +294,12 @@ def do_initialize(base, runs, initialize):
     for name, base_config, full_config in [
             generate_name_full_config(base, { 'target_device': device })
             for device in devices]:
-        print(full_config)
         full_config['output_dir'] = os.path.join(full_config['output_dir'], name)
         print("Initializing {name}".format(name=name))
 
         stop_destroy_lttng(conf)
 
-        for d in [full_conf['output_dir'], full_conf['target_dir']]:
+        for d in [full_config['output_dir'], full_config['target_dir']]:
             subprocess.run(['rm', '-rf', d], check=False)
             subprocess.run(['mkdir', '-p', d])
 
