@@ -59,7 +59,7 @@
     "target_device": [
 		  "hdd",
       "nvme",
-			"hdd_nvme_db"
+	"hdd_nvme_db",
 			"nvme_plain"
     ],
     "run": [
