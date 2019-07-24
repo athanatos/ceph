@@ -9,6 +9,11 @@
         "block_path": "/dev/nvme0n1p4",
         "target_dir": "/mnt/sjust/bluestore-nvme"
       },
+      "nvme": {
+        "device_type": "ssd",
+        "block_path": "/dev/nvme3n1p4",
+        "target_dir": "/mnt/sjust/bluestore-nvme-plain"
+      },
       "hdd": {
         "device_type": "hdd",
         "block_path": "/dev/sdh2",
@@ -55,6 +60,7 @@
 		  "hdd",
       "nvme",
 			"hdd_nvme_db"
+			"nvme_plain"
     ],
     "run": [
       0
