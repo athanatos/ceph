@@ -1469,8 +1469,12 @@ protected:
   void handle_manifest_flush(hobject_t oid, ceph_tid_t tid, int r,
 			     uint64_t offset, uint64_t last_offset, epoch_t lpr);
   void cancel_manifest_ops(bool requeue, vector<ceph_tid_t> *tids);
-  void refcount_manifest(ObjectContextRef obc, object_locator_t oloc, hobject_t soid,
-                         SnapContext snapc, bool get, RefCountCallback *cb, uint64_t offset);
+  void refcount_manifest(ObjectContextRef obc, hobject_t src_soid, object_locator_t oloc,
+			 hobject_t tgt_soid, SnapContext snapc, bool get, RefCountCallback* cb);
+  void dec_all_refcount_manifest(object_info_t& oi, OpContext* ctx);
+  void dec_refcount_non_intersection(ObjectContextRef obc, const object_info_t& oi, 
+				     set<uint64_t> intersection_set);
+  bool check_has_ref_snap(hobject_t soid, snapid_t snapid, chunk_info_t& ci);
 
   friend struct C_ProxyChunkRead;
   friend class PromoteManifestCallback;
