@@ -1,6 +1,6 @@
 {
   "base": {
-    "runtime": 600,
+    "runtime": 3600,
     "devices": {
       "nvme": {
         "device_type": "ssd",
@@ -22,7 +22,7 @@
         "target_dir": "/mnt/sjust/bluestore-hdd"
       }
     },
-		"size": 2,
+		"size": 512,
 		"filesize": 4,
     "preextend": "true",
     "qd": 1024,
