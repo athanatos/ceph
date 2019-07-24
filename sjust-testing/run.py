@@ -47,7 +47,7 @@ def generate_ceph_conf(conf):
     for k in ['block_path', 'block_wal_path', 'block_db_path']:
         v = conf['devices'][conf['target_device']].get(k, None)
         if v:
-            ret += "         bluestore_" + k + " = " + v
+            ret += "        bluestore_" + k + " = " + v + "\n"
     return ret
 
 
