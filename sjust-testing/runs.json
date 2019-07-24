@@ -1,6 +1,6 @@
 {
   "base": {
-    "runtime": 7200,
+    "runtime": 3600,
     "devices": {
       "nvme": {
         "device_type": "ssd",
