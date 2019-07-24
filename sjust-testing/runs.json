@@ -19,7 +19,7 @@
         "block_wal_path": "/dev/nvme2n1p2",
         "block_db_path": "/dev/nvme2n1p3",
         "block_path": "/dev/sdg2",
-        "target_dir": "/mnt/sjust/bluestore-hdd"
+        "target_dir": "/mnt/sjust/bluestore-hdd-nvme-db"
       }
     },
 		"size": 512,
