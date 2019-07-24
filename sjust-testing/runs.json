@@ -9,7 +9,7 @@
         "block_path": "/dev/nvme0n1p4",
         "target_dir": "/mnt/sjust/bluestore-nvme"
       },
-      "nvme": {
+      "nvme_plain": {
         "device_type": "ssd",
         "block_path": "/dev/nvme3n1p4",
         "target_dir": "/mnt/sjust/bluestore-nvme-plain"
