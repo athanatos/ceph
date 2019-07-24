@@ -1,6 +1,6 @@
 {
   "base": {
-    "runtime": 3600,
+    "runtime": 7200,
     "devices": {
       "nvme": {
         "device_type": "ssd",
@@ -52,6 +52,7 @@
       512
     ],
     "target_device": [
+		  "hdd",
       "nvme",
 			"hdd_nvme_db"
     ],
