@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('target', metavar='T', type=str, help='target results directory')
 parser.add_argument('--match', type=str, help='json for matching', default='{}')
 parser.add_argument('--output', type=str, help='output directory')
-parser.add_argument('--generate-graphs', type=bool, help='generate graphs')
+parser.add_argument('--generate-graphs', action='store_true', help='generate graphs')
 parser.add_argument('--drop-first', type=float,
                     help='drop', default=10.0)
 parser.add_argument('--drop-after', type=float,

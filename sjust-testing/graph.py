@@ -10,6 +10,37 @@ from scipy import interpolate
 
 FEATURES = Write.get_features()
 
+def weighted_quantile(values, quantiles, sample_weight=None, 
+                      values_sorted=False):
+    """
+    Adapted from: https://stackoverflow.com/questions/21844024/weighted-percentile-using-numpy
+    Very close to numpy.percentile, but supports weights.
+    NOTE: quantiles should be in [0, 1]!
+    :param values: numpy.array with data
+    :param quantiles: array-like with many quantiles needed
+    :param sample_weight: array-like of the same length as `array`
+    :param values_sorted: bool, if True, then will avoid sorting of
+        initial array
+    :return: numpy.array with computed quantiles.
+    """
+    values = np.array(values)
+    quantiles = np.array(quantiles)
+    if sample_weight is None:
+        sample_weight = np.ones(len(values))
+    sample_weight = np.array(sample_weight)
+    assert np.all(quantiles >= 0) and np.all(quantiles <= 1), \
+        'quantiles should be in [0, 1]'
+
+    if not values_sorted:
+        sorter = np.argsort(values)
+        values = values[sorter]
+        sample_weight = sample_weight[sorter]
+
+    weighted_quantiles = np.cumsum(sample_weight) - 0.5 * sample_weight
+    weighted_quantiles -= weighted_quantiles[0]
+    weighted_quantiles /= weighted_quantiles[-1]
+    return np.interp(quantiles, weighted_quantiles, values)
+
 def generate_throughput(start, d):
     P = 1.0
     finish = start + d
@@ -168,16 +199,24 @@ class Scatter(Graph):
         xsortidx = x.argsort()
         xs = x[xsortidx]
         ys = y[xsortidx]
+        ws = w[xsortidx]
         per_point = max(150, (len(xs)//50))
-        lines = [(t, c, []) for t, c in [(50, 'green'), (95, 'red')]]
+        lines = [(t, c, []) for t, c in [(.5, 'green'), (.95, 'red')]]
         limits = []
         idx = 0
+        min_per_tick = (xs[-1] - xs[0])/100.0
         while idx < len(xs):
-            limit = min(len(xs), idx + per_point)
-            vals = ys[idx:limit]
+            limit = min(
+                len(xs),
+                max(idx + per_point,
+                    np.searchsorted(xs, xs[idx] + min_per_tick)))
             limits.append((xs[idx] + xs[limit - 1]) / 2.0)
-            for t, _, d in lines:
-                d.append(np.percentile(vals, t))
+            quantiles = weighted_quantile(
+                ys[idx:limit],
+                [t for t, _, _ in lines],
+                ws[idx:limit])
+            for p, d in zip(quantiles, [d for _, _, d in lines]):
+                d.append(p)
             idx = limit
         for t, c, d in lines:
             ax.plot(limits, d, 'go--', linewidth=1, markersize=2, color=c)

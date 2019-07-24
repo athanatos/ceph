@@ -114,5 +114,7 @@ def generate_summary(filtered, match):
                 list(map(project_run(perfs), group['runs'])))
         }
         
-    return sort_by(lambda x: x['config']['bs'], list(map(project_group, grouped)))
+    return sort_by(
+        lambda x: x['config'].get('bs', 0),
+        list(map(project_group, grouped)))
 
