@@ -25,7 +25,8 @@
         "block_db_path": "/dev/nvme2n1p3",
         "block_path": "/dev/sdg2",
         "target_dir": "/mnt/sjust/bluestore-hdd-nvme-db"
-      }
+      },
+			"tcio_ssd": 670000
     },
 		"size": 512,
 		"filesize": 4,
@@ -53,14 +54,11 @@
   },
   "runs": {
     "bs": [
-      4,
-      512
+      4
     ],
     "target_device": [
-		  "hdd",
       "nvme",
-	"hdd_nvme_db",
-			"nvme_plain"
+	"hdd_nvme_db"
     ],
     "run": [
       0
