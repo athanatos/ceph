@@ -30,9 +30,6 @@ BLUESTORE_CONF = """
         bluestore_throttle_trace_rate = 100.0
         bluestore_throttle_bytes = 0
         bluestore_throttle_deferred_bytes = 0
-        bluestore prefer deferred size hdd = {hdd_deferred}
-        bluestore prefer deferred size ssd = {hdd_deferred}
-        bluestore prefer deferred size = {hdd_deferred}
         rocksdb collect extended stats = true
         rocksdb collect memory stats = true
         rocksdb collect compaction stats = true
@@ -143,7 +140,6 @@ DEFAULT = {
     'bs': 4,
     'fio_bin': '../build/bin/fio',
     'lttng': True,
-    'hdd_deferred': 32768,
     'preextend': 'false',
     'bluestore_throttle': [],
     'bluestore_deferred_throttle': [],
