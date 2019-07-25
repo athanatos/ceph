@@ -27,7 +27,6 @@
         "target_dir": "/mnt/sjust/bluestore-hdd-nvme-db"
       }
     },
-	  "tcio_ssd": 670000,
 		"size": 2,
 		"filesize": 4,
     "preextend": "true",
