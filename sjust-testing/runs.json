@@ -28,7 +28,7 @@
       }
     },
 	  "tcio_ssd": 670000,
-		"size": 512,
+		"size": 2,
 		"filesize": 4,
     "preextend": "true",
     "qd": 1024,
