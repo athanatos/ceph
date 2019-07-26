@@ -745,7 +745,7 @@ class UnitComplete : public Context {
 
 enum fio_q_status fio_ceph_os_queue(thread_data* cd, io_u* u)
 {
-  thread_data *tc = get_parent(cd);
+  thread_data *td = get_parent(cd);
   fio_ro_check(td, u);
 
   auto o = static_cast<const Options*>(td->eo);
