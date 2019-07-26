@@ -770,7 +770,7 @@ enum fio_q_status fio_ceph_os_queue(thread_data* cd, io_u* u)
 
     bufferptr one_for_all_data;
     if (job->max_data) {
-      one_for_all_data = buffer::create(max_data);
+      one_for_all_data = buffer::create(job->max_data);
     }
 
     // fill attrs if any
