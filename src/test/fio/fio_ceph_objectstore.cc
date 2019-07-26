@@ -477,6 +477,7 @@ struct Job {
   bufferptr one_for_all_data; //< preallocated buffer long enough
                               //< to use for vairious operations
 
+  std::mutex throttle_lock;
   const vector<unsigned> throttle_values;
   const vector<unsigned> deferred_throttle_values;
   std::chrono::duration<double> cycle_throttle_period;
@@ -610,6 +611,7 @@ Job::~Job()
 
 void Job::check_throttle()
 {
+  std::lock_guard<std::mutex> l(throttle_lock);
   if (throttle_values.empty() && deferred_throttle_values.empty())
     return;
 
