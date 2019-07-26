@@ -474,9 +474,6 @@ struct Job {
   std::vector<io_u*> events; //< completions for fio_ceph_os_event()
   const bool unlink; //< unlink objects on destruction
 
-  bufferptr one_for_all_data; //< preallocated buffer long enough
-                              //< to use for vairious operations
-
   std::mutex throttle_lock;
   const vector<unsigned> throttle_values;
   const vector<unsigned> deferred_throttle_values;
@@ -528,7 +525,6 @@ Job::Job(Engine* engine, const thread_data* td)
   max_data = max(max_data, o->pglog_omap_len_high);
   max_data = max(max_data, o->pglog_dup_omap_len_high);
   max_data = max(max_data, o->_fastinfo_omap_len_high);
-  one_for_all_data = buffer::create(max_data);
 
   std::vector<Collection>* colls;
   // create private collections up to osd_pool_default_pg_num
@@ -770,30 +766,35 @@ enum fio_q_status fio_ceph_os_queue(thread_data* cd, io_u* u)
     ObjectStore::Transaction t;
     char ver_key[64];
 
+    bufferptr one_for_all_data;
+    if (job->max_data) {
+      one_for_all_data = buffer::create(max_data);
+    }
+
     // fill attrs if any
     if (o->oi_attr_len_high) {
       ceph_assert(o->oi_attr_len_high >= o->oi_attr_len_low);
       // fill with the garbage as we do not care of the actual content...
-      job->one_for_all_data.set_length(
+      one_for_all_data.set_length(
         ceph::util::generate_random_number(
 	  o->oi_attr_len_low, o->oi_attr_len_high));
-      attrset["_"] = job->one_for_all_data;
+      attrset["_"] = one_for_all_data;
     }
     if (o->snapset_attr_len_high) {
       ceph_assert(o->snapset_attr_len_high >= o->snapset_attr_len_low);
-      job->one_for_all_data.set_length(
+      one_for_all_data.set_length(
         ceph::util::generate_random_number
 	  (o->snapset_attr_len_low, o->snapset_attr_len_high));
-      attrset["snapset"] = job->one_for_all_data;
+      attrset["snapset"] = one_for_all_data;
 
     }
     if (o->_fastinfo_omap_len_high) {
       ceph_assert(o->_fastinfo_omap_len_high >= o->_fastinfo_omap_len_low);
       // fill with the garbage as we do not care of the actual content...
-      job->one_for_all_data.set_length(
+      one_for_all_data.set_length(
 	ceph::util::generate_random_number(
 	  o->_fastinfo_omap_len_low, o->_fastinfo_omap_len_high));
-      omaps["_fastinfo"].append(job->one_for_all_data);
+      omaps["_fastinfo"].append(one_for_all_data);
     }
 
     uint64_t pglog_trim_head = 0, pglog_trim_tail = 0;
@@ -828,10 +829,10 @@ enum fio_q_status fio_ceph_os_queue(thread_data* cd, io_u* u)
 	snprintf(ver_key, sizeof(ver_key),
 	  "0000000011.%020llu", (unsigned long long)pglog_ver_cnt);
 	// fill with the garbage as we do not care of the actual content...
-        job->one_for_all_data.set_length(
+        one_for_all_data.set_length(
 	  ceph::util::generate_random_number(
 	    o->pglog_omap_len_low, o->pglog_omap_len_high));
-	omaps[ver_key].append(job->one_for_all_data);
+	omaps[ver_key].append(one_for_all_data);
       }
       if (o->pglog_dup_omap_len_high) {
 	//insert dup
@@ -840,10 +841,10 @@ enum fio_q_status fio_ceph_os_queue(thread_data* cd, io_u* u)
 	  snprintf(ver_key, sizeof(ver_key),
 	    "dup_0000000011.%020llu", (unsigned long long)i);
 	  // fill with the garbage as we do not care of the actual content...
-	  job->one_for_all_data.set_length(
+	  one_for_all_data.set_length(
 	    ceph::util::generate_random_number(
 	      o->pglog_dup_omap_len_low, o->pglog_dup_omap_len_high));
-	  omaps[ver_key].append(job->one_for_all_data);
+	  omaps[ver_key].append(one_for_all_data);
 	}
       }
     }
