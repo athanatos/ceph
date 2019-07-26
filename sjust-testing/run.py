@@ -224,7 +224,7 @@ def run_fio(conf, fn):
 
     if conf.get('tcmalloc', False):
         env['LD_PRELOAD'] = '/usr/lib64/libtcmalloc.so.4'
-        env['TCMALLOC_MAX_TOTAL_THREAD_CACHE_BYTES'] = 134217728
+        env['TCMALLOC_MAX_TOTAL_THREAD_CACHE_BYTES'] = '134217728'
     with open(get_fio_stdout(conf['output_dir']), 'a') as outf:
         subprocess.run(cmd, env=env, stdout=outf, stderr=outf)
 
