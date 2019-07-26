@@ -55,6 +55,7 @@ def generate_ceph_conf(conf):
 BLUESTORE_FIO_BASE = """
 [global]
 ioengine={lib}/libfio_ceph_objectstore.so
+io_submit_mode={submit_mode}
 
 conf={output_dir}/ceph.conf
 directory={target_dir}
@@ -154,6 +155,7 @@ DEFAULT = {
     'filesize': 4,
     'cache_size': None,
     'tcmalloc': False,
+    'submit_mode': 'inline'
 }
 
 def get_fio_fn(base):

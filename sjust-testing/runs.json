@@ -52,9 +52,11 @@
     "vary_bluestore_throttle_period": 30
   },
   "runs": {
+	  "submit_mode": [
+		  "offload"
+		],
 		"tcmalloc": [
-			true,
-			false
+			true
 		],
 	  "size": [
 			512
