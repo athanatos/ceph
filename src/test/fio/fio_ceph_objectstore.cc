@@ -474,6 +474,8 @@ struct Job {
   std::vector<io_u*> events; //< completions for fio_ceph_os_event()
   const bool unlink; //< unlink objects on destruction
 
+  unsigned long long max_data = 0;
+
   std::mutex throttle_lock;
   const vector<unsigned> throttle_values;
   const vector<unsigned> deferred_throttle_values;
@@ -520,8 +522,8 @@ Job::Job(Engine* engine, const thread_data* td)
 {
   engine->ref();
   auto o = static_cast<Options*>(td->eo);
-  unsigned long long max_data = max(o->oi_attr_len_high,
-				  o->snapset_attr_len_high);
+  max_data = max(o->oi_attr_len_high,
+		 o->snapset_attr_len_high);
   max_data = max(max_data, o->pglog_omap_len_high);
   max_data = max(max_data, o->pglog_dup_omap_len_high);
   max_data = max(max_data, o->_fastinfo_omap_len_high);
