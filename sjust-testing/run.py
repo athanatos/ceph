@@ -46,7 +46,7 @@ def generate_ceph_conf(conf):
         if v:
             ret += "        bluestore_" + k + " = " + v + "\n"
     for k in ['cache_size']:
-        v = conf.get(k, None):
+        v = conf.get(k, None)
         if v:
             ret += "        bluestore_" + k + " = " + v + "\n"
     return ret
