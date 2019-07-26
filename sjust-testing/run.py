@@ -154,7 +154,7 @@ DEFAULT = {
     'size': 1,
     'filesize': 4,
     'cache_size': None,
-    'tcmalloc': False,
+    'tcmalloc': True,
     'submit_mode': 'inline'
 }
 
@@ -221,6 +221,7 @@ def run_fio(conf, fn):
     cmd = [
         conf['fio_bin'],
         fn,
+        '--alloc-size', '1048576',
         '--output', output_json,
         '--output-format', 'json+']
 

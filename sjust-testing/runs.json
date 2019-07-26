@@ -1,6 +1,6 @@
 {
   "base": {
-    "runtime": 1200,
+    "runtime": 600,
     "devices": {
       "nvme": {
         "device_type": "ssd",
@@ -55,10 +55,8 @@
 	  "submit_mode": [
 		  "offload"
 		],
-		"tcmalloc": [
-			true
-		],
 	  "size": [
+			2,
 			512
 		],
     "bs": [
