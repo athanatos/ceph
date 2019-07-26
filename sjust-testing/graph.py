@@ -267,16 +267,32 @@ TO_GRAPH2 = [
 TO_GRAPH = [
     [Scatter(*x) for x in
      [('current_kv_throttle_cost', 'throughput'),
-      ('current_kv_throttle_cost', 'commit_latency_no_throttle')]],
+      ('time', 'current_deferred_throttle_cost'),
+      ('current_deferred_throttle_cost', 'throughput')]],
     [Scatter(*x) for x in
-     [('current_deferred_throttle_cost', 'throughput'),
+     [('current_kv_throttle_cost', 'commit_latency_no_throttle'),
+      ('current_deferred_throttle_cost', 'commit_latency_no_throttle'),
       ('current_deferred_throttle_cost', 'commit_latency_no_throttle')]],
     [Scatter(*x) for x in
      [('time', 'throughput'),
-      ('time', 'commit_latency_no_throttle')]],
-    [Scatter(*x) for x in
-     [('throughput', 'commit_latency_no_throttle'),
-      ('current_deferred_throttle_cost', 'commit_latency_no_throttle')]]
+      ('time', 'commit_latency_no_throttle'),
+      ('time', 'current_kv_throttle_cost')]],
+    [Scatter('time', x) for x in
+     ['rocksdb_compaction_pending',
+      'rocksdb_cur_size_all_mem_tables',
+      'rocksdb_estimate_pending_compaction_bytes']],
+    [Scatter('time', x) for x in
+     ['rocksdb_num_running_compactions',
+      'rocksdb_num_running_flushes',
+      'rocksdb_actual_delayed_write_rate']],
+    [Scatter('time', x) for x in
+     ['kv_submit_latency',
+      'kv_sync_latency',
+      'rocksdb_base_level']],
+    [Histogram(x) for x in
+     ['state_prepare_duration',
+      'state_kv_queued_duration',
+      'state_kv_submitted_duration']],
 ]
 
 

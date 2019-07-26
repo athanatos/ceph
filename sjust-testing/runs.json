@@ -52,10 +52,11 @@
     "vary_bluestore_throttle_period": 30
   },
   "runs": {
+		"tcmalloc": [
+			true,
+			false
+		],
 	  "size": [
-		  2,
-			32,
-			128,
 			512
 		],
     "bs": [

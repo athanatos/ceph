@@ -45,6 +45,10 @@ def generate_ceph_conf(conf):
         v = conf['devices'][conf['target_device']].get(k, None)
         if v:
             ret += "        bluestore_" + k + " = " + v + "\n"
+    for k in ['cache_size']:
+        v = conf.get(k, None):
+        if v:
+            ret += "        bluestore_" + k + " = " + v + "\n"
     return ret
 
 
@@ -147,7 +151,9 @@ DEFAULT = {
     'tcio_hdd': 670000,
     'tcio_ssd': 4000,
     'size': 1,
-    'filesize': 4
+    'filesize': 4,
+    'cache_size': None,
+    'tcmalloc': False,
 }
 
 def get_fio_fn(base):
@@ -215,6 +221,10 @@ def run_fio(conf, fn):
         fn,
         '--output', output_json,
         '--output-format', 'json+']
+
+    if conf.get('tcmalloc', False):
+        env['LD_PRELOAD'] = '/usr/lib64/libtcmalloc.so.4'
+        env['TCMALLOC_MAX_TOTAL_THREAD_CACHE_BYTES'] = 134217728
     with open(get_fio_stdout(conf['output_dir']), 'a') as outf:
         subprocess.run(cmd, env=env, stdout=outf, stderr=outf)
 

@@ -115,6 +115,6 @@ def generate_summary(filtered, match):
         }
         
     return sort_by(
-        lambda x: x['config'].get('bs', 0),
+        lambda x: (x['config'].get('bs', 0), x['config'].get('size', 0)),
         list(map(project_group, grouped)))
 
