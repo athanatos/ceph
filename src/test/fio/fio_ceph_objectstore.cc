@@ -645,8 +645,30 @@ void Job::check_throttle()
   }
 }
 
-int fio_ceph_os_setup(thread_data* td)
+thread_data *get_parent(thread_data *td)
 {
+  if (td->parent) {
+    return td->parent;
+  } else {
+    return td;
+  }
+}
+
+void set_job(thread_data* td, Job* job)
+{
+  ceph_assert(!td->parent);
+  td->io_ops_data = job;
+}
+
+Job *get_job(thread_data* td)
+{
+  ceph_assert(!td->parent);
+  return static_cast<Job*>(td->io_ops_data);
+}
+
+int fio_ceph_os_setup(thread_data* cd)
+{
+  thread_data *td = get_parent(cd);
   // if there are multiple jobs, they must run in the same process against a
   // single instance of the ObjectStore. explicitly disable fio's default
   // job-per-process configuration
@@ -656,7 +678,7 @@ int fio_ceph_os_setup(thread_data* td)
     // get or create the global Engine instance
     auto engine = Engine::get_instance(td);
     // create a Job for this thread
-    td->io_ops_data = new Job(engine, td);
+    set_job(td, new Job(engine, td));
   } catch (std::exception& e) {
     std::cerr << "setup failed with " << e.what() << std::endl;
     return -1;
@@ -664,25 +686,28 @@ int fio_ceph_os_setup(thread_data* td)
   return 0;
 }
 
-void fio_ceph_os_cleanup(thread_data* td)
+void fio_ceph_os_cleanup(thread_data* cd)
 {
-  auto job = static_cast<Job*>(td->io_ops_data);
-  td->io_ops_data = nullptr;
+  thread_data *td = get_parent(cd);
+  Job *job = get_job(td);
+  set_job(td, nullptr);
   delete job;
 }
 
 
-io_u* fio_ceph_os_event(thread_data* td, int event)
+io_u* fio_ceph_os_event(thread_data* cd, int event)
 {
+  thread_data *td = get_parent(cd);
   // return the requested event from fio_ceph_os_getevents()
-  auto job = static_cast<Job*>(td->io_ops_data);
+  Job *job = get_job(td);
   return job->events[event];
 }
 
-int fio_ceph_os_getevents(thread_data* td, unsigned int min,
+int fio_ceph_os_getevents(thread_data* cd, unsigned int min,
                           unsigned int max, const timespec* t)
 {
-  auto job = static_cast<Job*>(td->io_ops_data);
+  thread_data *td = get_parent(cd);
+  Job *job = get_job(td);
   unsigned int events = 0;
   io_u* u = NULL;
   unsigned int i = 0;
@@ -718,14 +743,13 @@ class UnitComplete : public Context {
   }
 };
 
-enum fio_q_status fio_ceph_os_queue(thread_data* td, io_u* u)
+enum fio_q_status fio_ceph_os_queue(thread_data* cd, io_u* u)
 {
+  thread_data *tc = get_parent(cd);
   fio_ro_check(td, u);
 
-
-
   auto o = static_cast<const Options*>(td->eo);
-  auto job = static_cast<Job*>(td->io_ops_data);
+  Job *job = get_job(td);
   auto& object = job->objects[u->file->engine_pos];
   auto& coll = object.coll;
   auto& os = job->engine->os;
