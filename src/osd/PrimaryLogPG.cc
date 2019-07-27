@@ -6936,11 +6936,13 @@ int PrimaryLogPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 
 	  if (obs.oi.manifest.is_chunked()) {
 	    src_hoid = obs.oi.soid;
+	    src_hoid.snap = ctx->snapc.seq;
 	    cb = new PromoteManifestCallback(ctx->obc, this, ctx);
 	  } else if (obs.oi.manifest.is_redirect()) {
 	    object_locator_t src_oloc(obs.oi.manifest.redirect_target);
 	    my_oloc = src_oloc;
 	    src_hoid = obs.oi.manifest.redirect_target;
+	    src_hoid.snap = ctx->snapc.seq;
 	    cb = new PromoteManifestCallback(ctx->obc, this, ctx);
 	  } else {
 	    ceph_abort_msg("unrecognized manifest type");
@@ -6952,8 +6954,14 @@ int PrimaryLogPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 			   CEPH_OSD_COPY_FROM_FLAG_MAP_SNAP_CLONE |
 			   CEPH_OSD_COPY_FROM_FLAG_RWORDERED;
 	  unsigned src_fadvise_flags = LIBRADOS_OP_FLAG_FADVISE_SEQUENTIAL;
-	  start_copy(cb, ctx->obc, src_hoid, my_oloc, 0, flags,
-		     obs.oi.soid.snap == CEPH_NOSNAP,
+	  ObjectContextRef src_obc = get_object_context(src_hoid, false, NULL);
+	  if (!src_obc) {
+	    dout(0) << " no obc for " << src_hoid << dendl;
+	    result = -EINVAL;
+	    break;
+	  }
+	  start_copy(cb, src_obc, src_hoid, my_oloc, 0, flags,
+		     src_hoid.snap == CEPH_NOSNAP,
 		     src_fadvise_flags, 0);
 
 	  dout(10) << "tier-promote oid:" << oi.soid << " manifest: " << obs.oi.manifest << dendl;
