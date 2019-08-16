@@ -55,6 +55,7 @@ function TEST_incomplete_recovery() {
       ceph osd crush add osd.$i 1 host=host$i
       ceph osd crush move host$i root=default
       ceph osd primary-affinity osd.$i 0
+      wait_for_osd up osd.$i || return 1
     done
     ceph osd crush move osd.3 host=host0
     ceph osd crush reweight osd.0 0
@@ -76,6 +77,23 @@ function TEST_incomplete_recovery() {
     for j in $(seq 1 $objects)
     do
        rados -p test put obj-${j} /etc/passwd
+    done
+
+    ceph osd crush reweight osd.0 1
+    ceph osd crush reweight osd.3 0
+
+    wait_for_clean || return 1
+
+    kill_daemons $dir TERM osd.2 || return 1
+    ceph tell osd.0 config set osd_debug_no_purge_strays false
+
+    sleep 20
+
+    activate_osd $dir 2 || return 1
+
+    for osd in $(seq 0 $(expr $OSDS - 1))
+    do
+	wait_for_osd up $i || return 1
     done
 }
 
