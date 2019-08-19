@@ -433,7 +433,7 @@ install(
 
 if(${WITH_LTTNG})
   add_subdirectory(tracing)
-  add_dependencies(common-objs oprequest-tp)
+  add_dependencies(common-objs tracepoint_libraries)
 endif(${WITH_LTTNG})
 
 add_subdirectory(global)
