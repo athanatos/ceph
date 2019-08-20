@@ -2784,6 +2784,8 @@ librados::AioCompletion *librados::Rados::aio_create_completion(void *cb_arg,
   return new AioCompletion(c);
 }
 
+static osdc::QosProfileMgr qos_profile_mgr;
+
 rados_qos_profile_t librados::Rados::qos_profile_create(uint64_t reservation,
 							uint64_t weight,
 							uint64_t limit)

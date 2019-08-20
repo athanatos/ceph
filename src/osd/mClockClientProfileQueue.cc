@@ -121,15 +121,13 @@ namespace ceph {
       auto pr = client_queue.pull_request();
       assert(pr.is_retn());
       auto& client_retn = pr.get_retn();
-      boost::optional<OpRequestRef> _op =
-	client_retn.request->maybe_get_op();
+      auto _op = client_retn.request->maybe_get_op();
       assert(_op);
       (*_op)->qos_phase = client_retn.phase;
       (*_op)->qos_cost = client_retn.cost;
       return std::move(*client_retn.request);
     } else {
-      if (boost::optional<OpRequestRef> _op =
-	  top_retn.request.request->maybe_get_op()) {
+      if (auto _op = top_retn.request.request->maybe_get_op()) {
 	(*_op)->qos_phase = top_retn.phase;
 	(*_op)->qos_cost = top_retn.cost;
       }

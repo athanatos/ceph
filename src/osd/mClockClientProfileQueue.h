@@ -88,10 +88,6 @@ namespace ceph {
 
     mClockClientProfileQueue(CephContext *cct);
 
-    inline unsigned length() const override final {
-      return top_queue.length();
-    }
-
     // Ops of this priority should be deleted immediately
     inline void remove_by_class(Client cl,
 				std::list<Request> *out) override final {

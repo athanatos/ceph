@@ -96,7 +96,7 @@ namespace ceph {
   inline Request mClockClientQueue::dequeue() {
     queue_t::Retn retn = queue.dequeue_distributed();
 
-    if (boost::optional<OpRequestRef> _op = retn.request.maybe_get_op()) {
+    if (auto _op = retn.request.maybe_get_op()) {
       (*_op)->qos_phase = retn.phase;
       (*_op)->qos_cost = retn.cost;
     }

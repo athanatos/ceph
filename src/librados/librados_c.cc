@@ -4033,6 +4033,8 @@ extern "C" void _rados_object_list_slice(
 }
 LIBRADOS_C_API_BASE_DEFAULT(rados_object_list_slice);
 
+static osdc::QosProfileMgr qos_profile_mgr;
+
 extern "C" int _rados_qos_profile_create(uint64_t reservation,
 					uint64_t weight,
 					uint64_t limit,

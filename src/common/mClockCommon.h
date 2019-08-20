@@ -18,7 +18,7 @@
 
 // the following is done to unclobber _ASSERT_H so it returns to the
 // way ceph likes it
-#include "include/assert.h"
+#include "include/ceph_assert.h"
 
 
 namespace ceph {
@@ -26,26 +26,26 @@ namespace ceph {
 namespace dmc = crimson::dmclock;
 
 inline void encode(const dmc::ReqParams &rp,
-		   ::ceph::bufferlist& bl,
+		   ceph::buffer::list& bl,
                    uint64_t features=0) {
   encode(rp.delta, bl);
   encode(rp.rho, bl);
 }
 
 inline void decode(dmc::ReqParams &rp,
-		   ::ceph::bufferlist::iterator& p) {
+		   ceph::buffer::list::const_iterator& p) {
   decode(rp.delta, p);
   decode(rp.rho, p);
 }
 
 inline void encode(const dmc::PhaseType &phase,
-		   ::ceph::bufferlist& bl,
+		   ceph::buffer::list& bl,
                    uint64_t features=0) {
   encode(static_cast<uint8_t>(phase), bl);
 }
 
 inline void decode(dmc::PhaseType &phase,
-		   ::ceph::bufferlist::iterator& p) {
+		   ceph::buffer::list::const_iterator& p) {
   uint8_t int_phase;
   decode((uint8_t&)int_phase, p);
   phase = static_cast<dmc::PhaseType>(int_phase);

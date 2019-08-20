@@ -190,28 +190,6 @@ public:
   }
 }; // class OpQueueItem
 
-
-#warning delete this
-#if 0
-class ClientOpProxy : public OpQueueItem::OpQueueable {
-  op_type_t get_op_type() const override {
-    return op_type_t::client_op_proxy;
-  }
-  uint32_t get_queue_token() const override {
-    assert(0);
-    return 0;
-  }
-  const spg_t& get_ordering_token() const override {
-    assert(0);
-    return spg_t(0);
-  }
-  OrderLocker::Ref get_order_locker(PGRef pg) override {
-    assert(0);
-    return OrderLocker::Ref();
-  }
-};
-#endif
-
 /// Implements boilerplate for operations queued for the pg lock
 class PGOpQueueable : public OpQueueItem::OpQueueable {
   spg_t pgid;
@@ -261,28 +239,6 @@ public:
   }
   void run(OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) override final;
 };
-
-#warning delete this
-#if 0
-/*
- * The PGProxyOpItem is a proxy for a client op that is in a different
- * queue. When such an item is dequeued, an op must then be dequeued
- * from the client queue and that op returned.
- */
-class PGProxyOpItem : public PGOpQueueable {
-public:
-  PGProxyOpItem(spg_t pg) : PGOpQueueable(pg) {}
-  op_type_t get_op_type() const override final {
-    return op_type_t::client_op_proxy;
-  }
-  ostream &print(ostream &rhs) const override final {
-    return rhs << "PGProxyOpItem";
-  }
-  // the implementation of run should assert false, as it is not
-  // runnable
-  void run(OSD *osd, PGRef& pg, ThreadPool::TPHandle &handle) override final;
-};
-#endif
 
 class PGPeeringItem : public PGOpQueueable {
   PGPeeringEventRef evt;

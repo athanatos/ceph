@@ -6141,7 +6141,7 @@ struct qos_params_t {
     qos_profile_id(qpid)
   {}
 
-  void encode(bufferlist& bl) const {
+  void encode(ceph::buffer::list& bl) const {
     ENCODE_START(1, 1, bl);
     encode(reservation, bl);
     encode(weight, bl);
@@ -6150,7 +6150,7 @@ struct qos_params_t {
     ENCODE_FINISH(bl);
   }
 
-  void decode(bufferlist::iterator& bl) {
+  void decode(ceph::buffer::list::const_iterator& bl) {
     DECODE_START(1, bl);
     decode(reservation, bl);
     decode(weight, bl);
