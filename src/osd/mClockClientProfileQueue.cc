@@ -38,10 +38,8 @@ namespace ceph {
     op_class_mgr(cct),
     client_queue(std::bind(&client_profile_mgr_t::get,
 			   &client_profile_mgr, _1),
-		 true,
-		 cct->_conf->osd_op_queue_mclock_anticipation_timeout,
-		 std::bind(&client_profile_mgr_t::clear,
-			   &client_profile_mgr, _1)),
+		 dmc::AtLimit::Wait,
+		 cct->_conf->osd_op_queue_mclock_anticipation_timeout),
     top_queue(std::bind(&ceph::mclock::OpClassClientInfoMgr::get_client_info,
 			&op_class_mgr, _1),
 	      cct->_conf->osd_op_queue_mclock_anticipation_timeout)
