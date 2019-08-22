@@ -14,6 +14,7 @@
 #include "common/perf_counters.h"
 #include "auth/DummyAuth.h"
 #include "ring_buffer.h"
+#include "common/mClockCommon.h"
 
 #include <fio.h>
 #include <flist.h>
