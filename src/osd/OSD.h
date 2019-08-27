@@ -1095,6 +1095,10 @@ struct OSDShard {
       pqueue = std::make_unique<ceph::mClockOpClassQueue>(cct);
     } else if (opqueue == io_queue::mclock_client) {
       pqueue = std::make_unique<ceph::mClockClientQueue>(cct);
+    } else if (opqueue == io_queue::mclock_client_profile) {
+      pqueue = std::make_unique<ceph::mClockClientProfileQueue>(cct);
+    } else {
+      ceph_assert(0 == "impossible opqueue value");
     }
   }
 };
