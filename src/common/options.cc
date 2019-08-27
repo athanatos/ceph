@@ -2772,9 +2772,6 @@ std::vector<Option> get_global_options() {
 
     Option("osd_op_queue", Option::TYPE_STR, Option::LEVEL_ADVANCED)
     .set_default("wpq")
-    .set_enum_allowed( { "wpq", "prioritized", "mclock_opclass", "mclock_client", "debug_random" } )
-    .set_description("which operation queue algorithm to use")
-    .set_long_description("which operation queue algorithm to use; mclock_opclass and mclock_client are currently experimental")
     .set_enum_allowed( { "wpq", "prioritized",
 	  "mclock_opclass", "mclock_client", "mclock_client_profile",
 	  "debug_random" } )
