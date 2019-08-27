@@ -330,6 +330,7 @@ set(libcommon_files
   dmclock/support/src/run_every.cc
   osdc/Striper.cc
   osdc/Objecter.cc
+  osdc/QosProfileMgr.cc
   librbd/Features.cc
   ${mds_files})
 set_source_files_properties(ceph_ver.c

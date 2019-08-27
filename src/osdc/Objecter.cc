@@ -240,6 +240,12 @@ void Objecter::handle_conf_change(const ConfigProxy& conf,
   if (changed.count("crush_location")) {
     update_crush_location();
   }
+
+  if (changed.count("objecter_default_qos_profile_res"),
+      changed.count("objecter_default_qos_profile_wgt"),
+      changed.count("objecter_default_qos_profile_lim")) {
+    set_default_qos_from_conf(conf);
+  }
 }
 
 void Objecter::update_crush_location()
@@ -536,6 +542,30 @@ void Objecter::shutdown()
     delete m_request_state_hook;
     m_request_state_hook = NULL;
   }
+}
+
+void Objecter::set_default_qos_profile(
+  osdc::qos_profile_ref qos_profile) {
+  osdc::qos_profile_ref(
+    default_qos_profile.exchange(qos_profile.detach()),
+    false /* add_ref=false, decrement ref on previous default */);
+}
+
+void Objecter::set_default_qos_from_conf(const ConfigProxy &conf) {
+  set_default_qos_profile(
+    qos_profile_mgr.create(
+      conf.get_val<uint64_t>("objecter_default_qos_profile_res"),
+      conf.get_val<uint64_t>("objecter_default_qos_profile_wgt"),
+      conf.get_val<uint64_t>("objecter_default_qos_profile_lim")));
+}
+  
+osdc::qos_profile_ref Objecter::get_default_qos_profile() const {
+  return osdc::qos_profile_ref(default_qos_profile);
+}
+  
+osdc::qos_profile_ref Objecter::qos_profile_create(
+  uint64_t r, uint64_t w, uint64_t l) {
+  return qos_profile_mgr.create(r, w, l);
 }
 
 void Objecter::_send_linger(LingerOp *info,
@@ -4997,10 +5027,14 @@ Objecter::Objecter(CephContext *cct_, Messenger *m, MonClient *mc,
 		    cct->_conf->objecter_inflight_op_bytes),
   op_throttle_ops(cct, "objecter_ops", cct->_conf->objecter_inflight_ops),
   retry_writes_after_first_reply(cct->_conf->objecter_retry_writes_after_first_reply)
-{}
+{
+  set_default_qos_from_conf(cct_->_conf);
+}
 
 Objecter::~Objecter()
 {
+  set_default_qos_profile(osdc::qos_profile_ref());
+
   ceph_assert(homeless_session->get_nref() == 1);
   ceph_assert(num_homeless_ops == 0);
   homeless_session->put();

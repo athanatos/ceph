@@ -27,7 +27,6 @@
 #include "include/xlist.h"
 #include "osd/osd_types.h"
 #include "osdc/Objecter.h"
-#include "osdc/QosProfileMgr.h"
 
 class RadosClient;
 
@@ -48,7 +47,7 @@ struct librados::IoCtxImpl {
   ceph::condition_variable aio_write_cond;
   xlist<AioCompletionImpl*> aio_write_list;
   map<ceph_tid_t, std::list<AioCompletionImpl*> > aio_write_waiters;
-  osdc::shared_qos_profile qos_profile;
+  osdc::qos_profile_ref qos_profile;
 
   Objecter *objecter = nullptr;
 
@@ -95,25 +94,25 @@ struct librados::IoCtxImpl {
   int get_object_hash_position(const std::string& oid, uint32_t *hash_position);
   int get_object_pg_hash_position(const std::string& oid, uint32_t *pg_hash_position);
 
-  // returns qos_profile associated with ioctx as long as it refers to
-  // one, otherwise returns the default qos profile
-  const osdc::shared_qos_profile& get_qos_profile() const {
-    if (qos_profile) return qos_profile;
-    else return osdc::get_default_qos_profile();
+  osdc::qos_profile_ref get_qos_profile() const {
+    return qos_profile;
   }
 
   // returns the passed in qos_profile as long as it refers to one
   // (e.g., it could be the one assigned to an op); otherwise it
   // returns the one associated with the ioctx or the default
-  const osdc::shared_qos_profile&
-  get_qos_profile(const osdc::shared_qos_profile& first_choice) const {
+  osdc::qos_profile_ref
+  get_qos_profile(osdc::qos_profile_ref& first_choice) const {
     if (first_choice) return first_choice;
-    else if (qos_profile) return qos_profile;
-    else return osdc::get_default_qos_profile();
+    else return get_qos_profile();
   }
 
-  void set_qos_profile(const osdc::shared_qos_profile& profile) {
-    qos_profile = profile;
+  void set_qos_profile(osdc::qos_profile_ref profile) {
+    if (profile) {
+      qos_profile = profile;
+    } else {
+      qos_profile = objecter->get_default_qos_profile();
+    }
   }
 
   ::ObjectOperation *prepare_assert_ops(::ObjectOperation *op);

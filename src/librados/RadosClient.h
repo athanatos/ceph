@@ -159,6 +159,9 @@ public:
   int monitor_log(const string& level, rados_log_callback_t cb,
 		  rados_log_callback2_t cb2, void *arg);
 
+  osdc::qos_profile_ref qos_profile_create(
+    uint64_t r, uint64_t w, uint64_t l);
+
   void get();
   bool put();
   void blacklist_self(bool set);

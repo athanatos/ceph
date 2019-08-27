@@ -230,7 +230,9 @@ librados::IoCtxImpl::IoCtxImpl(RadosClient *c, Objecter *objecter,
   : client(c), poolid(poolid), snap_seq(s),
     notify_timeout(c->cct->_conf->client_notify_timeout),
     oloc(poolid),
-    aio_write_seq(0), objecter(objecter)
+    aio_write_seq(0),
+    qos_profile(objecter->get_default_qos_profile()),
+    objecter(objecter)
 {
 }
 

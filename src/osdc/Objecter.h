@@ -73,7 +73,7 @@ struct ObjectOperation {
   std::vector<Context*> out_handler;
   std::vector<int*> out_rval;
 
-  osdc::shared_qos_profile qos_profile;
+  osdc::qos_profile_ref qos_profile;
 
   ObjectOperation() : flags(0), priority(0) {}
   ~ObjectOperation() {
@@ -87,7 +87,7 @@ struct ObjectOperation {
     return ops.size();
   }
 
-  void set_qos_profile(const osdc::shared_qos_profile& qp) {
+  void set_qos_profile(osdc::qos_profile_ref qp) {
     qos_profile = qp;
   }
 
@@ -1484,7 +1484,7 @@ public:
     osd_reqid_t reqid; // explicitly setting reqid
     ZTracer::Trace trace;
 
-    osdc::shared_qos_profile qos_profile;
+    osdc::qos_profile_ref qos_profile;
     
     Op(const object_t& o, const object_locator_t& ol, std::vector<OSDOp>& op,
        int f, Context *fin, version_t *ov, int *offset = NULL,
@@ -2139,6 +2139,19 @@ private:
     return std::forward<Callback>(cb)(*osdmap, std::forward<Args>(args)...);
   }
 
+private:
+  osdc::QosProfileMgr qos_profile_mgr;
+  std::atomic<osdc::qos_profile_ptr> default_qos_profile;
+
+  void set_default_qos_profile(
+    osdc::qos_profile_ref qos_profile);
+
+  void set_default_qos_from_conf(const ConfigProxy &conf);
+  
+public:
+  osdc::qos_profile_ref get_default_qos_profile() const;
+  
+  osdc::qos_profile_ref qos_profile_create(uint64_t r, uint64_t w, uint64_t l);
 
   /**
    * Tell the objecter to throttle outgoing ops according to its
@@ -2323,7 +2336,7 @@ public:
     const object_t& oid, const object_locator_t& oloc,
     ObjectOperation& op, const SnapContext& snapc,
     ceph::real_time mtime, int flags,
-    osdc::shared_qos_profile qos_profile,
+    const osdc::qos_profile_ref &qos_profile,
     Context *oncommit, version_t *objver = NULL,
     osd_reqid_t reqid = osd_reqid_t(),
     ZTracer::Trace *parent_trace = nullptr) {
@@ -2344,9 +2357,10 @@ public:
     Context *oncommit,
     version_t *objver = NULL,
     osd_reqid_t reqid = osd_reqid_t()) {
-    Op *o = prepare_mutate_op(oid, oloc, op, snapc, mtime, flags,
-			      osdc::get_default_qos_profile(),
-			      oncommit, objver, reqid);
+    Op *o = prepare_mutate_op(
+      oid, oloc, op, snapc, mtime, flags,
+      op.qos_profile,
+      oncommit, objver, reqid);
     ceph_tid_t tid;
     op_submit(o, &tid);
     return tid;
