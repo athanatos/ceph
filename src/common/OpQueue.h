@@ -56,6 +56,8 @@ class OpQueue {
     virtual T dequeue() = 0;
     // Formatted output of the queue
     virtual void dump(ceph::Formatter *f) const = 0;
+    // Print simple summary
+    virtual void print(ceph::Formatter *f) const = 0;
     // Don't leak resources on destruction
     virtual ~OpQueue() {}; 
 };
