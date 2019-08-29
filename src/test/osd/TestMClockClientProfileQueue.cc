@@ -10,6 +10,7 @@
 
 #include "osd/mClockClientProfileQueue.h"
 
+using namespace ceph::osd::scheduler;
 
 int main(int argc, char **argv) {
   std::vector<const char*> args(argv, argv+argc);
@@ -42,19 +43,19 @@ public:
 #if 0
 
   Request create_snaptrim(epoch_t e, uint64_t owner) {
-    return Request(OpQueueItem(unique_ptr<OpQueueItem::OpQueueable>(new PGSnapTrim(spg_t(), e)),
+    return Request(OpSchedulerItem(unique_ptr<OpSchedulerItem::OpQueueable>(new PGSnapTrim(spg_t(), e)),
 			       12, 12,
 			       utime_t(), owner, e));
   }
 
   Request create_scrub(epoch_t e, uint64_t owner) {
-    return Request(OpQueueItem(unique_ptr<OpQueueItem::OpQueueable>(new PGScrub(spg_t(), e)),
+    return Request(OpSchedulerItem(unique_ptr<OpSchedulerItem::OpQueueable>(new PGScrub(spg_t(), e)),
 			       12, 12,
 			       utime_t(), owner, e));
   }
 
   Request create_recovery(epoch_t e, uint64_t owner) {
-    return Request(OpQueueItem(unique_ptr<OpQueueItem::OpQueueable>(new PGRecovery(spg_t(), e, 64)),
+    return Request(OpSchedulerItem(unique_ptr<OpSchedulerItem::OpQueueable>(new PGRecovery(spg_t(), e, 64)),
 			       12, 12,
 			       utime_t(), owner, e));
   }

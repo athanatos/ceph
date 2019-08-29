@@ -20,7 +20,7 @@
 #include "include/utime.h"
 #include "osd/OpRequest.h"
 #include "osd/PG.h"
-#include "PGPeeringEvent.h"
+#include "osd/PGPeeringEvent.h"
 #include "common/mClockCommon.h"
 #include "messages/MOSDOp.h"
 
@@ -28,7 +28,11 @@
 class OSD;
 class OSDShard;
 
-class OpQueueItem {
+namespace ceph {
+namespace osd {
+namespace scheduler {
+
+class OpSchedulerItem {
 public:
   class OrderLocker {
   public:
@@ -99,7 +103,7 @@ private:
   epoch_t map_epoch;    ///< an epoch we expect the PG to exist in
 
 public:
-  OpQueueItem(
+  OpSchedulerItem(
     OpQueueable::Ref &&item,
     int cost,
     unsigned priority,
@@ -122,10 +126,10 @@ public:
       }
     }
   }
-  OpQueueItem(OpQueueItem &&) = default;
-  OpQueueItem(const OpQueueItem &) = delete;
-  OpQueueItem &operator=(OpQueueItem &&) = default;
-  OpQueueItem &operator=(const OpQueueItem &) = delete;
+  OpSchedulerItem(OpSchedulerItem &&) = default;
+  OpSchedulerItem(const OpSchedulerItem &) = delete;
+  OpSchedulerItem &operator=(OpSchedulerItem &&) = default;
+  OpSchedulerItem &operator=(const OpSchedulerItem &) = delete;
 
   OrderLocker::Ref get_order_locker(PGRef pg) {
     return qitem->get_order_locker(pg);
@@ -177,8 +181,8 @@ public:
     return qitem->peering_requires_pg();
   }
 
-  friend ostream& operator<<(ostream& out, const OpQueueItem& item) {
-     out << "OpQueueItem("
+  friend ostream& operator<<(ostream& out, const OpSchedulerItem& item) {
+     out << "OpSchedulerItem("
 	 << item.get_ordering_token() << " " << *item.qitem
 	 << " prio " << item.get_priority()
 	 << " cost " << item.get_cost()
@@ -188,10 +192,10 @@ public:
      }
     return out << ")";
   }
-}; // class OpQueueItem
+}; // class OpSchedulerItem
 
 /// Implements boilerplate for operations queued for the pg lock
-class PGOpQueueable : public OpQueueItem::OpQueueable {
+class PGOpQueueable : public OpSchedulerItem::OpQueueable {
   spg_t pgid;
 protected:
   const spg_t& get_pgid() const {
@@ -207,8 +211,8 @@ public:
     return get_pgid();
   }
 
-  OpQueueItem::OrderLocker::Ref get_order_locker(PGRef pg) override final {
-    class Locker : public OpQueueItem::OrderLocker {
+  OpSchedulerItem::OrderLocker::Ref get_order_locker(PGRef pg) override final {
+    class Locker : public OpSchedulerItem::OrderLocker {
       PGRef pg;
     public:
       explicit Locker(PGRef pg) : pg(pg) {}
@@ -219,7 +223,7 @@ public:
 	pg->unlock();
       }
     };
-    return OpQueueItem::OrderLocker::Ref(
+    return OpSchedulerItem::OrderLocker::Ref(
       new Locker(pg));
   }
 };
@@ -366,3 +370,7 @@ public:
   void run(
     OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) override final;
 };
+
+}
+}
+}

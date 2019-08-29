@@ -22,14 +22,14 @@
 #include "common/config.h"
 #include "common/ceph_context.h"
 #include "common/mClockPriorityQueue.h"
-#include "osd/OpQueueItem.h"
+#include "osd/scheduler/OpSchedulerItem.h"
 #include "osd/mClockOpClassSupport.h"
 #include "common/mClockClientInfoMgr.h"
 
 
 namespace ceph {
 
-  using Request = OpQueueItem;
+  using Request = ceph::osd::scheduler::OpSchedulerItem;
   using Client = uint64_t;
   using MClockProfile = uint64_t;
 
@@ -133,6 +133,10 @@ namespace ceph {
 
     // Formatted output of the queue
     void dump(ceph::Formatter *f) const override final;
+
+    void print(std::ostream &ostream) const final {
+      ostream << "mClockClientProfileQueue";
+    }
 
 #if 0
   protected:

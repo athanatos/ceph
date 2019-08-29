@@ -22,13 +22,13 @@
 #include "common/config.h"
 #include "common/ceph_context.h"
 #include "common/mClockPriorityQueue.h"
-#include "osd/OpQueueItem.h"
+#include "osd/scheduler/OpSchedulerItem.h"
 #include "osd/mClockOpClassSupport.h"
 
 
 namespace ceph {
 
-  using Request = OpQueueItem;
+  using Request = ceph::osd::scheduler::OpSchedulerItem;
   using Client = uint64_t;
 
   // This class exists to bridge the ceph code, which treats the class
@@ -102,6 +102,10 @@ namespace ceph {
 
     // Formatted output of the queue
     void dump(ceph::Formatter *f) const override final;
+
+    void print(std::ostream &ostream) const final {
+      ostream << "mClockClientQueue";
+    }
 
   protected:
 
