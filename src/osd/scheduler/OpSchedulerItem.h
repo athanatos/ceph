@@ -203,23 +203,23 @@ protected:
   }
 public:
   explicit PGOpQueueable(spg_t pg) : pgid(pg) {}
-  uint32_t get_queue_token() const override final {
+  uint32_t get_queue_token() const final {
     return get_pgid().ps();
   }
 
-  const spg_t& get_ordering_token() const override final {
+  const spg_t& get_ordering_token() const final {
     return get_pgid();
   }
 
-  OpSchedulerItem::OrderLocker::Ref get_order_locker(PGRef pg) override final {
+  OpSchedulerItem::OrderLocker::Ref get_order_locker(PGRef pg) final {
     class Locker : public OpSchedulerItem::OrderLocker {
       PGRef pg;
     public:
       explicit Locker(PGRef pg) : pg(pg) {}
-      void lock() override final {
+      void lock() final {
 	pg->lock();
       }
-      void unlock() override final {
+      void unlock() final {
 	pg->unlock();
       }
     };
@@ -232,29 +232,29 @@ class PGOpItem : public PGOpQueueable {
   OpRequestRef op;
 public:
   PGOpItem(spg_t pg, OpRequestRef op) : PGOpQueueable(pg), op(std::move(op)) {}
-  op_type_t get_op_type() const override final {
+  op_type_t get_op_type() const final {
     return op_type_t::client_op;
   }
-  ostream &print(ostream &rhs) const override final {
+  ostream &print(ostream &rhs) const final {
     return rhs << "PGOpItem(op=" << *(op->get_req()) << ")";
   }
-  std::optional<OpRequestRef> maybe_get_op() const override final {
+  std::optional<OpRequestRef> maybe_get_op() const final {
     return op;
   }
-  void run(OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) override final;
+  void run(OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) final;
 };
 
 class PGPeeringItem : public PGOpQueueable {
   PGPeeringEventRef evt;
 public:
   PGPeeringItem(spg_t pg, PGPeeringEventRef e) : PGOpQueueable(pg), evt(e) {}
-  op_type_t get_op_type() const override final {
+  op_type_t get_op_type() const final {
     return op_type_t::peering_event;
   }
-  ostream &print(ostream &rhs) const override final {
+  ostream &print(ostream &rhs) const final {
     return rhs << "PGPeeringEvent(" << evt->get_desc() << ")";
   }
-  void run(OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) override final;
+  void run(OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) final;
   bool is_peering() const override {
     return true;
   }
@@ -273,16 +273,16 @@ public:
     spg_t pg,
     epoch_t epoch_queued)
     : PGOpQueueable(pg), epoch_queued(epoch_queued) {}
-  op_type_t get_op_type() const override final {
+  op_type_t get_op_type() const final {
     return op_type_t::bg_snaptrim;
   }
-  ostream &print(ostream &rhs) const override final {
+  ostream &print(ostream &rhs) const final {
     return rhs << "PGSnapTrim(pgid=" << get_pgid()
 	       << "epoch_queued=" << epoch_queued
 	       << ")";
   }
   void run(
-    OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) override final;
+    OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) final;
 };
 
 class PGScrub : public PGOpQueueable {
@@ -292,16 +292,16 @@ public:
     spg_t pg,
     epoch_t epoch_queued)
     : PGOpQueueable(pg), epoch_queued(epoch_queued) {}
-  op_type_t get_op_type() const override final {
+  op_type_t get_op_type() const final {
     return op_type_t::bg_scrub;
   }
-  ostream &print(ostream &rhs) const override final {
+  ostream &print(ostream &rhs) const final {
     return rhs << "PGScrub(pgid=" << get_pgid()
 	       << "epoch_queued=" << epoch_queued
 	       << ")";
   }
   void run(
-    OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) override final;
+    OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) final;
 };
 
 class PGRecovery : public PGOpQueueable {
@@ -315,20 +315,20 @@ public:
     : PGOpQueueable(pg),
       epoch_queued(epoch_queued),
       reserved_pushes(reserved_pushes) {}
-  op_type_t get_op_type() const override final {
+  op_type_t get_op_type() const final {
     return op_type_t::bg_recovery;
   }
-  virtual ostream &print(ostream &rhs) const override final {
+  virtual ostream &print(ostream &rhs) const final {
     return rhs << "PGRecovery(pgid=" << get_pgid()
 	       << "epoch_queued=" << epoch_queued
 	       << "reserved_pushes=" << reserved_pushes
 	       << ")";
   }
-  virtual uint64_t get_reserved_pushes() const override final {
+  virtual uint64_t get_reserved_pushes() const final {
     return reserved_pushes;
   }
   virtual void run(
-    OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) override final;
+    OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) final;
 };
 
 class PGRecoveryContext : public PGOpQueueable {
@@ -339,16 +339,16 @@ public:
 		    GenContext<ThreadPool::TPHandle&> *c, epoch_t epoch)
     : PGOpQueueable(pgid),
       c(c), epoch(epoch) {}
-  op_type_t get_op_type() const override final {
+  op_type_t get_op_type() const final {
     return op_type_t::bg_recovery;
   }
-  ostream &print(ostream &rhs) const override final {
+  ostream &print(ostream &rhs) const final {
     return rhs << "PGRecoveryContext(pgid=" << get_pgid()
 	       << " c=" << c.get() << " epoch=" << epoch
 	       << ")";
   }
   void run(
-    OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) override final;
+    OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) final;
 };
 
 class PGDelete : public PGOpQueueable {
@@ -359,16 +359,16 @@ public:
     epoch_t epoch_queued)
     : PGOpQueueable(pg),
       epoch_queued(epoch_queued) {}
-  op_type_t get_op_type() const override final {
+  op_type_t get_op_type() const final {
     return op_type_t::bg_pg_delete;
   }
-  ostream &print(ostream &rhs) const override final {
+  ostream &print(ostream &rhs) const final {
     return rhs << "PGDelete(" << get_pgid()
 	       << " e" << epoch_queued
 	       << ")";
   }
   void run(
-    OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) override final;
+    OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) final;
 };
 
 }
