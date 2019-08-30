@@ -32,6 +32,13 @@ namespace ceph {
 namespace osd {
 namespace scheduler {
 
+enum class op_scheduler_class : uint8_t {
+  background_recovery = 0,
+  background_best_effort,
+  immediate,
+  client,
+};
+
 class OpSchedulerItem {
 public:
   class OrderLocker {
@@ -46,7 +53,7 @@ public:
   class OpQueueable {
   public:
     enum class op_type_t {
-      client_op,
+      client_op = 0,
       client_op_proxy,
       peering_event,
       bg_snaptrim,
@@ -85,6 +92,8 @@ public:
     virtual ostream &print(ostream &rhs) const = 0;
 
     virtual void run(OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) = 0;
+    virtual op_scheduler_class get_scheduler_class() const = 0;
+    
     virtual ~OpQueueable() {}
     friend ostream& operator<<(ostream& out, const OpQueueable& q) {
       return q.print(out);
@@ -181,6 +190,10 @@ public:
     return qitem->peering_requires_pg();
   }
 
+  op_scheduler_class get_scheduler_class() const {
+    return qitem->get_scheduler_class();
+  }
+
   friend ostream& operator<<(ostream& out, const OpSchedulerItem& item) {
      out << "OpSchedulerItem("
 	 << item.get_ordering_token() << " " << *item.qitem
@@ -235,12 +248,19 @@ public:
   op_type_t get_op_type() const final {
     return op_type_t::client_op;
   }
+
   ostream &print(ostream &rhs) const final {
     return rhs << "PGOpItem(op=" << *(op->get_req()) << ")";
   }
+
   std::optional<OpRequestRef> maybe_get_op() const final {
     return op;
   }
+
+  op_scheduler_class get_scheduler_class() const {
+    return op_scheduler_class::client;
+  }
+
   void run(OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) final;
 };
 
@@ -264,6 +284,9 @@ public:
   const PGCreateInfo *creates_pg() const override {
     return evt->create_info.get();
   }
+  op_scheduler_class get_scheduler_class() const {
+    return op_scheduler_class::immediate;
+  }
 };
 
 class PGSnapTrim : public PGOpQueueable {
@@ -283,6 +306,9 @@ public:
   }
   void run(
     OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) final;
+  op_scheduler_class get_scheduler_class() const {
+    return op_scheduler_class::background_best_effort;
+  }
 };
 
 class PGScrub : public PGOpQueueable {
@@ -302,6 +328,9 @@ public:
   }
   void run(
     OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) final;
+  op_scheduler_class get_scheduler_class() const {
+    return op_scheduler_class::background_best_effort;
+  }
 };
 
 class PGRecovery : public PGOpQueueable {
@@ -329,6 +358,9 @@ public:
   }
   virtual void run(
     OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) final;
+  op_scheduler_class get_scheduler_class() const {
+    return op_scheduler_class::background_recovery;
+  }
 };
 
 class PGRecoveryContext : public PGOpQueueable {
@@ -349,6 +381,9 @@ public:
   }
   void run(
     OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) final;
+  op_scheduler_class get_scheduler_class() const {
+    return op_scheduler_class::background_recovery;
+  }
 };
 
 class PGDelete : public PGOpQueueable {
@@ -369,6 +404,9 @@ public:
   }
   void run(
     OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) final;
+  op_scheduler_class get_scheduler_class() const {
+    return op_scheduler_class::background_best_effort;
+  }
 };
 
 }

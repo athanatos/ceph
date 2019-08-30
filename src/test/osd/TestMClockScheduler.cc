@@ -8,7 +8,7 @@
 #include "global/global_init.h"
 #include "common/common_init.h"
 
-#include "osd/mClockClientProfileQueue.h"
+#include "osd/scheduler/mClockScheduler.h"
 
 using namespace ceph::osd::scheduler;
 
@@ -24,22 +24,22 @@ int main(int argc, char **argv) {
 }
 
 
-class MClockClientProfileQueueTest : public testing::Test {
+class mClockSchedulerTest : public testing::Test {
 public:
-  mClockClientProfileQueue q;
+  mClockScheduler q;
 
   uint64_t client1;
   uint64_t client2;
   uint64_t client3;
 
-  MClockClientProfileQueueTest() :
+  mClockSchedulerTest() :
     q(g_ceph_context),
     client1(1001),
     client2(9999),
     client3(100000001)
   {}
 
-#warning Need to finish MClockClientProfileQueueTest
+#warning Need to finish mClockSchedulerTest
 #if 0
 
   Request create_snaptrim(epoch_t e, uint64_t owner) {
@@ -60,7 +60,7 @@ public:
 			       utime_t(), owner, e));
   }
 #endif
-}; // MClockClientProfileQueueTest
+}; // mClockSchedulerTest
 
 
 #if 0

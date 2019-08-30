@@ -18,7 +18,7 @@
 
 #include "common/PrioritizedQueue.h"
 #include "common/WeightedPriorityQueue.h"
-#include "osd/mClockClientProfileQueue.h"
+#include "osd/scheduler/mClockScheduler.h"
 #include "osd/mClockClientQueue.h"
 #include "osd/mClockOpClassQueue.h"
 
@@ -59,12 +59,8 @@ OpSchedulerRef make_scheduler(CephContext *cct)
 	cct,
 	cct
     );
-  } else if (*type == "mclock_client_profile") {
-    return std::make_unique<
-      ClassedOpQueueScheduler<mClockClientProfileQueue>>(
-	cct,
-	cct
-    );
+  } else if (*type == "mclock_scheduler") {
+    return std::make_unique<mClockScheduler>(cct);
   } else if (*type == "wpq" ) {
     // default is 'wpq'
     return std::make_unique<
