@@ -109,11 +109,7 @@ struct librados::IoCtxImpl {
   }
 
   void set_qos_profile(osdc::qos_profile_ref profile) {
-    if (profile) {
-      qos_profile = profile;
-    } else {
-      qos_profile = objecter->get_default_qos_profile();
-    }
+    qos_profile = profile;
   }
 
   ::ObjectOperation *prepare_assert_ops(::ObjectOperation *op);

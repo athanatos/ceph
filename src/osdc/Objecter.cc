@@ -3255,6 +3255,9 @@ MOSDOp *Objecter::_prepare_osd_op(Op *op)
     m->set_reqid(op->reqid);
   }
 
+  if (!op->qos_profile) {
+    op->qos_profile = get_default_qos_profile();
+  }
   dmc::ReqParams rp =
     op->qos_profile->service_tracker().get_req_params(op->target.osd);
   m->set_qos_req_params(rp);
