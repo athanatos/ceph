@@ -107,12 +107,12 @@ void mClockScheduler::dump(ceph::Formatter &f) const
 void mClockScheduler::enqueue(OpSchedulerItem&& item)
 {
   auto id = get_scheduler_id(item);
+  auto cost = item.get_cost();
 
   // TODO: move this check into OpSchedulerItem, handle backwards compat
   if (op_scheduler_class::immediate == item.get_scheduler_class()) {
     immediate.push_back(std::move(item));
   } else if (op_scheduler_class::client == item.get_scheduler_class()) {
-    auto id = get_scheduler_id(item);
     dmc::ReqParams qos_req_params = item.get_qos_req_params();
     qos_params_t params = item.get_qos_profile_params();
 
@@ -124,12 +124,12 @@ void mClockScheduler::enqueue(OpSchedulerItem&& item)
       std::move(item),
       id,
       qos_req_params,
-      item.get_cost());
+      cost);
   } else {
     scheduler.add_request(
       std::move(item),
       id,
-      item.get_cost());
+      cost);
   }
 }
 
