@@ -47,21 +47,21 @@ mClockScheduler::mClockScheduler(CephContext *cct) :
 void mClockScheduler::ClientRegistry::update_from_config(const ConfigProxy &conf)
 {
   default_external_client_info.update(
-    conf.get_val<double>("osd_mclock_scheduler_client_res"),
-    conf.get_val<double>("osd_mclock_scheduler_client_wgt"),
-    conf.get_val<double>("osd_mclock_scheduler_client_lim"));
+    conf.get_val<uint64_t>("osd_mclock_scheduler_client_res"),
+    conf.get_val<uint64_t>("osd_mclock_scheduler_client_wgt"),
+    conf.get_val<uint64_t>("osd_mclock_scheduler_client_lim"));
 
   internal_client_infos[
     static_cast<size_t>(op_scheduler_class::background_recovery)].update(
-    conf.get_val<double>("osd_mclock_scheduler_background_recovery_res"),
-    conf.get_val<double>("osd_mclock_scheduler_background_recovery_wgt"),
-    conf.get_val<double>("osd_mclock_scheduler_background_recovery_lim"));
+    conf.get_val<uint64_t>("osd_mclock_scheduler_background_recovery_res"),
+    conf.get_val<uint64_t>("osd_mclock_scheduler_background_recovery_wgt"),
+    conf.get_val<uint64_t>("osd_mclock_scheduler_background_recovery_lim"));
 
   internal_client_infos[
     static_cast<size_t>(op_scheduler_class::background_best_effort)].update(
-    conf.get_val<double>("osd_mclock_scheduler_background_best_effort_res"),
-    conf.get_val<double>("osd_mclock_scheduler_background_best_effort_wgt"),
-    conf.get_val<double>("osd_mclock_scheduler_background_best_effort_lim"));
+    conf.get_val<uint64_t>("osd_mclock_scheduler_background_best_effort_res"),
+    conf.get_val<uint64_t>("osd_mclock_scheduler_background_best_effort_wgt"),
+    conf.get_val<uint64_t>("osd_mclock_scheduler_background_best_effort_lim"));
 }
 
 void mClockScheduler::ClientRegistry::update_external_client(
@@ -107,7 +107,11 @@ void mClockScheduler::dump(ceph::Formatter &f) const
 void mClockScheduler::enqueue(OpSchedulerItem&& item)
 {
   auto id = get_scheduler_id(item);
-  auto cost = item.get_cost();
+#warning fixme
+  // TODO: cost needs to be something real, figure out with normalization of 
+  // TODO: qos_req_params needs to be filtered for sensiblity, can't be 0s
+  // client, local mclock params
+  auto cost = 1; //std::max(item.get_cost(), 1);
 
   // TODO: move this check into OpSchedulerItem, handle backwards compat
   if (op_scheduler_class::immediate == item.get_scheduler_class()) {

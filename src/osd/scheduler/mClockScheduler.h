@@ -120,7 +120,7 @@ public:
 
   // Returns if the queue is empty
   bool empty() const final {
-    return true;
+    return immediate.empty() && scheduler.empty();
   }
 
   // Formatted output of the queue

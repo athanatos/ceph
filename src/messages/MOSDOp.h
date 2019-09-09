@@ -412,6 +412,9 @@ struct ceph_osd_request_head {
 	// assert(header.version >= 8);
 	encode(qos_req_params, payload);
 	encode(qos_profile_params, payload);
+	ceph_assert(qos_profile_params.reservation != 0);
+      } else {
+	ceph_assert(0 == "impossible");
       }
     }
   } // encode_payload
@@ -553,6 +556,8 @@ struct ceph_osd_request_head {
     }
 
     partial_decode_needed = false;
+#warning remove
+    finish_decode();
   }
 
   bool finish_decode() {
@@ -586,6 +591,9 @@ struct ceph_osd_request_head {
       assert(header.version >= 8);
       decode(qos_req_params, p);
       decode(qos_profile_params, p);
+      ceph_assert(qos_profile_params.reservation != 0);
+    } else {
+      ceph_assert("wtf" == 0);
     }
 
     hobj.pool = pgid.pgid.pool();

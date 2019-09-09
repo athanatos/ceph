@@ -2141,7 +2141,7 @@ private:
 
 private:
   osdc::QosProfileMgr qos_profile_mgr;
-  std::atomic<osdc::qos_profile_ptr> default_qos_profile;
+  std::atomic<osdc::qos_profile_ptr> default_qos_profile = { nullptr };
 
   void set_default_qos_profile(
     osdc::qos_profile_ref qos_profile);

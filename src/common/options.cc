@@ -2283,15 +2283,15 @@ std::vector<Option> get_global_options() {
     .set_description(""),
 
     Option("objecter_default_qos_profile_res", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
-    .set_default(0)
+    .set_default(1)
     .set_description("objecter default profile mclock reservation"),
 
     Option("objecter_default_qos_profile_wgt", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
-    .set_default(0)
+    .set_default(1)
     .set_description("objecter default profile mclock weight"),
 
     Option("objecter_default_qos_profile_lim", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
-    .set_default(0)
+    .set_default(1)
     .set_description("objecter default profile mclock limit "),
 
     Option("filer_max_purge_ops", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
@@ -2800,56 +2800,56 @@ std::vector<Option> get_global_options() {
     .set_long_description("the threshold between high priority ops that use strict priority ordering and low priority ops that use a fairness algorithm that may or may not incorporate priority")
     .add_see_also("osd_op_queue"),
 
-    Option("osd_mclock_scheduler_client_res", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
-    .set_default(.1)
+    Option("osd_mclock_scheduler_client_res", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
+    .set_default(1)
     .set_description("IO proportion reserved for each client (default)")
     .set_long_description("Only considered for osd_op_queue = mClockScheduler")
     .add_see_also("osd_op_queue"),
 
-    Option("osd_mclock_scheduler_client_wgt", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
-    .set_default(.5)
+    Option("osd_mclock_scheduler_client_wgt", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
+    .set_default(1)
     .set_description("IO share for each client (default) over reservation")
     .set_long_description("Only considered for osd_op_queue = mClockScheduler")
     .add_see_also("osd_op_queue"),
 
-    Option("osd_mclock_scheduler_client_lim", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
-    .set_default(.5)
+    Option("osd_mclock_scheduler_client_lim", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
+    .set_default(999999)
     .set_description("IO limit for each client (default) over reservation")
     .set_long_description("Only considered for osd_op_queue = mClockScheduler")
     .add_see_also("osd_op_queue"),
 
-    Option("osd_mclock_scheduler_background_recovery_res", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
-    .set_default(.1)
+    Option("osd_mclock_scheduler_background_recovery_res", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
+    .set_default(1)
     .set_description("IO proportion reserved for background recovery (default)")
     .set_long_description("Only considered for osd_op_queue = mClockScheduler")
     .add_see_also("osd_op_queue"),
 
-    Option("osd_mclock_scheduler_background_recovery_wgt", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
-    .set_default(.5)
+    Option("osd_mclock_scheduler_background_recovery_wgt", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
+    .set_default(1)
     .set_description("IO share for each background recovery over reservation")
     .set_long_description("Only considered for osd_op_queue = mClockScheduler")
     .add_see_also("osd_op_queue"),
 
-    Option("osd_mclock_scheduler_background_recovery_lim", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
-    .set_default(.5)
+    Option("osd_mclock_scheduler_background_recovery_lim", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
+    .set_default(999999)
     .set_description("IO limit for background recovery over reservation")
     .set_long_description("Only considered for osd_op_queue = mClockScheduler")
     .add_see_also("osd_op_queue"),
 
-    Option("osd_mclock_scheduler_background_best_effort_res", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
-    .set_default(.1)
+    Option("osd_mclock_scheduler_background_best_effort_res", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
+    .set_default(1)
     .set_description("IO proportion reserved for background best_effort (default)")
     .set_long_description("Only considered for osd_op_queue = mClockScheduler")
     .add_see_also("osd_op_queue"),
 
-    Option("osd_mclock_scheduler_background_best_effort_wgt", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
-    .set_default(.5)
+    Option("osd_mclock_scheduler_background_best_effort_wgt", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
+    .set_default(1)
     .set_description("IO share for each background best_effort over reservation")
     .set_long_description("Only considered for osd_op_queue = mClockScheduler")
     .add_see_also("osd_op_queue"),
 
-    Option("osd_mclock_scheduler_background_best_effort_lim", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
-    .set_default(.5)
+    Option("osd_mclock_scheduler_background_best_effort_lim", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
+    .set_default(999999)
     .set_description("IO limit for background best_effort over reservation")
     .set_long_description("Only considered for osd_op_queue = mClockScheduler")
     .add_see_also("osd_op_queue"),
