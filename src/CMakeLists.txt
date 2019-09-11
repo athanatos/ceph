@@ -326,8 +326,11 @@ set(libcommon_files
   osd/osd_types.cc
   osd/PGPeeringEvent.cc
   osd/OpRequest.cc
+  dmclock/src/dmclock_util.cc
+  dmclock/support/src/run_every.cc
   osdc/Striper.cc
   osdc/Objecter.cc
+  osdc/QosProfileMgr.cc
   librbd/Features.cc
   ${mds_files})
 set_source_files_properties(ceph_ver.c

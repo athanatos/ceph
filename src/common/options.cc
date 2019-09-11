@@ -2295,6 +2295,18 @@ std::vector<Option> get_global_options() {
     .set_default(false)
     .set_description(""),
 
+    Option("objecter_default_qos_profile_res", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
+    .set_default(1)
+    .set_description("objecter default profile mclock reservation"),
+
+    Option("objecter_default_qos_profile_wgt", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
+    .set_default(1)
+    .set_description("objecter default profile mclock weight"),
+
+    Option("objecter_default_qos_profile_lim", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
+    .set_default(1)
+    .set_description("objecter default profile mclock limit "),
+
     Option("filer_max_purge_ops", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
     .set_default(10)
     .set_description("Max in-flight operations for purging a striped range (e.g., MDS journal)"),
