@@ -1004,6 +1004,12 @@ int librados::RadosClient::monitor_log(const string& level,
   return 0;
 }
 
+osdc::qos_profile_ref librados::RadosClient::qos_profile_create(
+  uint64_t r, uint64_t w, uint64_t l)
+{
+  return objecter->qos_profile_create(r, w, l);
+}
+
 void librados::RadosClient::handle_log(MLog *m)
 {
   ceph_assert(ceph_mutex_is_locked(lock));

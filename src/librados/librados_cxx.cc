@@ -715,6 +715,12 @@ void librados::ObjectWriteOperation::cache_unpin()
   o->cache_unpin();
 }
 
+void librados::ObjectWriteOperation::set_qos_profile(rados_qos_profile_t qp)
+{
+  impl->o.set_qos_profile(
+    osdc::qos_profile_ref(((osdc::qos_profile_ptr)qp)));
+}
+
 librados::WatchCtx::
 ~WatchCtx()
 {
@@ -2778,6 +2784,27 @@ librados::AioCompletion *librados::Rados::aio_create_completion(void *cb_arg,
   return new AioCompletion(c);
 }
 
+rados_qos_profile_t librados::Rados::qos_profile_create(uint64_t reservation,
+							uint64_t weight,
+							uint64_t limit)
+{
+  return static_cast<rados_qos_profile_t>(
+    client->qos_profile_create(reservation, weight, limit).detach());
+}
+
+int librados::Rados::qos_profile_release(rados_qos_profile_t qos_profile)
+{
+  osdc::qos_profile_ref(
+    (osdc::qos_profile_ptr)qos_profile,
+    false /* add_ref, causes the intrusive_ptr to net decrement */);
+  return 0;
+}
+
+uint64_t librados::Rados::qos_profile_get_id(rados_qos_profile_t qos_profile)
+{
+  return ((osdc::qos_profile_ptr)qos_profile)->get_profile_id();
+}
+
 librados::ObjectOperation::ObjectOperation() : impl(new ObjectOperationImpl) {}
 
 librados::ObjectOperation::ObjectOperation(ObjectOperation&& rhs)
@@ -3070,4 +3097,15 @@ int librados::IoCtx::application_metadata_list(const std::string& app_name,
                                                std::map<std::string, std::string> *values)
 {
   return io_ctx_impl->application_metadata_list(app_name, values);
+}
+
+void librados::IoCtx::set_qos_profile(rados_qos_profile_t qos_profile)
+{
+  if (nullptr == qos_profile) {
+    io_ctx_impl->set_qos_profile(osdc::qos_profile_ref());
+  } else {
+    io_ctx_impl->set_qos_profile(
+      osdc::qos_profile_ref(
+	((osdc::qos_profile_ptr)qos_profile)));
+  }
 }

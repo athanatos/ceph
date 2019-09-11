@@ -47,6 +47,7 @@ struct librados::IoCtxImpl {
   ceph::condition_variable aio_write_cond;
   xlist<AioCompletionImpl*> aio_write_list;
   map<ceph_tid_t, std::list<AioCompletionImpl*> > aio_write_waiters;
+  osdc::qos_profile_ref qos_profile;
 
   Objecter *objecter = nullptr;
 
@@ -64,6 +65,7 @@ struct librados::IoCtxImpl {
     last_objver = rhs.last_objver;
     notify_timeout = rhs.notify_timeout;
     oloc = rhs.oloc;
+    qos_profile = rhs.qos_profile;
     objecter = rhs.objecter;
   }
 
@@ -92,6 +94,20 @@ struct librados::IoCtxImpl {
 
   int get_object_hash_position(const std::string& oid, uint32_t *hash_position);
   int get_object_pg_hash_position(const std::string& oid, uint32_t *pg_hash_position);
+
+  osdc::qos_profile_ref get_qos_profile() const {
+    return qos_profile;
+  }
+
+  osdc::qos_profile_ref
+  get_qos_profile(osdc::qos_profile_ref& first_choice) const {
+    if (first_choice) return first_choice;
+    else return get_qos_profile();
+  }
+
+  void set_qos_profile(osdc::qos_profile_ref profile) {
+    qos_profile = profile;
+  }
 
   ::ObjectOperation *prepare_assert_ops(::ObjectOperation *op);
 
