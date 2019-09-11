@@ -21,6 +21,7 @@
 #include "MOSDFastDispatchOp.h"
 #include "include/ceph_features.h"
 #include "common/hobject.h"
+#include "common/mClockCommon.h"
 
 /*
  * OSD op
@@ -38,6 +39,8 @@ struct pre_dispatch_t {
   __u32 hobj_hash = 0;
   spg_t pgid;
   osd_reqid_t reqid; // reqid explicitly set by sender
+  std::optional<ceph::qos::mclock_profile_params_t> mclock_profile_params;
+  std::optional<ceph::qos::dmclock_request_t> dmclock_request_state;
 
   void encode(ceph::buffer::list &p) const {
     ENCODE_START(1, 1, p);
@@ -46,6 +49,8 @@ struct pre_dispatch_t {
     encode(hobj_hash, p);
     encode(pgid, p);
     encode(reqid, p);
+    encode(mclock_profile_params, p);
+    encode(dmclock_request_state, p);
     ENCODE_FINISH(p);
   }
 
@@ -56,6 +61,8 @@ struct pre_dispatch_t {
     decode(hobj_hash, p);
     decode(pgid, p);
     decode(reqid, p);
+    decode(mclock_profile_params, p);
+    decode(dmclock_request_state, p);
     DECODE_FINISH(p);
   }
 };
@@ -194,6 +201,24 @@ public:
     return get_connection()->get_features();
   }
 
+  const auto &get_mclock_profile_params() const {
+    return pre_dispatch.mclock_profile_params;
+  }
+
+  void set_mclock_profile_params(
+    ceph::qos::mclock_profile_params_t mclock_profile_params) {
+    pre_dispatch.mclock_profile_params = mclock_profile_params;
+  }
+
+  const auto &get_dmclock_request_state() const {
+    return pre_dispatch.dmclock_request_state;
+  }
+
+  void set_dmclock_request_state(
+    ceph::qos::dmclock_request_t dmclock_request_state) {
+    pre_dispatch.dmclock_request_state = dmclock_request_state;
+  }
+
   MOSDOp()
     : MOSDFastDispatchOp(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION),
       partial_decode_needed(true),
@@ -201,9 +226,12 @@ public:
       bdata_encode(false) { }
   MOSDOp(int inc, long tid, const hobject_t& ho, spg_t& _pgid,
 	 epoch_t _osdmap_epoch,
-	 int _flags, uint64_t feat)
+	 int _flags, uint64_t feat,
+	 std::optional<ceph::qos::mclock_profile_params_t> profile_params = std::nullopt,
+	 std::optional<ceph::qos::dmclock_request_t> dmclock_request_state = std::nullopt)
     : MOSDFastDispatchOp(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION),
-      pre_dispatch{_osdmap_epoch, ho.get_hash(), (__u32)_flags, _pgid, osd_reqid_t()},
+      pre_dispatch{_osdmap_epoch, ho.get_hash(), (__u32)_flags, _pgid, osd_reqid_t(),
+		   profile_params, dmclock_request_state},
       client_inc(inc),
       hobj(ho),
       partial_decode_needed(false),

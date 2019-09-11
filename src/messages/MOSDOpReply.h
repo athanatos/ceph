@@ -16,10 +16,13 @@
 #ifndef CEPH_MOSDOPREPLY_H
 #define CEPH_MOSDOPREPLY_H
 
+#include <optional>
+
 #include "msg/Message.h"
 
 #include "MOSDOp.h"
 #include "common/errno.h"
+#include "common/mClockCommon.h"
 
 /*
  * OSD op reply
@@ -31,13 +34,13 @@
 
 class MOSDOpReply : public Message {
 private:
-  static constexpr int HEAD_VERSION = 8;
+  static constexpr int HEAD_VERSION = 9;
   static constexpr int COMPAT_VERSION = 2;
 
   object_t oid;
   pg_t pgid;
   std::vector<OSDOp> ops;
-  bool bdata_encode;
+  bool bdata_encode = false;
   int64_t flags = 0;
   errorcode32_t result;
   eversion_t bad_replay_version;
@@ -45,8 +48,9 @@ private:
   version_t user_version = 0;
   epoch_t osdmap_epoch = 0;
   int32_t retry_attempt = -1;
-  bool do_redirect;
+  bool do_redirect = false;
   request_redirect_t redirect;
+  std::optional<ceph::qos::dmclock_response_t> qos_response;
 
 public:
   const object_t& get_oid() const { return oid; }
@@ -94,6 +98,13 @@ public:
   const request_redirect_t& get_redirect() const { return redirect; }
   bool is_redirect_reply() const { return do_redirect; }
 
+  void set_qos_response(ceph::qos::dmclock_response_t resp) {
+    qos_response = resp;
+  }
+  const auto &get_qos_resp() const {
+    return qos_response;
+  }
+
   void add_flags(int f) { flags |= f; }
 
   void claim_op_out_data(std::vector<OSDOp>& o) {
@@ -125,21 +136,17 @@ public:
   */
 
 public:
-  MOSDOpReply()
-    : Message{CEPH_MSG_OSD_OPREPLY, HEAD_VERSION, COMPAT_VERSION},
-    bdata_encode(false) {
-    do_redirect = false;
-  }
+  MOSDOpReply() : Message{CEPH_MSG_OSD_OPREPLY, HEAD_VERSION, COMPAT_VERSION} {}
   MOSDOpReply(const MOSDOp *req, int r, epoch_t e, int acktype,
-	      bool ignore_out_data)
+	      bool ignore_out_data,
+	      std::optional<ceph::qos::dmclock_response_t> dmc_response = std::nullopt)
     : Message{CEPH_MSG_OSD_OPREPLY, HEAD_VERSION, COMPAT_VERSION},
-      oid(req->hobj.oid), pgid(req->pgid.pgid), ops(req->ops),
-      bdata_encode(false) {
-
+      oid(req->get_hobj().oid), pgid(req->get_pg()), ops(req->ops),
+      qos_response(dmc_response) {
     set_tid(req->get_tid());
     result = r;
     flags =
-      (req->flags & ~(CEPH_OSD_FLAG_ONDISK|CEPH_OSD_FLAG_ONNVRAM|CEPH_OSD_FLAG_ACK)) | acktype;
+      (req->get_flags() & ~(CEPH_OSD_FLAG_ONDISK|CEPH_OSD_FLAG_ONNVRAM|CEPH_OSD_FLAG_ACK)) | acktype;
     osdmap_epoch = e;
     user_version = 0;
     retry_attempt = req->get_retry_attempt();
@@ -156,6 +163,7 @@ public:
       }
     }
   }
+
 private:
   ~MOSDOpReply() override {}
 
@@ -208,15 +216,19 @@ public:
         header.version = 6;
         encode(redirect, payload);
       } else {
+	// header.version is at least 8 at this point
         do_redirect = !redirect.empty();
         encode(do_redirect, payload);
         if (do_redirect) {
           encode(redirect, payload);
         }
+
+	encode(qos_response, payload);
       }
       encode_trace(payload, features);
     }
   }
+
   void decode_payload() override {
     using ceph::decode;
     auto p = payload.cbegin();
@@ -247,7 +259,12 @@ public:
       decode(do_redirect, p);
       if (do_redirect)
 	decode(redirect, p);
+
+      // header.version >= 8
       decode_trace(p);
+
+      // header.version >= 9
+      decode(qos_response, p);
     } else if (header.version < 2) {
       ceph_osd_reply_head head;
       decode(head, p);
@@ -308,7 +325,10 @@ public:
         }
       }
       if (header.version >= 8) {
-        decode_trace(p);
+	decode_trace(p);
+      }
+      if (header.version >= 9) {
+	decode(qos_response, p);
       }
     }
   }
