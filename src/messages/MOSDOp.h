@@ -32,20 +32,48 @@
 
 class OSD;
 
-class MOSDOp : public MOSDFastDispatchOp {
-private:
-  static constexpr int HEAD_VERSION = 8;
-  static constexpr int COMPAT_VERSION = 3;
-
-private:
-  uint32_t client_inc = 0;
+struct pre_dispatch_t {
   __u32 osdmap_epoch = 0;
   __u32 flags = 0;
+  __u32 hobj_hash = 0;
+  spg_t pgid;
+  osd_reqid_t reqid; // reqid explicitly set by sender
+
+  void encode(ceph::buffer::list &p) const {
+    ENCODE_START(1, 1, p);
+    encode(osdmap_epoch, p);
+    encode(flags, p);
+    encode(hobj_hash, p);
+    encode(pgid, p);
+    encode(reqid, p);
+    ENCODE_FINISH(p);
+  }
+
+  void decode(ceph::buffer::list::const_iterator& p) {
+    DECODE_START(1, p);
+    decode(osdmap_epoch, p);
+    decode(flags, p);
+    decode(hobj_hash, p);
+    decode(pgid, p);
+    decode(reqid, p);
+    DECODE_FINISH(p);
+  }
+};
+WRITE_CLASS_ENCODER(pre_dispatch_t)
+
+class MOSDOp : public MOSDFastDispatchOp {
+private:
+  static constexpr int HEAD_VERSION = 9;
+  static constexpr int COMPAT_VERSION = 3;
+
+  pre_dispatch_t pre_dispatch;
+
+  uint32_t client_inc = 0;
   utime_t mtime;
   int32_t retry_attempt = -1;   // 0 is first attempt.  -1 if we don't know.
 
   hobject_t hobj;
-  spg_t pgid;
+
   ceph::buffer::list::const_iterator p;
   // Decoding flags. Decoding is only needed for messages caught by pipe reader.
   // Transition from true -> false without locks being held
@@ -61,7 +89,6 @@ private:
 
   uint64_t features;
   bool bdata_encode;
-  osd_reqid_t reqid; // reqid explicitly set by sender
 
 public:
   friend class MOSDOpReply;
@@ -75,42 +102,42 @@ public:
   }
   void set_snap_seq(const snapid_t& s) { snap_seq = s; }
   void set_reqid(const osd_reqid_t rid) {
-    reqid = rid;
+    pre_dispatch.reqid = rid;
   }
   void set_spg(spg_t p) {
-    pgid = p;
+    pre_dispatch.pgid = p;
   }
 
   // Fields decoded in partial decoding
   pg_t get_pg() const {
     ceph_assert(!partial_decode_needed);
-    return pgid.pgid;
+    return pre_dispatch.pgid.pgid;
   }
   spg_t get_spg() const override {
     ceph_assert(!partial_decode_needed);
-    return pgid;
+    return pre_dispatch.pgid;
   }
   pg_t get_raw_pg() const {
     ceph_assert(!partial_decode_needed);
-    return pg_t(hobj.get_hash(), pgid.pgid.pool());
+    return pg_t(pre_dispatch.hobj_hash, pre_dispatch.pgid.pgid.pool());
   }
   epoch_t get_map_epoch() const override {
     ceph_assert(!partial_decode_needed);
-    return osdmap_epoch;
+    return pre_dispatch.osdmap_epoch;
   }
   int get_flags() const {
     ceph_assert(!partial_decode_needed);
-    return flags;
+    return pre_dispatch.flags;
   }
   osd_reqid_t get_reqid() const {
     ceph_assert(!partial_decode_needed);
-    if (reqid.name != entity_name_t() || reqid.tid != 0) {
-      return reqid;
+    if (pre_dispatch.reqid.name != entity_name_t() || pre_dispatch.reqid.tid != 0) {
+      return pre_dispatch.reqid;
     } else {
       if (!final_decode_needed)
-	ceph_assert(reqid.inc == (int32_t)client_inc);  // decode() should have done this
+	ceph_assert(pre_dispatch.reqid.inc == (int32_t)client_inc);  // decode() should have done this
       return osd_reqid_t(get_orig_source(),
-                         reqid.inc,
+                         pre_dispatch.reqid.inc,
 			 header.tid);
     }
   }
@@ -127,7 +154,7 @@ public:
   object_locator_t get_object_locator() const {
     ceph_assert(!final_decode_needed);
     if (hobj.oid.name.empty())
-      return object_locator_t(hobj.pool, hobj.nspace, hobj.get_hash());
+      return object_locator_t(hobj.pool, hobj.nspace, pre_dispatch.hobj_hash);
     else
       return object_locator_t(hobj);
   }
@@ -176,10 +203,9 @@ public:
 	 epoch_t _osdmap_epoch,
 	 int _flags, uint64_t feat)
     : MOSDFastDispatchOp(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION),
+      pre_dispatch{_osdmap_epoch, ho.get_hash(), (__u32)_flags, _pgid, osd_reqid_t()},
       client_inc(inc),
-      osdmap_epoch(_osdmap_epoch), flags(_flags), retry_attempt(-1),
       hobj(ho),
-      pgid(_pgid),
       partial_decode_needed(false),
       final_decode_needed(false),
       features(feat),
@@ -188,7 +214,7 @@ public:
 
     // also put the client_inc in reqid.inc, so that get_reqid() can
     // be used before the full message is decoded.
-    reqid.inc = inc;
+    pre_dispatch.reqid.inc = inc;
   }
 private:
   ~MOSDOp() override {}
@@ -234,14 +260,14 @@ public:
     add_simple_op(CEPH_OSD_OP_STAT, 0, 0);
   }
 
-  bool has_flag(__u32 flag) const { return flags & flag; };
+  bool has_flag(__u32 flag) const { return pre_dispatch.flags & flag; };
 
-  bool is_retry_attempt() const { return flags & CEPH_OSD_FLAG_RETRY; }
+  bool is_retry_attempt() const { return pre_dispatch.flags & CEPH_OSD_FLAG_RETRY; }
   void set_retry_attempt(unsigned a) { 
     if (a)
-      flags |= CEPH_OSD_FLAG_RETRY;
+      pre_dispatch.flags |= CEPH_OSD_FLAG_RETRY;
     else
-      flags &= ~CEPH_OSD_FLAG_RETRY;
+      pre_dispatch.flags &= ~CEPH_OSD_FLAG_RETRY;
     retry_attempt = a;
   }
 
@@ -284,8 +310,8 @@ struct ceph_osd_request_head {
       encode(get_raw_pg(), payload);
       encode(su, payload);
 
-      encode(osdmap_epoch, payload);
-      encode(flags, payload);
+      encode(pre_dispatch.osdmap_epoch, payload);
+      encode(pre_dispatch.flags, payload);
       encode(mtime, payload);
       encode(eversion_t(), payload);  // reassert_version
 
@@ -307,8 +333,8 @@ struct ceph_osd_request_head {
     } else if ((features & CEPH_FEATURE_NEW_OSDOP_ENCODING) == 0) {
       header.version = 6;
       encode(client_inc, payload);
-      encode(osdmap_epoch, payload);
-      encode(flags, payload);
+      encode(pre_dispatch.osdmap_epoch, payload);
+      encode(pre_dispatch.flags, payload);
       encode(mtime, payload);
       encode(eversion_t(), payload); // reassert_version
       encode(get_object_locator(), payload);
@@ -327,8 +353,8 @@ struct ceph_osd_request_head {
 
       encode(retry_attempt, payload);
       encode(features, payload);
-      if (reqid.name != entity_name_t() || reqid.tid != 0) {
-	encode(reqid, payload);
+      if (pre_dispatch.reqid.name != entity_name_t() || pre_dispatch.reqid.tid != 0) {
+	encode(pre_dispatch.reqid, payload);
       } else {
 	// don't include client_inc in the reqid for the legacy v6
 	// encoding or else we'll confuse older peers.
@@ -338,10 +364,40 @@ struct ceph_osd_request_head {
       // reordered, v7 message encoding
       header.version = 7;
       encode(get_raw_pg(), payload);
-      encode(osdmap_epoch, payload);
-      encode(flags, payload);
+      encode(pre_dispatch.osdmap_epoch, payload);
+      encode(pre_dispatch.flags, payload);
       encode(eversion_t(), payload); // reassert_version
-      encode(reqid, payload);
+      encode(pre_dispatch.reqid, payload);
+      encode(client_inc, payload);
+      encode(mtime, payload);
+      encode(get_object_locator(), payload);
+      encode(hobj.oid, payload);
+
+      __u16 num_ops = ops.size();
+      encode(num_ops, payload);
+      for (unsigned i = 0; i < ops.size(); i++)
+	encode(ops[i].op, payload);
+
+      encode(hobj.snap, payload);
+      encode(snap_seq, payload);
+      encode(snaps, payload);
+
+      encode(retry_attempt, payload);
+      encode(features, payload);
+    } else if (!HAVE_FEATURE(features, INDEPENDENT_PRE_DISPATCH)) {
+      // v8 encoding with hobject_t hash separate from pre_dispatch.pgid, no
+      // reassert version
+      header.version = 8;
+
+      encode(pre_dispatch.pgid, payload);
+      encode(hobj.get_hash(), payload);
+      encode(pre_dispatch.osdmap_epoch, payload);
+      encode(pre_dispatch.flags, payload);
+      encode(pre_dispatch.reqid, payload);
+      encode_trace(payload, features);
+
+      // -- above decoded up front; below decoded post-dispatch thread --
+
       encode(client_inc, payload);
       encode(mtime, payload);
       encode(get_object_locator(), payload);
@@ -359,15 +415,10 @@ struct ceph_osd_request_head {
       encode(retry_attempt, payload);
       encode(features, payload);
     } else {
-      // latest v8 encoding with hobject_t hash separate from pgid, no
-      // reassert version
+      // latest v9 encoding with independent pre-dispatch struct
       header.version = HEAD_VERSION;
 
-      encode(pgid, payload);
-      encode(hobj.get_hash(), payload);
-      encode(osdmap_epoch, payload);
-      encode(flags, payload);
-      encode(reqid, payload);
+      encode(pre_dispatch, payload);
       encode_trace(payload, features);
 
       // -- above decoded up front; below decoded post-dispatch thread --
@@ -398,35 +449,36 @@ struct ceph_osd_request_head {
 
     // Always keep here the newest version of decoding order/rule
     if (header.version == HEAD_VERSION) {
-      decode(pgid, p);      // actual pgid
-      uint32_t hash;
-      decode(hash, p); // raw hash value
-      hobj.set_hash(hash);
-      decode(osdmap_epoch, p);
-      decode(flags, p);
-      decode(reqid, p);
+      decode(pre_dispatch, p);
+      decode_trace(p);
+    } else if (header.version == 8) {
+      decode(pre_dispatch.pgid, p);      // actual pre_dispatch.pgid
+      decode(pre_dispatch.hobj_hash, p);
+      decode(pre_dispatch.osdmap_epoch, p);
+      decode(pre_dispatch.flags, p);
+      decode(pre_dispatch.reqid, p);
       decode_trace(p);
     } else if (header.version == 7) {
-      decode(pgid.pgid, p);      // raw pgid
-      hobj.set_hash(pgid.pgid.ps());
-      decode(osdmap_epoch, p);
-      decode(flags, p);
+      decode(pre_dispatch.pgid.pgid, p);      // raw pgid
+      pre_dispatch.hobj_hash = pre_dispatch.pgid.pgid.ps();
+      decode(pre_dispatch.osdmap_epoch, p);
+      decode(pre_dispatch.flags, p);
       eversion_t reassert_version;
       decode(reassert_version, p);
-      decode(reqid, p);
+      decode(pre_dispatch.reqid, p);
     } else if (header.version < 2) {
       // old decode
       decode(client_inc, p);
 
       old_pg_t opgid;
       ceph::decode_raw(opgid, p);
-      pgid.pgid = opgid;
+      pre_dispatch.pgid.pgid = opgid;
 
       __u32 su;
       decode(su, p);
 
-      decode(osdmap_epoch, p);
-      decode(flags, p);
+      decode(pre_dispatch.osdmap_epoch, p);
+      decode(pre_dispatch.flags, p);
       decode(mtime, p);
       eversion_t reassert_version;
       decode(reassert_version, p);
@@ -448,12 +500,14 @@ struct ceph_osd_request_head {
       ceph::decode_nohead(oid_len, hobj.oid.name, p);
       ceph::decode_nohead(num_snaps, snaps, p);
 
-      // recalculate pgid hash value
-      pgid.pgid.set_ps(ceph_str_hash(CEPH_STR_HASH_RJENKINS,
-				     hobj.oid.name.c_str(),
-				     hobj.oid.name.length()));
-      hobj.pool = pgid.pgid.pool();
-      hobj.set_hash(pgid.pgid.ps());
+      // recalculate pre_dispatch.pgid hash value
+      pre_dispatch.pgid.pgid.set_ps(
+	ceph_str_hash(CEPH_STR_HASH_RJENKINS,
+		      hobj.oid.name.c_str(),
+		      hobj.oid.name.length()));
+      hobj.pool = pre_dispatch.pgid.pgid.pool();
+      pre_dispatch.hobj_hash = pre_dispatch.pgid.pgid.ps();
+      hobj.set_hash(pre_dispatch.hobj_hash);
 
       retry_attempt = -1;
       features = 0;
@@ -462,13 +516,13 @@ struct ceph_osd_request_head {
       // we did the full decode
       final_decode_needed = false;
 
-      // put client_inc in reqid.inc for get_reqid()'s benefit
-      reqid = osd_reqid_t();
-      reqid.inc = client_inc;
+      // put client_inc in pre_dispatch.reqid.inc for get_reqid()'s benefit
+      pre_dispatch.reqid = osd_reqid_t();
+      pre_dispatch.reqid.inc = client_inc;
     } else if (header.version < 7) {
       decode(client_inc, p);
-      decode(osdmap_epoch, p);
-      decode(flags, p);
+      decode(pre_dispatch.osdmap_epoch, p);
+      decode(pre_dispatch.flags, p);
       decode(mtime, p);
       eversion_t reassert_version;
       decode(reassert_version, p);
@@ -479,9 +533,9 @@ struct ceph_osd_request_head {
       if (header.version < 3) {
 	old_pg_t opgid;
 	ceph::decode_raw(opgid, p);
-	pgid.pgid = opgid;
+	pre_dispatch.pgid.pgid = opgid;
       } else {
-	decode(pgid.pgid, p);
+	decode(pre_dispatch.pgid.pgid, p);
       }
 
       decode(hobj.oid, p);
@@ -508,23 +562,24 @@ struct ceph_osd_request_head {
 	features = 0;
 
       if (header.version >= 6)
-	decode(reqid, p);
+	decode(pre_dispatch.reqid, p);
       else
-	reqid = osd_reqid_t();
+	pre_dispatch.reqid = osd_reqid_t();
 
-      hobj.pool = pgid.pgid.pool();
+      hobj.pool = pre_dispatch.pgid.pgid.pool();
       hobj.set_key(oloc.key);
       hobj.nspace = oloc.nspace;
-      hobj.set_hash(pgid.pgid.ps());
+      pre_dispatch.hobj_hash = pre_dispatch.pgid.pgid.ps();
+      hobj.set_hash(pre_dispatch.hobj_hash);
 
       OSDOp::split_osd_op_vector_in_data(ops, data);
 
       // we did the full decode
       final_decode_needed = false;
 
-      // put client_inc in reqid.inc for get_reqid()'s benefit
-      if (reqid.name == entity_name_t() && reqid.tid == 0)
-	reqid.inc = client_inc;
+      // put client_inc in pre_dispatch.reqid.inc for get_reqid()'s benefit
+      if (pre_dispatch.reqid.name == entity_name_t() && pre_dispatch.reqid.tid == 0)
+	pre_dispatch.reqid.inc = client_inc;
     }
 
     partial_decode_needed = false;
@@ -557,12 +612,13 @@ struct ceph_osd_request_head {
 
     decode(features, p);
 
-    hobj.pool = pgid.pgid.pool();
+    hobj.pool = pre_dispatch.pgid.pgid.pool();
     hobj.set_key(oloc.key);
     hobj.nspace = oloc.nspace;
 
     OSDOp::split_osd_op_vector_in_data(ops, data);
 
+    hobj.set_hash(pre_dispatch.hobj_hash);
     final_decode_needed = false;
     return true;
   }
@@ -577,7 +633,7 @@ struct ceph_osd_request_head {
     out << "osd_op(";
     if (!partial_decode_needed) {
       out << get_reqid() << ' ';
-      out << pgid;
+      out << pre_dispatch.pgid;
       if (!final_decode_needed) {
 	out << ' ';
 	out << hobj
@@ -589,7 +645,7 @@ struct ceph_osd_request_head {
 	out << " " << get_raw_pg() << " (undecoded)";
       }
       out << " " << ceph_osd_flag_string(get_flags());
-      out << " e" << osdmap_epoch;
+      out << " e" << pre_dispatch.osdmap_epoch;
     }
     out << ")";
   }
