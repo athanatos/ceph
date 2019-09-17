@@ -33,6 +33,7 @@ OpSchedulerRef make_scheduler(CephContext *cct)
     static const std::string index_lookup[] = { "prioritized",
 						"mclock_opclass",
 						"mclock_client",
+						"mclock_scheduler",
 						"wpq" };
     srand(time(NULL));
     unsigned which = rand() % (sizeof(index_lookup) / sizeof(index_lookup[0]));
@@ -58,6 +59,8 @@ OpSchedulerRef make_scheduler(CephContext *cct)
 	cct,
 	cct
     );
+  } else if (*type == "mclock_scheduler") {
+    return std::make_unique<mClockScheduler>(cct);
   } else if (*type == "wpq" ) {
     // default is 'wpq'
     return std::make_unique<
