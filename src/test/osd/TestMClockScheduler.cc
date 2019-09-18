@@ -41,6 +41,7 @@ public:
   {}
 
   struct MockDmclockItem : public PGOpQueueable {
+    std::optional<ceph::qos::dmclock_request_t> request;
     op_scheduler_class scheduler_class;
 
     MockDmclockItem(op_scheduler_class _scheduler_class) :
@@ -49,6 +50,12 @@ public:
 
     MockDmclockItem()
       : MockDmclockItem(op_scheduler_class::background_best_effort) {}
+
+    template <typename... Args>
+    MockDmclockItem(Args&&... args) :
+      PGOpQueueable(spg_t()),
+      request(ceph::qos::dmclock_request_t(std::forward<Args>(args)...)),
+      scheduler_class(op_scheduler_class::client) {}
 
     op_type_t get_op_type() const final {
       return op_type_t::client_op; // not used
@@ -62,6 +69,11 @@ public:
 
     op_scheduler_class get_scheduler_class() const final {
       return scheduler_class;
+    }
+
+    std::optional<ceph::qos::dmclock_request_t>
+    get_dmclock_request_state() const final {
+      return request;
     }
 
     void run(OSD *osd, OSDShard *sdata, PGRef& pg, ThreadPool::TPHandle &handle) final {}

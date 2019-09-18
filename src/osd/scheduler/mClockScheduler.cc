@@ -64,6 +64,18 @@ void mClockScheduler::ClientRegistry::update_from_config(const ConfigProxy &conf
     conf.get_val<uint64_t>("osd_mclock_scheduler_background_best_effort_lim"));
 }
 
+void mClockScheduler::ClientRegistry::update_external_client(
+  const client_profile_id_t &client,
+  const ceph::qos::mclock_profile_params_t &params)
+{
+  external_client_infos.emplace(
+    client,
+    dmc::ClientInfo(1, 1, 1)).first->second.update(
+      params.reservation,
+      params.weight,
+      params.limit);
+}
+
 const dmc::ClientInfo *mClockScheduler::ClientRegistry::get_external_client(
   const client_profile_id_t &client) const
 {
@@ -101,6 +113,28 @@ void mClockScheduler::enqueue(OpSchedulerItem&& item)
   // TODO: move this check into OpSchedulerItem, handle backwards compat
   if (op_scheduler_class::immediate == item.get_scheduler_class()) {
     immediate.push_back(std::move(item));
+  } else if (op_scheduler_class::client == item.get_scheduler_class()) {
+    auto dmclock_state = item.get_dmclock_request_state();
+    auto params = item.get_mclock_profile_params();
+
+    if (params) {
+      client_registry.update_external_client(
+	id.client_profile_id,
+	*params);
+    }
+    
+    if (dmclock_state) {
+      scheduler.add_request(
+	std::move(item),
+	id,
+	dmclock_state->r,
+	cost);
+    } else {
+      scheduler.add_request(
+	std::move(item),
+	id,
+	cost);
+    }
   } else {
     scheduler.add_request(
       std::move(item),
@@ -136,6 +170,12 @@ OpSchedulerItem mClockScheduler::dequeue()
       ceph_assert(result.is_retn());
 
       auto &retn = result.get_retn();
+      if (auto _op = retn.request->maybe_get_op()) {
+	(*_op)->set_dmclock_response(ceph::qos::dmclock_response_t{
+	    retn.phase,
+	    retn.cost
+	  });
+      }
       return std::move(*result.get_retn().request);
     }
   }

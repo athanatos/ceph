@@ -30,6 +30,7 @@
 #include "common/mClockPriorityQueue.h"
 #include "osd/scheduler/OpSchedulerItem.h"
 #include "osd/mClockOpClassSupport.h"
+#include "common/mClockClientInfoMgr.h"
 
 
 namespace ceph {
@@ -82,6 +83,9 @@ class mClockScheduler : public OpScheduler, md_config_obs_t {
     void update_from_config(const ConfigProxy &conf);
     const crimson::dmclock::ClientInfo *get_info(
       const scheduler_id_t &id) const;
+    void update_external_client(
+      const client_profile_id_t &client,
+      const ceph::qos::mclock_profile_params_t &params);
   } client_registry;
 
   using mclock_queue_t = crimson::dmclock::PullPriorityQueue<
@@ -94,13 +98,23 @@ class mClockScheduler : public OpScheduler, md_config_obs_t {
   std::list<OpSchedulerItem> immediate;
 
   static scheduler_id_t get_scheduler_id(const OpSchedulerItem &item) {
-    return scheduler_id_t{
-      item.get_scheduler_class(),
+    auto profile = item.get_mclock_profile_params();
+    if (profile) {
+      return scheduler_id_t{
+	item.get_scheduler_class(),
 	client_profile_id_t{
-	item.get_owner(),
+	  item.get_owner(), profile->profile_id
+	}
+      };
+    } else {
+      return scheduler_id_t{
+	item.get_scheduler_class(),
+	client_profile_id_t{
+	  item.get_owner(),
 	  0
-	  }
-    };
+	}
+      };
+    }
   }
 
 public:

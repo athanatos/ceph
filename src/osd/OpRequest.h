@@ -16,6 +16,7 @@
 
 #include "osd/osd_types.h"
 #include "common/TrackedOp.h"
+#include "common/mClockCommon.h"
 
 /**
  * The OpRequest takes in a Message* and takes over a single reference
@@ -93,6 +94,8 @@ private:
 
   std::vector<ClassInfo> classes_;
 
+  std::optional<ceph::qos::dmclock_response_t> dmclock_response;
+
   OpRequest(Message *req, OpTracker *tracker);
 
 protected:
@@ -155,6 +158,13 @@ public:
   }
   void mark_commit_sent() {
     mark_flag_point(flag_commit_sent, "commit_sent");
+  }
+
+  void set_dmclock_response(decltype(dmclock_response) response) {
+    dmclock_response = response;
+  }
+  const auto &get_dmclock_response() const {
+    return dmclock_response;
   }
 
   utime_t get_dequeued_time() const {

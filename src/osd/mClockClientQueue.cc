@@ -16,6 +16,7 @@
 #include <memory>
 
 #include "osd/mClockClientQueue.h"
+#include "common/mClockCommon.h"
 #include "common/dout.h"
 
 namespace dmc = crimson::dmclock;
@@ -78,7 +79,17 @@ namespace ceph {
 					 unsigned priority,
 					 unsigned cost,
 					 Request&& item) {
-    queue.enqueue(get_inner_client(cl, item), priority, 1u, std::move(item));
+    auto qos_params = item.get_dmclock_request_state();
+    auto client = get_inner_client(cl, item);
+    if (qos_params) {
+      queue.enqueue_distributed(
+	client, priority, cost,
+	std::move(item), qos_params->r);
+    } else {
+      queue.enqueue(
+	client, priority, cost,
+	std::move(item));
+    }
   }
 
   // Enqueue the op in the front of the regular queue
@@ -92,6 +103,14 @@ namespace ceph {
 
   // Return an op to be dispatched
   inline Request mClockClientQueue::dequeue() {
-    return queue.dequeue();
+    queue_t::Retn retn = queue.dequeue_distributed();
+
+    if (auto _op = retn.request.maybe_get_op()) {
+      (*_op)->set_dmclock_response(ceph::qos::dmclock_response_t{
+	  retn.phase,
+	  retn.cost
+        });
+    }
+    return std::move(retn.request);
   }
 } // namespace ceph

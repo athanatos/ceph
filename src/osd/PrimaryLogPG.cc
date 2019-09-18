@@ -1371,7 +1371,7 @@ void PrimaryLogPG::do_pg_op(OpRequestRef op)
   // reply
   MOSDOpReply *reply = new MOSDOpReply(m, 0, get_osdmap_epoch(),
 				       CEPH_OSD_FLAG_ACK | CEPH_OSD_FLAG_ONDISK,
-				       false);
+				       false, op->get_dmclock_response());
   reply->claim_op_out_data(ops);
   reply->set_result(result);
   reply->set_reply_versions(info.last_update, info.last_user_version);
@@ -2490,7 +2490,7 @@ void PrimaryLogPG::record_write_error(OpRequestRef op, const hobject_t &soid,
       MOSDOpReply *reply = orig_reply.detach();
       if (reply == nullptr) {
 	reply = new MOSDOpReply(m, r, pg->get_osdmap_epoch(),
-				flags, true);
+				flags, true, op->get_dmclock_response());
       }
       ldpp_dout(pg, 10) << " sending commit on " << *m << " " << reply << dendl;
       pg->osd->send_message_osd_client(reply, m->get_connection());
@@ -2758,7 +2758,8 @@ void PrimaryLogPG::do_cache_redirect(OpRequestRef op)
   auto m = op->get_req<MOSDOp>();
   int flags = m->get_flags() & (CEPH_OSD_FLAG_ACK|CEPH_OSD_FLAG_ONDISK);
   MOSDOpReply *reply = new MOSDOpReply(m, -ENOENT, get_osdmap_epoch(),
-                                       flags, false);
+                                       flags, false,
+				       op->get_dmclock_response());
   request_redirect_t redir(m->get_object_locator(), pool.info.tier_of);
   reply->set_redirect(redir);
   dout(10) << "sending redirect to pool " << pool.info.tier_of << " for op "
@@ -2968,7 +2969,8 @@ void PrimaryLogPG::finish_proxy_read(hobject_t oid, ceph_tid_t tid, int r)
 
   auto m = op->get_req<MOSDOp>();
   OpContext *ctx = new OpContext(op, m->get_reqid(), &prdop->ops, this);
-  ctx->reply = new MOSDOpReply(m, 0, get_osdmap_epoch(), 0, false);
+  ctx->reply = new MOSDOpReply(m, 0, get_osdmap_epoch(), 0, false,
+                               op->get_dmclock_response());
   ctx->user_at_version = prdop->user_version;
   ctx->data_off = prdop->data_offset;
   ctx->ignore_log_op_stats = true;
@@ -3138,7 +3140,8 @@ void PrimaryLogPG::do_proxy_chunked_op(OpRequestRef op, const hobject_t& missing
       if (!chunk_index && !chunk_length) {
 	if (cursor == osd_op->op.extent.offset) {
 	  OpContext *ctx = new OpContext(op, m->get_reqid(), &m->ops, this);                                        
-	  ctx->reply = new MOSDOpReply(m, 0, get_osdmap_epoch(), 0, false);
+	  ctx->reply = new MOSDOpReply(m, 0, get_osdmap_epoch(), 0, false,
+				       ctx->op->get_dmclock_response());
 	  ctx->data_off = osd_op->op.extent.offset;                                                                
 	  ctx->ignore_log_op_stats = true;                                                                         
 	  complete_read_ctx(0, ctx);                                                                               
@@ -3460,7 +3463,9 @@ void PrimaryLogPG::finish_proxy_write(hobject_t oid, ceph_tid_t tid, int r)
     if (reply)
       pwop->ctx->reply = NULL;
     else {
-      reply = new MOSDOpReply(m, r, get_osdmap_epoch(), 0, true);
+      reply = new MOSDOpReply(
+	m, r, get_osdmap_epoch(), 0, true,
+	pwop->op->get_dmclock_response());
       reply->set_reply_versions(eversion_t(), pwop->user_version);
     }
     reply->add_flags(CEPH_OSD_FLAG_ACK | CEPH_OSD_FLAG_ONDISK);
@@ -3731,7 +3736,8 @@ void PrimaryLogPG::execute_ctx(OpContext *ctx)
   bool successful_write = !ctx->op_t->empty() && op->may_write() && result >= 0;
   // prepare the reply
   ctx->reply = new MOSDOpReply(m, 0, get_osdmap_epoch(), 0,
-			       successful_write);
+			       successful_write,
+			       op->get_dmclock_response());
 
   // Write operations aren't allowed to return a data payload because
   // we can't do so reliably. If the client has to resend the request
@@ -3820,7 +3826,8 @@ void PrimaryLogPG::execute_ctx(OpContext *ctx)
 	if (reply)
 	  ctx->reply = nullptr;
 	else {
-	  reply = new MOSDOpReply(m, 0, get_osdmap_epoch(), 0, true);
+	  reply = new MOSDOpReply(m, 0, get_osdmap_epoch(), 0, true,
+				  ctx->op->get_dmclock_response());
 	  reply->set_reply_versions(ctx->at_version,
 				    ctx->user_at_version);
 	}
@@ -8738,7 +8745,9 @@ void PrimaryLogPG::fill_in_copy_get_noent(OpRequestRef& op, hobject_t oid,
   dout(20) << __func__ << " got reqids " << reply_obj.reqids << dendl;
   encode(reply_obj, osd_op.outdata, features);
   osd_op.rval = -ENOENT;
-  MOSDOpReply *reply = new MOSDOpReply(m, 0, get_osdmap_epoch(), 0, false);
+  MOSDOpReply *reply = new MOSDOpReply(
+    m, 0, get_osdmap_epoch(), 0, false,
+    op->get_dmclock_response());
   reply->claim_op_out_data(m->ops);
   reply->set_result(-ENOENT);
   reply->add_flags(CEPH_OSD_FLAG_ACK | CEPH_OSD_FLAG_ONDISK);
