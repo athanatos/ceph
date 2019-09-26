@@ -106,7 +106,7 @@ private:
 			  const ceph::bufferlist& payload,
 			  ceph::bufferlist *reply) final;
 
-  CephContext cct; // for auth_registry
+  ceph::common::CephContext cct; // for auth_registry
   AuthRegistry auth_registry;
   ceph::common::AuthHandler& auth_handler;
 

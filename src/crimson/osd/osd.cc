@@ -68,7 +68,8 @@ OSD::OSD(int id, uint32_t nonce,
     mgrc{new ceph::mgr::Client{public_msgr, *this}},
     store{ceph::os::FuturizedStore::create(
       local_conf().get_val<std::string>("osd_objectstore"),
-      local_conf().get_val<std::string>("osd_data"))},
+      local_conf().get_val<std::string>("osd_data"),
+      local_conf().get_config_values())},
     shard_services{*this, cluster_msgr, public_msgr, *monc, *mgrc, *store},
     heartbeat{new Heartbeat{shard_services, *monc, hb_front_msgr, hb_back_msgr}},
     // do this in background
@@ -159,7 +160,7 @@ seastar::future<> OSD::mkfs(uuid_d osd_uuid, uuid_d cluster_fsid)
 namespace {
   entity_addrvec_t pick_addresses(int what) {
     entity_addrvec_t addrs;
-    CephContext cct;
+    ceph::common::CephContext cct;
     if (int r = ::pick_addresses(&cct, what, &addrs, -1); r < 0) {
       throw std::runtime_error("failed to pick address");
     }
@@ -341,24 +342,27 @@ seastar::future<> OSD::_add_me_to_crush()
   if (!local_conf().get_val<bool>("osd_crush_update_on_start")) {
     return seastar::now();
   }
-  const double weight = [this] {
+  auto get_weight = [this] () {
     if (auto w = local_conf().get_val<double>("osd_crush_initial_weight");
 	w >= 0) {
-      return w;
+      return seastar::make_ready_future<double>(w);
     } else {
-      auto total = store->stat().total;
-      return std::max(.00001, double(total) / double(1ull << 40)); // TB
+      return store->stat().then([](auto st) {
+        auto total = st.total;
+        return seastar::make_ready_future<double>(std::max(.00001, double(total) / double(1ull << 40))); // TB
+      });
     }
-  }();
-  const CrushLocation loc{make_unique<CephContext>().get()};
-  logger().info("{} crush location is {}", __func__, loc);
-  string cmd = fmt::format(R"({{
-    "prefix": "osd crush create-or-move",
-    "id": {},
-    "weight": {:.4f},
-    "args": [{}]
-  }})", whoami, weight, loc);
-  return monc->run_command({cmd}, {}).then(
+  };
+  return get_weight().then([this](auto weight) {
+    const ceph::common::CrushLocation loc{make_unique<CephContext>().get()};
+    logger().info("{} crush location is {}", __func__, loc);
+    string cmd = fmt::format(R"({{
+      "prefix": "osd crush create-or-move",
+      "id": {},
+      "weight": {:.4f},
+      "args": [{}]
+    }})", whoami, weight, loc);
+    return monc->run_command({cmd}, {}).then(
     [this](int32_t code, string message, bufferlist) {
       if (code) {
 	logger().warn("fail to add to crush: {} ({})", message, code);
@@ -368,6 +372,7 @@ seastar::future<> OSD::_add_me_to_crush()
       }
       return seastar::now();
     });
+  });
 }
 
 seastar::future<> OSD::_send_alive()
@@ -401,7 +406,11 @@ seastar::future<> OSD::stop()
   }).then([this] {
     return monc->stop();
   }).then([this] {
+    return meta_coll->clear();
+  }).then([this] {
     return store->umount();
+  }).then([this] {
+    return store->stop();
   }).handle_exception([](auto ep) {
     logger().error("error while stopping osd: {}", ep);
   });

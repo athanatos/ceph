@@ -26,7 +26,6 @@
 #include "likely.h"
 #include "lockdep.h"
 
-class CephContext;
 class PerfCounters;
 
 namespace ceph {

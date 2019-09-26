@@ -23,8 +23,6 @@
 #include "common/ceph_time.h"
 #include "common/ceph_mutex.h"
 
-class CephContext;
-
 namespace ceph {
 
 /*

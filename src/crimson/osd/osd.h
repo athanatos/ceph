@@ -120,7 +120,6 @@ public:
       ceph::net::Messenger& hb_front_msgr,
       ceph::net::Messenger& hb_back_msgr);
   ~OSD() final;
-
   seastar::future<> mkfs(uuid_d osd_uuid, uuid_d cluster_fsid);
 
   seastar::future<> start();

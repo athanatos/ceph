@@ -17,8 +17,6 @@
 
 #include "auth/AuthAuthorizeHandler.h"
 
-class CephContext;
-
 struct CephxAuthorizeHandler : public AuthAuthorizeHandler {
   bool verify_authorizer(
     CephContext *cct,

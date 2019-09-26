@@ -196,7 +196,7 @@ Connection::create_auth(ceph::auth::method_t protocol,
                         const EntityName& name,
                         uint32_t want_keys)
 {
-  static CephContext cct;
+  static ceph::common::CephContext cct;
   std::unique_ptr<AuthClientHandler> auth;
   auth.reset(AuthClientHandler::create(&cct,
                                        protocol,

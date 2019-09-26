@@ -7,6 +7,7 @@
 #include <string>
 #include <seastar/core/future.hh>
 #include "osd/osd_types.h"
+#include "crimson/os/futurized_collection.h"
 
 namespace ceph::os {
   class FuturizedCollection;
@@ -28,7 +29,10 @@ public:
     : store{store}, coll{coll}
   {}
 
-
+  seastar::future<> clear()
+  {
+    return coll->clear(store);
+  }
   auto collection() {
     return coll;
   }

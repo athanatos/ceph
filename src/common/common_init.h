@@ -18,8 +18,7 @@
 #include <deque>
 
 #include "common/code_environment.h"
-
-class CephContext;
+#include "crimson/os/with_alien.h"
 
 enum common_init_flags_t {
   // Set up defaults that make sense for an unprivileged daemon

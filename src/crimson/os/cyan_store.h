@@ -35,12 +35,12 @@ public:
 
   CyanStore(const std::string& path);
   ~CyanStore() final;
-
+  seastar::future<> stop() final {return seastar::now();}
   seastar::future<> mount() final;
   seastar::future<> umount() final;
 
   seastar::future<> mkfs(uuid_d new_osd_fsid) final;
-  store_statfs_t stat() const final;
+  seastar::future<store_statfs_t> stat() const final;
 
   seastar::future<ceph::bufferlist> read(CollectionRef c,
 				   const ghobject_t& oid,

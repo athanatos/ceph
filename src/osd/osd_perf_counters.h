@@ -120,6 +120,9 @@ enum {
   l_osd_last,
 };
 
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+using ceph::common::PerfCounters;
+#endif
 PerfCounters *build_osd_logger(CephContext *cct);
 
 // PeeringState perf counters

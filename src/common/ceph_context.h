@@ -29,7 +29,7 @@
 
 #include "common/cmdparse.h"
 #include "common/code_environment.h"
-#ifdef WITH_SEASTAR
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
 #include "crimson/common/config_proxy.h"
 #include "crimson/common/perf_counters_collection.h"
 #else
@@ -56,7 +56,8 @@ namespace ceph {
   }
 }
 
-#ifdef WITH_SEASTAR
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+namespace ceph::common {
 class CephContext {
 public:
   CephContext();
@@ -83,6 +84,7 @@ private:
   std::unique_ptr<CryptoRandom> _crypto_random;
   unsigned nref;
 };
+}
 #else
 /* A CephContext represents the context held by a single library user.
  * There can be multiple CephContexts in the same process.
@@ -103,10 +105,11 @@ public:
   CephContext& operator =(CephContext&&) = delete;
 
   bool _finished = false;
+  ~CephContext();
 
   // ref count!
 private:
-  ~CephContext();
+//  ~CephContext();
   std::atomic<unsigned> nref;
 public:
   CephContext *get() {

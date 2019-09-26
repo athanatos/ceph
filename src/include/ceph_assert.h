@@ -23,7 +23,7 @@
 # include "acconfig.h"
 #endif
 
-class CephContext;
+#include "crimson/os/with_alien.h"
 
 namespace ceph {
 

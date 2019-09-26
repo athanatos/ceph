@@ -12128,8 +12128,10 @@ int BlueStore::queue_transactions(
   }
 
   _txc_finalize_kv(txc, txc->t);
+#ifndef WITH_SEASTAR
   if (handle)
     handle->suspend_tp_timeout();
+#endif
 
   auto tstart = mono_clock::now();
   throttle_bytes.get(txc->cost);
@@ -12154,8 +12156,10 @@ int BlueStore::queue_transactions(
   }
   auto tend = mono_clock::now();
 
+#ifndef WITH_SEASTAR
   if (handle)
     handle->reset_tp_timeout();
+#endif
 
   logger->inc(l_bluestore_txc);
 

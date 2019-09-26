@@ -36,7 +36,6 @@
 
 #include "mds/mdstypes.h"
 
-class CephContext;
 class health_check_map_t;
 
 #define MDS_FEATURE_INCOMPAT_BASE CompatSet::Feature(1, "base v0.20")

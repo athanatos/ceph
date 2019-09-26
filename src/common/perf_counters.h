@@ -28,9 +28,18 @@
 #include "common/ceph_mutex.h"
 #include "common/ceph_time.h"
 
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+namespace ceph::common {
+  class CephContext;
+  class PerfCountersBuilder;
+  class PerfCounters;
+}
+using ceph::common::CephContext;
+#else
 class CephContext;
 class PerfCountersBuilder;
 class PerfCounters;
+#endif
 
 enum perfcounter_type_d : uint8_t
 {
@@ -56,6 +65,9 @@ enum unit_t : uint8_t
  * In the future, we will probably get rid of the first/last arguments, since
  * PerfCountersBuilder can deduce them itself.
  */
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+namespace ceph::common {
+#endif
 class PerfCountersBuilder
 {
 public:
@@ -374,5 +386,7 @@ public:
   }
 };
 
-
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+}
+#endif
 #endif

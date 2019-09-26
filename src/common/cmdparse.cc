@@ -22,6 +22,9 @@
  * Given a cmddesc like "foo baz name=bar,type=CephString",
  * return the prefix "foo baz".
  */
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+namespace ceph::common {
+#endif
 std::string cmddesc_get_prefix(const std::string &cmddesc)
 {
   stringstream ss(cmddesc);
@@ -663,3 +666,6 @@ bool cmd_getval(CephContext *cct, const cmdmap_t& cmdmap,
 }
 
 
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+}
+#endif

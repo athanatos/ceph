@@ -20,6 +20,7 @@ namespace ceph::os {
 class FuturizedCollection;
 class Transaction;
 
+using CollectionRef = boost::intrusive_ptr<FuturizedCollection>;
 class FuturizedStore {
 
 public:
@@ -54,7 +55,8 @@ public:
     using Exception<EnodataException>::Exception;
   };
   static std::unique_ptr<FuturizedStore> create(const std::string& type,
-                                                const std::string& data);
+                                                const std::string& data,
+                                                ConfigValues* values);
   FuturizedStore() = default;
   virtual ~FuturizedStore() = default;
 
@@ -62,13 +64,13 @@ public:
   explicit FuturizedStore(const FuturizedStore& o) = delete;
   const FuturizedStore& operator=(const FuturizedStore& o) = delete;
 
+  virtual seastar::future<> stop() = 0;
   virtual seastar::future<> mount() = 0;
   virtual seastar::future<> umount() = 0;
 
   virtual seastar::future<> mkfs(uuid_d new_osd_fsid) = 0;
-  virtual store_statfs_t stat() const = 0;
+  virtual seastar::future<store_statfs_t> stat() const = 0;
 
-  using CollectionRef = boost::intrusive_ptr<FuturizedCollection>;
   virtual seastar::future<ceph::bufferlist> read(CollectionRef c,
 				   const ghobject_t& oid,
 				   uint64_t offset,
@@ -77,11 +79,10 @@ public:
   virtual seastar::future<ceph::bufferptr> get_attr(CollectionRef c,
 					    const ghobject_t& oid,
 					    std::string_view name) const = 0;
-
-  using attrs_t = std::map<std::string, ceph::bufferptr, std::less<>>;
+  using attrs_t = std::map<std::string, ceph::bufferptr, std::less<std::string>>;
   virtual seastar::future<attrs_t> get_attrs(CollectionRef c,
                                              const ghobject_t& oid) = 0;
-  using omap_values_t = std::map<std::string, bufferlist, std::less<>>;
+  using omap_values_t = std::map<std::string, bufferlist, std::less<std::string>>;
   using omap_keys_t = std::set<std::string>;
   virtual seastar::future<omap_values_t> omap_get_values(
                                          CollectionRef c,

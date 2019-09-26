@@ -20,8 +20,7 @@
 
 #include <map>
 #include "common/ceph_mutex.h"
-
-class CephContext;
+#include "crimson/os/with_alien.h"
 
 extern "C" {
   const char *__ceph_plugin_version();

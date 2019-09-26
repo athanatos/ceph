@@ -17,8 +17,6 @@
 
 #include "auth/Auth.h"
 
-class CephContext;
-
 class KeyRing : public KeyStore {
   std::map<EntityName, EntityAuth> keys;
 

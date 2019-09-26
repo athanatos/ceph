@@ -14,6 +14,9 @@
 #include "common/SubProcess.h"
 
 #include <vector>
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+namespace ceph::common {
+#endif
 
 int CrushLocation::update_from_conf()
 {
@@ -142,3 +145,6 @@ std::ostream& operator<<(std::ostream& os, const CrushLocation& loc)
   }
   return os;
 }
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+}
+#endif

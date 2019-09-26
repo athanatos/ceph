@@ -2,7 +2,7 @@
 
 #pragma once
 
-#ifdef WITH_SEASTAR
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
 namespace ceph::common {
   class ConfigProxy;
 }

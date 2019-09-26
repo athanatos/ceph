@@ -16,6 +16,9 @@
 
 // rbd feature validation
 #include "librbd/Features.h"
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+using ceph::common::PerfCountersBuilder;
+#endif
 
 namespace {
 class printer : public boost::static_visitor<> {

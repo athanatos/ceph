@@ -18,7 +18,6 @@
 
 #include "auth/Auth.h"
 
-class CephContext;
 struct MAuthReply;
 class RotatingKeyRing;
 

@@ -34,8 +34,6 @@
 #include <errno.h>
 #include <sstream>
 
-class CephContext;
-
 /*
  * Authentication
  */

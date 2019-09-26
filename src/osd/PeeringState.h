@@ -24,6 +24,7 @@
 #include "MissingLoc.h"
 #include "osd/osd_perf_counters.h"
 #include "common/ostream_temp.h"
+#include "crimson/os/with_alien.h"
 
 struct PGPool {
   CephContext* cct;

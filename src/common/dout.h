@@ -19,7 +19,7 @@
 #include <type_traits>
 
 #include "include/ceph_assert.h"
-#ifdef WITH_SEASTAR
+#if defined(WITH_SEASTAR) && !defined(WITH_ALIEN)
 #include <seastar/util/log.hh>
 #include "crimson/common/log.h"
 #include "crimson/common/config_proxy.h"
@@ -31,6 +31,8 @@
 #include "common/Clock.h"
 #include "log/Log.h"
 #endif
+
+#include "crimson/os/with_alien.h"
 
 extern void dout_emergency(const char * const str);
 extern void dout_emergency(const std::string &str);
@@ -117,7 +119,7 @@ struct is_dynamic<dynamic_marker_t<T>> : public std::true_type {};
 // generic macros
 #define dout_prefix *_dout
 
-#ifdef WITH_SEASTAR
+#if defined(WITH_SEASTAR) && !defined(WITH_ALIEN)
 #define dout_impl(cct, sub, v)                                          \
   do {                                                                  \
     if (ceph::common::local_conf()->subsys.should_gather(sub, v)) {     \

@@ -19,7 +19,6 @@
 #include "CephxProtocol.h"
 #include "auth/RotatingKeyRing.h"
 
-class CephContext;
 class KeyRing;
 
 class CephxClientHandler : public AuthClientHandler {

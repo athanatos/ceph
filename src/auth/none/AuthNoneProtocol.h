@@ -17,8 +17,6 @@
 
 #include "auth/Auth.h"
 
-class CephContext;
-
 struct AuthNoneAuthorizer : public AuthAuthorizer {
   AuthNoneAuthorizer() : AuthAuthorizer(CEPH_AUTH_NONE) { }
   bool build_authorizer(const EntityName &ename, uint64_t global_id) {

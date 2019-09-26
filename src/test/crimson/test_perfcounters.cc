@@ -9,6 +9,7 @@
 
 #include <seastar/core/app-template.hh>
 #include <seastar/core/sharded.hh>
+using ceph::common::PerfCountersBuilder;
 
 enum {
   PERFTEST_FIRST = 1000000,

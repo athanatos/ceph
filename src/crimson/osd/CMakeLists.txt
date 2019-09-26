@@ -29,6 +29,7 @@ add_executable(crimson-osd
   ${PROJECT_SOURCE_DIR}/src/osd/PGLog.cc
   ${PROJECT_SOURCE_DIR}/src/osd/osd_perf_counters.cc
   )
+target_compile_definitions(crimson-osd PRIVATE -DWITH_SEASTAR -DWITH_BLUESTORE)
 target_link_libraries(crimson-osd
   crimson-common crimson-os crimson fmt::fmt)
 set_target_properties(crimson-osd PROPERTIES

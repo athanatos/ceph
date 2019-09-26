@@ -1,8 +1,10 @@
 if(ALLOCATOR STREQUAL "tcmalloc")
   add_library(heap_profiler STATIC
-    heap_profiler.cc)
-  target_link_libraries(heap_profiler
-    gperftools::tcmalloc)
+    disabled_heap_profiler.cc)
+  if(NOT WITH_SEASTAR)
+   target_link_libraries(heap_profiler
+     gperftools::tcmalloc)
+ endif()
 else()
   add_library(heap_profiler STATIC
     disabled_heap_profiler.cc)

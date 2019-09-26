@@ -24,8 +24,7 @@
 #include "common/subsys_types.h"
 #include "common/config_tracker.h"
 #include "common/config_values.h"
-
-class CephContext;
+#include "crimson/os/with_alien.h"
 
 enum {
   CONF_DEFAULT,

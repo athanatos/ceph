@@ -23,7 +23,6 @@
 
 // Defines the security applied to ongoing messages in a session, once the session is established. PLR
 
-class CephContext;
 class Message;
 
 struct AuthSessionHandler {

@@ -21,7 +21,8 @@
 
 #include <string>
 
-class CephContext;
+#include "crimson/os/with_alien.h"
+
 class CryptoKeyContext;
 namespace ceph { class Formatter; }
 

@@ -25,7 +25,6 @@
 #include "common/cmdparse.h"
 
 class AdminSocket;
-class CephContext;
 
 using namespace std::literals;
 

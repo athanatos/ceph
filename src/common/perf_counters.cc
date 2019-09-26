@@ -19,6 +19,9 @@
 
 using std::ostringstream;
 
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+namespace ceph::common {
+#endif
 PerfCountersCollectionImpl::PerfCountersCollectionImpl()
 {
 }
@@ -583,3 +586,6 @@ PerfCounters *PerfCountersBuilder::create_perf_counters()
   return ret;
 }
 
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+}
+#endif

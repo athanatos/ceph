@@ -6,7 +6,8 @@
 #include <string>
 #include <list>
 
-class CephContext;
+#include "crimson/os/with_alien.h"
+
 struct entity_addr_t;
 class entity_addrvec_t;
 

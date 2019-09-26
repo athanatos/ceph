@@ -7,16 +7,14 @@
 
 #include "include/types.h"
 #include "common/ceph_mutex.h"
+#include "crimson/os/with_alien.h"
 #include "objclass/objclass.h"
 
 //forward declaration
-class CephContext;
-
 class ClassHandler
 {
 public:
   CephContext *cct;
-
   struct ClassData;
 
   struct ClassMethod {

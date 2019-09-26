@@ -8,8 +8,7 @@
 
 #include "include/types.h"
 #include "common/entity_name.h"
-
-class CephContext;
+#include "crimson/os/with_alien.h"
 
 static const __u8 MON_CAP_R     = (1 << 1);      // read
 static const __u8 MON_CAP_W     = (1 << 2);      // write

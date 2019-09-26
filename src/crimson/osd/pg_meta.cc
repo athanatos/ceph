@@ -19,7 +19,7 @@ namespace {
   std::optional<T> find_value(const FuturizedStore::omap_values_t& values,
                               string_view key)
   {
-    auto found = values.find(key);
+    auto found = values.find(std::string(key).c_str());
     if (found == values.end()) {
       return {};
     }

@@ -53,7 +53,8 @@ using ceph::HeartbeatMap;
 #include <iostream>
 #include <pthread.h>
 
-#ifdef WITH_SEASTAR
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+namespace ceph::common {
 CephContext::CephContext()
   : _conf{ceph::common::local_conf()},
     _perf_counters_collection{ceph::common::local_perf_coll()},
@@ -92,6 +93,7 @@ PerfCountersCollectionImpl* CephContext::get_perfcounters_collection()
   return _perf_counters_collection.get_perf_collection();
 }
 
+}
 #else  // WITH_SEASTAR
 namespace {
 
@@ -750,14 +752,22 @@ void CephContext::put() {
 void CephContext::init_crypto()
 {
   if (_crypto_inited++ == 0) {
+#ifdef WITH_ALIEN
+    ceph::alien::crypto::init();
+#else
     ceph::crypto::init();
+#endif
   }
 }
 
 void CephContext::shutdown_crypto()
 {
   if (--_crypto_inited == 0) {
+#ifdef WITH_ALIEN
+    ceph::alien::crypto::shutdown(g_code_env == CODE_ENVIRONMENT_LIBRARY);
+#else
     ceph::crypto::shutdown(g_code_env == CODE_ENVIRONMENT_LIBRARY);
+#endif
   }
 }
 

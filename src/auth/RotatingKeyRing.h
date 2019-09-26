@@ -17,13 +17,11 @@
 
 #include "common/ceph_mutex.h"
 #include "auth/Auth.h"
-
 /*
  * mediate access to a service's keyring and rotating secrets
  */
 
 class KeyRing;
-class CephContext;
 
 class RotatingKeyRing : public KeyStore {
   CephContext *cct;

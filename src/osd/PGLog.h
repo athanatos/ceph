@@ -24,6 +24,7 @@
 
 #ifdef WITH_SEASTAR
 #include <seastar/core/future.hh>
+#include <seastar/core/future-util.hh>
 #include "crimson/os/futurized_store.h"
 #include "crimson/os/cyan_collection.h"
 #endif

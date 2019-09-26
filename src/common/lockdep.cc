@@ -21,6 +21,9 @@
 #define MAX_LOCKS  4096   // increase me as needed
 #define BACKTRACE_SKIP 2
 
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+namespace ceph::common {
+#endif
 /******* Globals **********/
 bool g_lockdep;
 struct lockdep_stopper_t {
@@ -397,4 +400,6 @@ out:
   return id;
 }
 
-
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+}
+#endif

@@ -5916,7 +5916,11 @@ int OSDMap::parse_osd_id_list(const vector<string>& ls, set<int> *out,
       get_all_osds(*out);
       break;
     }
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+    long osd = ceph::common::parse_osd_id(i->c_str(), ss);
+#else
     long osd = parse_osd_id(i->c_str(), ss);
+#endif
     if (osd < 0) {
       *ss << "invalid osd id '" << *i << "'";
       return -EINVAL;

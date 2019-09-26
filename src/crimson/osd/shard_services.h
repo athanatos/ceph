@@ -47,7 +47,7 @@ class ShardServices {
   ceph::mgr::Client &mgrc;
   ceph::os::FuturizedStore &store;
 
-  CephContext cct;
+  ceph::common::CephContext cct;
 
   PerfCounters *perf = nullptr;
   PerfCounters *recoverystate_perf = nullptr;
@@ -70,7 +70,7 @@ public:
     return store;
   }
 
-  CephContext *get_cct() {
+  ceph::common::CephContext *get_cct() {
     return &cct;
   }
 

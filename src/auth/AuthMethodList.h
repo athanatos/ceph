@@ -21,8 +21,6 @@
 #include <set>
 #include <string>
 
-class CephContext;
-
 class AuthMethodList {
   std::list<__u32> auth_supported;
 public:

@@ -10,6 +10,7 @@
 #include <boost/smart_ptr/local_shared_ptr.hpp>
 #include <seastar/core/future.hh>
 #include <seastar/core/shared_future.hh>
+#include <seastar/core/alien.hh>
 
 #include "common/dout.h"
 #include "crimson/net/Fwd.h"
@@ -99,7 +100,7 @@ public:
   std::ostream& gen_prefix(std::ostream& out) const final {
     return out << *this;
   }
-  CephContext *get_cct() const final {
+  ceph::common::CephContext *get_cct() const final {
     return shard_services.get_cct();
   }
   unsigned get_subsys() const final {
@@ -218,12 +219,12 @@ public:
     t.register_on_commit(
       new LambdaContext(
 	[this, on_commit=std::move(on_commit)](int r){
-	  shard_services.start_operation<LocalPeeringEvent>(
-	    this,
-	    shard_services,
-	    pg_whoami,
-	    pgid,
-	    std::move(*on_commit));
+	    shard_services.start_operation<LocalPeeringEvent>(
+	      this,
+	      shard_services,
+	      pg_whoami,
+	      pgid,
+	      std::move(*on_commit));
 	}));
   }
 

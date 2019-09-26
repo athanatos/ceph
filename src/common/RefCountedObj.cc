@@ -16,11 +16,13 @@ RefCountedObject::~RefCountedObject()
 void RefCountedObject::put() const {
   CephContext *local_cct = cct;
   auto v = --nref;
+#ifndef WITH_SEASTAR
   if (local_cct) {
     lsubdout(local_cct, refs, 1) << "RefCountedObject::put " << this << " "
 		   << (v + 1) << " -> " << v
 		   << dendl;
   }
+#endif
   if (v == 0) {
     ANNOTATE_HAPPENS_AFTER(&nref);
     ANNOTATE_HAPPENS_BEFORE_FORGET_ALL(&nref);
@@ -33,8 +35,10 @@ void RefCountedObject::put() const {
 void RefCountedObject::_get() const {
   auto v = ++nref;
   ceph_assert(v > 1); /* it should never happen that _get() sees nref == 0 */
+#ifndef WITH_SEASTAR
   if (cct) {
     lsubdout(cct, refs, 1) << "RefCountedObject::get " << this << " "
 	     << (v - 1) << " -> " << v << dendl;
   }
+#endif
 }

@@ -27,8 +27,11 @@
 #  include <openssl/err.h>
 #endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
 
+#ifdef WITH_ALIEN
+namespace ceph::alien::crypto::ssl {
+#else
 namespace ceph::crypto::ssl {
-
+#endif
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
 static std::atomic_uint32_t crypto_refs;
 
@@ -164,36 +167,59 @@ static void shutdown() {
 
 } // namespace ceph::crypto::openssl
 
-
+#ifdef WITH_ALIEN
+void ceph::alien::crypto::init(){
+  ceph::alien::crypto::ssl::init();
+}
+void ceph::alien::crypto::shutdown([[maybe_unused]] const bool shared) {
+  ceph::alien::crypto::ssl::shutdown();
+}
+#else
 void ceph::crypto::init() {
   ceph::crypto::ssl::init();
 }
-
 void ceph::crypto::shutdown([[maybe_unused]] const bool shared) {
   ceph::crypto::ssl::shutdown();
 }
+#endif
 
+#ifdef WITH_ALIEN
+ceph::alien::crypto::ssl::OpenSSLDigest::OpenSSLDigest(const EVP_MD * _type)
+#else
 ceph::crypto::ssl::OpenSSLDigest::OpenSSLDigest(const EVP_MD * _type)
+#endif
   : mpContext(EVP_MD_CTX_create())
   , mpType(_type) {
   this->Restart();
 }
-
+#ifdef WITH_ALIEN
+ceph::alien::crypto::ssl::OpenSSLDigest::~OpenSSLDigest() {
+#else
 ceph::crypto::ssl::OpenSSLDigest::~OpenSSLDigest() {
+#endif
   EVP_MD_CTX_destroy(mpContext);
 }
-
+#ifdef WITH_ALIEN
+void ceph::alien::crypto::ssl::OpenSSLDigest::Restart() {
+#else
 void ceph::crypto::ssl::OpenSSLDigest::Restart() {
+#endif
   EVP_DigestInit_ex(mpContext, mpType, NULL);
 }
-
+#ifdef WITH_ALIEN
+void ceph::alien::crypto::ssl::OpenSSLDigest::Update(const unsigned char *input, size_t length) {
+#else
 void ceph::crypto::ssl::OpenSSLDigest::Update(const unsigned char *input, size_t length) {
+#endif
   if (length) {
     EVP_DigestUpdate(mpContext, const_cast<void *>(reinterpret_cast<const void *>(input)), length);
   }
 }
-
+#ifdef WITH_ALIEN
+void ceph::alien::crypto::ssl::OpenSSLDigest::Final(unsigned char *digest) {
+#else
 void ceph::crypto::ssl::OpenSSLDigest::Final(unsigned char *digest) {
+#endif
   unsigned int s;
   EVP_DigestFinal_ex(mpContext, digest, &s);
 }

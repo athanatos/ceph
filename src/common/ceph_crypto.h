@@ -29,14 +29,24 @@ extern "C" {
 }
 
 namespace ceph {
+#ifdef WITH_ALIEN
+namespace alien{
+#endif
   namespace crypto {
     void assert_init();
     void init();
     void shutdown(bool shared=true);
   }
+#ifdef WITH_ALIEN
+}
+#endif
 }
 
 namespace ceph {
+#ifdef WITH_ALIEN
+namespace alien{
+#endif
+
   namespace crypto {
     class DigestException : public std::runtime_error
     {
@@ -83,10 +93,17 @@ namespace ceph {
       };
     }
   }
+#ifdef WITH_ALIEN
+}
+#endif
+
 }
 
-
+#ifdef WITH_ALIEN
+namespace ceph:: alien::crypto::ssl {
+#else
 namespace ceph::crypto::ssl {
+#endif
 # if OPENSSL_VERSION_NUMBER < 0x10100000L
   class HMAC {
   private:
@@ -185,6 +202,19 @@ namespace ceph::crypto::ssl {
 
 
 namespace ceph {
+#ifdef WITH_ALIEN
+namespace alien{
+  namespace crypto {
+    using ceph::alien::crypto::ssl::SHA256;
+    using ceph::alien::crypto::ssl::MD5;
+    using ceph::alien::crypto::ssl::SHA1;
+    using ceph::alien::crypto::ssl::SHA512;
+
+    using ceph::alien::crypto::ssl::HMACSHA256;
+    using ceph::alien::crypto::ssl::HMACSHA1;
+  }
+}
+#else
   namespace crypto {
     using ceph::crypto::ssl::SHA256;
     using ceph::crypto::ssl::MD5;
@@ -194,6 +224,7 @@ namespace ceph {
     using ceph::crypto::ssl::HMACSHA256;
     using ceph::crypto::ssl::HMACSHA1;
   }
+#endif
 }
 
 namespace ceph::crypto {

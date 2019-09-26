@@ -33,7 +33,6 @@
 #include "common/Formatter.h"
 #include "mds/mdstypes.h"
 
-class CephContext;
 class health_check_map_t;
 
 /**

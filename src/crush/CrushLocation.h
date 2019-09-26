@@ -9,8 +9,11 @@
 #include <string>
 
 #include "common/ceph_mutex.h"
+#include "crimson/os/with_alien.h"
 
-class CephContext;
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+namespace ceph::common {
+#endif
 
 class CrushLocation {
 public:
@@ -32,5 +35,7 @@ private:
 };
 
 std::ostream& operator<<(std::ostream& os, const CrushLocation& loc);
-
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+}
+#endif
 #endif

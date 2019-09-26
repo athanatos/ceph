@@ -363,7 +363,11 @@ int AdminSocket::execute_command(const std::string& cmd, ceph::bufferlist& out)
   vector<string> cmdvec;
   stringstream errss;
   cmdvec.push_back(cmd);
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+  if (!ceph::common::cmdmap_from_json(cmdvec, &cmdmap, errss)) {
+#else
   if (!cmdmap_from_json(cmdvec, &cmdmap, errss)) {
+#endif
     ldout(m_cct, 0) << "AdminSocket: " << errss.str() << dendl;
     return false;
   }
@@ -371,7 +375,11 @@ int AdminSocket::execute_command(const std::string& cmd, ceph::bufferlist& out)
   try {
     cmd_getval(m_cct, cmdmap, "format", format);
     cmd_getval(m_cct, cmdmap, "prefix", match);
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+  } catch (const ceph::common::bad_cmd_get& e) {
+#else
   } catch (const bad_cmd_get& e) {
+#endif
     return false;
   }
   if (format != "json" && format != "json-pretty" &&
@@ -573,7 +581,11 @@ public:
       (void)command;
       ostringstream secname;
       secname << "cmd" << setfill('0') << std::setw(3) << cmdnum;
+#if defined(WITH_SEASTAR) && !defined (WITH_ALIEN)
+      ceph::common::dump_cmd_and_help_to_json(&jf,
+#else
       dump_cmd_and_help_to_json(&jf,
+#endif
                                 CEPH_FEATURES_ALL,
 				secname.str().c_str(),
 				info.desc,

@@ -15,7 +15,7 @@
 #ifndef CEPH_LOCKDEP_H
 #define CEPH_LOCKDEP_H
 
-class CephContext;
+#include "crimson/os/with_alien.h"
 
 extern bool g_lockdep;
 

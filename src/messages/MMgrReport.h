@@ -23,6 +23,9 @@
 #include "common/perf_counters.h"
 #include "mgr/DaemonHealthMetric.h"
 
+#if defined (WITH_SEASTAR) && !defined (WITH_ALIEN)
+using ceph::common::PerfCountersBuilder;
+#endif
 class PerfCounterType
 {
 public:
