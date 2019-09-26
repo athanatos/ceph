@@ -38,7 +38,7 @@ mClockScheduler::mClockScheduler(CephContext *cct) :
 	      &client_registry,
 	      _1),
     dmc::AtLimit::Allow,
-    cct->_conf->osd_op_queue_mclock_anticipation_timeout)
+    cct->_conf.get_val<double>("osd_mclock_scheduler_anticipation_timeout"))
 {
   cct->_conf.add_observer(this);
   client_registry.update_from_config(cct->_conf);
@@ -136,7 +136,7 @@ OpSchedulerItem mClockScheduler::dequeue()
       ceph_assert(result.is_retn());
 
       auto &retn = result.get_retn();
-      return std::move(*result.get_retn().request);
+      return std::move(*retn.request);
     }
   }
 }
