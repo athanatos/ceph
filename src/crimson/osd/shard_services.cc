@@ -40,7 +40,8 @@ ShardServices::ShardServices(
       monc(monc),
       mgrc(mgrc),
       store(store),
-      obc_registry(crimson::common::local_conf())
+      throttler(crimson::common::local_conf()),
+      obc_registry(crimson::common::local_conf()),
       local_reserver(
 	&cct,
 	&finisher,

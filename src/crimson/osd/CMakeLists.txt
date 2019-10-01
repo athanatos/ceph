@@ -18,6 +18,9 @@ add_executable(crimson-osd
   osd_operations/peering_event.cc
   osd_operations/pg_advance_map.cc
   osd_operations/replicated_request.cc
+  osd_operations/background_recovery.cc
+  scheduler/scheduler.cc
+  scheduler/mclock_scheduler.cc
   osdmap_gate.cc
   pg_map.cc
   objclass.cc
@@ -32,7 +35,8 @@ add_executable(crimson-osd
   ${PROJECT_SOURCE_DIR}/src/osd/osd_perf_counters.cc
   )
 target_link_libraries(crimson-osd
-  crimson-common crimson-os crimson fmt::fmt)
+  crimson-common crimson-os crimson fmt::fmt
+	dmclock::dmclock)
 set_target_properties(crimson-osd PROPERTIES
   POSITION_INDEPENDENT_CODE ${EXE_LINKER_USE_PIE})
 install(TARGETS crimson-osd DESTINATION bin)
