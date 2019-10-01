@@ -39,7 +39,8 @@ ShardServices::ShardServices(
       monc(monc),
       mgrc(mgrc),
       store(store),
-      obc_registry(crimson::common::local_conf())
+      throttler(crimson::common::local_conf()),
+      obc_registry(crimson::common::local_conf()),
       local_reserver(
 	&cct,
 	&finisher,
@@ -49,7 +50,7 @@ ShardServices::ShardServices(
 	&cct,
 	&finisher,
 	crimson::common::local_conf()->osd_max_backfills,
-	crimson::common::local_conf()->osd_min_recovery_priority),
+	crimson::common::local_conf()->osd_min_recovery_priority)
 {
   perf = build_osd_logger(&cct);
   cct.get_perfcounters_collection()->add(perf);
