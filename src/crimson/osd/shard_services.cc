@@ -40,6 +40,7 @@ ShardServices::ShardServices(
       monc(monc),
       mgrc(mgrc),
       store(store),
+      throttler(ceph::common::local_conf()),
       local_reserver(
 	&cct,
 	&finisher,

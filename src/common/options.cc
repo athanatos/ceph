@@ -5217,6 +5217,15 @@ std::vector<Option> get_global_options() {
     Option("debug_heartbeat_testing_span", Option::TYPE_INT, Option::LEVEL_DEV)
     .set_default(0)
     .set_description("Override 60 second periods for testing only"),
+
+
+    // ----------------------------
+    // Crimson specific options
+
+    Option("crimson_osd_scheduler_concurrency", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
+    .set_default(0)
+    .set_description("The maximum number concurrent IO operations, 0 for unlimited")
+
   });
 }
 

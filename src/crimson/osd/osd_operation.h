@@ -15,17 +15,19 @@
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
 
 #include "common/Formatter.h"
+#include "crimson/osd/scheduler/scheduler.h"
 
 namespace ceph::osd {
 
 enum class OperationTypeCode {
   client_request = 0,
-  peering_event = 1,
-  compound_peering_request = 2,
-  pg_advance_map = 3,
-  pg_creation = 4,
-  replicated_request = 5,
-  last_op = 6
+  peering_event,
+  compound_peering_request,
+  pg_advance_map,
+  pg_creation,
+  replicated_request,
+  background_recovery,
+  last_op
 };
 
 static constexpr const char* const OP_NAMES[] = {
@@ -35,6 +37,7 @@ static constexpr const char* const OP_NAMES[] = {
   "pg_advance_map",
   "pg_creation",
   "replicated_request",
+  "background_recovery",
 };
 
 // prevent the addition of OperationTypeCode-s with no matching OP_NAMES entry:
@@ -217,6 +220,70 @@ public:
     registries[static_cast<int>(T::type)].push_back(*op);
     op->set_id(op_id_counters[static_cast<int>(T::type)]++);
     return op;
+  }
+};
+
+/**
+ * Throttles set of currently running operations
+ *
+ * Very primitive currently, assumes all ops are equally
+ * expensive and simply limits the number that can be
+ * concurrently active.
+ */
+class OperationThrottler : public Blocker, md_config_obs_t {
+  ceph::osd::scheduler::SchedulerRef scheduler;
+
+  uint64_t max_in_progress = 0;
+  uint64_t in_progress = 0;
+
+  uint64_t pending = 0;
+
+  void wake();
+
+  blocking_future<> acquire_throttle(
+    ceph::osd::scheduler::params_t params);
+
+  void release_throttle();
+protected:
+  virtual void dump_detail(Formatter *f) const final;
+  const char *get_type_name() const final {
+    return "OperationThrottler";
+  }
+
+public:
+  OperationThrottler(ConfigProxy &conf);
+
+  const char** get_tracked_conf_keys() const final;
+  void handle_conf_change(const ConfigProxy& conf,
+			  const std::set<std::string> &changed) final;
+  void update_from_config(const ConfigProxy &conf);
+
+  template <typename F>
+  auto with_throttle(
+    OperationRef op,
+    ceph::osd::scheduler::params_t params,
+    F &&f) {
+    if (!max_in_progress) return f();
+    auto fut = acquire_throttle(params);
+    return op->with_blocking_future(std::move(fut))
+      .then(std::forward<F>(f))
+      .then([this](auto x) {
+	release_throttle();
+	return x;
+      });
+  }
+
+  template <typename F>
+  seastar::future<> with_throttle_while(
+    OperationRef op,
+    ceph::osd::scheduler::params_t params,
+    F &&f) {
+    return with_throttle(op, params, f).then([this, params, op, f](bool cont) {
+      if (cont)
+	return with_throttle_while(op, params, f);
+      else
+	return seastar::now();
+    });
   }
 };
 
