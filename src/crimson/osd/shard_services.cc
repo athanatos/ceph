@@ -50,7 +50,8 @@ ShardServices::ShardServices(
 	&cct,
 	&finisher,
 	ceph::common::local_conf()->osd_max_backfills,
-	ceph::common::local_conf()->osd_min_recovery_priority)
+	ceph::common::local_conf()->osd_min_recovery_priority),
+      obc_registry(ceph::common::local_conf())
 {
   perf = build_osd_logger(&cct);
   cct.get_perfcounters_collection()->add(perf);

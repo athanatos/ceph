@@ -12,6 +12,7 @@
 #include "osd/PeeringState.h"
 #include "crimson/osd/osdmap_service.h"
 #include "common/AsyncReserver.h"
+#include "crimson/osd/object_context.h"
 
 namespace ceph::net {
   class Messenger;
@@ -174,6 +175,10 @@ private:
 public:
   AsyncReserver<spg_t, DirectFinisher> local_reserver;
   AsyncReserver<spg_t, DirectFinisher> remote_reserver;
+
+public:
+  ceph::osd::ObjectContextRegistry obc_registry;
+
 };
 
 
