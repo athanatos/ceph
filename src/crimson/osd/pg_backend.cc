@@ -16,6 +16,7 @@
 #include "crimson/os/futurized_collection.h"
 #include "crimson/os/cyan_object.h"
 #include "crimson/os/futurized_store.h"
+#include "crimson/osd/osd_operation.h"
 #include "replicated_backend.h"
 #include "ec_backend.h"
 #include "exceptions.h"
@@ -107,31 +108,67 @@ PGBackend::get_object_state(const hobject_t& oid)
   }
 }
 
+seastar::future<ObjectState>
+PGBackend::load_object_state(const hobject_t& oid)
+{
+  return store->get_attr(
+    coll,
+    ghobject_t{oid, ghobject_t::NO_GEN, shard},
+    OI_ATTR).then_wrapped(
+      [oid, this](auto fut) {
+	if (fut.failed()) {
+	  auto ep = std::move(fut).get_exception();
+	  if (!crimson::os::FuturizedStore::EnoentException::is_class_of(ep)) {
+	    std::rethrow_exception(ep);
+	  }
+	  return seastar::make_ready_future<ObjectState>(
+	    ObjectState(object_info_t(oid), false));
+	} else {
+	  // decode existing OI_ATTR's value
+	  ceph::bufferlist bl;
+	  bl.push_back(std::move(fut).get0());
+	  return seastar::make_ready_future<ObjectState>(
+	    ObjectState(object_info_t{bl}, true));
+	}
+      });
+}
+
+seastar::future<std::optional<SnapSet>>
+PGBackend::load_snapset(const hobject_t &oid)
+{
+  return store->get_attr(
+    coll,
+    ghobject_t{oid, ghobject_t::NO_GEN, shard},
+    SS_ATTR).then_wrapped(
+      [oid, this](auto fut) {
+	if (fut.failed()) {
+	  auto ep = std::move(fut).get_exception();
+	  if (!crimson::os::FuturizedStore::EnoentException::is_class_of(ep)) {
+	    std::rethrow_exception(ep);
+	  }
+	  return seastar::make_ready_future<std::optional<SnapSet>>(
+	    std::nullopt);
+	} else {
+	  // decode existing OI_ATTR's value
+	  ceph::bufferlist bl;
+	  bl.push_back(std::move(fut).get0());
+	  return seastar::make_ready_future<std::optional<SnapSet>>(
+	    SnapSet(bl));
+	}
+      });
+}
+
 seastar::future<PGBackend::cached_os_t>
 PGBackend::_load_os(const hobject_t& oid)
 {
   if (auto found = os_cache.find(oid); found) {
     return seastar::make_ready_future<cached_os_t>(std::move(found));
   }
-  return store->get_attr(coll,
-                         ghobject_t{oid, ghobject_t::NO_GEN, shard},
-                         OI_ATTR).then_wrapped([oid, this](auto fut) {
-    if (fut.failed()) {
-      auto ep = std::move(fut).get_exception();
-      if (!crimson::os::FuturizedStore::EnoentException::is_class_of(ep)) {
-        std::rethrow_exception(ep);
-      }
-      return seastar::make_ready_future<cached_os_t>(
-        os_cache.insert(oid,
-          std::make_unique<ObjectState>(object_info_t{oid}, false)));
-    } else {
-      // decode existing OI_ATTR's value
-      ceph::bufferlist bl;
-      bl.push_back(std::move(fut).get0());
-      return seastar::make_ready_future<cached_os_t>(
-        os_cache.insert(oid,
-          std::make_unique<ObjectState>(object_info_t{bl}, true /* exists */)));
-    }
+  return load_object_state(oid).then([oid, this](auto os) {
+    return seastar::make_ready_future<cached_os_t>(
+      os_cache.insert(
+	oid,
+	std::make_unique<ObjectState>(std::move(os))));
   });
 }
 
@@ -141,25 +178,14 @@ PGBackend::_load_ss(const hobject_t& oid)
   if (auto found = ss_cache.find(oid); found) {
     return seastar::make_ready_future<cached_ss_t>(std::move(found));
   }
-  return store->get_attr(coll,
-                         ghobject_t{oid, ghobject_t::NO_GEN, shard},
-                         SS_ATTR).then_wrapped([oid, this](auto fut) {
-    std::unique_ptr<SnapSet> snapset;
-    if (fut.failed()) {
-      auto ep = std::move(fut).get_exception();
-      if (!crimson::os::FuturizedStore::EnoentException::is_class_of(ep)) {
-        std::rethrow_exception(ep);
-      } else {
-        snapset = std::make_unique<SnapSet>();
-      }
+  return load_snapset(oid).then([oid, this](auto ss) {
+    if (!ss) {
+      return seastar::make_ready_future<cached_ss_t>(
+	std::make_unique<SnapSet>());
     } else {
-      // decode existing SS_ATTR's value
-      ceph::bufferlist bl;
-      bl.push_back(std::move(fut).get0());
-      snapset = std::make_unique<SnapSet>(bl);
+      return seastar::make_ready_future<cached_ss_t>(
+	ss_cache.insert(oid, std::make_unique<SnapSet>(std::move(*ss))));
     }
-    return seastar::make_ready_future<cached_ss_t>(
-      ss_cache.insert(oid, std::move(snapset)));
   });
 }
 
