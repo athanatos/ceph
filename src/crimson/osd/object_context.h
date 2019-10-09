@@ -15,7 +15,7 @@
 #include "crimson/common/config_proxy.h"
 #include "crimson/osd/osd_operation.h"
 
-namespace ceph::osd {
+namespace crimson::osd {
 
 template <typename OBC>
 struct obc_to_hoid {
@@ -213,7 +213,7 @@ class ObjectContextRegistry : public md_config_obs_t  {
   SnapSetContext::lru_t ssc_lru;
 
 public:
-  ObjectContextRegistry(ceph::common::ConfigProxy &conf);
+  ObjectContextRegistry(crimson::common::ConfigProxy &conf);
 
   std::pair<ObjectContextRef, bool> get_cached_obc(const hobject_t &hoid) {
     return obc_lru.get_or_create(hoid);

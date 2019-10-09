@@ -412,14 +412,14 @@ seastar::future<> PG::wait_for_active()
   }
 }
 
-seastar::future<> PG::submit_transaction(boost::local_shared_ptr<ObjectState>&& os,
+seastar::future<> PG::submit_transaction(ObjectContextRef&& obc,
 					 ceph::os::Transaction&& txn,
 					 const MOSDOp& req)
 {
   epoch_t map_epoch = get_osdmap_epoch();
   eversion_t at_version{map_epoch, projected_last_update.version + 1};
   return backend->mutate_object(peering_state.get_acting_recovery_backfill(),
-				std::move(os),
+				std::move(obc),
 				std::move(txn),
 				req,
 				peering_state.get_last_peering_reset(),
@@ -433,45 +433,43 @@ seastar::future<> PG::submit_transaction(boost::local_shared_ptr<ObjectState>&& 
   });
 }
 
-seastar::future<Ref<MOSDOpReply>> PG::do_osd_ops(Ref<MOSDOp> m)
+seastar::future<Ref<MOSDOpReply>> PG::do_osd_ops(
+  Ref<MOSDOp> m,
+  ObjectContextRef obc)
 {
-  const auto oid = m->get_snapid() == CEPH_SNAPDIR ? m->get_hobj().get_head()
-                                                   : m->get_hobj();
-  return backend->get_object_state(oid).then([this, m](auto os) mutable {
-    return seastar::do_with(OpsExecuter{std::move(os), *this/* as const& */, m},
-                            [this, m] (auto& ox) {
+  return seastar::do_with(
+    OpsExecuter{std::move(obc), *this/* as const& */, m},
+    [this, m] (auto& ox) {
       return seastar::do_for_each(m->ops, [this, &ox](OSDOp& osd_op) {
-        logger().debug("will be handling op {}", ceph_osd_op_name(osd_op.op.op));
-        return ox.execute_osd_op(osd_op);
-      }).then([this, m, &ox] {
-        logger().debug("all operations have been executed successfully");
-        return std::move(ox).submit_changes([this, m] (auto&& txn, auto&& os) {
-          // XXX: the entire lambda could be scheduled conditionally. ::if_then()?
-	  if (txn.empty()) {
-            logger().debug("txn is empty, bypassing mutate");
-	    return seastar::now();
-	  } else {
-	    return submit_transaction(std::move(os), std::move(txn), *m);
-	  }
-        });
-      });
-    });
-  }).then([m,this] {
-    auto reply = make_message<MOSDOpReply>(m.get(), 0, get_osdmap_epoch(),
-                                           0, false);
-    reply->add_flags(CEPH_OSD_FLAG_ACK | CEPH_OSD_FLAG_ONDISK);
-    return seastar::make_ready_future<Ref<MOSDOpReply>>(std::move(reply));
-  }).handle_exception_type([=,&oid](const crimson::osd::error& e) {
-    logger().debug("got crimson::osd::error while handling object {}: {} ({})",
-                   oid, e.code(), e.what());
-    return backend->evict_object_state(oid).then([=] {
+	  logger().debug("will be handling op {}", ceph_osd_op_name(osd_op.op.op));
+	  return ox.execute_osd_op(osd_op);
+	}).then([this, m, &ox] {
+	  logger().debug("all operations have been executed successfully");
+	  return std::move(ox).submit_changes(
+	    [this, m] (auto&& txn, auto&& obc) {
+	      // XXX: the entire lambda could be scheduled conditionally. ::if_then()?
+	      if (txn.empty()) {
+		logger().debug("txn is empty, bypassing mutate");
+		return seastar::now();
+	      } else {
+		return submit_transaction(std::move(obc), std::move(txn), *m);
+	      }
+	    });
+	});
+    }).then([m,this] {
+      auto reply = make_message<MOSDOpReply>(m.get(), 0, get_osdmap_epoch(),
+					     0, false);
+      reply->add_flags(CEPH_OSD_FLAG_ACK | CEPH_OSD_FLAG_ONDISK);
+      return seastar::make_ready_future<Ref<MOSDOpReply>>(std::move(reply));
+    }).handle_exception_type([=](const crimson::osd::error& e) {
+      logger().debug("got crimson::osd::error while handling object {}: {} ({})",
+		     obc->obs.oi.soid, e.code(), e.what());
       auto reply = make_message<MOSDOpReply>(
-        m.get(), -e.code().value(), get_osdmap_epoch(), 0, false);
+	m.get(), -e.code().value(), get_osdmap_epoch(), 0, false);
       reply->set_enoent_reply_versions(peering_state.get_info().last_update,
-                                         peering_state.get_info().last_user_version);
+				       peering_state.get_info().last_user_version);
       return seastar::make_ready_future<Ref<MOSDOpReply>>(std::move(reply));
     });
-  });
 }
 
 seastar::future<Ref<MOSDOpReply>> PG::do_pg_ops(Ref<MOSDOp> m)
@@ -496,22 +494,176 @@ seastar::future<Ref<MOSDOpReply>> PG::do_pg_ops(Ref<MOSDOp> m)
   });
 }
 
-seastar::future<> PG::handle_op(crimson::net::Connection* conn,
-                                Ref<MOSDOp> m)
+std::pair<hobject_t, RWState::State> PG::get_oid_and_lock(
+  const MOSDOp &m,
+  const OpInfo &op_info)
 {
-  return wait_for_active().then([conn, m, this] {
-    if (m->finish_decode()) {
-      m->clear_payload();
+  auto oid = m.get_snapid() == CEPH_SNAPDIR ?
+    m.get_hobj().get_head() : m.get_hobj();
+
+  RWState::State lock_type = RWState::RWNONE;
+  if (op_info.rwordered() && op_info.may_read()) {
+    lock_type = RWState::RWState::RWEXCL;
+  } else if (op_info.rwordered()) {
+    lock_type = RWState::RWState::RWWRITE;
+  } else {
+    ceph_assert(op_info.may_read());
+    lock_type = RWState::RWState::RWREAD;
+  }
+  return std::make_pair(oid, lock_type);
+}
+
+std::optional<hobject_t> PG::resolve_oid(
+  const SnapSet &ss,
+  const hobject_t &oid)
+{
+  if (oid.snap > ss.seq) {
+    return oid.get_head();
+  } else {
+    // which clone would it be?
+    auto clone = std::upper_bound(
+      begin(ss.clones), end(ss.clones),
+      oid.snap);
+    if (clone == end(ss.clones)) {
+      // Doesn't exist, > last clone, < ss.seq
+      return std::nullopt;
     }
-    if (std::any_of(begin(m->ops), end(m->ops),
-		    [](auto& op) { return ceph_osd_op_type_pg(op.op.op); })) {
-      return do_pg_ops(m);
+    auto citer = ss.clone_snaps.find(*clone);
+    // TODO: how do we want to handle this kind of logic error?
+    ceph_assert(citer != ss.clone_snaps.end());
+
+    if (std::find(
+	  citer->second.begin(),
+	  citer->second.end(),
+	  *clone) == citer->second.end()) {
+      return std::nullopt;
     } else {
-      return do_osd_ops(m);
+      auto soid = oid;
+      soid.snap = *clone;
+      return std::optional<hobject_t>(soid);
     }
-  }).then([conn](Ref<MOSDOpReply> reply) {
-    return conn->send(reply);
-  });
+  }
+}
+
+seastar::future<std::pair<crimson::osd::ObjectContextRef, bool>>
+PG::get_or_load_clone_obc(hobject_t oid, SnapSetContextRef ssc)
+{
+  ceph_assert(!oid.is_head());
+  using ObjectContextRef = crimson::osd::ObjectContextRef;
+  auto coid = resolve_oid(ssc->snapset, oid);
+  if (!coid) {
+    return seastar::make_ready_future<
+      std::pair<crimson::osd::ObjectContextRef, bool>>(
+	std::make_pair(ObjectContextRef(), true)
+      );
+  }
+  auto [obc, existed] = shard_services.obc_registry.get_cached_obc(*coid);
+  if (existed) {
+    return seastar::make_ready_future<
+      std::pair<crimson::osd::ObjectContextRef, bool>>(
+	std::make_pair(obc, true)
+      );
+  } else {
+    bool got = obc->maybe_get_excl();
+    ceph_assert(got);
+    return backend->load_object_state(*coid).then(
+      [oid, obc=std::move(obc), ssc=std::move(ssc), this](auto obs) mutable {
+	obc->set_obs_ssc(std::move(obs), std::move(ssc));
+	return seastar::make_ready_future<
+	  std::pair<crimson::osd::ObjectContextRef, bool>>(
+	    std::make_pair(obc, false)
+	  );
+      });
+  }
+}
+
+seastar::future<crimson::osd::SnapSetContextRef>
+PG::get_ssc(const hobject_t &oid)
+{
+  using SnapSetContextRef = crimson::osd::SnapSetContextRef;
+  auto [ssc, existed] = shard_services.obc_registry.get_cached_ssc(oid);
+  if (existed) {
+    ceph_assert(ssc->loaded);
+    return seastar::make_ready_future<SnapSetContextRef>(std::move(ssc));
+  } else {
+    return backend->load_snapset(oid).then(
+      [oid, ssc=std::move(ssc), this](auto ss) {
+      if (ss) {
+	ssc->set_snapset(std::move(*ss));
+      } else {
+	ssc->set_snapset(SnapSet());
+      }
+      return seastar::make_ready_future<SnapSetContextRef>(std::move(ssc));
+    });
+  }
+}
+
+seastar::future<std::pair<crimson::osd::ObjectContextRef, bool>>
+PG::get_or_load_head_obc(hobject_t oid)
+{
+  ceph_assert(oid.is_head());
+  auto [obc, existed] = shard_services.obc_registry.get_cached_obc(oid);
+  if (existed) {
+    return seastar::make_ready_future<
+      std::pair<crimson::osd::ObjectContextRef, bool>>(
+	std::make_pair(obc, true)
+      );
+  } else {
+    bool got = obc->maybe_get_excl();
+    ceph_assert(got);
+    return backend->load_object_state(oid).then(
+      [oid, obc=std::move(obc), this](auto obs) {
+	return get_ssc(oid).then([this, obs=std::move(obs), obc=std::move(obc)](
+				   auto ssc) mutable {
+	  obc->set_obs_ssc(std::move(obs), std::move(ssc));
+	  return seastar::make_ready_future<
+	    std::pair<crimson::osd::ObjectContextRef, bool>>(
+	      std::make_pair(obc, false)
+	    );
+	});
+      });
+  }
+}
+
+seastar::future<crimson::osd::ObjectContextRef>
+PG::get_locked_obc(
+  Operation *op, const hobject_t &oid, RWState::State type)
+{
+  return get_or_load_head_obc(oid.get_head()).then(
+    [this, op, oid, type](auto p) {
+      auto &[head_obc, head_existed] = p;
+      if (oid.is_head()) {
+	if (head_existed) {
+	  return head_obc->get_lock_type(op, type).then([head_obc] {
+	    ceph_assert(head_obc->loaded);
+	    return seastar::make_ready_future<ObjectContextRef>(head_obc);
+	  });
+	} else {
+	  head_obc->degrade_excl_to(type);
+	  return seastar::make_ready_future<ObjectContextRef>(head_obc);
+	}
+      } else {
+	return head_obc->get_lock_type(op, RWState::RWREAD).then(
+	  [this, head_obc, op, oid, type] {
+	    ceph_assert(head_obc->loaded);
+	    return get_or_load_clone_obc(oid, head_obc->ssc);
+	  }).then([this, head_obc, op, oid, type](auto p) {
+	      auto &[obc, existed] = p;
+	      if (existed) {
+		return obc->get_lock_type(op, type).then([obc] {
+		  ceph_assert(obc->loaded);
+		  return seastar::make_ready_future<ObjectContextRef>(obc);
+		});
+	      } else {
+		obc->degrade_excl_to(type);
+		return seastar::make_ready_future<ObjectContextRef>(obc);
+	      }
+	    }).then([head_obc](auto obc) {
+	      head_obc->put_lock_type(RWState::RWREAD);
+	      return seastar::make_ready_future<ObjectContextRef>(obc);
+	    });
+      }
+    });
 }
 
 seastar::future<> PG::handle_rep_op(Ref<MOSDRepOp> req)

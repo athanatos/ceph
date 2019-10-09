@@ -63,7 +63,7 @@ seastar::future<> OpsExecuter::do_op_call(OSDOp& osd_op)
   }
 
   const auto flags = method->get_flags();
-  if (!os->exists && (flags & CLS_METHOD_WR) == 0) {
+  if (!obc->obs.exists && (flags & CLS_METHOD_WR) == 0) {
     throw crimson::osd::object_not_found{};
   }
 

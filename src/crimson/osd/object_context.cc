@@ -3,7 +3,7 @@
 
 #include "crimson/osd/object_context.h"
 
-namespace ceph::osd {
+namespace crimson::osd {
 
 void ObjectContext::dump_detail(Formatter *f) const
 {
@@ -12,7 +12,7 @@ void ObjectContext::dump_detail(Formatter *f) const
   f->close_section();
 }
 
-ObjectContextRegistry::ObjectContextRegistry(ceph::common::ConfigProxy &conf)
+ObjectContextRegistry::ObjectContextRegistry(crimson::common::ConfigProxy &conf)
 {
   obc_lru.set_target_size(conf.get_val<uint64_t>("crimson_osd_obc_lru_size"));
   conf.add_observer(this);
