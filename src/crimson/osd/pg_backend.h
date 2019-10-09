@@ -110,12 +110,20 @@ protected:
   CollectionRef coll;
   ceph::os::FuturizedStore* store;
 
+public:
+  seastar::future<std::optional<SnapSet>>load_snapset(
+    const hobject_t &oid);
+  seastar::future<ObjectState> load_object_state(
+    const hobject_t &oid);
+
 private:
   using cached_ss_t = boost::local_shared_ptr<SnapSet>;
   SharedLRU<hobject_t, SnapSet> ss_cache;
   seastar::future<cached_ss_t> _load_ss(const hobject_t& oid);
+
   SharedLRU<hobject_t, ObjectState> os_cache;
   seastar::future<cached_os_t> _load_os(const hobject_t& oid);
+
   virtual seastar::future<bufferlist> _read(const hobject_t& hoid,
 					    size_t offset,
 					    size_t length,
