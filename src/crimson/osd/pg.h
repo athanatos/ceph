@@ -15,7 +15,7 @@
 #include "crimson/net/Fwd.h"
 #include "os/Transaction.h"
 #include "osd/osd_types.h"
-#include "osd/osd_internal_types.h"
+#include "crimson/osd/object_context.h"
 #include "osd/PeeringState.h"
 
 #include "crimson/common/type_helpers.h"
@@ -469,8 +469,36 @@ public:
   void handle_advance_map(cached_map_t next_map, PeeringCtx &rctx);
   void handle_activate_map(PeeringCtx &rctx);
   void handle_initialize(PeeringCtx &rctx);
-  seastar::future<> handle_op(ceph::net::Connection* conn,
-			      Ref<MOSDOp> m);
+
+  static std::pair<hobject_t, RWState::State> get_oid_and_lock(MOSDOp &m);
+  static std::optional<hobject_t> resolve_oid(
+    const SnapSet &snapset,
+    const hobject_t &oid);
+
+  seastar::future<std::pair<ceph::osd::ObjectContextRef, bool>>
+  get_or_load_clone_obc(hobject_t oid, SnapSetContextRef ssc);
+
+  seastar::future<ceph::osd::SnapSetContextRef> get_ssc(const hobject_t &oid);
+
+  seastar::future<std::pair<ceph::osd::ObjectContextRef, bool>>
+  get_or_load_head_obc(hobject_t oid);
+
+  seastar::future<ObjectContextRef> get_locked_obc(
+    Operation *op,
+    const hobject_t &oid,
+    RWState::State type);
+public:
+  template <typename F>
+  seastar::future<> with_locked_obc(Ref<MOSDOp> &m, Operation *op, F &&f) {
+    auto [oid, type] = get_oid_and_lock(*m);
+    return get_locked_obc(op, oid, type).then(
+      [this, f=std::forward<F>(f), type](auto obc) {
+	return f(obc).then([obc, type] {
+	  obc->put_lock_type(type);
+	});
+      });
+  }
+  
   seastar::future<> handle_rep_op(Ref<MOSDRepOp> m);
   void handle_rep_op_reply(ceph::net::Connection* conn,
 			   const MOSDRepOpReply& m);
@@ -481,7 +509,9 @@ private:
   void do_peering_event(
     const boost::statechart::event_base &evt,
     PeeringCtx &rctx);
-  seastar::future<Ref<MOSDOpReply>> do_osd_ops(Ref<MOSDOp> m);
+  seastar::future<Ref<MOSDOpReply>> do_osd_ops(
+    Ref<MOSDOp> m,
+    ObjectContextRef obc);
   seastar::future<Ref<MOSDOpReply>> do_pg_ops(Ref<MOSDOp> m);
   seastar::future<> do_osd_op(
     ObjectState& os,
@@ -490,7 +520,7 @@ private:
   seastar::future<ceph::bufferlist> do_pgnls(ceph::bufferlist& indata,
 					     const std::string& nspace,
 					     uint64_t limit);
-  seastar::future<> submit_transaction(boost::local_shared_ptr<ObjectState>&& os,
+  seastar::future<> submit_transaction(ObjectContextRef&& obc,
 				       ceph::os::Transaction&& txn,
 				       const MOSDOp& req);
 

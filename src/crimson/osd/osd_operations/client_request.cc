@@ -4,6 +4,7 @@
 #include <seastar/core/future.hh>
 
 #include "messages/MOSDOp.h"
+#include "messages/MOSDOpReply.h"
 
 #include "crimson/osd/pg.h"
 #include "crimson/osd/osd.h"
@@ -43,6 +44,13 @@ ClientRequest::PGPipeline &ClientRequest::pp(PG &pg)
   return pg.client_request_pg_pipeline;
 }
 
+bool ClientRequest::is_pg_op() const
+{
+  return std::any_of(
+    begin(m->ops), end(m->ops),
+    [](auto& op) { return ceph_osd_op_type_pg(op.op.op); });
+}
+
 seastar::future<> ClientRequest::start()
 {
   logger().debug("{}: start", *this);
@@ -58,18 +66,57 @@ seastar::future<> ClientRequest::start()
     }).then([this, ref=std::move(ref)](Ref<PG> pg) {
       return seastar::do_with(
 	std::move(pg), std::move(ref), [this](auto pg, auto op) {
-	return with_blocking_future(
-	  handle.enter(pp(*pg).await_map)
-	).then([this, pg] {
 	  return with_blocking_future(
-	    pg->osdmap_gate.wait_for_map(m->get_map_epoch()));
-	}).then([this, pg] (auto) {
-	  return with_blocking_future(handle.enter(pp(*pg).process));
-	}).then([this, pg] {
-	  return pg->handle_op(conn.get(), std::move(m));
+	    handle.enter(pp(*pg).await_map)
+	  ).then([this, &pg]() mutable {
+	    return with_blocking_future(
+	      pg->osdmap_gate.wait_for_map(m->get_map_epoch()));
+	  }).then([this, &pg](auto) mutable {
+	    return with_blocking_future(
+	      handle.enter(pp(*pg).wait_for_active));
+	  }).then([this, &pg]() mutable {
+	    return pg->wait_for_active();
+	    //return with_blocking_future(pg->wait_for_active_bf());
+	  }).then([this, &pg]() mutable {
+	    if (m->finish_decode()) {
+	      m->clear_payload();
+	    }
+	    if (is_pg_op()) {
+	      return process_pg_op(pg);
+	    } else {
+	      return process_op(pg);
+	    }
+	  });
+	});
+    });
+}
+
+seastar::future<> ClientRequest::process_pg_op(
+  Ref<PG> &pg)
+{
+  return pg->do_pg_ops(m)
+    .then([this](Ref<MOSDOpReply> reply) {
+      return conn->send(reply);
+    });
+}
+
+seastar::future<> ClientRequest::process_op(
+  Ref<PG> &pg)
+{
+  return with_blocking_future(
+    handle.enter(pp(*pg).get_obc)
+  ).then([this, pg]() {
+    return pg->with_locked_obc(
+      m, this,
+      [this, pg](auto obc) {
+	return with_blocking_future(handle.enter(pp(*pg).process)
+	).then([this, pg, obc]() {
+	  return pg->do_osd_ops(m, obc);
+	}).then([this](Ref<MOSDOpReply> reply) {
+	  return conn->send(reply);
 	});
       });
-    });
+  });
 }
 
 }

@@ -33,6 +33,12 @@ public:
     OrderedPipelinePhase await_map = {
       "ClientRequest::PGPipeline::await_map"
     };
+    OrderedPipelinePhase wait_for_active = {
+      "ClientRequest::PGPipeline::wait_for_active"
+    };
+    OrderedPipelinePhase get_obc = {
+      "ClientRequest::PGPipeline::get_obc"
+    };
     OrderedPipelinePhase process = {
       "ClientRequest::PGPipeline::process"
     };
@@ -45,9 +51,17 @@ public:
 
   void print(std::ostream &) const final;
   void dump_detail(Formatter *f) const final;
+
+public:
   seastar::future<> start();
 
 private:
+  seastar::future<> process_pg_op(
+    Ref<PG> &pg);
+  seastar::future<> process_op(
+    Ref<PG> &pg);
+  bool is_pg_op() const;
+
   ConnectionPipeline &cp();
   PGPipeline &pp(PG &pg);
 };

@@ -47,7 +47,7 @@ class OpsExecuter {
     virtual ~effect_t() = default;
   };
 
-  PGBackend::cached_os_t os;
+  ObjectContextRef obc;
   PG& pg;
   PGBackend& backend;
   Ref<MOSDOp> msg;
@@ -69,7 +69,7 @@ class OpsExecuter {
   template <class Func>
   auto do_const_op(Func&& f) {
     // TODO: pass backend as read-only
-    return std::forward<Func>(f)(backend, std::as_const(*os));
+    return std::forward<Func>(f)(backend, std::as_const(obc->obs));
   }
 
   template <class Func>
@@ -82,7 +82,7 @@ class OpsExecuter {
   template <class Func>
   auto do_write_op(Func&& f) {
     ++num_write;
-    return std::forward<Func>(f)(backend, *os, txn);
+    return std::forward<Func>(f)(backend, obc->obs, txn);
   }
 
   // PG operations are being provided with pg instead of os.
@@ -97,14 +97,14 @@ class OpsExecuter {
   }
 
 public:
-  OpsExecuter(PGBackend::cached_os_t os, PG& pg, Ref<MOSDOp> msg)
-    : os(std::move(os)),
+  OpsExecuter(ObjectContextRef obc, PG& pg, Ref<MOSDOp> msg)
+    : obc(std::move(obc)),
       pg(pg),
       backend(pg.get_backend()),
       msg(std::move(msg)) {
   }
   OpsExecuter(PG& pg, Ref<MOSDOp> msg)
-    : OpsExecuter{PGBackend::cached_os_t{}, pg, std::move(msg)}
+    : OpsExecuter{ObjectContextRef(), pg, std::move(msg)}
   {}
 
   seastar::future<> execute_osd_op(class OSDOp& osd_op);
@@ -149,7 +149,7 @@ auto OpsExecuter::with_effect(
 
 template <typename Func>
 seastar::future<> OpsExecuter::submit_changes(Func&& f) && {
-  return std::forward<Func>(f)(std::move(txn), std::move(os)).then(
+  return std::forward<Func>(f)(std::move(txn), std::move(obc)).then(
     // NOTE: this lambda could be scheduled conditionally (if_then?)
     [this] {
       return seastar::do_until(
