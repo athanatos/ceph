@@ -12,6 +12,7 @@ add_executable(crimson-osd
   shard_services.cc
   object_context.cc
   ops_executer.cc
+  recovery_manager.cc
   osd_operation.cc
   osd_operations/client_request.cc
   osd_operations/compound_peering_request.cc

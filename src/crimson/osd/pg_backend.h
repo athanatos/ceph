@@ -33,6 +33,8 @@ protected:
   using ec_profile_t = std::map<std::string, std::string>;
 
 public:
+  class RecoveryHandle {};
+
   PGBackend(shard_id_t shard, CollectionRef coll, crimson::os::FuturizedStore* store);
   virtual ~PGBackend() = default;
   static std::unique_ptr<PGBackend> create(pg_t pgid,

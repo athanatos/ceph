@@ -6,16 +6,18 @@
 #include "crimson/net/Connection.h"
 #include "crimson/osd/osd_operation.h"
 #include "crimson/common/type_helpers.h"
+#include "crimson/osd/recovery_manager.h"
 
 class MOSDOp;
 
-namespace ceph::osd {
+namespace crimson::osd {
 class PG;
 class ShardServices;
 
 class BackgroundRecovery final : public OperationT<BackgroundRecovery> {
   ShardServices &ss;
-  PG &pg;
+  Ref<PG> pg;
+  epoch_t epoch_started;
   ceph::osd::scheduler::scheduler_class_t scheduler_class;
 
   auto get_scheduler_params() const {
@@ -33,7 +35,8 @@ public:
 
   BackgroundRecovery(
     ShardServices &ss,
-    PG &pg,
+    Ref<PG> pg,
+    epoch_t epoch_started,
     ceph::osd::scheduler::scheduler_class_t scheduler_class);
 
   void print(std::ostream &) const final;

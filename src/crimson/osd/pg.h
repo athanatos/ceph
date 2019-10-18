@@ -23,6 +23,7 @@
 #include "crimson/osd/osd_operations/client_request.h"
 #include "crimson/osd/osd_operations/peering_event.h"
 #include "crimson/osd/osd_operations/replicated_request.h"
+#include "crimson/osd/osd_operations/background_recovery.h"
 #include "crimson/osd/shard_services.h"
 #include "crimson/osd/osdmap_gate.h"
 
@@ -544,7 +545,12 @@ private:
 
   PeeringState peering_state;
   eversion_t projected_last_update;
+public:
+  bool has_reset_since(epoch_t epoch) const {
+    return peering_state.pg_has_reset_since(epoch);
+  }
 
+private:
   class WaitForActiveBlocker : public BlockerT<WaitForActiveBlocker> {
     PG *pg;
 
@@ -567,6 +573,27 @@ private:
   friend class PGAdvanceMap;
   friend class PeeringEvent;
   friend class RepRequest;
+
+  RecoveryManager recovery_manager;
+public:
+  void dump_recovery_state(Formatter *f) const {
+    recovery_manager.dump_recovery_state(f);
+  }
+  seastar::future<bool> start_recovery_ops(size_t max_to_start);
+private:
+  seastar::future<bool> find_unfound() {
+    return seastar::make_ready_future<bool>(true);
+  }
+
+  size_t start_primary_recovery_ops(
+    size_t max_to_start,
+    std::vector<seastar::future<>> *out);
+  size_t start_replica_recovery_ops(
+    size_t max_to_start,
+    std::vector<seastar::future<>> *out);
+  size_t start_backfill_ops(
+    size_t max_to_start,
+    std::vector<seastar::future<>> *out);
 };
 
 std::ostream& operator<<(std::ostream&, const PG& pg);

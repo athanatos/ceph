@@ -699,4 +699,41 @@ void PG::handle_rep_op_reply(crimson::net::Connection* conn,
   backend->got_rep_op_reply(m);
 }
 
+seastar::future<bool> PG::start_recovery_ops(size_t max_to_start)
+{
+  std::vector<seastar::future<>> started;
+  started.reserve(max_to_start);
+  max_to_start -= start_primary_recovery_ops(max_to_start, &started);
+  if (max_to_start > 0) {
+    max_to_start -= start_replica_recovery_ops(max_to_start, &started);
+  }
+  if (max_to_start > 0) {
+    max_to_start -= start_backfill_ops(max_to_start, &started);
+  }
+
+  // todo: build blocker for started
+  return seastar::make_ready_future<bool>(false);
+}
+
+size_t PG::start_primary_recovery_ops(
+  size_t max_to_start,
+  std::vector<seastar::future<>> *out)
+{
+  return 0;
+}
+
+size_t PG::start_replica_recovery_ops(
+  size_t max_to_start,
+  std::vector<seastar::future<>> *out)
+{
+  return 0;
+}
+
+size_t PG::start_backfill_ops(
+  size_t max_to_start,
+  std::vector<seastar::future<>> *out)
+{
+  return 0;
+}
+
 }

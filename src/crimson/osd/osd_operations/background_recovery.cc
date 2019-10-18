@@ -12,32 +12,41 @@
 
 namespace {
   seastar::logger& logger() {
-    return ceph::get_logger(ceph_subsys_osd);
+    return crimson::get_logger(ceph_subsys_osd);
   }
 }
 
-namespace ceph::osd {
+namespace crimson::osd {
 
 BackgroundRecovery::BackgroundRecovery(
   ShardServices &ss,
-  PG &pg,
+  Ref<PG> pg,
+  epoch_t epoch_started,
   ceph::osd::scheduler::scheduler_class_t scheduler_class)
-  : ss(ss), pg(pg), scheduler_class(scheduler_class)
+  : ss(ss), pg(pg), epoch_started(epoch_started),
+    scheduler_class(scheduler_class)
 {}
 
 seastar::future<bool> BackgroundRecovery::do_recovery()
 {
-  return seastar::make_ready_future<bool>(false);
+  if (pg->has_reset_since(epoch_started))
+    return seastar::make_ready_future<bool>(false);
+  return pg->start_recovery_ops(5 /* replace with config */);
 }
 
 void BackgroundRecovery::print(std::ostream &lhs) const
 {
-  lhs << "BackgroundRecovery(" << pg.get_pgid() << ")";
+  lhs << "BackgroundRecovery(" << pg->get_pgid() << ")";
 }
 
 void BackgroundRecovery::dump_detail(Formatter *f) const
 {
-  f->dump_stream("pgid") << pg.get_pgid();
+  f->dump_stream("pgid") << pg->get_pgid();
+  {
+    f->open_object_section("recovery_detail");
+    pg->dump_recovery_state(f);
+    f->close_section();
+  }
 }
 
 seastar::future<> BackgroundRecovery::start()
