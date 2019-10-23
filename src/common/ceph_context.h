@@ -25,6 +25,7 @@
 #include <typeinfo>
 #include <typeindex>
 
+#include "include/ceph_crimson_common.h"
 #include "include/any.h"
 
 #include "common/cmdparse.h"

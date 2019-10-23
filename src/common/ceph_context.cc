@@ -752,22 +752,14 @@ void CephContext::put() {
 void CephContext::init_crypto()
 {
   if (_crypto_inited++ == 0) {
-#ifdef WITH_ALIEN
-    ceph::alien::crypto::init();
-#else
-    ceph::crypto::init();
-#endif
+    TOPNSPC::crypto::init();
   }
 }
 
 void CephContext::shutdown_crypto()
 {
   if (--_crypto_inited == 0) {
-#ifdef WITH_ALIEN
-    ceph::alien::crypto::shutdown(g_code_env == CODE_ENVIRONMENT_LIBRARY);
-#else
-    ceph::crypto::shutdown(g_code_env == CODE_ENVIRONMENT_LIBRARY);
-#endif
+    TOPNSPC::crypto::shutdown(g_code_env == CODE_ENVIRONMENT_LIBRARY);
   }
 }
 

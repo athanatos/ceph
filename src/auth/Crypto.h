@@ -15,13 +15,12 @@
 #ifndef CEPH_AUTH_CRYPTO_H
 #define CEPH_AUTH_CRYPTO_H
 
+#include "include/ceph_crimson_common.h"
 #include "include/types.h"
 #include "include/utime.h"
 #include "include/buffer.h"
 
 #include <string>
-
-#include "crimson/os/with_alien.h"
 
 class CryptoKeyContext;
 namespace ceph { class Formatter; }

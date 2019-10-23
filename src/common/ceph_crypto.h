@@ -5,6 +5,7 @@
 #include "acconfig.h"
 #include <stdexcept>
 
+#include "include/ceph_crimson_common.h"
 #include "include/buffer.h"
 #include "include/types.h"
 
@@ -28,84 +29,57 @@ extern "C" {
   const EVP_MD *EVP_sha512(void);
 }
 
-namespace ceph {
-#ifdef WITH_ALIEN
-namespace alien{
-#endif
-  namespace crypto {
-    void assert_init();
-    void init();
-    void shutdown(bool shared=true);
-  }
-#ifdef WITH_ALIEN
-}
-#endif
-}
+namespace TOPNSPC::crypto {
+void assert_init();
+void init();
+void shutdown(bool shared=true);
 
-namespace ceph {
-#ifdef WITH_ALIEN
-namespace alien{
-#endif
+class DigestException : public std::runtime_error
+{
+public:
+  DigestException(const char* what_arg) : runtime_error(what_arg)
+  {}
+};
 
-  namespace crypto {
-    class DigestException : public std::runtime_error
-    {
-    public:
-      DigestException(const char* what_arg) : runtime_error(what_arg)
-	{}
-    };
+namespace ssl {
+class OpenSSLDigest {
+private:
+  EVP_MD_CTX *mpContext;
+  const EVP_MD *mpType;
+public:
+  OpenSSLDigest (const EVP_MD *_type);
+  ~OpenSSLDigest ();
+  void Restart();
+  void Update (const unsigned char *input, size_t length);
+  void Final (unsigned char *digest);
+};
 
-    namespace ssl {
-      class OpenSSLDigest {
-      private:
-	EVP_MD_CTX *mpContext;
-	const EVP_MD *mpType;
-      public:
-	OpenSSLDigest (const EVP_MD *_type);
-	~OpenSSLDigest ();
-	void Restart();
-	void Update (const unsigned char *input, size_t length);
-	void Final (unsigned char *digest);
-      };
+class MD5 : public OpenSSLDigest {
+public:
+  static constexpr size_t digest_size = CEPH_CRYPTO_MD5_DIGESTSIZE;
+  MD5 () : OpenSSLDigest(EVP_md5()) { }
+};
 
-      class MD5 : public OpenSSLDigest {
-      public:
-	static constexpr size_t digest_size = CEPH_CRYPTO_MD5_DIGESTSIZE;
-	MD5 () : OpenSSLDigest(EVP_md5()) { }
-      };
+class SHA1 : public OpenSSLDigest {
+public:
+  static constexpr size_t digest_size = CEPH_CRYPTO_SHA1_DIGESTSIZE;
+  SHA1 () : OpenSSLDigest(EVP_sha1()) { }
+};
 
-      class SHA1 : public OpenSSLDigest {
-      public:
-        static constexpr size_t digest_size = CEPH_CRYPTO_SHA1_DIGESTSIZE;
-        SHA1 () : OpenSSLDigest(EVP_sha1()) { }
-      };
+class SHA256 : public OpenSSLDigest {
+public:
+  static constexpr size_t digest_size = CEPH_CRYPTO_SHA256_DIGESTSIZE;
+  SHA256 () : OpenSSLDigest(EVP_sha256()) { }
+};
 
-      class SHA256 : public OpenSSLDigest {
-      public:
-        static constexpr size_t digest_size = CEPH_CRYPTO_SHA256_DIGESTSIZE;
-        SHA256 () : OpenSSLDigest(EVP_sha256()) { }
-      };
+class SHA512 : public OpenSSLDigest {
+public:
+  static constexpr size_t digest_size = CEPH_CRYPTO_SHA512_DIGESTSIZE;
+  SHA512 () : OpenSSLDigest(EVP_sha512()) { }
+};
 
-      class SHA512 : public OpenSSLDigest {
-      public:
-        static constexpr size_t digest_size = CEPH_CRYPTO_SHA512_DIGESTSIZE;
-        SHA512 () : OpenSSLDigest(EVP_sha512()) { }
-      };
-    }
-  }
-#ifdef WITH_ALIEN
-}
-#endif
-
-}
-
-#ifdef WITH_ALIEN
-namespace ceph:: alien::crypto::ssl {
-#else
-namespace ceph::crypto::ssl {
-#endif
 # if OPENSSL_VERSION_NUMBER < 0x10100000L
-  class HMAC {
+class HMAC {
   private:
     HMAC_CTX mContext;
     const EVP_MD *mpType;
@@ -146,88 +120,69 @@ namespace ceph::crypto::ssl {
     }
   };
 # else
-  class HMAC {
-  private:
-    HMAC_CTX *mpContext;
+class HMAC {
+private:
+  HMAC_CTX *mpContext;
+  
+public:
+  HMAC (const EVP_MD *type, const unsigned char *key, size_t length)
+    : mpContext(HMAC_CTX_new()) {
+    const auto r = HMAC_Init_ex(mpContext, key, length, type, nullptr);
+    if (r != 1) {
+      throw DigestException("HMAC_Init_ex() failed");
+    }
+  }
+  ~HMAC () {
+    HMAC_CTX_free(mpContext);
+  }
 
-  public:
-    HMAC (const EVP_MD *type, const unsigned char *key, size_t length)
-      : mpContext(HMAC_CTX_new()) {
-      const auto r = HMAC_Init_ex(mpContext, key, length, type, nullptr);
+  void Restart () {
+    const EVP_MD * const type = HMAC_CTX_get_md(mpContext);
+    const auto r = HMAC_Init_ex(mpContext, nullptr, 0, type, nullptr);
+    if (r != 1) {
+      throw DigestException("HMAC_Init_ex() failed");
+    }
+  }
+  void Update (const unsigned char *input, size_t length) {
+    if (length) {
+      const auto r = HMAC_Update(mpContext, input, length);
       if (r != 1) {
-	throw DigestException("HMAC_Init_ex() failed");
+	throw DigestException("HMAC_Update() failed");
       }
     }
-    ~HMAC () {
-      HMAC_CTX_free(mpContext);
+  }
+  void Final (unsigned char *digest) {
+    unsigned int s;
+    const auto r = HMAC_Final(mpContext, digest, &s);
+    if (r != 1) {
+      throw DigestException("HMAC_Final() failed");
     }
-
-    void Restart () {
-      const EVP_MD * const type = HMAC_CTX_get_md(mpContext);
-      const auto r = HMAC_Init_ex(mpContext, nullptr, 0, type, nullptr);
-      if (r != 1) {
-	throw DigestException("HMAC_Init_ex() failed");
-      }
-    }
-    void Update (const unsigned char *input, size_t length) {
-      if (length) {
-        const auto r = HMAC_Update(mpContext, input, length);
-	if (r != 1) {
-	  throw DigestException("HMAC_Update() failed");
-	}
-      }
-    }
-    void Final (unsigned char *digest) {
-      unsigned int s;
-      const auto r = HMAC_Final(mpContext, digest, &s);
-      if (r != 1) {
-	throw DigestException("HMAC_Final() failed");
-      }
-    }
-  };
+  }
+};
 # endif // OPENSSL_VERSION_NUMBER < 0x10100000L
 
-  struct HMACSHA1 : public HMAC {
-    HMACSHA1 (const unsigned char *key, size_t length)
-      : HMAC(EVP_sha1(), key, length) {
-    }
-  };
-
-  struct HMACSHA256 : public HMAC {
-    HMACSHA256 (const unsigned char *key, size_t length)
-      : HMAC(EVP_sha256(), key, length) {
-    }
-  };
-}
-
-
-namespace ceph {
-#ifdef WITH_ALIEN
-namespace alien{
-  namespace crypto {
-    using ceph::alien::crypto::ssl::SHA256;
-    using ceph::alien::crypto::ssl::MD5;
-    using ceph::alien::crypto::ssl::SHA1;
-    using ceph::alien::crypto::ssl::SHA512;
-
-    using ceph::alien::crypto::ssl::HMACSHA256;
-    using ceph::alien::crypto::ssl::HMACSHA1;
+struct HMACSHA1 : public HMAC {
+  HMACSHA1 (const unsigned char *key, size_t length)
+    : HMAC(EVP_sha1(), key, length) {
   }
-}
-#else
-  namespace crypto {
-    using ceph::crypto::ssl::SHA256;
-    using ceph::crypto::ssl::MD5;
-    using ceph::crypto::ssl::SHA1;
-    using ceph::crypto::ssl::SHA512;
+};
 
-    using ceph::crypto::ssl::HMACSHA256;
-    using ceph::crypto::ssl::HMACSHA1;
+struct HMACSHA256 : public HMAC {
+  HMACSHA256 (const unsigned char *key, size_t length)
+    : HMAC(EVP_sha256(), key, length) {
   }
-#endif
+};
+
 }
 
-namespace ceph::crypto {
+using ssl::SHA256;
+using ssl::MD5;
+using ssl::SHA1;
+using ssl::SHA512;
+
+using ssl::HMACSHA256;
+using ssl::HMACSHA1;
+
 template<class Digest>
 auto digest(const ceph::buffer::list& bl)
 {
@@ -239,6 +194,7 @@ auto digest(const ceph::buffer::list& bl)
   gen.Final(fingerprint);
   return sha_digest_t<Digest::digest_size>{fingerprint};
 }
+
 }
 
 #endif
