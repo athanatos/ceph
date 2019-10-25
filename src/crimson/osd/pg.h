@@ -579,7 +579,7 @@ public:
   void dump_recovery_state(Formatter *f) const {
     recovery_manager.dump_recovery_state(f);
   }
-  seastar::future<bool> start_recovery_ops(size_t max_to_start);
+  crimson::osd::blocking_future<bool> start_recovery_ops(size_t max_to_start);
 private:
   seastar::future<bool> find_unfound() {
     return seastar::make_ready_future<bool>(true);
@@ -587,13 +587,13 @@ private:
 
   size_t start_primary_recovery_ops(
     size_t max_to_start,
-    std::vector<seastar::future<>> *out);
+    std::vector<crimson::osd::blocking_future<>> *out);
   size_t start_replica_recovery_ops(
     size_t max_to_start,
-    std::vector<seastar::future<>> *out);
+    std::vector<crimson::osd::blocking_future<>> *out);
   size_t start_backfill_ops(
     size_t max_to_start,
-    std::vector<seastar::future<>> *out);
+    std::vector<crimson::osd::blocking_future<>> *out);
 };
 
 std::ostream& operator<<(std::ostream&, const PG& pg);

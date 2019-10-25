@@ -31,7 +31,8 @@ seastar::future<bool> BackgroundRecovery::do_recovery()
 {
   if (pg->has_reset_since(epoch_started))
     return seastar::make_ready_future<bool>(false);
-  return pg->start_recovery_ops(5 /* replace with config */);
+  return with_blocking_future(
+    pg->start_recovery_ops(5 /* replace with config */));
 }
 
 void BackgroundRecovery::print(std::ostream &lhs) const

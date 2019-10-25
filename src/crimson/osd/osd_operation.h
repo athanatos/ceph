@@ -71,6 +71,20 @@ class blocking_future {
 
   template <typename... V, typename... U>
   friend blocking_future<V...> make_ready_blocking_future(U&&... args);
+
+  template <typename U>
+  friend blocking_future<> join_blocking_futures(U &&u);
+
+  template <typename... U>
+  friend class blocking_future;
+
+public:
+  template <typename F>
+  auto then(F &&f) && {
+    return blocking_future<decltype(f(std::declval<T>()...))>(
+      blocker,
+      std::move(fut).then(std::forward<F>(f)));
+  }
 };
 
 template <typename... V, typename... U>
@@ -110,6 +124,36 @@ public:
 
   virtual ~BlockerT() = default;
 };
+
+class AggregateBlocker : public BlockerT<AggregateBlocker> {
+  vector<Blocker*> parent_blockers;
+protected:
+  void dump_detail(ceph::Formatter *f) const final;
+public:
+  AggregateBlocker(vector<Blocker*> &&parent_blockers)
+    : parent_blockers(std::move(parent_blockers)) {}
+  static constexpr const char *type_name = "AggregateBlocker";
+};
+
+template <typename T>
+blocking_future<> join_blocking_futures(T &&t) {
+  vector<Blocker*> blockers;
+  blockers.reserve(t.size());
+  for (auto &&bf: t) {
+    blockers.push_back(bf.blocker);
+    bf.blocker = nullptr;
+  }
+  auto agg = std::make_unique<AggregateBlocker>(std::move(blockers));
+  return agg->make_blocking_future(
+    seastar::parallel_for_each(
+      std::forward<T>(t),
+      [](auto &&bf) {
+	return std::move(bf.fut);
+      }).then([agg=std::move(agg)] {
+	return seastar::now();
+      }));
+}
+
 
 /**
  * Common base for all crimson-osd operations.  Mainly provides
