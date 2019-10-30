@@ -20,7 +20,7 @@
 #include "crimson/osd/scheduler/mclock_scheduler.h"
 #include "common/WeightedPriorityQueue.h"
 
-namespace ceph::osd::scheduler {
+namespace crimson::osd::scheduler {
 
 std::ostream &operator<<(std::ostream &lhs, const scheduler_class_t &c)
 {

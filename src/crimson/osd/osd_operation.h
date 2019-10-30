@@ -81,7 +81,8 @@ class blocking_future {
 public:
   template <typename F>
   auto then(F &&f) && {
-    return blocking_future<decltype(f(std::declval<T>()...))>(
+    using futurator = seastar::futurize<std::result_of_t<F(T&&...)>>;
+    return blocking_future<futurator::value_type>(
       blocker,
       std::move(fut).then(std::forward<F>(f)));
   }
@@ -278,7 +279,7 @@ public:
  * concurrently active.
  */
 class OperationThrottler : public Blocker, md_config_obs_t {
-  ceph::osd::scheduler::SchedulerRef scheduler;
+  crimson::osd::scheduler::SchedulerRef scheduler;
 
   uint64_t max_in_progress = 0;
   uint64_t in_progress = 0;
@@ -288,7 +289,7 @@ class OperationThrottler : public Blocker, md_config_obs_t {
   void wake();
 
   blocking_future<> acquire_throttle(
-    ceph::osd::scheduler::params_t params);
+    crimson::osd::scheduler::params_t params);
 
   void release_throttle();
 protected:
@@ -308,7 +309,7 @@ public:
   template <typename F>
   auto with_throttle(
     OperationRef op,
-    ceph::osd::scheduler::params_t params,
+    crimson::osd::scheduler::params_t params,
     F &&f) {
     if (!max_in_progress) return f();
     auto fut = acquire_throttle(params);
@@ -323,7 +324,7 @@ public:
   template <typename F>
   seastar::future<> with_throttle_while(
     OperationRef op,
-    ceph::osd::scheduler::params_t params,
+    crimson::osd::scheduler::params_t params,
     F &&f) {
     return with_throttle(op, params, f).then([this, params, op, f](bool cont) {
       if (cont)

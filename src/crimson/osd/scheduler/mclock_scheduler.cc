@@ -28,7 +28,7 @@ using namespace std::placeholders;
 #define dout_prefix *_dout
 
 
-namespace ceph::osd::scheduler {
+namespace crimson::osd::scheduler {
 
 mClockScheduler::mClockScheduler(ConfigProxy &conf) :
   scheduler(

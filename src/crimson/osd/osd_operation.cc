@@ -63,7 +63,7 @@ void AggregateBlocker::dump_detail(ceph::Formatter *f) const
 }
 
 OperationThrottler::OperationThrottler(ConfigProxy &conf)
-  : scheduler(ceph::osd::scheduler::make_scheduler(conf))
+  : scheduler(crimson::osd::scheduler::make_scheduler(conf))
 {
   conf.add_observer(this);
   update_from_config(conf);
@@ -88,9 +88,9 @@ void OperationThrottler::release_throttle()
 }
 
 blocking_future<> OperationThrottler::acquire_throttle(
-  ceph::osd::scheduler::params_t params)
+  crimson::osd::scheduler::params_t params)
 {
-  ceph::osd::scheduler::item_t item{params, seastar::promise<>()};
+  crimson::osd::scheduler::item_t item{params, seastar::promise<>()};
   auto fut = item.wake.get_future();
   scheduler->enqueue(std::move(item));
   return make_blocking_future(std::move(fut));

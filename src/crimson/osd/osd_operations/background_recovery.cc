@@ -19,11 +19,11 @@ namespace {
 namespace crimson::osd {
 
 BackgroundRecovery::BackgroundRecovery(
-  ShardServices &ss,
   Ref<PG> pg,
+  ShardServices &ss,
   epoch_t epoch_started,
-  ceph::osd::scheduler::scheduler_class_t scheduler_class)
-  : ss(ss), pg(pg), epoch_started(epoch_started),
+  crimson::osd::scheduler::scheduler_class_t scheduler_class)
+  : pg(pg), ss(ss), epoch_started(epoch_started),
     scheduler_class(scheduler_class)
 {}
 

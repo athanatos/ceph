@@ -19,7 +19,7 @@
 
 #include "crimson/common/config_proxy.h"
 
-namespace ceph::osd::scheduler {
+namespace crimson::osd::scheduler {
 
 enum class scheduler_class_t : uint8_t {
   background_best_effort = 0,

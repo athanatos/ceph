@@ -347,15 +347,25 @@ public:
     return 0;
   }
 
+  void start_background_recovery(
+    crimson::osd::scheduler::scheduler_class_t klass) {
+    shard_services.start_operation<BackgroundRecovery>(
+      this,
+      shard_services,
+      get_osdmap_epoch(),
+      klass);
+  }
 
   void on_backfill_reserved() final {
-    ceph_assert(0 == "Not implemented");
+    start_background_recovery(
+      crimson::osd::scheduler::scheduler_class_t::background_best_effort);
   }
   void on_backfill_canceled() final {
     ceph_assert(0 == "Not implemented");
   }
   void on_recovery_reserved() final {
-    ceph_assert(0 == "Not implemented");
+    start_background_recovery(
+      crimson::osd::scheduler::scheduler_class_t::background_recovery);
   }
 
 
@@ -432,6 +442,15 @@ public:
   // Utility
   bool is_primary() const {
     return peering_state.is_primary();
+  }
+  bool is_peered() const {
+    return peering_state.is_peered();
+  }
+  bool is_recovering() const {
+    return peering_state.is_recovering();
+  }
+  bool is_backfilling() const {
+    return peering_state.is_backfilling();
   }
   pg_stat_t get_stats() {
     auto stats = peering_state.prepare_stats_for_publish(

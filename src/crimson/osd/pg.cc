@@ -701,6 +701,18 @@ void PG::handle_rep_op_reply(crimson::net::Connection* conn,
 
 crimson::osd::blocking_future<bool> PG::start_recovery_ops(size_t max_to_start)
 {
+  ceph_assert(is_primary());
+  ceph_assert(is_peered());
+  ceph_assert(!peering_state.is_deleting());
+
+  if (!peering_state.state_test(PG_STATE_RECOVERING) &&
+      !peering_state.state_test(PG_STATE_BACKFILLING)) {
+    return crimson::osd::make_ready_blocking_future<bool>(false);
+  }
+
+  const auto &missing = peering_state.get_pg_log().get_missing();
+
+
   std::vector<crimson::osd::blocking_future<>> started;
   started.reserve(max_to_start);
   max_to_start -= start_primary_recovery_ops(max_to_start, &started);
@@ -712,7 +724,7 @@ crimson::osd::blocking_future<bool> PG::start_recovery_ops(size_t max_to_start)
   }
 
   return crimson::osd::join_blocking_futures(std::move(started)).then([this] {
-    return false;
+    return seastar::make_ready_future<bool>(false);
   });
 }
 
@@ -720,6 +732,10 @@ size_t PG::start_primary_recovery_ops(
   size_t max_to_start,
   std::vector<crimson::osd::blocking_future<>> *out)
 {
+  if (!peering_state.have_missing()) {
+    peering_state.local_recovery_complete();
+    return 0;
+  }
   return 0;
 }
 

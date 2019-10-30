@@ -29,7 +29,7 @@
 #include "common/ceph_context.h"
 
 
-namespace ceph::osd::scheduler {
+namespace crimson::osd::scheduler {
 
 using client_id_t = uint64_t;
 using profile_id_t = uint64_t;
