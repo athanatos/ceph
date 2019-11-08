@@ -705,8 +705,7 @@ crimson::osd::blocking_future<bool> PG::start_recovery_ops(size_t max_to_start)
   ceph_assert(is_peered());
   ceph_assert(!peering_state.is_deleting());
 
-  if (!peering_state.state_test(PG_STATE_RECOVERING) &&
-      !peering_state.state_test(PG_STATE_BACKFILLING)) {
+  if (!is_recovering() && !is_backfilling()) {
     return crimson::osd::make_ready_blocking_future<bool>(false);
   }
 
@@ -723,8 +722,9 @@ crimson::osd::blocking_future<bool> PG::start_recovery_ops(size_t max_to_start)
     max_to_start -= start_backfill_ops(max_to_start, &started);
   }
 
-  return crimson::osd::join_blocking_futures(std::move(started)).then([this] {
-    return seastar::make_ready_future<bool>(false);
+  bool done = max_to_start == 0;
+  return crimson::osd::join_blocking_futures(std::move(started)).then([this, done] {
+    return seastar::make_ready_future<bool>(done);
   });
 }
 
@@ -732,17 +732,99 @@ size_t PG::start_primary_recovery_ops(
   size_t max_to_start,
   std::vector<crimson::osd::blocking_future<>> *out)
 {
+  if (!is_recovering()) {
+    return 0;
+  }
+
   if (!peering_state.have_missing()) {
     peering_state.local_recovery_complete();
     return 0;
   }
-  return 0;
+
+  const auto &missing = peering_state.get_pg_log().get_missing();
+
+  logger().info(
+    "{} recovering {} in pg {}, missing {}",
+    __func__, 
+    recovering.size(),
+    *this,
+    missing);
+
+  // look at log!
+  pg_log_entry_t *latest = 0;
+  unsigned started = 0;
+  int skipped = 0;
+
+  //PGBackend::RecoveryHandle *h = pgbackend->open_recovery_op();
+  map<version_t, hobject_t>::const_iterator p =
+    missing.get_rmissing().lower_bound(peering_state.get_pg_log().get_log().last_requested);
+  while (p != missing.get_rmissing().end()) {
+    // TODO: chain futures here to enable yielding to scheduler?
+    hobject_t soid;
+    version_t v = p->first;
+
+    auto it_objects = peering_state.get_pg_log().get_log().objects.find(p->second);
+    if (it_objects != peering_state.get_pg_log().get_log().objects.end()) {
+      latest = it_objects->second;
+      ceph_assert(latest->is_update() || latest->is_delete());
+      soid = latest->soid;
+    } else {
+      latest = 0;
+      soid = p->second;
+    }
+    const pg_missing_item& item = missing.get_items().find(p->second)->second;
+    ++p;
+
+    hobject_t head = soid.get_head();
+
+    logger().info(
+      "{} {} item.need {} {} {} {} {}",
+      __func__,
+      soid,
+      item.need,
+      missing.is_missing(soid) ? " (missing)":"",
+      missing.is_missing(head) ? " (missing head)":"",
+      recovering.count(soid) ? " (recovering)":"",
+      recovering.count(head) ? " (recovering head)":"");
+
+    // TODO: handle lost/unfound
+    if (!recovering.count(soid)) {
+      if (recovering.count(head)) {
+	++skipped;
+      } else {
+/*
+	auto futopt = recover_missing(soid, need);
+	if (futopt) {
+	  out->push_back(std::move(*futopt));
+	  ++started;
+	} else {
+	  ++skipped;
+	}
+	*/
+      }
+    }
+
+    if (!skipped)
+      peering_state.set_last_requested(v);
+  }
+
+  logger().info(
+    "{} started {} skipped {}",
+    __func__,
+    started,
+    skipped);
+
+  return started;
 }
 
 size_t PG::start_replica_recovery_ops(
   size_t max_to_start,
   std::vector<crimson::osd::blocking_future<>> *out)
 {
+  if (!is_recovering()) {
+    return 0;
+  }
+
   return 0;
 }
 
@@ -750,6 +832,9 @@ size_t PG::start_backfill_ops(
   size_t max_to_start,
   std::vector<crimson::osd::blocking_future<>> *out)
 {
+  if (!is_backfilling()) {
+    return 0;
+  }
   return 0;
 }
 

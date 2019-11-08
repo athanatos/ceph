@@ -604,6 +604,8 @@ private:
     return seastar::make_ready_future<bool>(true);
   }
 
+  std::set<hobject_t> recovering;
+
   size_t start_primary_recovery_ops(
     size_t max_to_start,
     std::vector<crimson::osd::blocking_future<>> *out);
