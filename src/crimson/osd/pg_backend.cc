@@ -88,6 +88,9 @@ PGBackend::load_object_state(const hobject_t& oid)
 seastar::future<std::optional<SnapSet>>
 PGBackend::load_snapset(const hobject_t &oid)
 {
+  return seastar::make_ready_future<std::optional<SnapSet>>(
+    std::nullopt);
+#if 0
   return store->get_attr(
     coll,
     ghobject_t{oid, ghobject_t::NO_GEN, shard},
@@ -114,6 +117,7 @@ PGBackend::load_snapset(const hobject_t &oid)
 	    SnapSet(bl));
 	}
       });
+#endif
 }
 
 seastar::future<crimson::osd::acked_peers_t>
