@@ -592,6 +592,10 @@ seastar::future<crimson::osd::SnapSetContextRef>
 PG::get_ssc(const hobject_t &oid)
 {
   using SnapSetContextRef = crimson::osd::SnapSetContextRef;
+  auto ssc = SnapSetContextRef(new SnapSetContext(oid));
+  ssc->set_snapset(SnapSet());
+  return seastar::make_ready_future<SnapSetContextRef>(ssc);
+#if 0
   auto [ssc, existed] = shard_services.obc_registry.get_cached_ssc(oid);
   if (existed) {
     ceph_assert(ssc->loaded);
@@ -607,6 +611,7 @@ PG::get_ssc(const hobject_t &oid)
       return seastar::make_ready_future<SnapSetContextRef>(std::move(ssc));
     });
   }
+#endif
 }
 
 seastar::future<std::pair<crimson::osd::ObjectContextRef, bool>>
