@@ -156,7 +156,6 @@ public:
 template <typename Config>
 void intrusive_ptr_add_ref(intrusive_lru_base<Config> *p) {
   if (!p) return;
-  ceph_assert(p->lru);
   p->use_count++;
 }
 
@@ -166,7 +165,11 @@ void intrusive_ptr_release(intrusive_lru_base<Config> *p) {
   ceph_assert(p->use_count > 0);
   --p->use_count;
   if (p->use_count == 0) {
-    p->lru->unreferenced(*p);
+    if (p->lru) {
+      p->lru->unreferenced(*p);
+    } else {
+      delete p;
+    }
   }
 }
 
