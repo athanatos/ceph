@@ -74,7 +74,8 @@ void OpInfo::set_returnvec() { set_rmw_flags(CEPH_OSD_RMW_FLAG_RETURNVEC); }
 
 int OpInfo::set_from_op(
   const MOSDOp *m,
-  const OSDMap &osdmap)
+  const OSDMap &osdmap,
+  bool assume_simple)
 {
   vector<OSDOp>::const_iterator iter;
 
@@ -106,6 +107,9 @@ int OpInfo::set_from_op(
     }
     if (ceph_osd_op_mode_read(iter->op.op))
       set_read();
+
+    if (assume_simple)
+      continue;
 
     // set READ flag if there are src_oids
     if (iter->soid.oid.name.length())

@@ -106,7 +106,7 @@ seastar::future<> ClientRequest::process_op(
   return with_blocking_future(
     handle.enter(pp(pg).get_obc)
   ).then([this, &pg]() {
-    op_info.set_from_op(&*m, *pg.get_osdmap());
+    op_info.set_from_op(&*m, *pg.get_osdmap(), true);
     return pg.with_locked_obc(
       m,
       op_info,

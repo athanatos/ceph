@@ -86,7 +86,8 @@ public:
 
   int set_from_op(
     const MOSDOp *m,
-    const OSDMap &osdmap);
+    const OSDMap &osdmap,
+    bool assume_simple=false);
 
   std::vector<ClassInfo> get_classes() const {
     return classes;
