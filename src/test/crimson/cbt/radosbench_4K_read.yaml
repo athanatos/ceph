@@ -11,7 +11,7 @@ tasks:
         concurrent_procs: 2
         op_size: [4096]
         pool_profile: 'replicated'
-        read_time: 30
+        read_time: 60
         read_only: true
         readmode: 'rand'
         prefill_time: 3
@@ -24,7 +24,8 @@ tasks:
       perf:
         nodes:
           - osds
-        args: 'stat -p {pid} -o {perf_dir}/perf_stat.{pid}'
+        #args: 'stat -p {pid} -o {perf_dir}/perf_stat.{pid}'
+        args: 'record --call-graph -g -p {pid} -o {perf_dir}/perf_data.{pid}'
     cluster:
       osds_per_node: 3
       iterations: 1

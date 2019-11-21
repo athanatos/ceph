@@ -115,6 +115,7 @@ for config_file in $config_files; do
     rm -f $cbt_config
 done
 
+exit 0
 if ! $use_existing; then
     cd $build_dir
     if $classical; then
