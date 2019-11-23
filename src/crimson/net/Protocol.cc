@@ -49,7 +49,6 @@ seastar::future<> Protocol::close()
 
   // unregister_conn() drops a reference, so hold another until completion
   auto cleanup = [conn_ref = conn.shared_from_this(), this] {
-      logger().debug("{} closed!", conn);
     };
 
   trigger_close();
