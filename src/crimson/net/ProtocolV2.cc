@@ -467,9 +467,13 @@ void ProtocolV2::dispatch_reset()
   (void) seastar::with_gate(pending_dispatch, [this] {
     return dispatcher.ms_handle_reset(
         seastar::static_pointer_cast<SocketConnection>(conn.shared_from_this()));
-  }).handle_exception([this] (std::exception_ptr eptr) {
-    logger().error("{} ms_handle_reset caught exception: {}", conn, eptr);
-    ceph_abort("unexpected exception from ms_handle_reset()");
+  }).handle_exception_type(
+    [this] (seastar::broken_promise eptr) {
+      logger().error("ms_handle_reset caught broken promise: {}", eptr);
+  }).handle_exception(
+    [this] (std::exception_ptr eptr) {
+      logger().error("ms_handle_reset caught exception: {}", eptr);
+      ceph_abort("unexpected exception from ms_handle_reset()");
   });
 }
 
