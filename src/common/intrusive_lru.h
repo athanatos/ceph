@@ -6,11 +6,14 @@
 #include <boost/intrusive_ptr.hpp>
 #include <boost/intrusive/set.hpp>
 #include <boost/intrusive/list.hpp>
-#include <boost/smart_ptr/intrusive_ref_counter.hpp>
-
-#include "include/ceph_assert.h"
 
 namespace ceph::common {
+
+/**
+ * intrusive_lru: lru implementation with embedded map and list hook
+ *
+ * Note, this implementation currently is entirely thread-unsafe.
+ */
 
 template <typename K, typename V, typename VToK>
 struct intrusive_lru_config {
@@ -93,7 +96,7 @@ class intrusive_lru {
     while (!unreferenced_list.empty() &&
 	   lru_set.size() > lru_target_size) {
       auto &b = unreferenced_list.front();
-      ceph_assert(!b.lru);
+      assert(!b.lru);
       unreferenced_list.pop_front();
       lru_set.erase_and_dispose(
 	lru_set_t::s_iterator_to(b),
@@ -155,14 +158,14 @@ public:
 
 template <typename Config>
 void intrusive_ptr_add_ref(intrusive_lru_base<Config> *p) {
-  if (!p) return;
+  assert(p);
   ceph_assert(p->lru);
   p->use_count++;
 }
 
 template <typename Config>
 void intrusive_ptr_release(intrusive_lru_base<Config> *p) {
-  if (!p) return;
+  assert(p);
   ceph_assert(p->use_count > 0);
   --p->use_count;
   if (p->use_count == 0) {
