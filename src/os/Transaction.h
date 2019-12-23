@@ -738,7 +738,11 @@ public:
       return colls[cid_id];
     }
     uint32_t get_fadvise_flags() const {
-	return t->get_fadvise_flags();
+      return t->get_fadvise_flags();
+    }
+
+    const vector<ghobject_t> &get_objects() const {
+      return objects;
     }
   };
 
