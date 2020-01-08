@@ -7,6 +7,7 @@
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
 #include <seastar/core/future.hh>
 
+#include "include/buffer_fwd.h"
 #include "crimson/osd/exceptions.h"
 
 namespace crimson::os::seastore {
@@ -59,22 +60,34 @@ public:
   using open_ertr = crimson::errorator<
     crimson::ct_error::input_output_error,
     crimson::ct_error::enoent>;
-  virtual open_ertr::future<Segment> open(segment_id_t id) = 0;
-
-  using read_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error,
-    crimson::ct_error::enoent,
-    crimson::ct_error::erange>;
-  virtual read_ertr::future<bufferlist> read(segment_id_t id, segment_off_t offset, size_t len) = 0;
+  virtual open_ertr::future<SegmentRef> open(segment_id_t id) = 0;
 
   using release_ertr = crimson::errorator<
     crimson::ct_error::input_output_error,
     crimson::ct_error::enoent>;
   virtual release_ertr::future<> release(segment_id_t id) = 0;
 
-  /* Methods for discovering device geometry, segmentid set, etc */
+  using read_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error,
+    crimson::ct_error::enoent,
+    crimson::ct_error::erange>;
+  virtual read_ertr::future<ceph::bufferlist> read(
+    segment_id_t id, segment_off_t offset, size_t len) = 0;
 
+  /* Methods for discovering device geometry, segmentid set, etc */
   virtual ~SegmentManager() {}
 };
+using SegmentManagerRef = std::unique_ptr<SegmentManager>;
+
+namespace segment_manager {
+
+struct ephemeral_config_t {
+  size_t size;
+  size_t block_size;
+  size_t segment_size;
+};
+SegmentManagerRef create_ephemeral(ephemeral_config_t config);
+
+}
 
 };
