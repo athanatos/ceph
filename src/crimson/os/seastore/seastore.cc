@@ -15,6 +15,8 @@
 
 #include "crimson/os/futurized_collection.h"
 
+#include "crimson/os/seastore/segment_manager.h"
+
 namespace {
   seastar::logger& logger() {
     return crimson::get_logger(ceph_subsys_filestore);

@@ -840,6 +840,8 @@ namespace ct_error {
   using permission_denied = ct_error_code<std::errc::permission_denied>;
   using operation_not_supported =
     ct_error_code<std::errc::operation_not_supported>;
+  using erange =
+    ct_error_code<std::errc::result_out_of_range>;
 }
 
 using stateful_errc = stateful_error_t<std::errc>;
