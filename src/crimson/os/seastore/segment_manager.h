@@ -23,11 +23,24 @@ class Segment : public boost::intrusive_ref_counter<
   boost::thread_unsafe_counter>{
 public:
 
+  /**
+   * close
+   *
+   * Closes segment for writes.
+   */
   using close_ertr = crimson::errorator<
     crimson::ct_error::input_output_error,
     crimson::ct_error::enoent>;
   virtual close_ertr::future<> close() = 0;
 
+
+  /**
+   * write
+   *
+   * @param offset offset of write, must be aligned to <> and >= write pointer, advances
+   *               write pointer
+   * @param bl     buffer to write, will be padded if not aligned
+  */
   using write_ertr = crimson::errorator<
     crimson::ct_error::input_output_error, // media error or corruption
     crimson::ct_error::invarg,             // if offset is < write pointer or misaligned
