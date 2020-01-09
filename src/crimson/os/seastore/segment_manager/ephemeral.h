@@ -33,9 +33,28 @@ class EphemeralSegmentManager final : public SegmentManager {
 
   const ephemeral_config_t config;
 
+  size_t get_num_segments() const {
+    return config.size / config.segment_size;
+  }
+
+  size_t get_offset(paddr_t addr) {
+    return (addr.segment * config.segment_size) + addr.offset;
+  }
+
+  enum class segment_state_t {
+    EMPTY,
+    OPEN,
+    CLOSED 
+  };
+  std::vector<segment_state_t> segment_state;
+
   char *buffer = nullptr;
   
-  Segment::close_ertr::future<> close_segment(segment_id_t id);
+  Segment::close_ertr::future<> segment_write(
+    segment_id_t id,
+    segment_off_t offset,
+    ceph::bufferlist bl);
+  Segment::close_ertr::future<> segment_close(segment_id_t id);
 public:
   EphemeralSegmentManager(ephemeral_config_t config);
 

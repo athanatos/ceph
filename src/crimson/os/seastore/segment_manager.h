@@ -62,16 +62,19 @@ class SegmentManager {
 public:
   using open_ertr = crimson::errorator<
     crimson::ct_error::input_output_error,
+    crimson::ct_error::invarg,
     crimson::ct_error::enoent>;
   virtual open_ertr::future<SegmentRef> open(segment_id_t id) = 0;
 
   using release_ertr = crimson::errorator<
     crimson::ct_error::input_output_error,
+    crimson::ct_error::invarg,
     crimson::ct_error::enoent>;
   virtual release_ertr::future<> release(segment_id_t id) = 0;
 
   using read_ertr = crimson::errorator<
     crimson::ct_error::input_output_error,
+    crimson::ct_error::invarg,
     crimson::ct_error::enoent,
     crimson::ct_error::erange>;
   virtual read_ertr::future<ceph::bufferlist> read(

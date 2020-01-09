@@ -22,23 +22,36 @@ EphemeralSegment::EphemeralSegment(
 
 Segment::close_ertr::future<> EphemeralSegment::close()
 {
-  manager.close_segment(id);
+  manager.segment_close(id);
   return close_ertr::now();
 }
 
 Segment::write_ertr::future<> EphemeralSegment::write(
   segment_off_t offset, ceph::bufferlist bl)
 {
+  if (offset < write_pointer || offset % manager.config.block_size != 0)
+    return crimson::ct_error::invarg::make();
+
   if (offset + bl.length() >= manager.config.segment_size)
     return crimson::ct_error::enospc::make();
+  
   return write_ertr::now();
 }
 
 EphemeralSegmentManager::EphemeralSegmentManager(ephemeral_config_t config)
   : config(config) {}
 
-Segment::close_ertr::future<> EphemeralSegmentManager::close_segment(segment_id_t id)
+Segment::close_ertr::future<> EphemeralSegmentManager::segment_close(segment_id_t id)
 {
+  return Segment::close_ertr::now();
+}
+
+Segment::close_ertr::future<> segment_write(
+  segment_id_t id,
+  segment_off_t offset,
+  ceph::bufferlist bl)
+{
+  
   return Segment::close_ertr::now();
 }
 
@@ -65,6 +78,8 @@ EphemeralSegmentManager::init_ertr::future<> EphemeralSegmentManager::init()
     -1,
     0);
 
+  segment_state.resize(config.size / config.segment_size, segment_state_t::EMPTY);
+
   if (addr == MAP_FAILED)
     return crimson::ct_error::enospc::make();
 
@@ -75,19 +90,41 @@ EphemeralSegmentManager::init_ertr::future<> EphemeralSegmentManager::init()
 SegmentManager::open_ertr::future<SegmentRef> EphemeralSegmentManager::open(
   segment_id_t id)
 {
-  return open_ertr::make_ready_future<SegmentRef>();
+  if (id >= get_num_segments())
+    return crimson::ct_error::invarg::make();
+
+  if (segment_state[id] != segment_state_t::EMPTY)
+    return crimson::ct_error::invarg::make();
+
+  segment_state[id] = segment_state_t::OPEN;
+  return open_ertr::make_ready_future<SegmentRef>(new EphemeralSegment(*this, id));
 }
 
 SegmentManager::release_ertr::future<> EphemeralSegmentManager::release(
   segment_id_t id)
 {
+  if (id >= get_num_segments())
+    return crimson::ct_error::invarg::make();
+
+  if (segment_state[id] != segment_state_t::CLOSED)
+    return crimson::ct_error::invarg::make();
+
   return release_ertr::now();
 }
 
 SegmentManager::read_ertr::future<ceph::bufferlist> EphemeralSegmentManager::read(
   paddr_t addr, size_t len)
 {
-  return read_ertr::make_ready_future<ceph::bufferlist>();
+  if (addr.segment >= get_num_segments())
+    return crimson::ct_error::invarg::make();
+
+  if (addr.offset + len >= config.segment_size)
+    return crimson::ct_error::invarg::make();
+
+  ceph::bufferptr ptr(buffer + get_offset(addr), len);
+  ceph::bufferlist bl;
+  bl.append(ptr);
+  return read_ertr::make_ready_future<ceph::bufferlist>(std::move(bl));
 }
 
 }
