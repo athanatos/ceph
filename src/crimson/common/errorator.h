@@ -844,6 +844,8 @@ namespace ct_error {
     ct_error_code<std::errc::result_out_of_range>;
   using ebadf =
     ct_error_code<std::errc::bad_file_descriptor>;
+  using enospc =
+    ct_error_code<std::errc::no_space_on_device>;
 }
 
 using stateful_errc = stateful_error_t<std::errc>;

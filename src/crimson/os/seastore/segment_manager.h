@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <iostream>
+
 #include <boost/intrusive_ptr.hpp>
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
 #include <seastar/core/future.hh>
@@ -86,6 +88,7 @@ struct ephemeral_config_t {
   size_t block_size;
   size_t segment_size;
 };
+std::ostream &operator<<(std::ostream &, const ephemeral_config_t &);
 SegmentManagerRef create_ephemeral(ephemeral_config_t config);
 
 }
