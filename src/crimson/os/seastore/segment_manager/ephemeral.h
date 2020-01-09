@@ -50,7 +50,7 @@ class EphemeralSegmentManager final : public SegmentManager {
 
   char *buffer = nullptr;
   
-  Segment::close_ertr::future<> segment_write(
+  Segment::write_ertr::future<> segment_write(
     paddr_t addr,
     ceph::bufferlist bl);
   Segment::close_ertr::future<> segment_close(segment_id_t id);
