@@ -47,7 +47,8 @@ public:
   using write_ertr = crimson::errorator<
     crimson::ct_error::input_output_error, // media error or corruption
     crimson::ct_error::invarg,             // if offset is < write pointer or misaligned
-    crimson::ct_error::ebadf               // segment closed
+    crimson::ct_error::ebadf,              // segment closed
+    crimson::ct_error::enospc              // write exceeds segment size
     >;
   virtual write_ertr::future<> write(segment_off_t offset, ceph::bufferlist bl) = 0;
 

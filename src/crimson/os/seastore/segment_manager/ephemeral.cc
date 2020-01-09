@@ -16,19 +16,31 @@ namespace {
 
 namespace crimson::os::seastore::segment_manager {
 
+EphemeralSegment::EphemeralSegment(
+  EphemeralSegmentManager &manager, segment_id_t id)
+  : manager(manager), id(id) {}
+
 Segment::close_ertr::future<> EphemeralSegment::close()
 {
+  manager.close_segment(id);
   return close_ertr::now();
 }
 
 Segment::write_ertr::future<> EphemeralSegment::write(
   segment_off_t offset, ceph::bufferlist bl)
 {
+  if (offset + bl.length() >= manager.config.segment_size)
+    return crimson::ct_error::enospc::make();
   return write_ertr::now();
 }
 
 EphemeralSegmentManager::EphemeralSegmentManager(ephemeral_config_t config)
   : config(config) {}
+
+Segment::close_ertr::future<> EphemeralSegmentManager::close_segment(segment_id_t id)
+{
+  return Segment::close_ertr::now();
+}
 
 EphemeralSegmentManager::init_ertr::future<> EphemeralSegmentManager::init()
 {
