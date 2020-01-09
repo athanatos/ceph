@@ -74,7 +74,8 @@ public:
     crimson::ct_error::enoent,
     crimson::ct_error::erange>;
   virtual read_ertr::future<ceph::bufferlist> read(
-    segment_id_t id, segment_off_t offset, size_t len) = 0;
+    paddr_t addr,
+    size_t len) = 0;
 
   /* Methods for discovering device geometry, segmentid set, etc */
   virtual ~SegmentManager() {}
