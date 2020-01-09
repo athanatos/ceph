@@ -2,6 +2,7 @@
 // vim: ts=8 sw=2 smarttab
 
 #include <sys/mman.h>
+#include <string.h>
 
 #include "crimson/common/log.h"
 
@@ -35,7 +36,7 @@ Segment::write_ertr::future<> EphemeralSegment::write(
   if (offset + bl.length() >= manager.config.segment_size)
     return crimson::ct_error::enospc::make();
   
-  return write_ertr::now();
+  return manager.segment_write({id, offset}, bl);
 }
 
 EphemeralSegmentManager::EphemeralSegmentManager(ephemeral_config_t config)
@@ -108,6 +109,7 @@ SegmentManager::release_ertr::future<> EphemeralSegmentManager::release(
   if (segment_state[id] != segment_state_t::CLOSED)
     return crimson::ct_error::invarg::make();
 
+  ::memset(buffer + get_offset({id, 0}), 0, config.segment_size);
   return release_ertr::now();
 }
 
