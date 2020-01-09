@@ -47,12 +47,14 @@ Segment::close_ertr::future<> EphemeralSegmentManager::segment_close(segment_id_
 }
 
 Segment::close_ertr::future<> segment_write(
-  segment_id_t id,
-  segment_off_t offset,
+  paddr_t addr,
   ceph::bufferlist bl)
 {
-  
-  return Segment::close_ertr::now();
+  if (addr.segment >= get_num_segments())
+    return crimson::ct_error::invarg::make();
+
+  bl.copy_out(0, bl.length(), buffer + get_offset(addr));
+  return Segment::write_ertr::now();
 }
 
 EphemeralSegmentManager::init_ertr::future<> EphemeralSegmentManager::init()
