@@ -33,6 +33,7 @@ public:
    */
   using close_ertr = crimson::errorator<
     crimson::ct_error::input_output_error,
+    crimson::ct_error::invarg,
     crimson::ct_error::enoent>;
   virtual close_ertr::future<> close() = 0;
 

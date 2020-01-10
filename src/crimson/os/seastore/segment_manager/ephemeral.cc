@@ -44,10 +44,10 @@ EphemeralSegmentManager::EphemeralSegmentManager(ephemeral_config_t config)
 
 Segment::close_ertr::future<> EphemeralSegmentManager::segment_close(segment_id_t id)
 {
-  if (segment_state[addr.segment] != segment_state_t::OPEN)
-    return crimson::ct_error::invarg;
+  if (segment_state[id] != segment_state_t::OPEN)
+    return crimson::ct_error::invarg::make();
 
-  segment_state[id] = segment_state_t::CLOSED:
+  segment_state[id] = segment_state_t::CLOSED;
   return Segment::close_ertr::now();
 }
 
@@ -56,7 +56,7 @@ Segment::write_ertr::future<> EphemeralSegmentManager::segment_write(
   ceph::bufferlist bl)
 {
   if (segment_state[addr.segment] != segment_state_t::OPEN)
-    return crimson::ct_error::invarg;
+    return crimson::ct_error::invarg::make();
 
   bl.copy(0, bl.length(), buffer + get_offset(addr));
   return Segment::write_ertr::now();
