@@ -70,6 +70,16 @@ public:
 
   read_ertr::future<ceph::bufferlist> read(
     paddr_t addr, size_t len) final;
+
+  size_t get_size() const final {
+    return config.size;
+  }
+  size_t get_block_size() const {
+    return config.block_size;
+  }
+  size_t get_segment_size() const {
+    return config.segment_size;
+  }
 };
     
 }

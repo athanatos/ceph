@@ -9,17 +9,12 @@
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
 #include <seastar/core/future.hh>
 
+#include "include/ceph_assert.h"
+#include "crimson/os/seastore/seastore_types.h"
 #include "include/buffer_fwd.h"
 #include "crimson/osd/exceptions.h"
 
 namespace crimson::os::seastore {
-
-using segment_id_t = uint32_t;
-using segment_off_t = uint32_t;
-struct paddr_t {
-  segment_id_t segment;
-  segment_off_t offset;
-};
 
 class Segment : public boost::intrusive_ref_counter<
   Segment,
@@ -83,6 +78,15 @@ public:
     size_t len) = 0;
 
   /* Methods for discovering device geometry, segmentid set, etc */
+  virtual size_t get_size() const = 0;
+  virtual size_t get_block_size() const = 0;
+  virtual size_t get_segment_size() const = 0;
+  virtual size_t get_num_segments() const {
+    ceph_assert(get_size() % get_segment_size() == 0);
+    return get_size() / get_segment_size();
+  }
+
+
   virtual ~SegmentManager() {}
 };
 using SegmentManagerRef = std::unique_ptr<SegmentManager>;
@@ -93,7 +97,14 @@ struct ephemeral_config_t {
   size_t size;
   size_t block_size;
   size_t segment_size;
+
 };
+constexpr ephemeral_config_t DEFAULT_TEST_EPHEMERAL = {
+  1 << 30,
+  4 << 10,
+  32 << 20
+};
+
 std::ostream &operator<<(std::ostream &, const ephemeral_config_t &);
 SegmentManagerRef create_ephemeral(ephemeral_config_t config);
 

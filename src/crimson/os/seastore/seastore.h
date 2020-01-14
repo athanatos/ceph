@@ -15,14 +15,15 @@
 #include "osd/osd_types.h"
 #include "include/uuid.h"
 
+#include "os/Transaction.h"
 #include "crimson/os/futurized_store.h"
 
-namespace ceph::os {
-class Transaction;
-}
-
 namespace crimson::os::seastore {
+
 class SeastoreCollection;
+class SegmentManager;
+class OnodeManager;
+class Cache;
 
 class SeaStore final : public FuturizedStore {
   uuid_d osd_fsid;
@@ -74,8 +75,9 @@ public:
   seastar::future<CollectionRef> open_collection(const coll_t& cid) final;
   seastar::future<std::vector<coll_t>> list_collections() final;
 
-  seastar::future<> do_transaction(CollectionRef ch,
-				   ceph::os::Transaction&& txn) final;
+  seastar::future<> do_transaction(
+    CollectionRef ch,
+    ceph::os::Transaction&& txn) final;
 
   seastar::future<> write_meta(const std::string& key,
 		  const std::string& value) final;
@@ -87,6 +89,15 @@ public:
   }
 
 private:
+  std::unique_ptr<SegmentManager> segment_manager;
+  std::unique_ptr<OnodeManager> onode_manager;
+  std::unique_ptr<Cache> cache;
+
+
+  int _do_transaction_step(
+    CollectionRef col,
+    ceph::os::Transaction::iterator &i);
+
   int _remove(const coll_t& cid, const ghobject_t& oid);
   int _touch(const coll_t& cid, const ghobject_t& oid);
   int _write(const coll_t& cid, const ghobject_t& oid,
