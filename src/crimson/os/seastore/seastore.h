@@ -94,36 +94,38 @@ private:
   std::unique_ptr<Cache> cache;
 
 
-  int _do_transaction_step(
-    CollectionRef col,
+  using write_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  write_ertr::future<> _do_transaction_step(
+    CollectionRef &col,
     ceph::os::Transaction::iterator &i);
 
-  int _remove(const coll_t& cid, const ghobject_t& oid);
-  int _touch(const coll_t& cid, const ghobject_t& oid);
-  int _write(const coll_t& cid, const ghobject_t& oid,
+  write_ertr::future<> _remove(const coll_t& cid, const ghobject_t& oid);
+  write_ertr::future<> _touch(const coll_t& cid, const ghobject_t& oid);
+  write_ertr::future<> _write(const coll_t& cid, const ghobject_t& oid,
 	     uint64_t offset, size_t len, const ceph::bufferlist& bl,
 	     uint32_t fadvise_flags);
-  int _omap_set_values(
+  write_ertr::future<> _omap_set_values(
     const coll_t& cid,
     const ghobject_t& oid,
     std::map<std::string, ceph::bufferlist> &&aset);
-  int _omap_set_header(
+  write_ertr::future<> _omap_set_header(
     const coll_t& cid,
     const ghobject_t& oid,
     const ceph::bufferlist &header);
-  int _omap_rmkeys(
+  write_ertr::future<> _omap_rmkeys(
     const coll_t& cid,
     const ghobject_t& oid,
     const omap_keys_t& aset);
-  int _omap_rmkeyrange(
+  write_ertr::future<> _omap_rmkeyrange(
     const coll_t& cid,
     const ghobject_t& oid,
     const std::string &first,
     const std::string &last);
-  int _truncate(const coll_t& cid, const ghobject_t& oid, uint64_t size);
-  int _setattrs(const coll_t& cid, const ghobject_t& oid,
+  write_ertr::future<> _truncate(const coll_t& cid, const ghobject_t& oid, uint64_t size);
+  write_ertr::future<> _setattrs(const coll_t& cid, const ghobject_t& oid,
                 std::map<std::string,bufferptr>& aset);
-  int _create_collection(const coll_t& cid, int bits);
+  write_ertr::future<> _create_collection(const coll_t& cid, int bits);
 
   boost::intrusive_ptr<SeastoreCollection> _get_collection(const coll_t& cid);
 };
