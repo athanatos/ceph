@@ -29,7 +29,7 @@ public:
   using open_ertr = crimson::errorator<
     crimson::ct_error::input_output_error,
     crimson::ct_error::enoent>;
-  virtual open_ertr::future<OnodeRef> get_onode(
+  virtual open_ertr::future<OnodeRef> get_or_create_onode(
     const coll_t &cid,
     const ghobject_t &hoid) {
     return open_ertr::make_ready_future<OnodeRef>();

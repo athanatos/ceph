@@ -16,6 +16,7 @@
 #include "crimson/os/futurized_collection.h"
 
 #include "crimson/os/seastore/segment_manager.h"
+#include "crimson/os/seastore/transaction_manager.h"
 #include "crimson/os/seastore/onode_manager.h"
 #include "crimson/os/seastore/cache.h"
 
@@ -38,6 +39,7 @@ SeaStore::SeaStore(const std::string& path)
   : segment_manager(segment_manager::create_ephemeral(
 		      segment_manager::DEFAULT_TEST_EPHEMERAL)),
     onode_manager(onode_manager::create_ephemeral()),
+    transaction_manager(new TransactionManager()),
     cache(std::make_unique<Cache>())
 {}
 
@@ -153,29 +155,33 @@ seastar::future<> SeaStore::do_transaction(
 {
   return seastar::do_with(
     _t.begin(),
+    transaction_manager->create_transaction(),
     std::move(_t),
     std::move(_ch),
-    [this](auto &iter, auto &t, auto &ch) {
+    [this](auto &iter, auto &trans, auto &t, auto &ch) {
       return seastar::do_until(
-	[this, &iter, &t, &ch]() { return iter.have_op(); },
-	[this, &iter, &t, &ch]() {
-	  return _do_transaction_step(ch, iter).handle_error(
-	    write_ertr::all_same_way([this, &t](auto e) {
-	      logger().error(" transaction dump:\n");
-	      JSONFormatter f(true);
-	      f.open_object_section("transaction");
-	      t.dump(&f);
-	      f.close_section();
-	      std::stringstream str;
-	      f.flush(str);
-	      logger().error("{}", str.str());
-	      abort();
-	    }));
+	[this, &iter]() { return iter.have_op(); },
+	[this, &iter, &trans, &t, &ch]() {
+	  return _do_transaction_step(trans, ch, iter).safe_then(
+	    [this, &trans] {
+	      return transaction_manager->submit_transaction();
+	    }).handle_error(
+	      write_ertr::all_same_way([this, &t](auto e) {
+		logger().error(" transaction dump:\n");
+		JSONFormatter f(true);
+		f.open_object_section("transaction");
+		t.dump(&f);
+		f.close_section();
+		std::stringstream str;
+		f.flush(str);
+		logger().error("{}", str.str());
+		abort();
+	      }));
 	}).then([this, &t]() {
 	  for (auto i : {
 	      t.get_on_applied(),
-	      t.get_on_commit(),
-	      t.get_on_applied_sync()}) {
+		t.get_on_commit(),
+		t.get_on_applied_sync()}) {
 	    if (i) {
 	      i->complete(0);
 	    }
@@ -185,6 +191,7 @@ seastar::future<> SeaStore::do_transaction(
 }
 
 SeaStore::write_ertr::future<> SeaStore::_do_transaction_step(
+  TransactionRef &trans,
   CollectionRef &col,
   ceph::os::Transaction::iterator &i)
 {
@@ -197,14 +204,14 @@ SeaStore::write_ertr::future<> SeaStore::_do_transaction_step(
     {
       coll_t cid = i.get_cid(op->cid);
       ghobject_t oid = i.get_oid(op->oid);
-      return _remove(cid, oid);
+      return _remove(trans, cid, oid);
     }
     break;
     case Transaction::OP_TOUCH:
     {
       coll_t cid = i.get_cid(op->cid);
       ghobject_t oid = i.get_oid(op->oid);
-      return _touch(cid, oid);
+      return _touch(trans, cid, oid);
     }
     break;
     case Transaction::OP_WRITE:
@@ -216,7 +223,7 @@ SeaStore::write_ertr::future<> SeaStore::_do_transaction_step(
       uint32_t fadvise_flags = i.get_fadvise_flags();
       ceph::bufferlist bl;
       i.decode_bl(bl);
-      return _write(cid, oid, off, len, bl, fadvise_flags);
+      return _write(trans, cid, oid, off, len, bl, fadvise_flags);
     }
     break;
     case Transaction::OP_TRUNCATE:
@@ -224,7 +231,7 @@ SeaStore::write_ertr::future<> SeaStore::_do_transaction_step(
       coll_t cid = i.get_cid(op->cid);
       ghobject_t oid = i.get_oid(op->oid);
       uint64_t off = op->off;
-      return _truncate(cid, oid, off);
+      return _truncate(trans, cid, oid, off);
     }
     break;
     case Transaction::OP_SETATTR:
@@ -236,13 +243,13 @@ SeaStore::write_ertr::future<> SeaStore::_do_transaction_step(
       i.decode_bl(bl);
       std::map<std::string, bufferptr> to_set;
       to_set[name] = bufferptr(bl.c_str(), bl.length());
-      return _setattrs(cid, oid, to_set);
+      return _setattrs(trans, cid, oid, to_set);
     }
     break;
     case Transaction::OP_MKCOLL:
     {
       coll_t cid = i.get_cid(op->cid);
-      return _create_collection(cid, op->split_bits);
+      return _create_collection(trans, cid, op->split_bits);
     }
     break;
     case Transaction::OP_OMAP_SETKEYS:
@@ -251,7 +258,7 @@ SeaStore::write_ertr::future<> SeaStore::_do_transaction_step(
       ghobject_t oid = i.get_oid(op->oid);
       std::map<std::string, ceph::bufferlist> aset;
       i.decode_attrset(aset);
-      return _omap_set_values(cid, oid, std::move(aset));
+      return _omap_set_values(trans, cid, oid, std::move(aset));
     }
     break;
     case Transaction::OP_OMAP_SETHEADER:
@@ -260,7 +267,7 @@ SeaStore::write_ertr::future<> SeaStore::_do_transaction_step(
       const ghobject_t &oid = i.get_oid(op->oid);
       ceph::bufferlist bl;
       i.decode_bl(bl);
-      return _omap_set_header(cid, oid, bl);
+      return _omap_set_header(trans, cid, oid, bl);
     }
     break;
     case Transaction::OP_OMAP_RMKEYS:
@@ -269,7 +276,7 @@ SeaStore::write_ertr::future<> SeaStore::_do_transaction_step(
       const ghobject_t &oid = i.get_oid(op->oid);
       omap_keys_t keys;
       i.decode_keyset(keys);
-      return _omap_rmkeys(cid, oid, keys);
+      return _omap_rmkeys(trans, cid, oid, keys);
     }
     break;
     case Transaction::OP_OMAP_RMKEYRANGE:
@@ -279,7 +286,7 @@ SeaStore::write_ertr::future<> SeaStore::_do_transaction_step(
       string first, last;
       first = i.decode_string();
       last = i.decode_string();
-      return _omap_rmkeyrange(cid, oid, first, last);
+      return _omap_rmkeyrange(trans, cid, oid, first, last);
     }
     break;
     case Transaction::OP_COLL_HINT:
@@ -298,14 +305,18 @@ SeaStore::write_ertr::future<> SeaStore::_do_transaction_step(
   }
 }
 
-SeaStore::write_ertr::future<> SeaStore::_remove(const coll_t& cid, const ghobject_t& oid)
+SeaStore::write_ertr::future<> SeaStore::_remove(
+  TransactionRef &trans,
+  const coll_t& cid, const ghobject_t& oid)
 {
   logger().debug("{} cid={} oid={}",
                 __func__, cid, oid);
   return write_ertr::now();
 }
 
-SeaStore::write_ertr::future<> SeaStore::_touch(const coll_t& cid, const ghobject_t& oid)
+SeaStore::write_ertr::future<> SeaStore::_touch(
+  TransactionRef &trans,
+  const coll_t& cid, const ghobject_t& oid)
 {
   logger().debug("{} cid={} oid={}",
                 __func__, cid, oid);
@@ -313,6 +324,7 @@ SeaStore::write_ertr::future<> SeaStore::_touch(const coll_t& cid, const ghobjec
 }
 
 SeaStore::write_ertr::future<> SeaStore::_write(
+  TransactionRef &trans,
   const coll_t& cid, const ghobject_t& oid,
   uint64_t offset, size_t len, const ceph::bufferlist& bl,
   uint32_t fadvise_flags)
@@ -321,7 +333,7 @@ SeaStore::write_ertr::future<> SeaStore::_write(
                 __func__, cid, oid, offset, len);
   assert(len == bl.length());
 
-  return onode_manager->get_onode(cid, oid).safe_then([=, &bl](auto ref) {
+  return onode_manager->get_or_create_onode(cid, oid).safe_then([=, &bl](auto ref) {
     return;
   }).handle_error(
     crimson::ct_error::enoent::handle([]() {
@@ -332,6 +344,7 @@ SeaStore::write_ertr::future<> SeaStore::_write(
 }
 
 SeaStore::write_ertr::future<> SeaStore::_omap_set_values(
+  TransactionRef &trans,
   const coll_t& cid,
   const ghobject_t& oid,
   std::map<std::string, ceph::bufferlist> &&aset)
@@ -344,6 +357,7 @@ SeaStore::write_ertr::future<> SeaStore::_omap_set_values(
 }
 
 SeaStore::write_ertr::future<> SeaStore::_omap_set_header(
+  TransactionRef &trans,
   const coll_t& cid,
   const ghobject_t& oid,
   const ceph::bufferlist &header)
@@ -355,6 +369,7 @@ SeaStore::write_ertr::future<> SeaStore::_omap_set_header(
 }
 
 SeaStore::write_ertr::future<> SeaStore::_omap_rmkeys(
+  TransactionRef &trans,
   const coll_t& cid,
   const ghobject_t& oid,
   const omap_keys_t& aset)
@@ -366,6 +381,7 @@ SeaStore::write_ertr::future<> SeaStore::_omap_rmkeys(
 }
 
 SeaStore::write_ertr::future<> SeaStore::_omap_rmkeyrange(
+  TransactionRef &trans,
   const coll_t& cid,
   const ghobject_t& oid,
   const std::string &first,
@@ -377,22 +393,28 @@ SeaStore::write_ertr::future<> SeaStore::_omap_rmkeyrange(
   return write_ertr::now();
 }
 
-SeaStore::write_ertr::future<> SeaStore::_truncate(const coll_t& cid, const ghobject_t& oid, uint64_t size)
+SeaStore::write_ertr::future<> SeaStore::_truncate(
+  TransactionRef &trans,
+  const coll_t& cid, const ghobject_t& oid, uint64_t size)
 {
   logger().debug("{} cid={} oid={} size={}",
                 __func__, cid, oid, size);
   return write_ertr::now();
 }
 
-SeaStore::write_ertr::future<> SeaStore::_setattrs(const coll_t& cid, const ghobject_t& oid,
-                         std::map<std::string,bufferptr>& aset)
+SeaStore::write_ertr::future<> SeaStore::_setattrs(
+  TransactionRef &trans,
+  const coll_t& cid, const ghobject_t& oid,
+  std::map<std::string,bufferptr>& aset)
 {
   logger().debug("{} cid={} oid={}",
                 __func__, cid, oid);
   return write_ertr::now();
 }
 
-SeaStore::write_ertr::future<> SeaStore::_create_collection(const coll_t& cid, int bits)
+SeaStore::write_ertr::future<> SeaStore::_create_collection(
+  TransactionRef &trans,
+  const coll_t& cid, int bits)
 {
   return write_ertr::now();
 }

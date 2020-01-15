@@ -23,6 +23,9 @@ namespace crimson::os::seastore {
 class SeastoreCollection;
 class SegmentManager;
 class OnodeManager;
+class TransactionManager;
+class Transaction;
+using TransactionRef = std::unique_ptr<Transaction>;
 class Cache;
 
 class SeaStore final : public FuturizedStore {
@@ -91,41 +94,59 @@ public:
 private:
   std::unique_ptr<SegmentManager> segment_manager;
   std::unique_ptr<OnodeManager> onode_manager;
+  std::unique_ptr<TransactionManager> transaction_manager;
   std::unique_ptr<Cache> cache;
 
 
   using write_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   write_ertr::future<> _do_transaction_step(
+    TransactionRef &trans,
     CollectionRef &col,
     ceph::os::Transaction::iterator &i);
 
-  write_ertr::future<> _remove(const coll_t& cid, const ghobject_t& oid);
-  write_ertr::future<> _touch(const coll_t& cid, const ghobject_t& oid);
-  write_ertr::future<> _write(const coll_t& cid, const ghobject_t& oid,
-	     uint64_t offset, size_t len, const ceph::bufferlist& bl,
-	     uint32_t fadvise_flags);
+  write_ertr::future<> _remove(
+    TransactionRef &trans,
+    const coll_t& cid, const ghobject_t& oid);
+  write_ertr::future<> _touch(
+    TransactionRef &trans,
+    const coll_t& cid, const ghobject_t& oid);
+  write_ertr::future<> _write(
+    TransactionRef &trans,
+    const coll_t& cid, const ghobject_t& oid,
+    uint64_t offset, size_t len, const ceph::bufferlist& bl,
+    uint32_t fadvise_flags);
   write_ertr::future<> _omap_set_values(
+    TransactionRef &trans,
     const coll_t& cid,
     const ghobject_t& oid,
     std::map<std::string, ceph::bufferlist> &&aset);
   write_ertr::future<> _omap_set_header(
+    TransactionRef &trans,
     const coll_t& cid,
     const ghobject_t& oid,
     const ceph::bufferlist &header);
   write_ertr::future<> _omap_rmkeys(
+    TransactionRef &trans,
     const coll_t& cid,
     const ghobject_t& oid,
     const omap_keys_t& aset);
   write_ertr::future<> _omap_rmkeyrange(
+    TransactionRef &trans,
     const coll_t& cid,
     const ghobject_t& oid,
     const std::string &first,
     const std::string &last);
-  write_ertr::future<> _truncate(const coll_t& cid, const ghobject_t& oid, uint64_t size);
-  write_ertr::future<> _setattrs(const coll_t& cid, const ghobject_t& oid,
-                std::map<std::string,bufferptr>& aset);
-  write_ertr::future<> _create_collection(const coll_t& cid, int bits);
+  write_ertr::future<> _truncate(
+    TransactionRef &trans,
+    const coll_t& cid, const ghobject_t& oid, uint64_t size);
+  write_ertr::future<> _setattrs(
+    TransactionRef &trans,
+    const coll_t& cid, const ghobject_t& oid,
+    std::map<std::string,bufferptr>& aset);
+  write_ertr::future<> _create_collection(
+    TransactionRef &trans,
+    const coll_t& cid, int bits);
 
   boost::intrusive_ptr<SeastoreCollection> _get_collection(const coll_t& cid);
 };
