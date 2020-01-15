@@ -160,50 +160,56 @@ seastar::future<> SeaStore::do_transaction(
     std::move(_t),
     std::move(_ch),
     [this](auto &iter, auto &trans, auto &onodes, auto &t, auto &ch) {
-      return onode_manager->get_or_create_onodes(iter.get_objects()).safe_then(
-	[this, &iter, &trans, &onodes, &t, &ch](auto &&read_onodes) {
-	  onodes = std::move(read_onodes);
-	  return seastar::do_until(
-	    [this, &iter]() { return iter.have_op(); },
-	    [this, &iter, &trans, &onodes, &t, &ch]() {
-	      return _do_transaction_step(trans, ch, onodes, iter).safe_then(
-		[this, &trans] {
-		  return transaction_manager->submit_transaction();
-		}).handle_error(
-		  // TODO: add errorator::do_until
-		  write_ertr::all_same_way([this, &t](auto e) {
-		    logger().error(" transaction dump:\n");
-		    JSONFormatter f(true);
-		    f.open_object_section("transaction");
-		    t.dump(&f);
-		    f.close_section();
-		    std::stringstream str;
-		    f.flush(str);
-		    logger().error("{}", str.str());
-		    abort();
-		  }));
-	    });
-	}).handle_error(
-	  write_ertr::all_same_way([this, &t](auto e) {
-	    logger().error(" transaction dump:\n");
-	    JSONFormatter f(true);
-	    f.open_object_section("transaction");
-	    t.dump(&f);
-	    f.close_section();
-	    std::stringstream str;
-	    f.flush(str);
-	    logger().error("{}", str.str());
-	    abort();
-	  })).then([this, &t]() {
-	    for (auto i : {
-		t.get_on_applied(),
-		t.get_on_commit(),
-		t.get_on_applied_sync()}) {
-	      if (i) {
-		i->complete(0);
+      return onode_manager->get_or_create_onodes(
+	trans, iter.get_objects()).safe_then(
+	  [this, &iter, &trans, &onodes, &t, &ch](auto &&read_onodes) {
+	    onodes = std::move(read_onodes);
+	    return seastar::do_until(
+	      [this, &iter]() { return iter.have_op(); },
+	      [this, &iter, &trans, &onodes, &t, &ch]() {
+		return _do_transaction_step(trans, ch, onodes, iter).safe_then(
+		  [this, &trans] {
+		    return transaction_manager->submit_transaction();
+		  }).handle_error(
+		    // TODO: add errorator::do_until
+		    write_ertr::all_same_way([this, &t](auto e) {
+		      logger().error(" transaction dump:\n");
+		      JSONFormatter f(true);
+		      f.open_object_section("transaction");
+		      t.dump(&f);
+		      f.close_section();
+		      std::stringstream str;
+		      f.flush(str);
+		      logger().error("{}", str.str());
+		      abort();
+		    }));
+	      });
+	  }).safe_then([this, &trans, &onodes]() {
+	    return onode_manager->write_dirty(trans, onodes);
+	  }).safe_then([this, &trans]() {
+	    // TODO: complete transaction!
+	    return;
+	  }).handle_error(
+	    write_ertr::all_same_way([this, &t](auto e) {
+	      logger().error(" transaction dump:\n");
+	      JSONFormatter f(true);
+	      f.open_object_section("transaction");
+	      t.dump(&f);
+	      f.close_section();
+	      std::stringstream str;
+	      f.flush(str);
+	      logger().error("{}", str.str());
+	      abort();
+	    })).then([this, &t]() {
+	      for (auto i : {
+		  t.get_on_applied(),
+		    t.get_on_commit(),
+		    t.get_on_applied_sync()}) {
+		if (i) {
+		  i->complete(0);
+		}
 	      }
-	    }
-	  });
+	    });
     });
 }
 

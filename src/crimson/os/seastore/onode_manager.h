@@ -13,6 +13,7 @@
 #include "crimson/os/seastore/seastore_types.h"
 #include "include/buffer_fwd.h"
 #include "crimson/osd/exceptions.h"
+#include "crimson/os/seastore/transaction_manager.h"
 
 namespace crimson::os::seastore {
 
@@ -32,15 +33,23 @@ public:
   using open_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   virtual open_ertr::future<OnodeRef> get_or_create_onode(
+    TransactionRef &trans,
     const ghobject_t &hoid) {
     return open_ertr::make_ready_future<OnodeRef>();
   }
   virtual open_ertr::future<std::vector<OnodeRef>> get_or_create_onodes(
+    TransactionRef &trans,
     const std::vector<ghobject_t> &hoids) {
     return open_ertr::make_ready_future<std::vector<OnodeRef>>();
   }
 
-
+  using write_ertr= crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  virtual write_ertr::future<> write_dirty(
+    TransactionRef &trans,
+    const std::vector<OnodeRef> &onodes) {
+    return write_ertr::now();
+  }
   virtual ~OnodeManager() {}
 };
 using OnodeManagerRef = std::unique_ptr<OnodeManager>;
