@@ -23,6 +23,8 @@ namespace crimson::os::seastore {
 class SeastoreCollection;
 class SegmentManager;
 class OnodeManager;
+class Onode;
+using OnodeRef = boost::intrusive_ptr<Onode>;
 class TransactionManager;
 class Transaction;
 using TransactionRef = std::unique_ptr<Transaction>;
@@ -103,46 +105,43 @@ private:
   write_ertr::future<> _do_transaction_step(
     TransactionRef &trans,
     CollectionRef &col,
+    std::vector<OnodeRef> &onodes,
     ceph::os::Transaction::iterator &i);
 
   write_ertr::future<> _remove(
     TransactionRef &trans,
-    const coll_t& cid, const ghobject_t& oid);
+    OnodeRef &onode);
   write_ertr::future<> _touch(
     TransactionRef &trans,
-    const coll_t& cid, const ghobject_t& oid);
+    OnodeRef &onode);
   write_ertr::future<> _write(
     TransactionRef &trans,
-    const coll_t& cid, const ghobject_t& oid,
+    OnodeRef &onode,
     uint64_t offset, size_t len, const ceph::bufferlist& bl,
     uint32_t fadvise_flags);
   write_ertr::future<> _omap_set_values(
     TransactionRef &trans,
-    const coll_t& cid,
-    const ghobject_t& oid,
+    OnodeRef &onode,
     std::map<std::string, ceph::bufferlist> &&aset);
   write_ertr::future<> _omap_set_header(
     TransactionRef &trans,
-    const coll_t& cid,
-    const ghobject_t& oid,
+    OnodeRef &onode,
     const ceph::bufferlist &header);
   write_ertr::future<> _omap_rmkeys(
     TransactionRef &trans,
-    const coll_t& cid,
-    const ghobject_t& oid,
+    OnodeRef &onode,
     const omap_keys_t& aset);
   write_ertr::future<> _omap_rmkeyrange(
     TransactionRef &trans,
-    const coll_t& cid,
-    const ghobject_t& oid,
+    OnodeRef &onode,
     const std::string &first,
     const std::string &last);
   write_ertr::future<> _truncate(
     TransactionRef &trans,
-    const coll_t& cid, const ghobject_t& oid, uint64_t size);
+    OnodeRef &onode, uint64_t size);
   write_ertr::future<> _setattrs(
     TransactionRef &trans,
-    const coll_t& cid, const ghobject_t& oid,
+    OnodeRef &onode,
     std::map<std::string,bufferptr>& aset);
   write_ertr::future<> _create_collection(
     TransactionRef &trans,

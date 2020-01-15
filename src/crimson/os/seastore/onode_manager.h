@@ -23,6 +23,9 @@ public:
 };
 using OnodeRef = boost::intrusive_ptr<Onode>;
 
+std::ostream &operator<<(std::ostream &out, const Onode &rhs) {
+  return out;
+}
 
 class OnodeManager {
 public:

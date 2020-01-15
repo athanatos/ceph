@@ -156,13 +156,14 @@ seastar::future<> SeaStore::do_transaction(
   return seastar::do_with(
     _t.begin(),
     transaction_manager->create_transaction(),
+    std::vector<OnodeRef>(),
     std::move(_t),
     std::move(_ch),
-    [this](auto &iter, auto &trans, auto &t, auto &ch) {
+    [this](auto &iter, auto &trans, auto &onodes, auto &t, auto &ch) {
       return seastar::do_until(
 	[this, &iter]() { return iter.have_op(); },
-	[this, &iter, &trans, &t, &ch]() {
-	  return _do_transaction_step(trans, ch, iter).safe_then(
+	[this, &iter, &trans, &onodes, &t, &ch]() {
+	  return _do_transaction_step(trans, ch, onodes, iter).safe_then(
 	    [this, &trans] {
 	      return transaction_manager->submit_transaction();
 	    }).handle_error(
@@ -193,8 +194,14 @@ seastar::future<> SeaStore::do_transaction(
 SeaStore::write_ertr::future<> SeaStore::_do_transaction_step(
   TransactionRef &trans,
   CollectionRef &col,
+  std::vector<OnodeRef> &onodes,
   ceph::os::Transaction::iterator &i)
 {
+  auto get_onode = [&onodes](size_t i) -> OnodeRef& {
+    ceph_assert(i < onodes.size());
+    return onodes[i];
+  };
+
   using ceph::os::Transaction;
   try {
     switch (auto op = i.decode_op(); op->op) {
@@ -202,48 +209,38 @@ SeaStore::write_ertr::future<> SeaStore::_do_transaction_step(
       return write_ertr::now();
     case Transaction::OP_REMOVE:
     {
-      coll_t cid = i.get_cid(op->cid);
-      ghobject_t oid = i.get_oid(op->oid);
-      return _remove(trans, cid, oid);
+      return _remove(trans, get_onode(op->oid));
     }
     break;
     case Transaction::OP_TOUCH:
     {
-      coll_t cid = i.get_cid(op->cid);
-      ghobject_t oid = i.get_oid(op->oid);
-      return _touch(trans, cid, oid);
+      return _touch(trans, get_onode(op->oid));
     }
     break;
     case Transaction::OP_WRITE:
     {
-      coll_t cid = i.get_cid(op->cid);
-      ghobject_t oid = i.get_oid(op->oid);
       uint64_t off = op->off;
       uint64_t len = op->len;
       uint32_t fadvise_flags = i.get_fadvise_flags();
       ceph::bufferlist bl;
       i.decode_bl(bl);
-      return _write(trans, cid, oid, off, len, bl, fadvise_flags);
+      return _write(trans, get_onode(op->oid), off, len, bl, fadvise_flags);
     }
     break;
     case Transaction::OP_TRUNCATE:
     {
-      coll_t cid = i.get_cid(op->cid);
-      ghobject_t oid = i.get_oid(op->oid);
       uint64_t off = op->off;
-      return _truncate(trans, cid, oid, off);
+      return _truncate(trans, get_onode(op->oid), off);
     }
     break;
     case Transaction::OP_SETATTR:
     {
-      coll_t cid = i.get_cid(op->cid);
-      ghobject_t oid = i.get_oid(op->oid);
       std::string name = i.decode_string();
       ceph::bufferlist bl;
       i.decode_bl(bl);
       std::map<std::string, bufferptr> to_set;
       to_set[name] = bufferptr(bl.c_str(), bl.length());
-      return _setattrs(trans, cid, oid, to_set);
+      return _setattrs(trans, get_onode(op->oid), to_set);
     }
     break;
     case Transaction::OP_MKCOLL:
@@ -254,39 +251,31 @@ SeaStore::write_ertr::future<> SeaStore::_do_transaction_step(
     break;
     case Transaction::OP_OMAP_SETKEYS:
     {
-      coll_t cid = i.get_cid(op->cid);
-      ghobject_t oid = i.get_oid(op->oid);
       std::map<std::string, ceph::bufferlist> aset;
       i.decode_attrset(aset);
-      return _omap_set_values(trans, cid, oid, std::move(aset));
+      return _omap_set_values(trans, get_onode(op->oid), std::move(aset));
     }
     break;
     case Transaction::OP_OMAP_SETHEADER:
     {
-      const coll_t &cid = i.get_cid(op->cid);
-      const ghobject_t &oid = i.get_oid(op->oid);
       ceph::bufferlist bl;
       i.decode_bl(bl);
-      return _omap_set_header(trans, cid, oid, bl);
+      return _omap_set_header(trans, get_onode(op->oid), bl);
     }
     break;
     case Transaction::OP_OMAP_RMKEYS:
     {
-      const coll_t &cid = i.get_cid(op->cid);
-      const ghobject_t &oid = i.get_oid(op->oid);
       omap_keys_t keys;
       i.decode_keyset(keys);
-      return _omap_rmkeys(trans, cid, oid, keys);
+      return _omap_rmkeys(trans, get_onode(op->oid), keys);
     }
     break;
     case Transaction::OP_OMAP_RMKEYRANGE:
     {
-      const coll_t &cid = i.get_cid(op->cid);
-      const ghobject_t &oid = i.get_oid(op->oid);
       string first, last;
       first = i.decode_string();
       last = i.decode_string();
-      return _omap_rmkeyrange(trans, cid, oid, first, last);
+      return _omap_rmkeyrange(trans, get_onode(op->oid), first, last);
     }
     break;
     case Transaction::OP_COLL_HINT:
@@ -307,32 +296,33 @@ SeaStore::write_ertr::future<> SeaStore::_do_transaction_step(
 
 SeaStore::write_ertr::future<> SeaStore::_remove(
   TransactionRef &trans,
-  const coll_t& cid, const ghobject_t& oid)
+  OnodeRef &onode)
 {
-  logger().debug("{} cid={} oid={}",
-                __func__, cid, oid);
+  logger().debug("{} onode={}",
+                __func__, *onode);
   return write_ertr::now();
 }
 
 SeaStore::write_ertr::future<> SeaStore::_touch(
   TransactionRef &trans,
-  const coll_t& cid, const ghobject_t& oid)
+  OnodeRef &onode)
 {
-  logger().debug("{} cid={} oid={}",
-                __func__, cid, oid);
+  logger().debug("{} onode={}",
+                __func__, *onode);
   return write_ertr::now();
 }
 
 SeaStore::write_ertr::future<> SeaStore::_write(
   TransactionRef &trans,
-  const coll_t& cid, const ghobject_t& oid,
+  OnodeRef &onode,
   uint64_t offset, size_t len, const ceph::bufferlist& bl,
   uint32_t fadvise_flags)
 {
-  logger().debug("{} {} {} {} ~ {}",
-                __func__, cid, oid, offset, len);
+  logger().debug("{}: {} {} ~ {}",
+                __func__, *onode, offset, len);
   assert(len == bl.length());
 
+/*
   return onode_manager->get_or_create_onode(cid, oid).safe_then([=, &bl](auto ref) {
     return;
   }).handle_error(
@@ -341,74 +331,73 @@ SeaStore::write_ertr::future<> SeaStore::_write(
     }),
     OnodeManager::open_ertr::pass_further{}
   );
+  */
+  return write_ertr::now();
 }
 
 SeaStore::write_ertr::future<> SeaStore::_omap_set_values(
   TransactionRef &trans,
-  const coll_t& cid,
-  const ghobject_t& oid,
+  OnodeRef &onode,
   std::map<std::string, ceph::bufferlist> &&aset)
 {
   logger().debug(
-    "{} {} {} {} keys",
-    __func__, cid, oid, aset.size());
+    "{}: {} {} keys",
+    __func__, *onode, aset.size());
 
   return write_ertr::now();
 }
 
 SeaStore::write_ertr::future<> SeaStore::_omap_set_header(
   TransactionRef &trans,
-  const coll_t& cid,
-  const ghobject_t& oid,
+  OnodeRef &onode,
   const ceph::bufferlist &header)
 {
   logger().debug(
-    "{} {} {} {} bytes",
-    __func__, cid, oid, header.length());
+    "{}: {} {} bytes",
+    __func__, *onode, header.length());
   return write_ertr::now();
 }
 
 SeaStore::write_ertr::future<> SeaStore::_omap_rmkeys(
   TransactionRef &trans,
-  const coll_t& cid,
-  const ghobject_t& oid,
+  OnodeRef &onode,
   const omap_keys_t& aset)
 {
   logger().debug(
-    "{} {} {} {} keys",
-    __func__, cid, oid, aset.size());
+    "{} {} {} keys",
+    __func__, *onode, aset.size());
   return write_ertr::now();
 }
 
 SeaStore::write_ertr::future<> SeaStore::_omap_rmkeyrange(
   TransactionRef &trans,
-  const coll_t& cid,
-  const ghobject_t& oid,
+  OnodeRef &onode,
   const std::string &first,
   const std::string &last)
 {
   logger().debug(
-    "{} {} {} first={} last={}",
-    __func__, cid, oid, first, last);
+    "{} {} first={} last={}",
+    __func__, *onode, first, last);
   return write_ertr::now();
 }
 
 SeaStore::write_ertr::future<> SeaStore::_truncate(
   TransactionRef &trans,
-  const coll_t& cid, const ghobject_t& oid, uint64_t size)
+  OnodeRef &onode,
+  uint64_t size)
 {
-  logger().debug("{} cid={} oid={} size={}",
-                __func__, cid, oid, size);
+  logger().debug("{} onode={} size={}",
+                __func__, *onode, size);
   return write_ertr::now();
 }
 
 SeaStore::write_ertr::future<> SeaStore::_setattrs(
   TransactionRef &trans,
-  const coll_t& cid, const ghobject_t& oid,
+  OnodeRef &onode,
   std::map<std::string,bufferptr>& aset)
 {
-  logger().debug("{} cid={} oid={}",
-                __func__, cid, oid);
+  logger().debug("{} onode={}",
+                __func__, *onode);
   return write_ertr::now();
 }
 
