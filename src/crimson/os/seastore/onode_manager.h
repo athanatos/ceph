@@ -30,13 +30,16 @@ std::ostream &operator<<(std::ostream &out, const Onode &rhs) {
 class OnodeManager {
 public:
   using open_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error,
-    crimson::ct_error::enoent>;
+    crimson::ct_error::input_output_error>;
   virtual open_ertr::future<OnodeRef> get_or_create_onode(
-    const coll_t &cid,
     const ghobject_t &hoid) {
     return open_ertr::make_ready_future<OnodeRef>();
   }
+  virtual open_ertr::future<std::vector<OnodeRef>> get_or_create_onodes(
+    const std::vector<ghobject_t> &hoids) {
+    return open_ertr::make_ready_future<std::vector<OnodeRef>>();
+  }
+
 
   virtual ~OnodeManager() {}
 };
