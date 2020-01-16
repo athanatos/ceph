@@ -38,9 +38,9 @@ struct SeastoreCollection final : public FuturizedCollection {
 SeaStore::SeaStore(const std::string& path)
   : segment_manager(segment_manager::create_ephemeral(
 		      segment_manager::DEFAULT_TEST_EPHEMERAL)),
-    onode_manager(onode_manager::create_ephemeral()),
-    transaction_manager(new TransactionManager()),
-    cache(std::make_unique<Cache>())
+    transaction_manager(new TransactionManager(*segment_manager)),
+    cache(std::make_unique<Cache>()),
+    onode_manager(onode_manager::create_ephemeral())
 {}
 
 SeaStore::~SeaStore() = default;

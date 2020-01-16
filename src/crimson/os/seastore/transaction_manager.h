@@ -15,6 +15,9 @@
 #include "crimson/osd/exceptions.h"
 
 namespace crimson::os::seastore {
+class SegmentManager;
+class Segment;
+using SegmentRef = boost::intrusive_ptr<Segment>;
 
 /* Could be modified to be omitted for logical blocks */
 struct extent_info_t {
@@ -51,7 +54,24 @@ public:
 using TransactionRef = std::unique_ptr<Transaction>;
 
 class TransactionManager {
+  SegmentManager &segment_manager;
+
+  segment_id_t current_journal_segment = NULL_SEG_ID;
+  SegmentRef current_segment;
+
+  segment_id_t next_journal_segment = 0;
+  SegmentRef next_segment;
+
+  journal_seq_t current_journal_seq = 0;
+
 public:
+  TransactionManager(SegmentManager &segment_manager);
+
+  using init_ertr = crimson::errorator <
+    crimson::ct_error::input_output_error
+    >;
+  init_ertr::future<> init();
+
   TransactionRef create_transaction() {
     return std::make_unique<Transaction>(paddr_t{0,0});
   }
@@ -59,7 +79,6 @@ public:
   using read_ertr = crimson::errorator <
     crimson::ct_error::input_output_error
     >;
-
   /**
    * Add journaled representation of overwrite of physical offsets
    * [addr, addr + bl.size()).
