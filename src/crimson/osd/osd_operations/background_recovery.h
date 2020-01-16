@@ -14,12 +14,13 @@ class PG;
 class ShardServices;
 
 class BackgroundRecovery final : public OperationT<BackgroundRecovery> {
+  Ref<PG> pg;
   ShardServices &ss;
-  PG &pg;
+  epoch_t epoch_started;
   crimson::osd::scheduler::scheduler_class_t scheduler_class;
 
   auto get_scheduler_params() const {
-    return ceph::osd::scheduler::params_t{
+    return crimson::osd::scheduler::params_t{
       1, // cost
       0, // owner
       scheduler_class
@@ -32,8 +33,9 @@ public:
   static constexpr OperationTypeCode type = OperationTypeCode::background_recovery;
 
   BackgroundRecovery(
+    Ref<PG> pg,
     ShardServices &ss,
-    PG &pg,
+    epoch_t epoch_started,
     crimson::osd::scheduler::scheduler_class_t scheduler_class);
 
   void print(std::ostream &) const final;
