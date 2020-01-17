@@ -24,7 +24,8 @@ public:
   /**
    * close
    *
-   * Closes segment for writes.
+   * Closes segment for writes.  Won't complete until
+   * outstanding writes to this segment are complete.
    */
   using close_ertr = crimson::errorator<
     crimson::ct_error::input_output_error,
@@ -46,7 +47,8 @@ public:
     crimson::ct_error::ebadf,              // segment closed
     crimson::ct_error::enospc              // write exceeds segment size
     >;
-  virtual write_ertr::future<> write(segment_off_t offset, ceph::bufferlist bl) = 0;
+  virtual write_ertr::future<> write(
+    segment_off_t offset, ceph::bufferlist bl) = 0;
 
   virtual ~Segment() {}
 };

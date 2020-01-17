@@ -4,9 +4,11 @@
 #pragma once
 
 #include <iostream>
+#include <optional>
 
 #include <boost/intrusive_ptr.hpp>
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
+
 #include <seastar/core/future.hh>
 
 #include "include/ceph_assert.h"
@@ -16,8 +18,10 @@
 
 namespace crimson::os::seastore {
 class SegmentManager;
-class Segment;
-using SegmentRef = boost::intrusive_ptr<Segment>;
+
+namespace transaction_manager_detail {
+class Journal;
+}
 
 /* Could be modified to be omitted for logical blocks */
 struct extent_info_t {
@@ -54,20 +58,12 @@ public:
 using TransactionRef = std::unique_ptr<Transaction>;
 
 class TransactionManager {
-  SegmentManager &segment_manager;
-
-  segment_id_t current_journal_segment = NULL_SEG_ID;
-  SegmentRef current_segment;
-
-  segment_id_t next_journal_segment = 0;
-  SegmentRef next_segment;
-
-  journal_seq_t current_journal_seq = 0;
+  std::unique_ptr<transaction_manager_detail::Journal> journal;
 
 public:
   TransactionManager(SegmentManager &segment_manager);
 
-  using init_ertr = crimson::errorator <
+  using init_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
   init_ertr::future<> init();
@@ -127,6 +123,8 @@ public:
   submit_transaction_ertr::future<> submit_transaction() {
     return submit_transaction_ertr::now();
   }
+
+  ~TransactionManager();
 };
 using TransactionManagerRef = std::unique_ptr<TransactionManager>;
 
