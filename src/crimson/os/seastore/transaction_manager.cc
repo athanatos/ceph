@@ -67,8 +67,9 @@ Journal::roll_journal_segment_ertr::future<>
 Journal::roll_journal_segment()
 {
   return current_journal_segment->close().handle_error(
+    //roll_journal_segment_ertr::pass_further{},
     roll_journal_segment_ertr::pass_further{},
-    SegmentManager::open_ertr::all_same_way([this](auto &&e) {
+    crimson::ct_error::all_same_way([this](auto &&e) {
       logger().error(
 	"error {} in close segment {}",
 	e,
