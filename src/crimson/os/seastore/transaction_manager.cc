@@ -19,6 +19,8 @@ class Journal {
   SegmentManager &segment_manager;
 
   SegmentRef current_journal_segment;
+  segment_off_t written_to = 0;
+  segment_off_t reserved_to = 0;
 
   segment_id_t next_journal_segment_id = NULL_SEG_ID;
   journal_seq_t current_journal_seq = 0;
@@ -35,7 +37,7 @@ public:
 
   using roll_journal_segment_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
-  roll_journal_segment_ertr::future<> roll_journal_segment(
+  roll_journal_segment_ertr::future<SegmentRef> roll_journal_segment(
     SegmentRef next_journal_segment,
     segment_id_t next_next_id);
 
@@ -59,31 +61,23 @@ Journal::init_ertr::future<> Journal::init_write(
   SegmentRef initial_journal_segment,
   segment_id_t next_next_id)
 {
-  return roll_journal_segment(initial_journal_segment, next_next_id);
+  return roll_journal_segment(initial_journal_segment, next_next_id).safe_then(
+    [](auto) { return; });
 }
 
-Journal::roll_journal_segment_ertr::future<>
+Journal::roll_journal_segment_ertr::future<SegmentRef>
 Journal::roll_journal_segment(
   SegmentRef next_journal_segment,
   segment_id_t next_next_id)
 {
-  return current_journal_segment->close().handle_error(
-    //roll_journal_segment_ertr::pass_further{},
-    roll_journal_segment_ertr::pass_further{},
-    crimson::ct_error::all_same_way([this](auto &&e) {
-      logger().error(
-	"error {} in close segment {}",
-	e,
-	current_journal_segment->get_segment_id());
-      ceph_assert(0 == "error in close");
-      return;
-    })
-  ).safe_then([=] {
-    current_journal_segment = next_journal_segment;
-    next_journal_segment_id = next_next_id;
-    return initialize_segment(
-      *current_journal_segment, next_journal_segment_id);
-  });
+  auto old_segment = current_journal_segment;
+  current_journal_segment = next_journal_segment;
+  next_journal_segment_id = next_next_id;
+  return initialize_segment(
+    *current_journal_segment,
+    next_journal_segment_id).safe_then([old_segment] {
+      return old_segment;
+    });
 }
 
 }
