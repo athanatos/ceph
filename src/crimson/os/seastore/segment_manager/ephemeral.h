@@ -23,6 +23,8 @@ public:
   EphemeralSegment(EphemeralSegmentManager &manager, segment_id_t id);
 
   segment_id_t get_segment_id() const final { return id; }
+  segment_off_t get_write_capacity() const final;
+  segment_off_t get_write_ptr() const final { return write_pointer; }
   close_ertr::future<> close() final;
   write_ertr::future<> write(segment_off_t offset, ceph::bufferlist bl) final;
 
@@ -75,10 +77,10 @@ public:
   size_t get_size() const final {
     return config.size;
   }
-  size_t get_block_size() const {
+  segment_off_t get_block_size() const {
     return config.block_size;
   }
-  size_t get_segment_size() const {
+  segment_off_t get_segment_size() const {
     return config.segment_size;
   }
 };

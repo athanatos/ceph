@@ -27,6 +27,16 @@ public:
   virtual segment_id_t get_segment_id() const = 0;
 
   /**
+   * min next write location
+   */
+  virtual segment_off_t get_write_ptr() const = 0;
+
+  /**
+   * max capacity
+   */
+  virtual segment_off_t get_write_capacity() const = 0;
+
+  /**
    * close
    *
    * Closes segment for writes.  Won't complete until
@@ -86,8 +96,8 @@ public:
 
   /* Methods for discovering device geometry, segmentid set, etc */
   virtual size_t get_size() const = 0;
-  virtual size_t get_block_size() const = 0;
-  virtual size_t get_segment_size() const = 0;
+  virtual segment_off_t get_block_size() const = 0;
+  virtual segment_off_t get_segment_size() const = 0;
   virtual size_t get_num_segments() const {
     ceph_assert(get_size() % get_segment_size() == 0);
     return get_size() / get_segment_size();
@@ -102,8 +112,8 @@ namespace segment_manager {
 
 struct ephemeral_config_t {
   size_t size;
-  size_t block_size;
-  size_t segment_size;
+  segment_off_t block_size;
+  segment_off_t segment_size;
 
 };
 constexpr ephemeral_config_t DEFAULT_TEST_EPHEMERAL = {

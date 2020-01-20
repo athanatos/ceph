@@ -21,6 +21,10 @@ EphemeralSegment::EphemeralSegment(
   EphemeralSegmentManager &manager, segment_id_t id)
   : manager(manager), id(id) {}
 
+segment_off_t EphemeralSegment::get_write_capacity() const {
+  return manager.get_segment_size();
+}
+
 Segment::close_ertr::future<> EphemeralSegment::close()
 {
   manager.segment_close(id);
