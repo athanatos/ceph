@@ -22,6 +22,11 @@ class Segment : public boost::intrusive_ref_counter<
 public:
 
   /**
+   * get_segment_id
+   */
+  virtual segment_id_t get_segment_id() const = 0;
+
+  /**
    * close
    *
    * Closes segment for writes.  Won't complete until

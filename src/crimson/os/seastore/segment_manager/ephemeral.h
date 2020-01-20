@@ -22,6 +22,7 @@ class EphemeralSegment final : public Segment {
 public:
   EphemeralSegment(EphemeralSegmentManager &manager, segment_id_t id);
 
+  segment_id_t get_segment_id() const final { return id; }
   close_ertr::future<> close() final;
   write_ertr::future<> write(segment_off_t offset, ceph::bufferlist bl) final;
 
