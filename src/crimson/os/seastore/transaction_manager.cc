@@ -68,7 +68,7 @@ public:
 
   /* Reserves space for size bytes (must be block aligned), returns NULL_SEG
    * if journal doesn't have enough space */
-  segment_off_t reserve(segment_off_t size);
+  std::pair<segment_off_t, SegmentRef> reserve(segment_off_t size);
 };
 
 Journal::initialize_segment_ertr::future<> Journal::initialize_segment(
@@ -112,15 +112,16 @@ Journal::roll_journal_segment(
     });
 }
 
-segment_off_t Journal::reserve(segment_off_t size)
+std::pair<segment_off_t, SegmentRef> Journal::reserve(segment_off_t size)
 {
   ceph_assert(size % block_size == 0);
-  if (reserved_to + size >= block_size) {
-    return NULL_SEG_OFF;
+  if (reserved_to + size >= current_journal_segment->get_write_capacity()) {
+    return std::make_pair(NULL_SEG_OFF, nullptr);
   } else {
     auto offset = reserved_to;
     reserved_to += size;
-    return offset;
+    return std::make_pair(
+      offset, current_journal_segment);
   }
 }
 
