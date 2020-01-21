@@ -89,6 +89,7 @@ Journal::Journal(
   JournalSegmentProvider &segment_provider,
   SegmentManager &segment_manager)
   : max_record_length(segment_manager.get_segment_size() /* TODO */),
+    block_size(segment_manager.get_block_size()),
     segment_provider(segment_provider),
     segment_manager(segment_manager) {}
 
@@ -110,12 +111,22 @@ Journal::initialize_segment_ertr::future<> Journal::initialize_segment(
     crimson::ct_error::all_same_way([] { ceph_assert(0 == "TODO"); }));
 }
 
+ceph::bufferlist encode_record(record_t &&record)
+{
+  return ceph::bufferlist(); /* TODO */
+}
 
 Journal::write_record_ertr::future<> Journal::write_record(
-  paddr_t addr,
+  segment_off_t length,
   record_t &&record)
 {
-  return write_record_ertr::now();
+  ceph::bufferlist to_write = encode_record(std::move(record));
+  ceph_assert(length == to_write.length());
+  written_to += p2roundup(to_write.length(), block_size);
+  return current_journal_segment->write(written_to, to_write).handle_error(
+    write_record_ertr::pass_further{},
+    crimson::ct_error::all_same_way([] { ceph_assert(0 == "TODO"); }));
+    
 }
 
 segment_off_t Journal::get_encoded_record_length(

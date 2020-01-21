@@ -40,6 +40,7 @@ public:
 
 private:
   const segment_off_t max_record_length;
+  const segment_off_t block_size;
 
   JournalSegmentProvider &segment_provider;
   SegmentManager &segment_manager;
@@ -62,13 +63,15 @@ private:
   using write_record_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   write_record_ertr::future<> write_record(
-    paddr_t addr,
+    segment_off_t length,
     record_t &&record);
   
   segment_off_t get_encoded_record_length(
     const record_t &record) const;
 
   bool needs_roll(segment_off_t length) const;
+
+  paddr_t next_block_addr() const;
 
 public:
   Journal(
@@ -93,14 +96,18 @@ public:
     record_t &&record,
     F &&fixup) {
     auto length = get_encoded_record_length(record);
-
     if (length > max_record_length) {
       return crimson::ct_error::erange::make();
     }
-
     return (needs_roll(length) ? roll_journal_segment() :
 	    roll_journal_segment_ertr::now()
-    ).safe_then([this]() {
+    ).safe_then([this,
+		 fixup=std::forward<F>(fixup),
+		 record=std::move(record),
+		 length]() {
+      fixup(written_to + block_size, record);
+      ceph_assert(get_encoded_record_length(record) == length);
+      return write_ertr::now();//write_record(length, std::move(record));
     });
   }
 };
