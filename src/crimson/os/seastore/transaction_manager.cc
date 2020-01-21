@@ -19,7 +19,8 @@ namespace {
 namespace crimson::os::seastore {
 
 TransactionManager::TransactionManager(SegmentManager &segment_manager)
-  : journal(new Journal(*((JournalSegmentProvider*)nullptr), segment_manager))
+  : segment_manager(segment_manager),
+    journal(new Journal(*((JournalSegmentProvider*)nullptr), segment_manager))
 {}
 
 TransactionManager::init_ertr::future<> TransactionManager::init()

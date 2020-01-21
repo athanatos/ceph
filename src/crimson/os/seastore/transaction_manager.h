@@ -27,16 +27,12 @@ class Journal;
 class Transaction {
   friend class TransactionManager;
 
-  std::vector<
-    std::pair<
-      segment_off_t,
-      std::function<block_info_t(paddr_t)>
-      >
-    > blocks;
+  record_t record;
+  std::vector<std::function<void(paddr_t, extent_info_t &)>> extent_fixups;
+  std::vector<std::function<void(paddr_t, delta_info_t &)>> delta_fixups;
 
-  std::vector<std::function<delta_info_t(paddr_t)>> deltas;
 public:
-  segment_off_t block_offset = 0;
+  segment_off_t extent_offset = 0;
 
   /**
    * Add journaled representation of overwrite of physical offsets
@@ -53,8 +49,9 @@ public:
    * @return future for completion
    */
   template <typename F>
-  void add_delta(F &&f) {
-    deltas.emplace_back(std::forward<F>(f));
+  void add_delta(delta_info_t &&delta, F &&f = [](auto, auto &){}) {
+    record.deltas.emplace_back(std::move(delta));
+    delta_fixups.emplace_back(std::forward<F>(f));
   }
 
   /**
@@ -65,13 +62,15 @@ public:
    * @return 
    */
   template <typename F>
-  segment_off_t add_block(
-    segment_off_t length,
-    F &&f) {
-    blocks.emplace_back(std::make_pair(length, std::forward<F>(f)));
-    auto current = block_offset;
-    block_offset += length;
-    return block_offset;
+  segment_off_t add_extent(
+    extent_info_t &&extent,
+    F &&f = [](auto, auto &){}) {
+    record.extents.emplace_back(std::move(extent));
+    extent_fixups.emplace_back(std::forward<F>(f));
+    
+    auto current = extent_offset;
+    extent_offset += extent.bl.length();
+    return current;
   }
     
 
@@ -80,6 +79,7 @@ public:
 using TransactionRef = std::unique_ptr<Transaction>;
 
 class TransactionManager {
+  SegmentManager &segment_manager;
   std::unique_ptr<Journal> journal;
 
 public:

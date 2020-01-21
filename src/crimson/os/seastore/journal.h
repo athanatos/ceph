@@ -82,7 +82,7 @@ public:
 
   using write_ertr = write_record_ertr;
   template <typename F>
-  write_ertr::future<> write(F &&f) {
+  write_ertr::future<> write_with_offset(F &&f) {
     return write_ertr::now();
   }
 };
