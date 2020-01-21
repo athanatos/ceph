@@ -27,7 +27,8 @@ TransactionManager::init_ertr::future<> TransactionManager::init()
   return journal->open_for_write();
 }
 
-submit_transaction_ertr::future<> submit_transaction(TransactionRef &&t)
+submit_transaction_ertr::future<> TransactionManager::submit_transaction(
+  TransactionRef &&t)
 {
 }
 
