@@ -85,6 +85,14 @@ WRITE_CLASS_DENC_BOUNDED(extent_header_t)
 
 namespace crimson::os::seastore {
 
+Journal::Journal(
+  JournalSegmentProvider &segment_provider,
+  SegmentManager &segment_manager)
+  : max_record_length(segment_manager.get_segment_size() /* TODO */),
+    segment_provider(segment_provider),
+    segment_manager(segment_manager) {}
+
+
 Journal::initialize_segment_ertr::future<> Journal::initialize_segment(
   Segment &segment)
 {
@@ -96,7 +104,6 @@ Journal::initialize_segment_ertr::future<> Journal::initialize_segment(
     segment.get_segment_id(),
     current_replay_point};
   ::encode(header, bl);
-  reserved_to = segment_manager.get_block_size();
   written_to = segment_manager.get_block_size();
   return segment.write(0, bl).handle_error(
     init_ertr::pass_further{},
@@ -104,11 +111,11 @@ Journal::initialize_segment_ertr::future<> Journal::initialize_segment(
 }
 
 
-Journal::write_ertr::future<> Journal::write_record(
+Journal::write_record_ertr::future<> Journal::write_record(
   paddr_t addr,
   record_t &&record)
 {
-  return write_ertr::now();
+  return write_record_ertr::now();
 }
 
 segment_off_t Journal::get_encoded_record_length(
@@ -118,6 +125,11 @@ segment_off_t Journal::get_encoded_record_length(
   for (const auto &i: record.extents) {
   }
   return ret;
+}
+
+bool Journal::needs_roll(segment_off_t length) const {
+  return length + written_to >
+    current_journal_segment->get_write_capacity();
 }
 
 Journal::roll_journal_segment_ertr::future<>
@@ -136,7 +148,6 @@ Journal::roll_journal_segment()
     }).safe_then([this](auto sref) {
       current_journal_segment = sref;
       written_to = 0;
-      reserved_to = 0;
       return initialize_segment(*current_journal_segment);
     }).handle_error(
       roll_journal_segment_ertr::pass_further{},

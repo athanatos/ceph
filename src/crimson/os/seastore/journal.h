@@ -39,6 +39,8 @@ public:
     std::numeric_limits<journal_segment_seq_t>::max();
 
 private:
+  const segment_off_t max_record_length;
+
   JournalSegmentProvider &segment_provider;
   SegmentManager &segment_manager;
 
@@ -48,7 +50,6 @@ private:
   
   SegmentRef current_journal_segment;
   segment_off_t written_to = 0;
-  segment_off_t reserved_to = 0;
 
   segment_id_t next_journal_segment_id = NULL_SEG_ID;
   journal_seq_t current_journal_seq = 0;
@@ -67,28 +68,40 @@ private:
   segment_off_t get_encoded_record_length(
     const record_t &record) const;
 
+  bool needs_roll(segment_off_t length) const;
+
 public:
   Journal(
     JournalSegmentProvider &segment_provider,
-    SegmentManager &segment_manager)
-    : segment_provider(segment_provider),
-      segment_manager(segment_manager) {}
+    SegmentManager &segment_manager);
 
   using roll_journal_segment_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   roll_journal_segment_ertr::future<> roll_journal_segment();
 
-  using init_ertr = crimson::errorator <
+  using init_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
   init_ertr::future<> open_for_write();
 
-  using write_ertr = write_record_ertr;
+  using write_ertr = crimson::errorator<
+    crimson::ct_error::erange,
+    crimson::ct_error::input_output_error
+    >;
   template <typename F>
   write_ertr::future<> write_with_offset(
     record_t &&record,
     F &&fixup) {
-    return write_ertr::now();
+    auto length = get_encoded_record_length(record);
+
+    if (length > max_record_length) {
+      return crimson::ct_error::erange::make();
+    }
+
+    return (needs_roll(length) ? roll_journal_segment() :
+	    roll_journal_segment_ertr::now()
+    ).safe_then([this]() {
+    });
   }
 };
 
