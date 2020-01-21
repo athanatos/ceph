@@ -95,15 +95,13 @@ public:
   }
 
   /**
-   * Atomically submits transaction to persistence and cache
+   * Atomically submits transaction to persistence
    *
    * @param 
    */
   using submit_transaction_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
-  submit_transaction_ertr::future<> submit_transaction() {
-    return submit_transaction_ertr::now();
-  }
+  submit_transaction_ertr::future<> submit_transaction(TransactionRef &&);
 
   ~TransactionManager();
 };
