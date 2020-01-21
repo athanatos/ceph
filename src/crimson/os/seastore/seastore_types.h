@@ -69,6 +69,15 @@ struct block_info_t {
   }
 };
 
+using journal_seq_t = uint64_t;
+static constexpr journal_seq_t NO_DELTAS =
+  std::numeric_limits<journal_seq_t>::max();
+
+struct record_t {
+  std::vector<block_info_t> extents;
+  std::vector<delta_info_t> deltas;
+};
+
 }
 
 WRITE_CLASS_DENC(crimson::os::seastore::paddr_t)

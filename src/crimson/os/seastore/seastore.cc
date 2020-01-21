@@ -169,7 +169,7 @@ seastar::future<> SeaStore::do_transaction(
 	      [this, &iter, &trans, &onodes, &t, &ch]() {
 		return _do_transaction_step(trans, ch, onodes, iter).safe_then(
 		  [this, &trans] {
-		    return transaction_manager->submit_transaction();
+		    return transaction_manager->submit_transaction(std::move(trans));
 		  }).handle_error(
 		    // TODO: add errorator::do_until
 		    write_ertr::all_same_way([this, &t](auto e) {

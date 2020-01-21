@@ -56,19 +56,22 @@ struct extent_info_t {
 struct record_header_t {
   // Fixed portion
   segment_off_t length;         // block aligned
-  Journal::journal_seq_t seq;            // journal sequence for
+  journal_seq_t seq;            // journal sequence for
   segment_off_t tail;           // overflow for long record metadata
   checksum_t    full_checksum;  // checksum for full record
+
+  DENC(record_header_t, v, p) {
+    denc(v.length, p);
+    denc(v.seq, p);
+    denc(v.tail, p);
+    denc(v.full_checksum, p);
+  }
 };
 
-struct record_t : record_header_t {
-  std::vector<ceph::bufferlist> extents; // block aligned, offset and length
-  ceph::bufferlist delta;
-  std::vector<extent_info_t> block_info; // information on each extent
-};
 
 }
 WRITE_CLASS_DENC(segment_header_t)
+WRITE_CLASS_DENC(record_header_t)
 
 namespace crimson::os::seastore {
 
@@ -89,6 +92,14 @@ Journal::initialize_segment_ertr::future<> Journal::initialize_segment(
     init_ertr::pass_further{},
     crimson::ct_error::all_same_way([] { ceph_assert(0 == "TODO"); }));
 }
+
+
+Journal::write_ertr::future<> Journal::write_record(
+  paddr_t addr,
+  record_t &&record)
+{
+}
+  
 
 Journal::roll_journal_segment_ertr::future<>
 Journal::roll_journal_segment()
@@ -118,20 +129,5 @@ Journal::init_ertr::future<> Journal::open_for_write()
 {
   return roll_journal_segment();
 }
-
-#if 0
-std::pair<segment_off_t, SegmentRef> Journal::reserve(segment_off_t size)
-{
-  ceph_assert(size % segment_manager.get_block_size() == 0);
-  if (reserved_to + size >= current_journal_segment->get_write_capacity()) {
-    return std::make_pair(NULL_SEG_OFF, nullptr);
-  } else {
-    auto offset = reserved_to;
-    reserved_to += size;
-    return std::make_pair(
-      offset, current_journal_segment);
-  }
-}
-#endif
 
 }

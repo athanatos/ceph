@@ -34,13 +34,10 @@ public:
 
 class Journal {
 public:
-  using journal_seq_t = uint64_t;
-  static constexpr journal_seq_t NO_DELTAS = std::numeric_limits<journal_seq_t>::max();
-  
   using journal_segment_seq_t = uint64_t;
   static constexpr journal_segment_seq_t NO_JOURNAL =
     std::numeric_limits<journal_segment_seq_t>::max();
-  
+
 private:
   JournalSegmentProvider &segment_provider;
   SegmentManager &segment_manager;
@@ -61,6 +58,11 @@ private:
   initialize_segment_ertr::future<> initialize_segment(
     Segment &segment);
 
+  using write_record_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  write_record_ertr::future<> write_record(
+    paddr_t addr,
+    record_t &&record);
   
 public:
   Journal(
@@ -77,6 +79,12 @@ public:
     crimson::ct_error::input_output_error
     >;
   init_ertr::future<> open_for_write();
+
+  using write_ertr = write_record_ertr;
+  template <typename F>
+  write_ertr::future<> write(F &&f) {
+    return write_ertr::now();
+  }
 };
 
 }

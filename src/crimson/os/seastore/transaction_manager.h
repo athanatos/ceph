@@ -54,7 +54,7 @@ public:
    */
   template <typename F>
   void add_delta(F &&f) {
-    deltas.emplace_back(std::move(f));
+    deltas.emplace_back(std::forward<F>(f));
   }
 
   /**
@@ -68,7 +68,7 @@ public:
   segment_off_t add_block(
     segment_off_t length,
     F &&f) {
-    blocks.emplace_back(std::make_pair(length, std::move(f)));
+    blocks.emplace_back(std::make_pair(length, std::forward<F>(f)));
     auto current = block_offset;
     block_offset += length;
     return block_offset;
