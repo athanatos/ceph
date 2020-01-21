@@ -104,10 +104,10 @@ public:
     ).safe_then([this,
 		 fixup=std::forward<F>(fixup),
 		 record=std::move(record),
-		 length]() {
+		 length]() mutable {
       fixup(written_to + block_size, record);
       ceph_assert(get_encoded_record_length(record) == length);
-      return write_ertr::now();//write_record(length, std::move(record));
+      return write_record(length, std::move(record));
     });
   }
 };
