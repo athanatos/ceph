@@ -17,16 +17,32 @@ class SegmentManager;
 class Segment;
 using SegmentRef = boost::intrusive_ptr<Segment>;
 
+/**
+ * Callback interface for managing available segments
+ */
+class JournalSegmentProvider {
+public:
+  using get_segment_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  virtual get_segment_ertr::future<segment_id_t> get_segment() = 0;
+  
+  /* TODO: we'll want to use this to propogate information about segment contents */
+  virtual void put_segment(segment_id_t segment) = 0;
+
+  virtual ~JournalSegmentProvider() {}
+};
+
 class Journal {
 public:
   using journal_seq_t = uint64_t;
   static constexpr journal_seq_t NO_DELTAS = std::numeric_limits<journal_seq_t>::max();
-
+  
   using journal_segment_seq_t = uint64_t;
   static constexpr journal_segment_seq_t NO_JOURNAL =
     std::numeric_limits<journal_segment_seq_t>::max();
-
+  
 private:
+  JournalSegmentProvider &segment_provider;
   SegmentManager &segment_manager;
 
   paddr_t current_replay_point;
@@ -43,32 +59,24 @@ private:
   using initialize_segment_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   initialize_segment_ertr::future<> initialize_segment(
-    Segment &segment,
-    segment_id_t next_journal_segment);
+    Segment &segment);
 
   
 public:
   Journal(
+    JournalSegmentProvider &segment_provider,
     SegmentManager &segment_manager)
-    : segment_manager(segment_manager) {}
+    : segment_provider(segment_provider),
+      segment_manager(segment_manager) {}
 
   using roll_journal_segment_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
-  roll_journal_segment_ertr::future<SegmentRef> roll_journal_segment(
-    SegmentRef next_journal_segment,
-    segment_id_t next_next_id);
+  roll_journal_segment_ertr::future<> roll_journal_segment();
 
   using init_ertr = crimson::errorator <
     crimson::ct_error::input_output_error
     >;
-  init_ertr::future<> init_write(
-    SegmentRef initial_journal_segment,
-    segment_id_t next_next_id);
-
-  /* Reserves space for size bytes (must be block aligned), returns NULL_SEG
-   * if journal doesn't have enough space */
-  std::pair<segment_off_t, SegmentRef> reserve(segment_off_t size);
-
+  init_ertr::future<> open_for_write();
 };
 
 }

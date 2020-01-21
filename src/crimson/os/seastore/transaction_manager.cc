@@ -21,12 +21,12 @@ namespace crimson::os::seastore {
 Transaction::Transaction(paddr_t start) : start(start) {}
 
 TransactionManager::TransactionManager(SegmentManager &segment_manager)
-  : journal(new Journal(segment_manager))
+  : journal(new Journal(*((JournalSegmentProvider*)nullptr), segment_manager))
 {}
 
 TransactionManager::init_ertr::future<> TransactionManager::init()
 {
-  return journal->init_write(SegmentRef(), 0 /* TODO */);
+  return journal->open_for_write();
 }
 
 TransactionManager::read_ertr::future<> TransactionManager::add_delta(

@@ -73,8 +73,7 @@ WRITE_CLASS_DENC(segment_header_t)
 namespace crimson::os::seastore {
 
 Journal::initialize_segment_ertr::future<> Journal::initialize_segment(
-  Segment &segment,
-  segment_id_t next_journal_segment)
+  Segment &segment)
 {
   // write out header
   ceph_assert(segment.get_write_ptr() == 0);
@@ -91,31 +90,36 @@ Journal::initialize_segment_ertr::future<> Journal::initialize_segment(
     crimson::ct_error::all_same_way([] { ceph_assert(0 == "TODO"); }));
 }
 
-Journal::init_ertr::future<> Journal::init_write(
-  SegmentRef initial_journal_segment,
-  segment_id_t next_next_id)
+Journal::roll_journal_segment_ertr::future<>
+Journal::roll_journal_segment()
 {
-  return roll_journal_segment(initial_journal_segment, next_next_id).safe_then(
-    [](auto) { return; });
+  return current_journal_segment->close().safe_then(
+    [this, old_segment_id = current_journal_segment->get_segment_id()] {
+      // TODO: pretty sure this needs to be atomic in some sense with
+      // making use of the new segment, maybe this bit needs to take
+      // the first transaction of the new segment?  Or the segment
+      // header should include deltas?
+      segment_provider.put_segment(old_segment_id);
+      return segment_provider.get_segment();
+    }).safe_then([this](auto segment) {
+      return segment_manager.open(segment);
+    }).safe_then([this](auto sref) {
+      current_journal_segment = sref;
+      written_to = 0;
+      reserved_to = 0;
+      return initialize_segment(*current_journal_segment);
+    }).handle_error(
+      roll_journal_segment_ertr::pass_further{},
+      crimson::ct_error::all_same_way([] { ceph_assert(0 == "TODO"); })
+    );
 }
 
-Journal::roll_journal_segment_ertr::future<SegmentRef>
-Journal::roll_journal_segment(
-  SegmentRef next_journal_segment,
-  segment_id_t next_next_id)
+Journal::init_ertr::future<> Journal::open_for_write()
 {
-  auto old_segment = current_journal_segment;
-  current_journal_segment = next_journal_segment;
-  next_journal_segment_id = next_next_id;
-  written_to = 0;
-  reserved_to = 0;
-  return initialize_segment(
-    *current_journal_segment,
-    next_journal_segment_id).safe_then([old_segment] {
-      return old_segment;
-    });
+  return roll_journal_segment();
 }
 
+#if 0
 std::pair<segment_off_t, SegmentRef> Journal::reserve(segment_off_t size)
 {
   ceph_assert(size % segment_manager.get_block_size() == 0);
@@ -128,5 +132,6 @@ std::pair<segment_off_t, SegmentRef> Journal::reserve(segment_off_t size)
       offset, current_journal_segment);
   }
 }
+#endif
 
 }
