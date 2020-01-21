@@ -19,17 +19,40 @@
 #include "include/buffer.h"
 #include "crimson/osd/exceptions.h"
 
+
 namespace crimson::os::seastore {
 class SegmentManager;
-
 class Journal;
 
 class Transaction {
   friend class TransactionManager;
 
+public:
+  using extent_offset_t = off_t;
+
+  class FixupHandler {
+    paddr_t block_base;
+    record_t &record;
+    friend class TransactionManager;
+    FixupHandler(paddr_t block_base, record_t &record)
+      : block_base(block_base), record(record) {}
+  public:
+    paddr_t get_paddr(extent_offset_t off) {
+      segment_off_t offset = 0;
+      for (extent_offset_t i = 0; i < off; ++i) {
+	offset += record.extents[i].bl.length();
+      }
+      return {block_base.segment, block_base.offset + offset};
+    }
+
+    ceph::bufferlist &get_bl(extent_offset_t off) {
+      return record.extents[off].bl;
+    }
+  };
+
   record_t record;
-  std::vector<std::function<void(paddr_t, extent_info_t &)>> extent_fixups;
-  std::vector<std::function<void(paddr_t, delta_info_t &)>> delta_fixups;
+  std::vector<std::function<void(FixupHandler &, extent_info_t &)>> extent_fixups;
+  std::vector<std::function<void(FixupHandler &, delta_info_t &)>> delta_fixups;
 
 public:
   segment_off_t extent_offset = 0;
