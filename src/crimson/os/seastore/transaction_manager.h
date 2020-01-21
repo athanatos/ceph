@@ -5,6 +5,9 @@
 
 #include <iostream>
 #include <optional>
+#include <vector>
+#include <utility>
+#include <functional>
 
 #include <boost/intrusive_ptr.hpp>
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
@@ -23,11 +26,56 @@ class Journal;
 
 class Transaction {
   friend class TransactionManager;
-  
-  const paddr_t start;
 
+  std::vector<
+    std::pair<
+      segment_off_t,
+      std::function<block_info_t(paddr_t)>
+      >
+    > blocks;
+
+  std::vector<std::function<delta_info_t(paddr_t)>> deltas;
 public:
-  Transaction(paddr_t start);
+  segment_off_t block_offset = 0;
+
+  /**
+   * Add journaled representation of overwrite of physical offsets
+   * [addr, addr + bl.size()).
+   *
+   * As read_ertr indicates, may perform reads.
+   *
+   * @param trans [in,out] current transaction
+   * @param type  [in]     type of delta
+   * @param laddr [in]     aligned logical block address -- null 
+   *                       ff type != LBA_BLOCK
+   * @param delta [in]     logical mutation -- encoding of mutation
+   *                       to block
+   * @return future for completion
+   */
+  template <typename F>
+  void add_delta(F &&f) {
+    deltas.emplace_back(std::move(f));
+  }
+
+  /**
+   * Adds a new block containing bl.
+   *
+   * @param bl    [in] contents of new bloc, must be page aligned and have
+   *                   aligned length.
+   * @return 
+   */
+  template <typename F>
+  segment_off_t add_block(
+    segment_off_t length,
+    F &&f) {
+    blocks.emplace_back(std::make_pair(length, std::move(f)));
+    auto current = block_offset;
+    block_offset += length;
+    return block_offset;
+  }
+    
+
+  
 };
 using TransactionRef = std::unique_ptr<Transaction>;
 
@@ -43,49 +91,8 @@ public:
   init_ertr::future<> init();
 
   TransactionRef create_transaction() {
-    return std::make_unique<Transaction>(paddr_t{0,0});
+    return std::make_unique<Transaction>();
   }
-
-  using read_ertr = crimson::errorator <
-    crimson::ct_error::input_output_error
-    >;
-  /**
-   * Add journaled representation of overwrite of physical offsets
-   * [addr, addr + bl.size()).
-   *
-   * As read_ertr indicates, may perform reads.
-   *
-   * @param trans [in,out] current transaction
-   * @param paddr [in]     aligned physical block address
-   * @param laddr [in]     aligned logical block address or type tag for
-   *                       non-logical blocks
-   * @param delta [in]     logical mutation -- encoding of mutation
-   *                       to block
-   * @param bytes [in]     vector of offset, bufferlist pairs representing
-   *                       physical mutation to blocks
-   * @return future for completion
-   */
-  read_ertr::future<> add_delta(
-    TransactionRef &trans,
-    paddr_t paddr,
-    laddr_t laddr,
-    ceph::bufferlist delta,
-    ceph::bufferlist bl);
-
-  /**
-   * Adds a new block containing bl.
-   *
-   * @param trans [in,out] current transaction
-   * @param laddr [in] laddr of block or type code for non-logical
-   * @param bl    [in] contents of new bloc, must be page aligned and have
-   *                   aligned length.
-   *
-   * @return 
-   */
-  paddr_t add_block(
-    TransactionRef &trans,
-    laddr_t laddr,
-    ceph::bufferlist bl);
 
   /**
    * Atomically submits transaction to persistence and cache

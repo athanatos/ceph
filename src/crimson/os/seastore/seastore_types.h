@@ -6,6 +6,7 @@
 #include <limits>
 
 #include "include/denc.h"
+#include "include/buffer.h"
 
 namespace crimson::os::seastore {
 
@@ -34,6 +35,42 @@ constexpr laddr_t L_ADDR_NULL = std::numeric_limits<laddr_t>::max();
 constexpr laddr_t L_ADDR_ROOT = std::numeric_limits<laddr_t>::max() - 1;
 constexpr laddr_t L_ADDR_LBAT = std::numeric_limits<laddr_t>::max() - 2;
 
+enum class block_types_t : uint8_t {
+  ROOT = 0,
+  LADDR_TREE = 1,
+  LBA_BLOCK = 2
+};
+
+struct delta_info_t {
+  block_types_t type; ///< delta type
+  laddr_t laddr;       ///< logical address, null iff delta != LBA_BLOCK
+  paddr_t paddr;       ///< physical address
+  ceph::bufferlist bl; ///< payload
+
+  DENC(delta_info_t, v, p) {
+    denc(v.type, p);
+    denc(v.laddr, p);
+    denc(v.paddr, p);
+    denc(v.bl, p);
+  }
+};
+
+struct block_info_t {
+  block_types_t type;   ///< delta type
+  laddr_t laddr;        ///< logical address, null iff delta != LBA_BLOCK
+  segment_off_t length; ///< length
+  ceph::bufferlist bl;  ///< payload, bl.length() == length, aligned
+
+  DENC(block_info_t, v, p) {
+    denc(v.type, p);
+    denc(v.laddr, p);
+    denc(v.length, p);
+    denc(v.bl, p);
+  }
+};
+
 }
 
 WRITE_CLASS_DENC(crimson::os::seastore::paddr_t)
+WRITE_CLASS_DENC(crimson::os::seastore::delta_info_t)
+WRITE_CLASS_DENC(crimson::os::seastore::block_info_t)
