@@ -47,26 +47,12 @@ struct delta_info_t {
   paddr_t paddr;        ///< physical address
   segment_off_t length; ///< extent length
   ceph::bufferlist bl;  ///< payload
-
-  DENC(delta_info_t, v, p) {
-    denc(v.type, p);
-    denc(v.laddr, p);
-    denc(v.paddr, p);
-    denc(v.length, p);
-    denc(v.bl, p);
-  }
 };
 
 struct extent_info_t {
   extent_types_t type;  ///< delta type
   laddr_t laddr;        ///< logical address, null iff delta != LBA_BLOCK
   ceph::bufferlist bl;  ///< payload, bl.length() == length, aligned
-
-  DENC(extent_info_t, v, p) {
-    denc(v.type, p);
-    denc(v.laddr, p);
-    denc(v.bl, p);
-  }
 };
 
 using journal_seq_t = uint64_t;
@@ -81,5 +67,3 @@ struct record_t {
 }
 
 WRITE_CLASS_DENC(crimson::os::seastore::paddr_t)
-WRITE_CLASS_DENC(crimson::os::seastore::delta_info_t)
-WRITE_CLASS_DENC(crimson::os::seastore::extent_info_t)

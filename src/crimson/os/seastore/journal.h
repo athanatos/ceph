@@ -64,6 +64,9 @@ private:
     paddr_t addr,
     record_t &&record);
   
+  segment_off_t get_encoded_record_length(
+    const record_t &record) const;
+
 public:
   Journal(
     JournalSegmentProvider &segment_provider,
@@ -82,7 +85,9 @@ public:
 
   using write_ertr = write_record_ertr;
   template <typename F>
-  write_ertr::future<> write_with_offset(F &&f) {
+  write_ertr::future<> write_with_offset(
+    record_t &&record,
+    F &&fixup) {
     return write_ertr::now();
   }
 };

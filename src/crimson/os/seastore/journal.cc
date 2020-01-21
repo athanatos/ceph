@@ -40,17 +40,26 @@ struct segment_header_t {
   }
 };
 
-
-/* Could be modified to be omitted for logical blocks */
-struct extent_info_t {
-  // offset inferred from position in list
+struct extent_header_t {
+  // Almost certainly wrong
+  static constexpr size_t ENCODED_SIZE =
+    5 +
+    1 +
+    sizeof(laddr_t) +
+    sizeof(segment_off_t);
+  // Fixed portion
+  extent_types_t type;
+  laddr_t laddr;
   segment_off_t length;
-  laddr_t laddr; // Encodes type for non-logical, debugging info for
-  // logical (lba tree already has a secondary lookup
-  // for checking logical block liveness)
-  // Note, we could omit this for logical blocks, replace laddr
-  // with another segment_off_t for offset, and stash the type tag in the
-  // low bits.
+
+  extent_header_t(extent_info_t info)
+    : type(info.type), laddr(info.laddr), length(info.bl.length()) {}
+
+  DENC(extent_header_t, v, p) {
+    denc(v.type, p);
+    denc(v.laddr, p);
+    denc(v.length, p);
+  }
 };
 
 struct record_header_t {
@@ -70,8 +79,9 @@ struct record_header_t {
 
 
 }
-WRITE_CLASS_DENC(segment_header_t)
-WRITE_CLASS_DENC(record_header_t)
+WRITE_CLASS_DENC_BOUNDED(segment_header_t)
+WRITE_CLASS_DENC_BOUNDED(record_header_t)
+WRITE_CLASS_DENC_BOUNDED(extent_header_t)
 
 namespace crimson::os::seastore {
 
@@ -98,8 +108,17 @@ Journal::write_ertr::future<> Journal::write_record(
   paddr_t addr,
   record_t &&record)
 {
+  return write_ertr::now();
 }
-  
+
+segment_off_t Journal::get_encoded_record_length(
+  const record_t &record) const {
+  const auto block_size = segment_manager.get_block_size();
+  auto ret = block_size;
+  for (const auto &i: record.extents) {
+  }
+  return ret;
+}
 
 Journal::roll_journal_segment_ertr::future<>
 Journal::roll_journal_segment()
