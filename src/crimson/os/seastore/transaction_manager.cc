@@ -19,16 +19,35 @@ namespace {
 using namespace crimson;
 using namespace crimson::os::seastore;
 
+using journal_seq_t = uint64_t;
+constexpr journal_seq_t NO_DELTAS = std::numeric_limits<journal_seq_t>::max();
+
+using journal_segment_seq_t = uint64_t;
+constexpr journal_segment_seq_t NO_JOURNAL =
+  std::numeric_limits<journal_segment_seq_t>::max();
+
+
+
 /**
  * Segment header
+ *
+ * Every segment contains and encode segment_header_t in the first block.
+ * Our strategy for finding the journal replay point is:
+ * 1) Find the segment with the highest journal_segment_id
+ * 2) Scan forward from committed_journal_lb to find the most recent
+ *    journal_commit_lb record
+ * 3) Replay starting at the most recent found journal_commit_lb record
  */
 struct segment_header_t {
-  crimson::os::seastore::segment_id_t next_segment;
-  crimson::os::seastore::journal_seq_t journal_lb;
+  journal_segment_seq_t journal_segment_id;
+  segment_id_t physical_segment_id; // debugging
+
+  paddr_t journal_replay_lb;
 
   DENC(segment_header_t, v, p) {
-    denc(v.next_segment, p);
-    denc(v.journal_lb, p);
+    denc(v.journal_segment_id, p);
+    denc(v.physical_segment_id, p);
+    denc(v.journal_replay_lb, p);
   }
 };
 
@@ -66,7 +85,11 @@ namespace crimson::os::seastore {
 namespace transaction_manager_detail {
 
 class Journal {
-  const segment_off_t block_size;
+  SegmentManager &segment_manager;
+
+  paddr_t current_replay_point;
+
+  journal_segment_seq_t current_journal_segment_id = 0;
   
   SegmentRef current_journal_segment;
   segment_off_t written_to = 0;
@@ -83,7 +106,9 @@ class Journal {
 
   
 public:
-  Journal(segment_off_t block_size) : block_size(block_size) {}
+  Journal(
+    SegmentManager &segment_manager)
+    : segment_manager(segment_manager) {}
 
   using roll_journal_segment_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
@@ -110,10 +135,13 @@ Journal::initialize_segment_ertr::future<> Journal::initialize_segment(
   // write out header
   ceph_assert(segment.get_write_ptr() == 0);
   bufferlist bl;
-  auto header = segment_header_t{next_journal_segment, current_journal_seq};
+  auto header = segment_header_t{
+    current_journal_segment_id++,
+    segment.get_segment_id(),
+    current_replay_point};
   ::encode(header, bl);
-  reserved_to = block_size;
-  written_to = block_size;
+  reserved_to = segment_manager.get_block_size();
+  written_to = segment_manager.get_block_size();
   return segment.write(0, bl).handle_error(
     init_ertr::pass_further{},
     crimson::ct_error::all_same_way([] { ceph_assert(0 == "TODO"); }));
@@ -146,7 +174,7 @@ Journal::roll_journal_segment(
 
 std::pair<segment_off_t, SegmentRef> Journal::reserve(segment_off_t size)
 {
-  ceph_assert(size % block_size == 0);
+  ceph_assert(size % segment_manager.get_block_size() == 0);
   if (reserved_to + size >= current_journal_segment->get_write_capacity()) {
     return std::make_pair(NULL_SEG_OFF, nullptr);
   } else {
@@ -163,7 +191,7 @@ Transaction::Transaction(paddr_t start) : start(start) {}
 
 TransactionManager::TransactionManager(SegmentManager &segment_manager)
   : journal(new transaction_manager_detail::Journal(
-	      segment_manager.get_block_size()))
+	      segment_manager))
 {}
 
 TransactionManager::init_ertr::future<> TransactionManager::init()
