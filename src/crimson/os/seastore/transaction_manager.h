@@ -19,9 +19,7 @@
 namespace crimson::os::seastore {
 class SegmentManager;
 
-namespace transaction_manager_detail {
 class Journal;
-}
 
 class Transaction {
   friend class TransactionManager;
@@ -34,7 +32,7 @@ public:
 using TransactionRef = std::unique_ptr<Transaction>;
 
 class TransactionManager {
-  std::unique_ptr<transaction_manager_detail::Journal> journal;
+  std::unique_ptr<Journal> journal;
 
 public:
   TransactionManager(SegmentManager &segment_manager);
