@@ -13,8 +13,11 @@ namespace {
   seastar::logger& logger() {
     return crimson::get_logger(ceph_subsys_filestore);
   }
-
 }
+
+namespace {
+using namespace crimson;
+using namespace crimson::os::seastore;
 
 /**
  * Segment header
@@ -28,6 +31,35 @@ struct segment_header_t {
     denc(v.journal_lb, p);
   }
 };
+
+
+/* Could be modified to be omitted for logical blocks */
+struct extent_info_t {
+  // offset inferred from position in list
+  segment_off_t length;
+  laddr_t laddr; // Encodes type for non-logical, debugging info for
+  // logical (lba tree already has a secondary lookup
+  // for checking logical block liveness)
+  // Note, we could omit this for logical blocks, replace laddr
+  // with another segment_off_t for offset, and stash the type tag in the
+  // low bits.
+};
+
+struct record_header_t {
+  // Fixed portion
+  segment_off_t length;         // block aligned
+  journal_seq_t seq;            // journal sequence for
+  segment_off_t tail;           // overflow for long record metadata
+  checksum_t    full_checksum;  // checksum for full record
+};
+
+struct record_t : record_header_t {
+  std::vector<ceph::bufferlist> extents; // block aligned, offset and length
+  ceph::bufferlist delta;
+  std::vector<extent_info_t> block_info; // information on each extent
+};
+
+}
 WRITE_CLASS_DENC(segment_header_t)
 
 namespace crimson::os::seastore {
