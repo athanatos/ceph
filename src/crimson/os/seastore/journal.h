@@ -60,13 +60,19 @@ private:
   initialize_segment_ertr::future<> initialize_segment(
     Segment &segment);
 
+  ceph::bufferlist encode_record(
+    segment_off_t mdlength,
+    segment_off_t dlength,
+    record_t &&record);
+
   using write_record_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   write_record_ertr::future<> write_record(
-    segment_off_t length,
+    segment_off_t mdlength,
+    segment_off_t dlength,
     record_t &&record);
   
-  segment_off_t get_encoded_record_length(
+  std::pair<segment_off_t, segment_off_t> get_encoded_record_length(
     const record_t &record) const;
 
   bool needs_roll(segment_off_t length) const;
@@ -95,19 +101,21 @@ public:
   write_ertr::future<> write_with_offset(
     record_t &&record,
     F &&fixup) {
-    auto length = get_encoded_record_length(record);
-    if (length > max_record_length) {
+    auto [mdlength, dlength] = get_encoded_record_length(record);
+    auto total = mdlength + dlength;
+    if (total > max_record_length) {
       return crimson::ct_error::erange::make();
     }
-    return (needs_roll(length) ? roll_journal_segment() :
+    return (needs_roll(total) ? roll_journal_segment() :
 	    roll_journal_segment_ertr::now()
     ).safe_then([this,
 		 fixup=std::forward<F>(fixup),
 		 record=std::move(record),
-		 length]() mutable {
+		 mdlength,
+		 dlength,
+		 total]() mutable {
       fixup(written_to + block_size, record);
-      ceph_assert(get_encoded_record_length(record) == length);
-      return write_record(length, std::move(record));
+      return write_record(mdlength, dlength, std::move(record));
     });
   }
 };

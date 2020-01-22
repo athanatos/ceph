@@ -41,16 +41,12 @@ struct segment_header_t {
 };
 
 struct extent_header_t {
-  // Almost certainly wrong
-  static constexpr size_t ENCODED_SIZE =
-    5 +
-    1 +
-    sizeof(laddr_t) +
-    sizeof(segment_off_t);
   // Fixed portion
-  extent_types_t type;
+  extent_types_t type = extent_types_t::NONE;
   laddr_t laddr;
-  segment_off_t length;
+  segment_off_t length = 0;
+
+  extent_header_t() = default;
 
   extent_header_t(extent_info_t info)
     : type(info.type), laddr(info.laddr), length(info.bl.length()) {}
@@ -64,16 +60,20 @@ struct extent_header_t {
 
 struct record_header_t {
   // Fixed portion
-  segment_off_t length;         // block aligned
-  journal_seq_t seq;            // journal sequence for
-  segment_off_t tail;           // overflow for long record metadata
+  segment_off_t mdlength;       // block aligned
+  segment_off_t dlength;        // block aligned
+  journal_seq_t seq;            // current journal seqid
   checksum_t    full_checksum;  // checksum for full record
+  size_t deltas;                // number of deltas
+  size_t extents;               // number of extents
 
   DENC(record_header_t, v, p) {
-    denc(v.length, p);
+    denc(v.mdlength, p);
+    denc(v.dlength, p);
     denc(v.seq, p);
-    denc(v.tail, p);
     denc(v.full_checksum, p);
+    denc(v.deltas, p);
+    denc(v.extents, p);
   }
 };
 
@@ -111,17 +111,48 @@ Journal::initialize_segment_ertr::future<> Journal::initialize_segment(
     crimson::ct_error::all_same_way([] { ceph_assert(0 == "TODO"); }));
 }
 
-ceph::bufferlist encode_record(record_t &&record)
+ceph::bufferlist Journal::encode_record(
+  segment_off_t mdlength,
+  segment_off_t dlength,
+  record_t &&record)
 {
-  return ceph::bufferlist(); /* TODO */
+  bufferlist metadatabl;
+  record_header_t header{
+    mdlength,
+    dlength,
+    current_journal_seq,
+    0 /* checksum, TODO */,
+    record.deltas.size(),
+    record.extents.size()
+  };
+  ::encode(header, metadatabl);
+  for (const auto &i: record.deltas) {
+    ::encode(i, metadatabl);
+  }
+  bufferlist databl;
+  for (auto &i: record.extents) {
+    ::encode(extent_header_t{i}, metadatabl);
+    databl.claim_append(i.bl);
+  }
+  if (metadatabl.length() % block_size != 0) {
+    metadatabl.append(
+      ceph::bufferptr(
+	block_size - (metadatabl.length() % block_size)));
+  }
+  ceph_assert(metadatabl.length() == mdlength);
+  ceph_assert(databl.length() == dlength);
+  metadatabl.claim_append(databl);
+  ceph_assert(metadatabl.length() == (mdlength + dlength));
+  return metadatabl;
 }
 
 Journal::write_record_ertr::future<> Journal::write_record(
-  segment_off_t length,
+  segment_off_t mdlength,
+  segment_off_t dlength,
   record_t &&record)
 {
-  ceph::bufferlist to_write = encode_record(std::move(record));
-  ceph_assert(length == to_write.length());
+  ceph::bufferlist to_write = encode_record(
+    mdlength, dlength, std::move(record));
   written_to += p2roundup(to_write.length(), block_size);
   return current_journal_segment->write(written_to, to_write).handle_error(
     write_record_ertr::pass_further{},
@@ -129,13 +160,19 @@ Journal::write_record_ertr::future<> Journal::write_record(
     
 }
 
-segment_off_t Journal::get_encoded_record_length(
+std::pair<segment_off_t, segment_off_t> Journal::get_encoded_record_length(
   const record_t &record) const {
-  const auto block_size = segment_manager.get_block_size();
-  auto ret = block_size;
-  for (const auto &i: record.extents) {
+  auto metadata = ceph::encoded_sizeof_bounded<record_header_t>();
+  auto data = 0;
+  for (const auto &i: record.deltas) {
+    metadata += ceph::encoded_sizeof(i);
   }
-  return ret;
+  for (const auto &i: record.extents) {
+    data += i.bl.length();
+    metadata += ceph::encoded_sizeof_bounded<extent_header_t>();
+  }
+  metadata = p2roundup(metadata, (size_t)block_size);
+  return std::make_pair(metadata, data);
 }
 
 bool Journal::needs_roll(segment_off_t length) const {

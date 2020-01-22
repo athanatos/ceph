@@ -38,7 +38,8 @@ constexpr laddr_t L_ADDR_LBAT = std::numeric_limits<laddr_t>::max() - 2;
 enum class extent_types_t : uint8_t {
   ROOT = 0,
   LADDR_TREE = 1,
-  LBA_BLOCK = 2
+  LBA_BLOCK = 2,
+  NONE = 0xFF
 };
 
 struct delta_info_t {
@@ -47,6 +48,14 @@ struct delta_info_t {
   paddr_t paddr;        ///< physical address
   segment_off_t length; ///< extent length
   ceph::bufferlist bl;  ///< payload
+
+  DENC(delta_info_t, v, p) {
+    denc(v.type, p);
+    denc(v.laddr, p);
+    denc(v.paddr, p);
+    denc(v.length, p);
+    denc(v.bl, p);
+  }
 };
 
 struct extent_info_t {
@@ -66,4 +75,5 @@ struct record_t {
 
 }
 
-WRITE_CLASS_DENC(crimson::os::seastore::paddr_t)
+WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::paddr_t)
+WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::delta_info_t)
