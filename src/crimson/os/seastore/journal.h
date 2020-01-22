@@ -39,8 +39,8 @@ public:
     std::numeric_limits<journal_segment_seq_t>::max();
 
 private:
-  const segment_off_t max_record_length;
   const segment_off_t block_size;
+  const segment_off_t max_record_length;
 
   JournalSegmentProvider &segment_provider;
   SegmentManager &segment_manager;

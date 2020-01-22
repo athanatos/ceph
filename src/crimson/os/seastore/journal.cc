@@ -88,8 +88,11 @@ namespace crimson::os::seastore {
 Journal::Journal(
   JournalSegmentProvider &segment_provider,
   SegmentManager &segment_manager)
-  : max_record_length(segment_manager.get_segment_size() /* TODO */),
-    block_size(segment_manager.get_block_size()),
+  : block_size(segment_manager.get_block_size()),
+    max_record_length(
+      segment_manager.get_segment_size() -
+      p2align(ceph::encoded_sizeof_bounded<segment_header_t>(),
+	      size_t(block_size))),
     segment_provider(segment_provider),
     segment_manager(segment_manager) {}
 
