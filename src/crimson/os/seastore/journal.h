@@ -192,6 +192,13 @@ public:
     >;
   using replay_ret = replay_ertr::future<>;
   replay_ret replay(delta_handler_t &&);
+
+  replay_ertr::future<>
+  replay_segment(
+    SegmentManager &segment_manager,
+    paddr_t start,
+    delta_handler_t &delta_handler);
+
 };
 
 }

@@ -200,17 +200,44 @@ Journal::find_replay_segments_fut Journal::find_replay_segments()
 }
 
 Journal::replay_ertr::future<>
-replay_segment(
+Journal::replay_segment(
   SegmentManager &segment_manager,
   paddr_t start,
-  Journal::delta_handler_t &delta_handler)
+  delta_handler_t &delta_handler)
 {
   return seastar::do_with(
-    std::move(start),
-    [&segment_manager, &delta_handler](auto &&current) {
+    std::make_tuple(std::move(start), record_header_t()),
+    [this, &segment_manager, &delta_handler](auto &&in) {
+      auto &&[current, header] = in;
       return crimson::do_until(
-	[&segment_manager, &current, &delta_handler] {
-	  return Journal::replay_ertr::make_ready_future<bool>(true);
+	[this, &segment_manager, &current, &delta_handler, &header] {
+	  return segment_manager.read(current, block_size
+	  ).safe_then(
+	    [this, &segment_manager, &current, &header](bufferlist bl) mutable
+	    -> SegmentManager::read_ertr::future<bufferlist> {
+	      auto bp = bl.cbegin();
+	      try {
+		::decode(header, bp);
+	      } catch (...) {
+		return replay_ertr::make_ready_future<bufferlist>(std::move(bl));
+	      }
+	      if (header.mdlength > block_size) {
+		return segment_manager.read(
+		  {current.segment, current.offset + block_size},
+		  header.mdlength - block_size).safe_then(
+		    [this, bl=std::move(bl)](auto &&bltail) mutable {
+		      bl.claim_append(bltail);
+		      return std::move(bl);
+		    });
+	      } else {
+		return replay_ertr::make_ready_future<bufferlist>(std::move(bl));
+	      }
+	    }).safe_then([](auto){
+	      return replay_ertr::make_ready_future<bool>(true);
+	    }).handle_error(
+	      replay_ertr::pass_further{},
+	      crimson::ct_error::all_same_way([] { ceph_assert(0 == "TODO"); })
+	    );
 	});
     });
 }
