@@ -205,7 +205,14 @@ replay_segment(
   paddr_t start,
   Journal::delta_handler_t &delta_handler)
 {
-  return Journal::replay_ertr::now();
+  return seastar::do_with(
+    std::move(start),
+    [&segment_manager, &delta_handler](auto &&current) {
+      return crimson::do_until(
+	[&segment_manager, &current, &delta_handler] {
+	  return Journal::replay_ertr::make_ready_future<bool>(true);
+	});
+    });
 }
 
 Journal::replay_ret Journal::replay(delta_handler_t &&delta_handler)
