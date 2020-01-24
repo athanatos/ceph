@@ -11,13 +11,11 @@
 #include "include/buffer.h"
 #include "include/denc.h"
 
+#include "crimson/os/seastore/segment_manager.h"
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/osd/exceptions.h"
 
 namespace crimson::os::seastore {
-class SegmentManager;
-class Segment;
-using SegmentRef = boost::intrusive_ptr<Segment>;
 
 using journal_segment_seq_t = uint64_t;
 static constexpr journal_segment_seq_t NO_JOURNAL =
@@ -182,15 +180,18 @@ public:
   using find_replay_segments_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
-  find_replay_segments_ertr::future<
-    std::pair<paddr_t, std::vector<segment_id_t>>>
-  find_replay_segments();
+  using find_replay_segments_fut = 
+    find_replay_segments_ertr::future<std::vector<paddr_t>>;
+  find_replay_segments_fut find_replay_segments();
 
+  using delta_handler_t = std::function<
+    SegmentManager::read_ertr::future<>(const delta_info_t&)>;
   using replay_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     // Something for decode failures?
     >;
-  replay_ertr::future<> replay(std::function<void(delta_info_t)> delta_handler);
+  using replay_ret = replay_ertr::future<>;
+  replay_ret replay(delta_handler_t &&);
 };
 
 }

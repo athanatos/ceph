@@ -143,9 +143,7 @@ Journal::init_ertr::future<> Journal::open_for_write()
   return roll_journal_segment();
 }
 
-using find_replay_segments_ret = Journal::find_replay_segments_ertr::future<
-  std::pair<paddr_t, std::vector<segment_id_t>>>;
-find_replay_segments_ret Journal::find_replay_segments()
+Journal::find_replay_segments_fut Journal::find_replay_segments()
 {
   return seastar::do_with(
     std::vector<std::pair<segment_id_t, segment_header_t>>(),
@@ -169,7 +167,7 @@ find_replay_segments_ret Journal::find_replay_segments()
 	    find_replay_segments_ertr::pass_further{},
 	    crimson::ct_error::discard_all{}
 	  );
-	}).safe_then([&segments]() mutable -> find_replay_segments_ret {
+	}).safe_then([this, &segments]() mutable -> find_replay_segments_fut {
 	  if (segments.empty()) {
 	    return crimson::ct_error::input_output_error::make();
 	  }
@@ -189,23 +187,43 @@ find_replay_segments_ret Journal::find_replay_segments()
 	  if (from == segments.end()) {
 	    return crimson::ct_error::input_output_error::make();
 	  }
-	  ++from;
-	  auto ret = std::vector<segment_id_t>(segments.end() - from);
+	  auto ret = std::vector<paddr_t>(segments.end() - from);
 	  std::transform(
 	    from, segments.end(), ret.begin(),
-	    [](const auto &p) { return p.first; });
-	  return find_replay_segments_ret(
+	    [this](const auto &p) { return paddr_t{p.first, block_size}; });
+	  ret[0] = replay_from;
+	  return find_replay_segments_fut(
 	    find_replay_segments_ertr::ready_future_marker{},
-	    std::make_pair(replay_from, std::move(ret)));
+	    std::move(ret));
 	});
     });
 }
 
-
 Journal::replay_ertr::future<>
-Journal::replay(std::function<void(delta_info_t)> delta_handler)
+replay_segment(
+  SegmentManager &segment_manager,
+  paddr_t start,
+  Journal::delta_handler_t &delta_handler)
 {
-  return replay_ertr::now();
+  return Journal::replay_ertr::now();
+}
+
+Journal::replay_ret Journal::replay(delta_handler_t &&delta_handler)
+{
+  return seastar::do_with(
+    std::make_pair(std::move(delta_handler), std::vector<paddr_t>()),
+    [this](auto &&item) mutable -> replay_ret {
+      auto &[handler, segments] = item;
+      return find_replay_segments(
+      ).safe_then([this, &handler, &segments](auto osegments) {
+	segments.swap(osegments);
+	return crimson::do_for_each(
+	  segments,
+	  [this, &handler](auto i) {
+	    return replay_segment(segment_manager, i, handler);
+	  });
+      });
+    });
 }
 
 }
