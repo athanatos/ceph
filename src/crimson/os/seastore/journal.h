@@ -8,14 +8,80 @@
 #include <seastar/core/future.hh>
 
 #include "include/ceph_assert.h"
-#include "crimson/os/seastore/seastore_types.h"
 #include "include/buffer.h"
+#include "include/denc.h"
+
+#include "crimson/os/seastore/seastore_types.h"
 #include "crimson/osd/exceptions.h"
 
 namespace crimson::os::seastore {
 class SegmentManager;
 class Segment;
 using SegmentRef = boost::intrusive_ptr<Segment>;
+
+using journal_segment_seq_t = uint64_t;
+static constexpr journal_segment_seq_t NO_JOURNAL =
+  std::numeric_limits<journal_segment_seq_t>::max();
+
+/**
+ * Segment header
+ *
+ * Every segment contains and encode segment_header_t in the first block.
+ * Our strategy for finding the journal replay point is:
+ * 1) Find the segment with the highest journal_segment_id
+ * 2) Scan forward from committed_journal_lb to find the most recent
+ *    journal_commit_lb record
+ * 3) Replay starting at the most recent found journal_commit_lb record
+ */
+struct segment_header_t {
+  journal_segment_seq_t journal_segment_id;
+  segment_id_t physical_segment_id; // debugging
+
+  paddr_t journal_replay_lb;
+
+  DENC(segment_header_t, v, p) {
+    denc(v.journal_segment_id, p);
+    denc(v.physical_segment_id, p);
+    denc(v.journal_replay_lb, p);
+  }
+};
+
+struct extent_header_t {
+  // Fixed portion
+  extent_types_t type = extent_types_t::NONE;
+  laddr_t laddr;
+  segment_off_t length = 0;
+
+  extent_header_t() = default;
+
+  extent_header_t(extent_info_t info)
+    : type(info.type), laddr(info.laddr), length(info.bl.length()) {}
+
+  DENC(extent_header_t, v, p) {
+    denc(v.type, p);
+    denc(v.laddr, p);
+    denc(v.length, p);
+  }
+};
+
+struct record_header_t {
+  // Fixed portion
+  segment_off_t mdlength;       // block aligned
+  segment_off_t dlength;        // block aligned
+  journal_seq_t seq;            // current journal seqid
+  checksum_t    full_checksum;  // checksum for full record
+  size_t deltas;                // number of deltas
+  size_t extents;               // number of extents
+
+  DENC(record_header_t, v, p) {
+    denc(v.mdlength, p);
+    denc(v.dlength, p);
+    denc(v.seq, p);
+    denc(v.full_checksum, p);
+    denc(v.deltas, p);
+    denc(v.extents, p);
+  }
+};
 
 /**
  * Callback interface for managing available segments
@@ -33,12 +99,6 @@ public:
 };
 
 class Journal {
-public:
-  using journal_segment_seq_t = uint64_t;
-  static constexpr journal_segment_seq_t NO_JOURNAL =
-    std::numeric_limits<journal_segment_seq_t>::max();
-
-private:
   const segment_off_t block_size;
   const segment_off_t max_record_length;
 
@@ -118,6 +178,23 @@ public:
       return write_record(mdlength, dlength, std::move(record));
     });
   }
+
+  using find_valid_segments_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error
+    >;
+  find_valid_segments_ertr::future<
+    std::vector<std::pair<segment_id_t, segment_header_t>>>
+  find_valid_segments();
+
+  using replay_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error
+    // Something for decode failures?
+    >;
+  replay_ertr::future<> replay(std::function<void(delta_info_t)> delta_handler);
 };
 
 }
+WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::segment_header_t)
+WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::record_header_t)
+WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::extent_header_t)
+

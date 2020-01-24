@@ -36,10 +36,6 @@ class EphemeralSegmentManager final : public SegmentManager {
 
   const ephemeral_config_t config;
 
-  size_t get_num_segments() const {
-    return config.size / config.segment_size;
-  }
-
   size_t get_offset(paddr_t addr) {
     return (addr.segment * config.segment_size) + addr.offset;
   }

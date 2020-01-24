@@ -1,6 +1,8 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#include <boost/iterator/counting_iterator.hpp>
+
 #include "crimson/os/seastore/journal.h"
 
 #include "include/denc.h"
@@ -12,76 +14,6 @@ namespace {
     return crimson::get_logger(ceph_subsys_filestore);
   }
 }
-
-namespace {
-using namespace crimson;
-using namespace crimson::os::seastore;
-
-/**
- * Segment header
- *
- * Every segment contains and encode segment_header_t in the first block.
- * Our strategy for finding the journal replay point is:
- * 1) Find the segment with the highest journal_segment_id
- * 2) Scan forward from committed_journal_lb to find the most recent
- *    journal_commit_lb record
- * 3) Replay starting at the most recent found journal_commit_lb record
- */
-struct segment_header_t {
-  Journal::journal_segment_seq_t journal_segment_id;
-  segment_id_t physical_segment_id; // debugging
-
-  paddr_t journal_replay_lb;
-
-  DENC(segment_header_t, v, p) {
-    denc(v.journal_segment_id, p);
-    denc(v.physical_segment_id, p);
-    denc(v.journal_replay_lb, p);
-  }
-};
-
-struct extent_header_t {
-  // Fixed portion
-  extent_types_t type = extent_types_t::NONE;
-  laddr_t laddr;
-  segment_off_t length = 0;
-
-  extent_header_t() = default;
-
-  extent_header_t(extent_info_t info)
-    : type(info.type), laddr(info.laddr), length(info.bl.length()) {}
-
-  DENC(extent_header_t, v, p) {
-    denc(v.type, p);
-    denc(v.laddr, p);
-    denc(v.length, p);
-  }
-};
-
-struct record_header_t {
-  // Fixed portion
-  segment_off_t mdlength;       // block aligned
-  segment_off_t dlength;        // block aligned
-  journal_seq_t seq;            // current journal seqid
-  checksum_t    full_checksum;  // checksum for full record
-  size_t deltas;                // number of deltas
-  size_t extents;               // number of extents
-
-  DENC(record_header_t, v, p) {
-    denc(v.mdlength, p);
-    denc(v.dlength, p);
-    denc(v.seq, p);
-    denc(v.full_checksum, p);
-    denc(v.deltas, p);
-    denc(v.extents, p);
-  }
-};
-
-
-}
-WRITE_CLASS_DENC_BOUNDED(segment_header_t)
-WRITE_CLASS_DENC_BOUNDED(record_header_t)
-WRITE_CLASS_DENC_BOUNDED(extent_header_t)
 
 namespace crimson::os::seastore {
 
@@ -209,6 +141,78 @@ Journal::roll_journal_segment()
 Journal::init_ertr::future<> Journal::open_for_write()
 {
   return roll_journal_segment();
+}
+
+Journal::find_valid_segments_ertr::future<
+  std::vector<std::pair<segment_id_t, segment_header_t>>>
+Journal::find_valid_segments()
+{
+  return seastar::do_with(
+    std::vector<std::pair<segment_id_t, segment_header_t>>(),
+    [this](auto &&ret) mutable {
+      return crimson::do_for_each(
+	boost::make_counting_iterator(segment_id_t{0}),
+	boost::make_counting_iterator(segment_manager.get_num_segments()),
+	[this, &ret](auto i) {
+	  return segment_manager.read(paddr_t{i, 0}, block_size
+	  ).safe_then([this, &ret, i](const bufferlist bl) mutable {
+	    auto bp = bl.begin();
+	    segment_header_t header;
+	    try {
+	      ::decode(header, bp);
+	    } catch (...) {
+	      return find_valid_segments_ertr::now();
+	    }
+	    ret.emplace_back(std::make_pair(i, std::move(header)));
+	    return find_valid_segments_ertr::now();
+	  }).handle_error(
+	    find_valid_segments_ertr::pass_further{},
+	    crimson::ct_error::discard_all{}
+	  );
+	}).safe_then([&ret]() mutable {
+	  return find_valid_segments_ertr::make_ready_future<
+	    std::vector<std::pair<segment_id_t, segment_header_t>>>(
+	      std::move(ret));
+	});
+    });
+}
+
+
+std::pair<paddr_t, std::vector<segment_id_t>>
+get_replay_order(
+  std::vector<std::pair<segment_id_t, segment_header_t>> &segments)
+{
+  ceph_assert(segments.size() > 0);
+  std::sort(
+    segments.begin(),
+    segments.end(),
+    [](const auto &lt, const auto &rt) {
+      return lt.second.journal_segment_id < rt.second.journal_segment_id;
+    });
+  auto replay_from = segments.rbegin()->second.journal_replay_lb;
+  auto from = std::find_if(
+    segments.begin(),
+    segments.end(),
+    [&replay_from](const auto &seg) -> bool {
+      return seg.first == replay_from.segment;
+    });
+  ceph_assert(from != segments.end());
+  ++from;
+  auto ret = std::vector<segment_id_t>(segments.end() - from);
+  std::transform(
+    from, segments.end(), ret.begin(),
+    [](const auto &p) { return p.first; });
+  return std::make_pair(
+    replay_from,
+    std::move(ret));
+}
+
+Journal::replay_ertr::future<>
+Journal::replay(std::function<void(delta_info_t)> delta_handler)
+{
+  return find_valid_segments().safe_then([this](auto valid) {
+    
+  });
 }
 
 }
