@@ -195,7 +195,6 @@ public:
 
   replay_ertr::future<>
   replay_segment(
-    SegmentManager &segment_manager,
     paddr_t start,
     delta_handler_t &delta_handler);
 

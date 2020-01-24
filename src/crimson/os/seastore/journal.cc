@@ -201,19 +201,18 @@ Journal::find_replay_segments_fut Journal::find_replay_segments()
 
 Journal::replay_ertr::future<>
 Journal::replay_segment(
-  SegmentManager &segment_manager,
   paddr_t start,
   delta_handler_t &delta_handler)
 {
   return seastar::do_with(
     std::make_tuple(std::move(start), record_header_t()),
-    [this, &segment_manager, &delta_handler](auto &&in) {
+    [this, &delta_handler](auto &&in) {
       auto &&[current, header] = in;
       return crimson::do_until(
-	[this, &segment_manager, &current, &delta_handler, &header] {
+	[this, &current, &delta_handler, &header] {
 	  return segment_manager.read(current, block_size
 	  ).safe_then(
-	    [this, &segment_manager, &current, &header](bufferlist bl) mutable
+	    [this, &current, &header](bufferlist bl) mutable
 	    -> SegmentManager::read_ertr::future<bufferlist> {
 	      auto bp = bl.cbegin();
 	      try {
@@ -232,8 +231,33 @@ Journal::replay_segment(
 	      } else {
 		return replay_ertr::make_ready_future<bufferlist>(std::move(bl));
 	      }
-	    }).safe_then([](auto){
-	      return replay_ertr::make_ready_future<bool>(true);
+	    }).safe_then([this, &delta_handler, &header](auto bl){
+	      auto bp = bl.cbegin();
+	      bp.advance(ceph::encoded_sizeof_bounded<record_header_t>());
+	      return seastar::do_with(
+		std::move(bp),
+		[this, &delta_handler, &header](auto &&bp) -> SegmentManager::read_ertr::future<bool> {
+		  return SegmentManager::read_ertr::make_ready_future<bool>(true);
+#if 0
+		  return crimson::do_for_each(
+		    boost::make_counting_iterator(0),
+		    boost::make_counting_iterator(header.deltas),
+		    [this, &delta_handler, &bp](auto) -> SegmentManager::read_ertr::future<> {
+		      return SegmentManager::read_ertr::make_ready_future<>();
+#if 0
+		      delta_info_t dt;
+		      try {
+			::decode(dt, bp);
+		      } catch (...) {
+			// need to do other validation, but failures should generally
+			// mean we've found the end of the journal
+			return crimson::ct_error::input_output_error();
+		      }
+		      return delta_handler(dt);
+#endif
+		    });
+#endif
+		});
 	    }).handle_error(
 	      replay_ertr::pass_further{},
 	      crimson::ct_error::all_same_way([] { ceph_assert(0 == "TODO"); })
@@ -254,7 +278,7 @@ Journal::replay_ret Journal::replay(delta_handler_t &&delta_handler)
 	return crimson::do_for_each(
 	  segments,
 	  [this, &handler](auto i) {
-	    return replay_segment(segment_manager, i, handler);
+	    return replay_segment(i, handler);
 	  });
       });
     });
