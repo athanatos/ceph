@@ -143,76 +143,65 @@ Journal::init_ertr::future<> Journal::open_for_write()
   return roll_journal_segment();
 }
 
-Journal::find_valid_segments_ertr::future<
-  std::vector<std::pair<segment_id_t, segment_header_t>>>
-Journal::find_valid_segments()
+Journal::find_replay_segments_ertr::future<
+  std::pair<paddr_t, std::vector<segment_id_t>>>
+Journal::find_replay_segments()
 {
   return seastar::do_with(
     std::vector<std::pair<segment_id_t, segment_header_t>>(),
-    [this](auto &&ret) mutable {
+    [this](auto &&segments) mutable {
       return crimson::do_for_each(
 	boost::make_counting_iterator(segment_id_t{0}),
 	boost::make_counting_iterator(segment_manager.get_num_segments()),
-	[this, &ret](auto i) {
+	[this, &segments](auto i) {
 	  return segment_manager.read(paddr_t{i, 0}, block_size
-	  ).safe_then([this, &ret, i](const bufferlist bl) mutable {
+	  ).safe_then([this, &segments, i](const bufferlist bl) mutable {
 	    auto bp = bl.begin();
 	    segment_header_t header;
 	    try {
 	      ::decode(header, bp);
 	    } catch (...) {
-	      return find_valid_segments_ertr::now();
+	      return find_replay_segments_ertr::now();
 	    }
-	    ret.emplace_back(std::make_pair(i, std::move(header)));
-	    return find_valid_segments_ertr::now();
+	    segments.emplace_back(std::make_pair(i, std::move(header)));
+	    return find_replay_segments_ertr::now();
 	  }).handle_error(
-	    find_valid_segments_ertr::pass_further{},
+	    find_replay_segments_ertr::pass_further{},
 	    crimson::ct_error::discard_all{}
 	  );
-	}).safe_then([&ret]() mutable {
-	  return find_valid_segments_ertr::make_ready_future<
-	    std::vector<std::pair<segment_id_t, segment_header_t>>>(
-	      std::move(ret));
+	}).safe_then([&segments]() mutable {
+	  ceph_assert(segments.size() > 0);
+	  std::sort(
+	    segments.begin(),
+	    segments.end(),
+	    [](const auto &lt, const auto &rt) {
+	      return lt.second.journal_segment_id < rt.second.journal_segment_id;
+	    });
+	  auto replay_from = segments.rbegin()->second.journal_replay_lb;
+	  auto from = std::find_if(
+	    segments.begin(),
+	    segments.end(),
+	    [&replay_from](const auto &seg) -> bool {
+	      return seg.first == replay_from.segment;
+	    });
+	  ceph_assert(from != segments.end());
+	  ++from;
+	  auto ret = std::vector<segment_id_t>(segments.end() - from);
+	  std::transform(
+	    from, segments.end(), ret.begin(),
+	    [](const auto &p) { return p.first; });
+	  return std::make_pair(
+	    replay_from,
+	    std::move(ret));
 	});
     });
 }
 
 
-std::pair<paddr_t, std::vector<segment_id_t>>
-get_replay_order(
-  std::vector<std::pair<segment_id_t, segment_header_t>> &segments)
-{
-  ceph_assert(segments.size() > 0);
-  std::sort(
-    segments.begin(),
-    segments.end(),
-    [](const auto &lt, const auto &rt) {
-      return lt.second.journal_segment_id < rt.second.journal_segment_id;
-    });
-  auto replay_from = segments.rbegin()->second.journal_replay_lb;
-  auto from = std::find_if(
-    segments.begin(),
-    segments.end(),
-    [&replay_from](const auto &seg) -> bool {
-      return seg.first == replay_from.segment;
-    });
-  ceph_assert(from != segments.end());
-  ++from;
-  auto ret = std::vector<segment_id_t>(segments.end() - from);
-  std::transform(
-    from, segments.end(), ret.begin(),
-    [](const auto &p) { return p.first; });
-  return std::make_pair(
-    replay_from,
-    std::move(ret));
-}
-
 Journal::replay_ertr::future<>
 Journal::replay(std::function<void(delta_info_t)> delta_handler)
 {
-  return find_valid_segments().safe_then([this](auto valid) {
-    
-  });
+  return replay_ertr::now();
 }
 
 }

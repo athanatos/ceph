@@ -179,12 +179,12 @@ public:
     });
   }
 
-  using find_valid_segments_ertr = crimson::errorator<
+  using find_replay_segments_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
-  find_valid_segments_ertr::future<
-    std::vector<std::pair<segment_id_t, segment_header_t>>>
-  find_valid_segments();
+  find_replay_segments_ertr::future<
+    std::pair<paddr_t, std::vector<segment_id_t>>>
+  find_replay_segments();
 
   using replay_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
