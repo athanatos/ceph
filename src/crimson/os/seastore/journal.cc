@@ -236,28 +236,24 @@ Journal::replay_segment(
 	      bp.advance(ceph::encoded_sizeof_bounded<record_header_t>());
 	      return seastar::do_with(
 		std::move(bp),
-		[this, &delta_handler, &header](auto &&bp) -> SegmentManager::read_ertr::future<bool> {
-		  return SegmentManager::read_ertr::make_ready_future<bool>(true);
-#if 0
+		[this, &delta_handler, &header](auto &&bp) {
 		  return crimson::do_for_each(
-		    boost::make_counting_iterator(0),
+		    boost::make_counting_iterator(size_t{0}),
 		    boost::make_counting_iterator(header.deltas),
 		    [this, &delta_handler, &bp](auto) -> SegmentManager::read_ertr::future<> {
-		      return SegmentManager::read_ertr::make_ready_future<>();
-#if 0
 		      delta_info_t dt;
 		      try {
 			::decode(dt, bp);
 		      } catch (...) {
 			// need to do other validation, but failures should generally
 			// mean we've found the end of the journal
-			return crimson::ct_error::input_output_error();
+			return crimson::ct_error::input_output_error::make();
 		      }
 		      return delta_handler(dt);
-#endif
 		    });
-#endif
 		});
+	    }).safe_then([](){
+	      return SegmentManager::read_ertr::make_ready_future<bool>(true);
 	    }).handle_error(
 	      replay_ertr::pass_further{},
 	      crimson::ct_error::all_same_way([] { ceph_assert(0 == "TODO"); })
