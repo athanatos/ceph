@@ -252,11 +252,16 @@ Journal::replay_segment(
 		      return delta_handler(dt);
 		    });
 		});
-	    }).safe_then([](){
-	      return SegmentManager::read_ertr::make_ready_future<bool>(true);
+	    }).safe_then([&header, &current](){
+	      current.offset += header.mdlength + header.dlength;
+	      return SegmentManager::read_ertr::make_ready_future<bool>(false);
 	    }).handle_error(
+	      // TODO: this needs to correctly propogate information about failed
+	      // record reads
 	      replay_ertr::pass_further{},
-	      crimson::ct_error::all_same_way([] { ceph_assert(0 == "TODO"); })
+	      crimson::ct_error::all_same_way([] {
+		return replay_ertr::make_ready_future<bool>(true);
+	      })
 	    );
 	});
     });
