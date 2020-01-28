@@ -137,6 +137,13 @@ class Journal {
 
   paddr_t next_block_addr() const;
 
+  using find_replay_segments_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error
+    >;
+  using find_replay_segments_fut = 
+    find_replay_segments_ertr::future<std::vector<paddr_t>>;
+  find_replay_segments_fut find_replay_segments();
+
 public:
   Journal(
     JournalSegmentProvider &segment_provider,
@@ -157,9 +164,9 @@ public:
     >;
   template <typename F>
   write_ertr::future<> write_with_offset(
-    record_t &&record,
-    F &&fixup) {
-    auto [mdlength, dlength] = get_encoded_record_length(record);
+    segment_off_t mdlength,
+    segment_off_t dlength,
+    F &&record_f) {
     auto total = mdlength + dlength;
     if (total > max_record_length) {
       return crimson::ct_error::erange::make();
@@ -167,22 +174,13 @@ public:
     return (needs_roll(total) ? roll_journal_segment() :
 	    roll_journal_segment_ertr::now()
     ).safe_then([this,
-		 fixup=std::forward<F>(fixup),
-		 record=std::move(record),
+		 record_f=std::forward<F>(record_f),
 		 mdlength,
 		 dlength,
 		 total]() mutable {
-      fixup(written_to + block_size, record);
-      return write_record(mdlength, dlength, std::move(record));
+      return write_record(mdlength, dlength, std::move(record_f)(written_to));
     });
   }
-
-  using find_replay_segments_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error
-    >;
-  using find_replay_segments_fut = 
-    find_replay_segments_ertr::future<std::vector<paddr_t>>;
-  find_replay_segments_fut find_replay_segments();
 
   using delta_handler_t = std::function<
     SegmentManager::read_ertr::future<>(const delta_info_t&)>;
@@ -193,11 +191,11 @@ public:
   using replay_ret = replay_ertr::future<>;
   replay_ret replay(delta_handler_t &&);
 
+private:
   replay_ertr::future<>
   replay_segment(
     paddr_t start,
     delta_handler_t &delta_handler);
-
 };
 
 }
