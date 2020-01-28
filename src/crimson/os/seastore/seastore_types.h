@@ -35,6 +35,9 @@ constexpr laddr_t L_ADDR_NULL = std::numeric_limits<laddr_t>::max();
 constexpr laddr_t L_ADDR_ROOT = std::numeric_limits<laddr_t>::max() - 1;
 constexpr laddr_t L_ADDR_LBAT = std::numeric_limits<laddr_t>::max() - 2;
 
+using loff_t = uint64_t;
+constexpr loff_t L_OFF_NULL = std::numeric_limits<laddr_t>::max();
+
 enum class extent_types_t : uint8_t {
   ROOT = 0,
   LADDR_TREE = 1,

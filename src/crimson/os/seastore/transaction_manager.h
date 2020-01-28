@@ -18,91 +18,30 @@
 #include "crimson/os/seastore/seastore_types.h"
 #include "include/buffer.h"
 #include "crimson/osd/exceptions.h"
+#include "crimson/os/seastore/segment_manager.h"
+#include "crimson/os/seastore/lba_manager.h"
 
 
 namespace crimson::os::seastore {
-class SegmentManager;
 class Journal;
 
 class Transaction {
   friend class TransactionManager;
-
 public:
-  using extent_offset_t = off_t;
-
-  class FixupHandler {
-    paddr_t block_base;
-    record_t &record;
-    friend class TransactionManager;
-    FixupHandler(paddr_t block_base, record_t &record)
-      : block_base(block_base), record(record) {}
-  public:
-    paddr_t get_paddr(extent_offset_t off) {
-      segment_off_t offset = 0;
-      for (extent_offset_t i = 0; i < off; ++i) {
-	offset += record.extents[i].bl.length();
-      }
-      return {block_base.segment, block_base.offset + offset};
-    }
-
-    ceph::bufferlist &get_bl(extent_offset_t off) {
-      return record.extents[off].bl;
-    }
-  };
-
-  record_t record;
-  std::vector<std::function<void(FixupHandler &, extent_info_t &)>> extent_fixups;
-  std::vector<std::function<void(FixupHandler &, delta_info_t &)>> delta_fixups;
-
-public:
-  segment_off_t extent_offset = 0;
-
-  /**
-   * Add journaled representation of overwrite of physical offsets
-   * [addr, addr + bl.size()).
-   *
-   * As read_ertr indicates, may perform reads.
-   *
-   * @param trans [in,out] current transaction
-   * @param type  [in]     type of delta
-   * @param laddr [in]     aligned logical block address -- null 
-   *                       ff type != LBA_BLOCK
-   * @param delta [in]     logical mutation -- encoding of mutation
-   *                       to block
-   * @return future for completion
-   */
-  template <typename F>
-  void add_delta(delta_info_t &&delta, F &&f = [](auto, auto &){}) {
-    record.deltas.emplace_back(std::move(delta));
-    delta_fixups.emplace_back(std::forward<F>(f));
-  }
-
-  /**
-   * Adds a new block containing bl.
-   *
-   * @param bl    [in] contents of new bloc, must be page aligned and have
-   *                   aligned length.
-   * @return 
-   */
-  template <typename F>
-  segment_off_t add_extent(
-    extent_info_t &&extent,
-    F &&f = [](auto, auto &){}) {
-    record.extents.emplace_back(std::move(extent));
-    extent_fixups.emplace_back(std::forward<F>(f));
-    
-    auto current = extent_offset;
-    extent_offset += extent.bl.length();
-    return current;
-  }
-    
-
-  
 };
 using TransactionRef = std::unique_ptr<Transaction>;
 
+class versioned_extent_t {
+  bufferlist bl;
+public:
+  const bufferlist &get_bl() const {
+    return bl;
+  }
+};
+
 class TransactionManager {
   SegmentManager &segment_manager;
+  LBAManager &lba_manager;
   std::unique_ptr<Journal> journal;
 
 public:
@@ -118,7 +57,81 @@ public:
   }
 
   /**
+   * Add operation mutating specified extent
+   *
+   * offset~len must be an extent previously returned from alloc_extent
+   *
+   * f(current) should mutate the bytes of current and return a
+   * bufferlist suitable for a record delta
+   */
+  using mutate_ertr = SegmentManager::read_ertr;
+  template <typename F>
+  mutate_ertr::future<> mutate(
+    Transaction &t,
+    extent_types_t type,
+    laddr_t offset,
+    loff_t len,
+    F &&f) {
+    // read offset~len from cache
+    // read offset~len from segment_manager
+    // deltabl (type) = f(blocks)
+    return mutate_ertr::now();
+  }
+  
+  /**
+   * Add operation replacing specified extent
+   *
+   * offset, len must be aligned, offset~len must be
+   * allocated
+   */
+  using replace_ertr = SegmentManager::read_ertr;
+  replace_ertr::future<> replace(
+    Transaction &t,
+    laddr_t offset,
+    loff_t len,
+    bufferlist bl) {
+    // pull relevant portions of lba tree
+    return replace_ertr::now();
+  }
+
+  /**
+   * Add refcount for range
+   */
+  using inc_ref_ertr = SegmentManager::read_ertr;
+  inc_ref_ertr::future<> inc_ref(
+    Transaction &t,
+    laddr_t offset,
+    loff_t len) {
+    // pull relevant portion of lba tree
+    return inc_ref_ertr::now();
+  }
+
+  /**
+   * Remove refcount for range
+   */
+  using dec_ref_ertr = SegmentManager::read_ertr;
+  dec_ref_ertr::future<> dec_ref(
+    Transaction &t,
+    laddr_t offset,
+    loff_t len) {
+    // pull relevant portion of lba tree
+    return dec_ref_ertr::now();
+  }
+
+  using alloc_extent_ertr = SegmentManager::read_ertr;
+  alloc_extent_ertr::future<laddr_t> alloc_extent(
+    Transaction &t,
+    laddr_t hint,
+    loff_t len,
+    bufferlist bl) {
+    // pull relevant portion of lba tree
+    return alloc_extent_ertr::make_ready_future<laddr_t>();
+  }
+
+  /**
    * Atomically submits transaction to persistence
+   *
+   * TODO: add ertr for retry due to transaction race
    *
    * @param 
    */
