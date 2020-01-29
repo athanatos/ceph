@@ -11,6 +11,7 @@
 
 #include "include/buffer.h"
 #include "crimson/os/seastore/seastore_types.h"
+#include "crimson/os/seastore/lba_manager.h"
 
 namespace crimson::os::seastore {
 
@@ -21,6 +22,8 @@ class CachedExtent : public boost::intrusive_ref_counter<
   CachedExtent,
   boost::thread_unsafe_counter> {
   
+  LBAPinRef pin_ref;
+  extent_version_t version;
   laddr_t offset;
   loff_t length;
   ceph::bufferptr ptr;

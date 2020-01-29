@@ -15,9 +15,12 @@
 #include <seastar/core/future.hh>
 
 #include "include/ceph_assert.h"
-#include "crimson/os/seastore/seastore_types.h"
 #include "include/buffer.h"
+
 #include "crimson/osd/exceptions.h"
+
+#include "crimson/os/seastore/seastore_types.h"
+#include "crimson/os/seastore/cache.h"
 #include "crimson/os/seastore/segment_manager.h"
 #include "crimson/os/seastore/lba_manager.h"
 #include "crimson/os/seastore/journal.h"
@@ -47,6 +50,20 @@ class TransactionManager {
   LBAManager &lba_manager;
   std::unique_ptr<Journal> journal;
 
+  using read_extent_ertr = SegmentManager::read_ertr;
+  read_extent_ertr::future<CachedExtentRef> read_extent(
+    Transaction &t,
+    extent_types_t type,
+    laddr_t offset,
+    loff_t len);
+
+  using get_mutable_extent_ertr = SegmentManager::read_ertr;
+  get_mutable_extent_ertr::future<CachedExtentRef> get_mutable_extent(
+    Transaction &t,
+    extent_types_t type,
+    laddr_t offset,
+    loff_t len);
+    
 public:
   TransactionManager(SegmentManager &segment_manager);
 
@@ -59,8 +76,6 @@ public:
     return std::make_unique<Transaction>();
   }
 
-  using buffer_mut_f = std::function<void(bufferptr&)>;
-
   /**
    * Add operation mutating specified extent
    *
@@ -70,12 +85,21 @@ public:
    * bufferlist suitable for a record delta
    */
   using mutate_ertr = SegmentManager::read_ertr;
+  template <typename F>
   mutate_ertr::future<> mutate(
     Transaction &t,
     extent_types_t type,
     laddr_t offset,
     loff_t len,
-    buffer_mut_f &&f);
+    F &&f) {
+    return get_mutable_extent(
+      t, type, offset, len
+    ).safe_then([this, &t, f=std::move(f)](auto &extent) mutable {
+      auto bl = f(extent->ptr);
+      // remember bl;
+      return mutate_ertr::now();
+    });
+  }
   
   /**
    * Add operation replacing specified extent
