@@ -54,8 +54,8 @@ struct lba_pin_split_merge {
   uint64_t length(const LBAPinRef &b) const { return b->get_length(); }
 };
 
-using extent_set = interval_set<uint64_t>;
-using extent_map = interval_map<uint64_t, LBAPinRef, lba_pin_split_merge>;
+using lba_pin_extent_set = interval_set<uint64_t>;
+using lba_pin_extent_map = interval_map<uint64_t, LBAPinRef, lba_pin_split_merge>;
 
 /**
  * Abstract interface for managing the logical to physical mapping

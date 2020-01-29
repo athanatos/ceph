@@ -29,20 +29,35 @@ TransactionManager::init_ertr::future<> TransactionManager::init()
   return journal->open_for_write();
 }
 
-TransactionManager::read_extent_ertr::future<CachedExtentRef>
+TransactionManager::read_extent_ret
 TransactionManager::read_extent(
   Transaction &t,
-  extent_types_t type,
   laddr_t offset,
   loff_t len)
 {
-  return read_extent_ertr::make_ready_future<CachedExtentRef>(nullptr);
+  auto [all, need] = cache.get_reserve_extents(offset, len);
+  return seastar::do_with(
+    std::make_tuple(std::move(all), std::move(need)),
+    [this, &t, offset, len](auto &tup) -> read_extent_ret {
+      auto &[all, need] = tup;
+      return crimson::do_for_each(
+	need.begin(),
+	need.end(),
+	[this, &t, offset, len](auto &iter) {
+	  // TODO
+	  return read_extent_ertr::now();
+	}).safe_then([this, &t, offset, len, &all]() mutable {
+	  // offer all to transaction
+	  return read_extent_ret(
+	    read_extent_ertr::ready_future_marker{},
+	    std::move(all));
+	});
+    });
 }
 
 TransactionManager::get_mutable_extent_ertr::future<CachedExtentRef>
 TransactionManager::get_mutable_extent(
   Transaction &t,
-  extent_types_t type,
   laddr_t offset,
   loff_t len)
 {

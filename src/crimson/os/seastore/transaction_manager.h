@@ -46,21 +46,21 @@ public:
 };
 
 class TransactionManager {
+  Cache cache;
   SegmentManager &segment_manager;
   LBAManager &lba_manager;
   std::unique_ptr<Journal> journal;
 
   using read_extent_ertr = SegmentManager::read_ertr;
-  read_extent_ertr::future<CachedExtentRef> read_extent(
+  using read_extent_ret = read_extent_ertr::future<Cache::extent_ref_list>;
+  read_extent_ret read_extent(
     Transaction &t,
-    extent_types_t type,
     laddr_t offset,
     loff_t len);
 
   using get_mutable_extent_ertr = SegmentManager::read_ertr;
   get_mutable_extent_ertr::future<CachedExtentRef> get_mutable_extent(
     Transaction &t,
-    extent_types_t type,
     laddr_t offset,
     loff_t len);
     
@@ -93,7 +93,7 @@ public:
     loff_t len,
     F &&f) {
     return get_mutable_extent(
-      t, type, offset, len
+      t, offset, len
     ).safe_then([this, &t, f=std::move(f)](auto &extent) mutable {
       auto bl = f(extent->ptr);
       // remember bl;

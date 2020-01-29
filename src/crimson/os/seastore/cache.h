@@ -40,12 +40,15 @@ class Cache {
 public:
 
   // Always a contiguous sequence of extents either logical offset
-  using extent_ref_list = std::list<CachedExtent>;
+  using extent_ref_list = std::list<CachedExtentRef>;
   
-  extent_ref_list get_logical_extents_for_write(
+  std::pair<extent_ref_list, extent_ref_list> get_reserve_extents(
     laddr_t offset,
-    size_t length) {
-    return std::list<CachedExtent>();
+    loff_t length) {
+    return std::make_pair(
+      extent_ref_list(),
+      extent_ref_list()
+    );
   }
     
   std::ostream &print(
