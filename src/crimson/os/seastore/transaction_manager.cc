@@ -29,6 +29,21 @@ TransactionManager::init_ertr::future<> TransactionManager::init()
   return journal->open_for_write();
 }
 
+
+TransactionManager::mutate_ertr::future<>
+TransactionManager::mutate(
+  Transaction &t,
+  extent_types_t type,
+  laddr_t offset,
+  loff_t len,
+  buffer_mut_f &&f) {
+  // read offset~len from cache
+  // read offset~len from segment_manager
+  // deltabl (type) = f(blocks)
+  return mutate_ertr::now();
+}
+  
+
 TransactionManager::submit_transaction_ertr::future<>
 TransactionManager::submit_transaction(
   TransactionRef &&t)

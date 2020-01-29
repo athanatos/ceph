@@ -1,6 +1,8 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#pragma once
+
 #include "crimson/common/log.h"
 
 #include <boost/intrusive_ptr.hpp>
@@ -17,10 +19,6 @@
 
 namespace crimson::os::seastore {
 
-using journal_segment_seq_t = uint64_t;
-static constexpr journal_segment_seq_t NO_JOURNAL =
-  std::numeric_limits<journal_segment_seq_t>::max();
-
 /**
  * Segment header
  *
@@ -32,7 +30,7 @@ static constexpr journal_segment_seq_t NO_JOURNAL =
  * 3) Replay starting at the most recent found journal_commit_lb record
  */
 struct segment_header_t {
-  journal_segment_seq_t journal_segment_id;
+  segment_seq_t journal_segment_id;
   segment_id_t physical_segment_id; // debugging
 
   paddr_t journal_replay_lb;
@@ -105,7 +103,7 @@ class Journal {
 
   paddr_t current_replay_point;
 
-  journal_segment_seq_t current_journal_segment_id = 0;
+  segment_seq_t current_journal_segment_id = 0;
   
   SegmentRef current_journal_segment;
   segment_off_t written_to = 0;
@@ -130,9 +128,6 @@ class Journal {
     segment_off_t dlength,
     record_t &&record);
   
-  std::pair<segment_off_t, segment_off_t> get_encoded_record_length(
-    const record_t &record) const;
-
   bool needs_roll(segment_off_t length) const;
 
   paddr_t next_block_addr() const;
@@ -148,6 +143,13 @@ public:
   Journal(
     JournalSegmentProvider &segment_provider,
     SegmentManager &segment_manager);
+
+  /**
+   * Return <mdlength, dlength> pair denoting length of
+   * metadata and blocks respectively.
+   */
+  std::pair<segment_off_t, segment_off_t> get_encoded_record_length(
+    const record_t &record) const;
 
   using roll_journal_segment_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;

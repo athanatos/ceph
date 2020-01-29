@@ -10,6 +10,10 @@
 
 namespace crimson::os::seastore {
 
+using segment_seq_t = uint32_t;
+static constexpr segment_seq_t NO_SEGMENT =
+  std::numeric_limits<segment_seq_t>::max();
+
 using checksum_t = uint32_t;
 
 using segment_id_t = uint32_t;
@@ -67,6 +71,16 @@ struct extent_info_t {
   ceph::bufferlist bl;  ///< payload, bl.length() == length, aligned
 };
 
+struct extent_version_t {
+  segment_seq_t seq = NO_SEGMENT;
+  segment_off_t off = NULL_SEG_OFF;
+
+  DENC(extent_version_t, v, p) {
+    denc(v.seq, p);
+    denc(v.off, p);
+  }
+};
+
 using journal_seq_t = uint64_t;
 static constexpr journal_seq_t NO_DELTAS =
   std::numeric_limits<journal_seq_t>::max();
@@ -80,3 +94,4 @@ struct record_t {
 
 WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::paddr_t)
 WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::delta_info_t)
+WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::extent_version_t)

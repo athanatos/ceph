@@ -20,6 +20,7 @@
 #include "crimson/osd/exceptions.h"
 #include "crimson/os/seastore/segment_manager.h"
 #include "crimson/os/seastore/lba_manager.h"
+#include "crimson/os/seastore/journal.h"
 
 
 namespace crimson::os::seastore {
@@ -27,6 +28,8 @@ class Journal;
 
 class Transaction {
   friend class TransactionManager;
+  
+  record_t pending_record;
 public:
 };
 using TransactionRef = std::unique_ptr<Transaction>;
@@ -56,6 +59,8 @@ public:
     return std::make_unique<Transaction>();
   }
 
+  using buffer_mut_f = std::function<void(bufferptr&)>;
+
   /**
    * Add operation mutating specified extent
    *
@@ -65,18 +70,12 @@ public:
    * bufferlist suitable for a record delta
    */
   using mutate_ertr = SegmentManager::read_ertr;
-  template <typename F>
   mutate_ertr::future<> mutate(
     Transaction &t,
     extent_types_t type,
     laddr_t offset,
     loff_t len,
-    F &&f) {
-    // read offset~len from cache
-    // read offset~len from segment_manager
-    // deltabl (type) = f(blocks)
-    return mutate_ertr::now();
-  }
+    buffer_mut_f &&f);
   
   /**
    * Add operation replacing specified extent

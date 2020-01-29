@@ -21,20 +21,22 @@ class CachedExtent : public boost::intrusive_ref_counter<
   CachedExtent,
   boost::thread_unsafe_counter> {
   
-  laddr_t l_offset;
-  paddr_t p_offset;
-  size_t length;
+  laddr_t offset;
+  loff_t length;
   ceph::bufferptr ptr;
-
 public:
 };
 using CachedExtentRef = boost::intrusive_ptr<CachedExtent>;
 
+class ExtentSet {
+public:
+  
+};
+
 class Cache {
 public:
 
-  // Always a contiguous sequence of extents either by either logical or
-  // physical offset
+  // Always a contiguous sequence of extents either logical offset
   using extent_ref_list = std::list<CachedExtent>;
   
   extent_ref_list get_logical_extents_for_write(

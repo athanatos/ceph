@@ -51,7 +51,7 @@ struct lba_pin_split_merge {
   LBAPinRef merge(LBAPinRef &&left, LBAPinRef &&right) const {
     return std::move(*(right.release())).merge(std::move(*(left.release())));
   }
-  uint64_t length(const bufferlist &b) const { return b.length(); }
+  uint64_t length(const LBAPinRef &b) const { return b->get_length(); }
 };
 
 using extent_set = interval_set<uint64_t>;
