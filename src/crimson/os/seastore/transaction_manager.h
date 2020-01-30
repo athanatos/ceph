@@ -52,7 +52,7 @@ class TransactionManager {
   std::unique_ptr<Journal> journal;
 
   using read_extent_ertr = SegmentManager::read_ertr;
-  using read_extent_ret = read_extent_ertr::future<Cache::extent_ref_list>;
+  using read_extent_ret = read_extent_ertr::future<ExtentSet>;
   read_extent_ret read_extent(
     Transaction &t,
     laddr_t offset,

@@ -36,6 +36,9 @@ TransactionManager::read_extent(
   loff_t len)
 {
   auto [all, need] = cache.get_reserve_extents(offset, len);
+  /* TODO: need to deal with concurrent access to the same buffer -- probably
+     all would include some pending buffers that have to be waited on at the
+     end */
   return seastar::do_with(
     std::make_tuple(std::move(all), std::move(need)),
     [this, &t, offset, len](auto &tup) -> read_extent_ret {

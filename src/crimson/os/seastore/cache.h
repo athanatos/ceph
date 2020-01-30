@@ -45,22 +45,38 @@ public:
 using CachedExtentRef = boost::intrusive_ptr<CachedExtent>;
 
 class ExtentSet {
+  using extent_ref_list = std::list<CachedExtentRef>;
+  extent_ref_list extents;
 public:
+  using iterator = extent_ref_list::iterator;
+  using const_iterator = extent_ref_list::const_iterator;
   
+
+  iterator begin() {
+    return extents.begin();
+  }
+
+  const_iterator begin() const {
+    return extents.begin();
+  }
+
+  iterator end() {
+    return extents.end();
+  }
+
+  const_iterator end() const {
+    return extents.end();
+  }
 };
 
 class Cache {
 public:
-
-  // Always a contiguous sequence of extents either logical offset
-  using extent_ref_list = std::list<CachedExtentRef>;
-  
-  std::pair<extent_ref_list, extent_ref_list> get_reserve_extents(
+  std::pair<ExtentSet, ExtentSet> get_reserve_extents(
     laddr_t offset,
     loff_t length) {
     return std::make_pair(
-      extent_ref_list(),
-      extent_ref_list()
+      ExtentSet(),
+      ExtentSet()
     );
   }
     
