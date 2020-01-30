@@ -43,8 +43,29 @@ TransactionManager::read_extent(
       return crimson::do_for_each(
 	need.begin(),
 	need.end(),
-	[this, &t, offset, len](auto &iter) {
-	  return read_extent_ertr::now();
+	[this, &t](auto &iter) {
+	  return lba_manager->get_mapping(
+	    iter->get_addr(), iter->get_length()).safe_then(
+	      [this, &t, &iter](auto &&pin_ref) {
+		iter->set_pin(std::move(pin_ref));
+		return seastar::do_with(
+		  iter->get_pin().get_mapping(),
+		  [this, &t, &iter](auto &mapping) {
+		    return crimson::do_for_each(
+		      mapping.begin(),
+		      mapping.end(),
+		      [this, &t, &iter](auto &lpmap) {
+			auto &[laddr, paddr, length] = lpmap;
+			// TODO: invert buffer control so that we pass the buffer
+			// here into segment_manager to avoid a copy
+			return segment_manager.read(paddr, length).safe_then(
+			  [&iter, &laddr, &length](auto &&bl) {
+			    iter->copy_in(bl, laddr, length);
+			    return read_extent_ertr::now();
+			  });
+		      });
+		  });
+	      });
 	}).safe_then([this, &t, offset, len, &all]() mutable {
 	  // offer all to transaction
 	  return read_extent_ret(

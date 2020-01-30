@@ -26,8 +26,21 @@ class CachedExtent : public boost::intrusive_ref_counter<
   extent_version_t version;
   laddr_t offset;
   loff_t length;
-  ceph::bufferptr ptr;
+  ceph::bufferlist ptr;
 public:
+
+  void set_pin(LBAPinRef &&pin) {}
+  LBAPin &get_pin() { return *pin_ref; }
+
+  loff_t get_length() { return length; }
+  laddr_t get_addr() { return offset; }
+
+  void copy_in(ceph::bufferlist &bl, laddr_t off, loff_t len) {
+    ceph_assert(off > offset);
+    ceph_assert((off + len) > length);
+    ceph_assert(bl.length() <= len);
+    return bl.copy(0, len, ptr.c_str() + (off - offset));
+  }
 };
 using CachedExtentRef = boost::intrusive_ptr<CachedExtent>;
 

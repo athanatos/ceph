@@ -23,46 +23,29 @@ using LBAPinRef = std::unique_ptr<LBAPin>;
 
 class LBAPin {
   friend class lba_pin_split_merge;
-protected:
 
-  virtual bool can_merge(const LBAPin &right) const = 0;
-  virtual LBAPinRef merge(LBAPin &&right) && = 0;
-  virtual void split(uint64_t offset, uint64_t length) = 0;
 public:
+  virtual void shrink(uint64_t offset, uint64_t length) = 0;
 
   virtual loff_t get_length() const = 0;
   virtual paddr_t get_paddr() const = 0;
   virtual laddr_t get_laddr() const = 0;
 
+  virtual std::vector<std::tuple<laddr_t, paddr_t, segment_off_t>>
+  get_mapping() const = 0;
+
   virtual ~LBAPin() {}
 };
-
-struct lba_pin_split_merge {
-  LBAPinRef split(
-    uint64_t offset,
-    uint64_t length,
-    LBAPinRef &&pin) const {
-    pin->split(offset, length);
-    return std::move(pin);
-  }
-  bool can_merge(const LBAPinRef &left, const LBAPinRef &right) const {
-    return left->can_merge(*right);
-  }
-  LBAPinRef merge(LBAPinRef &&left, LBAPinRef &&right) const {
-    return std::move(*(right.release())).merge(std::move(*(left.release())));
-  }
-  uint64_t length(const LBAPinRef &b) const { return b->get_length(); }
-};
-
-using lba_pin_extent_set = interval_set<uint64_t>;
-using lba_pin_extent_map = interval_map<uint64_t, LBAPinRef, lba_pin_split_merge>;
 
 /**
  * Abstract interface for managing the logical to physical mapping
  */
 class LBAManager {
 public:
-  virtual LBAPinRef get_mapping(laddr_t offset, loff_t length) = 0;
+  using get_mapping_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  virtual get_mapping_ertr::future<LBAPinRef> get_mapping(
+    laddr_t offset, loff_t length) = 0;
 
   virtual ~LBAManager() {}
 };
