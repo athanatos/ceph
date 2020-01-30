@@ -20,7 +20,7 @@ namespace crimson::os::seastore {
 
 TransactionManager::TransactionManager(SegmentManager &segment_manager)
   : segment_manager(segment_manager),
-    lba_manager(*((LBAManager*)nullptr)),
+    lba_manager(lba_manager::create_lba_manager()),
     journal(new Journal(*((JournalSegmentProvider*)nullptr), segment_manager))
 {}
 
@@ -44,7 +44,6 @@ TransactionManager::read_extent(
 	need.begin(),
 	need.end(),
 	[this, &t, offset, len](auto &iter) {
-	  // TODO
 	  return read_extent_ertr::now();
 	}).safe_then([this, &t, offset, len, &all]() mutable {
 	  // offer all to transaction

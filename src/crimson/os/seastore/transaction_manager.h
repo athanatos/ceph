@@ -48,7 +48,7 @@ public:
 class TransactionManager {
   Cache cache;
   SegmentManager &segment_manager;
-  LBAManager &lba_manager;
+  LBAManagerRef lba_manager;
   std::unique_ptr<Journal> journal;
 
   using read_extent_ertr = SegmentManager::read_ertr;

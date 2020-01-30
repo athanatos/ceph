@@ -62,6 +62,14 @@ using lba_pin_extent_map = interval_map<uint64_t, LBAPinRef, lba_pin_split_merge
  */
 class LBAManager {
 public:
-};
+  virtual LBAPinRef get_mapping(laddr_t offset, loff_t length) = 0;
 
+  virtual ~LBAManager() {}
+};
+using LBAManagerRef = std::unique_ptr<LBAManager>;
+
+namespace lba_manager {
+LBAManagerRef create_lba_manager();
+
+}
 }
