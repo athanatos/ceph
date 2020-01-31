@@ -70,6 +70,9 @@ public:
     return extents.end();
   }
 };
+
+/* TODO: replace with something that mostly doesn't allocate,
+   often used for single elements */
 using extent_list_t = std::list<std::pair<laddr_t, loff_t>>;
 
 class Cache {
