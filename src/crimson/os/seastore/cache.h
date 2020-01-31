@@ -75,8 +75,7 @@ using extent_list_t = std::list<std::pair<laddr_t, loff_t>>;
 class Cache {
 public:
   std::tuple<ExtentSet, extent_list_t, extent_list_t> get_reserve_extents(
-    laddr_t offset,
-    loff_t length);
+    const extent_list_t &extents);
 
   void present_reserved_extents(
     ExtentSet &extents);

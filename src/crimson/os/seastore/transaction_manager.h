@@ -35,6 +35,7 @@ class Transaction {
   ExtentSet read_set;
   record_t pending_record;
 public:
+  void add_to_read_set(const ExtentSet &eset) { /* TODO */ }
 };
 using TransactionRef = std::unique_ptr<Transaction>;
 
@@ -54,16 +55,14 @@ class TransactionManager {
 
   using read_extent_ertr = SegmentManager::read_ertr;
   using read_extent_ret = read_extent_ertr::future<ExtentSet>;
-  read_extent_ret read_extent(
+  read_extent_ret read_extents(
     Transaction &t,
-    laddr_t offset,
-    loff_t len);
+    const extent_list_t &extents);
 
   using get_mutable_extent_ertr = SegmentManager::read_ertr;
-  get_mutable_extent_ertr::future<CachedExtentRef> get_mutable_extent(
+  get_mutable_extent_ertr::future<CachedExtentRef> get_mutable_extents(
     Transaction &t,
-    laddr_t offset,
-    loff_t len);
+    const extent_list_t &extents);
     
 public:
   TransactionManager(SegmentManager &segment_manager);
@@ -93,8 +92,8 @@ public:
     laddr_t offset,
     loff_t len,
     F &&f) {
-    return get_mutable_extent(
-      t, offset, len
+    return get_mutable_extents(
+      t, {{offset, len}}
     ).safe_then([this, &t, f=std::move(f)](auto &extent) mutable {
       auto bl = f(extent->ptr);
       // remember bl;
