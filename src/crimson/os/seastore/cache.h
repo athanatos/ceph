@@ -23,22 +23,21 @@ class CachedExtent : public boost::intrusive_ref_counter<
   boost::thread_unsafe_counter> {
   
   LBAPinRef pin_ref;
-  extent_version_t version;
+  extent_version_t version; // changes to EXTENT_VERSION_NULL once invalidated
   laddr_t offset;
-  loff_t length;
-  ceph::bufferlist ptr;
+  ceph::bufferptr ptr;
 public:
 
   void set_pin(LBAPinRef &&pin) {}
   LBAPin &get_pin() { return *pin_ref; }
 
-  loff_t get_length() { return length; }
+  loff_t get_length() { return ptr.length(); }
   laddr_t get_addr() { return offset; }
 
   void copy_in(ceph::bufferlist &bl, laddr_t off, loff_t len) {
     ceph_assert(off > offset);
-    ceph_assert((off + len) > length);
-    ceph_assert(bl.length() <= len);
+    ceph_assert((off + len) > get_length());
+    ceph_assert(get_length() <= len);
     return bl.copy(0, len, ptr.c_str() + (off - offset));
   }
 };
@@ -50,6 +49,7 @@ class ExtentSet {
 public:
   using iterator = extent_ref_list::iterator;
   using const_iterator = extent_ref_list::const_iterator;
+  
   
 
   iterator begin() {

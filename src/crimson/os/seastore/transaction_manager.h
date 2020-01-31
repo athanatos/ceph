@@ -32,6 +32,7 @@ class Journal;
 class Transaction {
   friend class TransactionManager;
   
+  ExtentSet read_set;
   record_t pending_record;
 public:
 };

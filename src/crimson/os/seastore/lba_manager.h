@@ -25,17 +25,14 @@ class LBAPin {
   friend class lba_pin_split_merge;
 
 public:
-  virtual void shrink(uint64_t offset, uint64_t length) = 0;
-
   virtual loff_t get_length() const = 0;
   virtual paddr_t get_paddr() const = 0;
   virtual laddr_t get_laddr() const = 0;
 
-  virtual std::vector<std::tuple<laddr_t, paddr_t, segment_off_t>>
-  get_mapping() const = 0;
-
   virtual ~LBAPin() {}
 };
+
+using lba_pin_list_t = std::list<LBAPinRef>;
 
 /**
  * Abstract interface for managing the logical to physical mapping
@@ -44,7 +41,7 @@ class LBAManager {
 public:
   using get_mapping_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
-  virtual get_mapping_ertr::future<LBAPinRef> get_mapping(
+  virtual get_mapping_ertr::future<lba_pin_list_t> get_mappings(
     laddr_t offset, loff_t length) = 0;
 
   virtual ~LBAManager() {}

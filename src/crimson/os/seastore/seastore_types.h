@@ -7,6 +7,7 @@
 
 #include "include/denc.h"
 #include "include/buffer.h"
+#include "include/cmp.h"
 
 namespace crimson::os::seastore {
 
@@ -80,6 +81,8 @@ struct extent_version_t {
     denc(v.off, p);
   }
 };
+constexpr extent_version_t EXTENT_VERSION_NULL = extent_version_t{};
+WRITE_CMP_OPERATORS_2(extent_version_t, seq, off)
 
 using journal_seq_t = uint64_t;
 static constexpr journal_seq_t NO_DELTAS =

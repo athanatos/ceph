@@ -39,6 +39,7 @@ TransactionManager::read_extent(
   /* TODO: need to deal with concurrent access to the same buffer -- probably
      all would include some pending buffers that have to be waited on at the
      end */
+  //t.add_read_set(std::move(all));
   return seastar::do_with(
     std::make_tuple(std::move(all), std::move(need)),
     [this, &t, offset, len](auto &tup) -> read_extent_ret {
@@ -47,9 +48,10 @@ TransactionManager::read_extent(
 	need.begin(),
 	need.end(),
 	[this, &t](auto &iter) {
-	  return lba_manager->get_mapping(
+	  return lba_manager->get_mappings(
 	    iter->get_addr(), iter->get_length()).safe_then(
-	      [this, &t, &iter](auto &&pin_ref) {
+	      [this, &t, &iter](auto &&pin_refs) {
+#if 0
 		iter->set_pin(std::move(pin_ref));
 		return seastar::do_with(
 		  iter->get_pin().get_mapping(),
@@ -68,6 +70,8 @@ TransactionManager::read_extent(
 			  });
 		      });
 		  });
+#endif
+		return read_extent_ertr::now();
 	      });
 	}).safe_then([this, &t, offset, len, &all]() mutable {
 	  // offer all to transaction
