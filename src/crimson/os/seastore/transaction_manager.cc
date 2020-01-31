@@ -35,7 +35,7 @@ TransactionManager::read_extent(
   laddr_t offset,
   loff_t len)
 {
-  auto [all, need] = cache.get_reserve_extents(offset, len);
+  auto [all, need, pending] = cache.get_reserve_extents(offset, len);
   /* TODO: need to deal with concurrent access to the same buffer -- probably
      all would include some pending buffers that have to be waited on at the
      end */
@@ -48,10 +48,10 @@ TransactionManager::read_extent(
 	need.begin(),
 	need.end(),
 	[this, &t](auto &iter) {
+#if 0
 	  return lba_manager->get_mappings(
 	    iter->get_addr(), iter->get_length()).safe_then(
 	      [this, &t, &iter](auto &&pin_refs) {
-#if 0
 		iter->set_pin(std::move(pin_ref));
 		return seastar::do_with(
 		  iter->get_pin().get_mapping(),
@@ -70,14 +70,23 @@ TransactionManager::read_extent(
 			  });
 		      });
 		  });
+	      });
 #endif
 		return read_extent_ertr::now();
-	      });
 	}).safe_then([this, &t, offset, len, &all]() mutable {
 	  // offer all to transaction
 	  return read_extent_ret(
 	    read_extent_ertr::ready_future_marker{},
 	    std::move(all));
+	});
+    }).safe_then([this, &t, pending=std::move(pending)](auto &&extent_set) {
+      return cache.await_pending(pending).safe_then(
+	[this, &t, extent_set=std::move(extent_set)](
+	  auto &&pending_extents) mutable {
+	  extent_set.merge(std::move(pending_extents));
+	  return read_extent_ret(
+	    read_extent_ertr::ready_future_marker{},
+	    std::move(extent_set));
 	});
     });
 }

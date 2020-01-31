@@ -7,11 +7,11 @@
 
 #include <boost/intrusive_ptr.hpp>
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
-#include <seastar/core/future.hh>
 
 #include "include/buffer.h"
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/lba_manager.h"
+#include "crimson/common/errorator.h"
 
 namespace crimson::os::seastore {
 
@@ -50,7 +50,7 @@ public:
   using iterator = extent_ref_list::iterator;
   using const_iterator = extent_ref_list::const_iterator;
   
-  
+  void merge(ExtentSet &&other) { /* TODO */ }
 
   iterator begin() {
     return extents.begin();
@@ -68,17 +68,24 @@ public:
     return extents.end();
   }
 };
+using extent_list_t = std::list<std::pair<laddr_t, loff_t>>;
 
 class Cache {
 public:
-  std::pair<ExtentSet, ExtentSet> get_reserve_extents(
+  std::tuple<ExtentSet, extent_list_t, extent_list_t> get_reserve_extents(
     laddr_t offset,
-    loff_t length) {
-    return std::make_pair(
-      ExtentSet(),
-      ExtentSet()
-    );
-  }
+    loff_t length);
+
+  void present_reserved_extents(
+    ExtentSet &extents);
+
+  using wait_extents_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  // TODO: eio isn't actually important here, but we probably
+  // want a way to signal that the original transaction isn't
+  // going to complete the read
+  wait_extents_ertr::future<ExtentSet> await_pending(
+    const extent_list_t &pending);
     
   std::ostream &print(
     std::ostream &out) const {
