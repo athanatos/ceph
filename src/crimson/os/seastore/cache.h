@@ -52,6 +52,8 @@ public:
   
   void merge(ExtentSet &&other) { /* TODO */ }
 
+  void insert(CachedExtentRef &ref) { /* TODO */ }
+
   iterator begin() {
     return extents.begin();
   }
@@ -86,6 +88,10 @@ public:
   // going to complete the read
   wait_extents_ertr::future<ExtentSet> await_pending(
     const extent_list_t &pending);
+
+  CachedExtentRef get_extent_buffer(
+    laddr_t offset,
+    loff_t length);
     
   std::ostream &print(
     std::ostream &out) const {

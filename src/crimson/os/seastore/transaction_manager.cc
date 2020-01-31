@@ -36,43 +36,42 @@ TransactionManager::read_extent(
   loff_t len)
 {
   auto [all, need, pending] = cache.get_reserve_extents(offset, len);
-  /* TODO: need to deal with concurrent access to the same buffer -- probably
-     all would include some pending buffers that have to be waited on at the
-     end */
   //t.add_read_set(std::move(all));
   return seastar::do_with(
-    std::make_tuple(std::move(all), std::move(need)),
+    std::make_tuple(std::move(all), std::move(need), ExtentSet()),
     [this, &t, offset, len](auto &tup) -> read_extent_ret {
-      auto &[all, need] = tup;
+      auto &[all, need, read] = tup;
       return crimson::do_for_each(
 	need.begin(),
 	need.end(),
-	[this, &t](auto &iter) {
-#if 0
-	  return lba_manager->get_mappings(
-	    iter->get_addr(), iter->get_length()).safe_then(
-	      [this, &t, &iter](auto &&pin_refs) {
-		iter->set_pin(std::move(pin_ref));
+	[this, &t, &all, &read](auto &iter) {
+	  auto &[offset, length] = iter;
+	  return lba_manager->get_mappings(offset, length).safe_then(
+	    [this, &t, &all, &read](auto &&pin_refs) {
 		return seastar::do_with(
-		  iter->get_pin().get_mapping(),
-		  [this, &t, &iter](auto &mapping) {
+		  std::move(pin_refs),
+		  [this, &t, &all, &read](auto &lba_pins) {
 		    return crimson::do_for_each(
-		      mapping.begin(),
-		      mapping.end(),
-		      [this, &t, &iter](auto &lpmap) {
-			auto &[laddr, paddr, length] = lpmap;
+		      lba_pins.begin(),
+		      lba_pins.end(),
+		      [this, &t, &all, &read](auto &pin) {
 			// TODO: invert buffer control so that we pass the buffer
 			// here into segment_manager to avoid a copy
-			return segment_manager.read(paddr, length).safe_then(
-			  [&iter, &laddr, &length](auto &&bl) {
-			    iter->copy_in(bl, laddr, length);
-			    return read_extent_ertr::now();
-			  });
+			return segment_manager.read(
+			  pin->get_paddr(),
+			  pin->get_length()
+			).safe_then([this, &t, &all, &read, &pin](auto bl) mutable {
+			  auto eref = cache.get_extent_buffer(
+			    pin->get_laddr(),
+			    pin->get_length());
+			  eref->set_pin(std::move(pin));
+			  eref->copy_in(bl, pin->get_laddr(), pin->get_length());
+			  read.insert(eref);
+			  return read_extent_ertr::now();
+			});
 		      });
 		  });
 	      });
-#endif
-		return read_extent_ertr::now();
 	}).safe_then([this, &t, offset, len, &all]() mutable {
 	  // offer all to transaction
 	  return read_extent_ret(
