@@ -34,8 +34,9 @@ TransactionManager::read_extents(
   Transaction &t,
   const extent_list_t &extents)
 {
-  auto [all, need, pending] = cache.get_reserve_extents(extents);
-  //t.add_read_set(std::move(all));
+  auto [all, remaining] = t.get_extents(extents);
+  auto [from_cache, need, pending] = cache.get_reserve_extents(remaining);
+  all.merge(std::move(from_cache));
   return seastar::do_with(
     std::make_tuple(std::move(need), ExtentSet()),
     [this](auto &tup) -> read_extent_ret {
@@ -82,9 +83,10 @@ TransactionManager::read_extents(
       return cache.await_pending(pending).safe_then(
 	[this, &t, all=std::move(all), read=std::move(read)](
 	  auto &&pending_extents) mutable {
+	  t.add_to_read_set(pending_extents);
+	  t.add_to_read_set(read);
 	  all.merge(std::move(pending_extents));
 	  all.merge(std::move(read));
-	  t.add_to_read_set(all);
 	  return read_extent_ret(
 	    read_extent_ertr::ready_future_marker{},
 	    std::move(all));

@@ -36,22 +36,21 @@ class Transaction {
   record_t pending_record;
 public:
   void add_to_read_set(const ExtentSet &eset) { /* TODO */ }
-};
-using TransactionRef = std::unique_ptr<Transaction>;
-
-class versioned_extent_t {
-  bufferlist bl;
-public:
-  const bufferlist &get_bl() const {
-    return bl;
+  std::pair<ExtentSet, extent_list_t>
+  get_extents(const extent_list_t &eset) {
+    return {ExtentSet{}, extent_list_t{}};
   }
 };
+using TransactionRef = std::unique_ptr<Transaction>;
 
 class TransactionManager {
   Cache cache;
   SegmentManager &segment_manager;
   LBAManagerRef lba_manager;
   std::unique_ptr<Journal> journal;
+
+  ExtentSet read_set;
+  ExtentSet write_set;
 
   using read_extent_ertr = SegmentManager::read_ertr;
   using read_extent_ret = read_extent_ertr::future<ExtentSet>;

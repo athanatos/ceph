@@ -25,7 +25,12 @@ class CachedExtent : public boost::intrusive_ref_counter<
   LBAPinRef pin_ref;
   extent_version_t version; // changes to EXTENT_VERSION_NULL once invalidated
   laddr_t offset;
+  paddr_t poffset;
   ceph::bufferptr ptr;
+
+  bool written = false;
+  bool dirty = false;
+  std::list<delta_info_t> pending_deltas;
 public:
 
   void set_pin(LBAPinRef &&pin) {}
@@ -39,6 +44,10 @@ public:
     ceph_assert((off + len) > get_length());
     ceph_assert(get_length() <= len);
     return bl.copy(0, len, ptr.c_str() + (off - offset));
+  }
+
+  void add_pending_delta(delta_info_t &&delta) {
+    pending_deltas.push_back(std::move(delta));
   }
 };
 using CachedExtentRef = boost::intrusive_ptr<CachedExtent>;
