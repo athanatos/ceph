@@ -4,7 +4,6 @@
 #pragma once
 
 #include <limits>
-#include <type_traits>
 
 #include "include/denc.h"
 #include "include/buffer.h"
@@ -45,56 +44,25 @@ using loff_t = uint64_t;
 constexpr loff_t L_OFF_NULL = std::numeric_limits<laddr_t>::max();
 
 enum class extent_types_t : uint8_t {
-  ROOT = 0x0,
-  LADDR_TREE = 0x1,
-  LBA_BLOCK = 0x80,
+  ROOT = 0,
+  LADDR_TREE = 1,
+  LBA_BLOCK = 2,
   NONE = 0xFF
 };
 
-bool extent_type_is_physical(extent_types_t in) {
-  return static_cast<uint8_t>(in) < 
-    static_cast<uint8_t>(extent_types_t::LBA_BLOCK);
-}
-
 struct delta_info_t {
-  extent_types_t type = extent_types_t::NONE;  ///< delta type
-  union delta_addr_t {
-    laddr_t laddr; ///< logical address, present iff delta == LBA_BLOCK
-    paddr_t paddr; ///< physical address, present otherwise
-
-    delta_addr_t(laddr_t addr) : laddr(addr) {}
-    delta_addr_t(paddr_t addr) : paddr(addr) {}
-  } addr;
-  segment_off_t length = 0; ///< extent length
+  extent_types_t type;  ///< delta type
+  laddr_t laddr;        ///< logical address, null iff delta != LBA_BLOCK
+  paddr_t paddr;        ///< physical address
+  segment_off_t length; ///< extent length
   ceph::bufferlist bl;  ///< payload
 
   DENC(delta_info_t, v, p) {
     denc(v.type, p);
-    if (extent_type_is_physical(v.type)) {
-      denc(v.addr.paddr, p);
-    } else {
-      denc(v.addr.laddr, p);
-    }
+    denc(v.laddr, p);
+    denc(v.paddr, p);
     denc(v.length, p);
     denc(v.bl, p);
-  }
-
-  bool is_physical() const {
-    return extent_type_is_physical(type);
-  }
-
-  delta_info_t() : addr{L_ADDR_NULL} {}
-
-  delta_info_t(extent_types_t type, laddr_t inaddr,
-	       segment_off_t length, ceph::bufferlist &&bl)
-    : type(type), addr{inaddr}, length(length), bl(std::move(bl)) {
-    ceph_assert(!is_physical());
-  }
-
-  delta_info_t(extent_types_t type, paddr_t inaddr,
-	       segment_off_t length, ceph::bufferlist &&bl)
-    : type(type), addr{inaddr}, length(length), bl(std::move(bl)) {
-    ceph_assert(is_physical());
   }
 };
 
@@ -128,5 +96,5 @@ struct record_t {
 }
 
 WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::paddr_t)
-WRITE_CLASS_DENC(crimson::os::seastore::delta_info_t)
+WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::delta_info_t)
 WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::extent_version_t)
