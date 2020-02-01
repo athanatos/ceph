@@ -15,9 +15,6 @@
 
 namespace crimson::os::seastore {
 
-class TransactionCacheState {
-};
-
 class CachedExtent : public boost::intrusive_ref_counter<
   CachedExtent,
   boost::thread_unsafe_counter> {
@@ -28,22 +25,37 @@ class CachedExtent : public boost::intrusive_ref_counter<
   paddr_t poffset;
   ceph::bufferptr ptr;
 
-  bool written = false;
-  bool dirty = false;
+  enum extent_state_t {
+    PENDING,
+    CLEAN,
+    DIRTY
+  } state = extent_state_t::PENDING;
+
   std::list<delta_info_t> pending_deltas;
 public:
+  bool is_pending() const { return state == extent_state_t::PENDING; }
 
   void set_pin(LBAPinRef &&pin) {}
   LBAPin &get_pin() { return *pin_ref; }
 
   loff_t get_length() { return ptr.length(); }
   laddr_t get_addr() { return offset; }
+  paddr_t get_paddr() { return poffset; }
 
   void copy_in(ceph::bufferlist &bl, laddr_t off, loff_t len) {
-    ceph_assert(off > offset);
-    ceph_assert((off + len) > get_length());
-    ceph_assert(get_length() <= len);
-    return bl.copy(0, len, ptr.c_str() + (off - offset));
+    ceph_assert(off >= offset);
+    ceph_assert((off + len) <= (offset + ptr.length()));
+    bl.copy(0, len, ptr.c_str() + (off - offset));
+  }
+
+  void copy_in(CachedExtent &extent) {
+    ceph_assert(extent.offset >= offset);
+    ceph_assert((extent.offset + extent.ptr.length()) <=
+		(offset + ptr.length()));
+    memcpy(
+      ptr.c_str() + (extent.offset - offset),
+      extent.ptr.c_str(),
+      extent.get_length());
   }
 
   void add_pending_delta(delta_info_t &&delta) {
@@ -58,6 +70,9 @@ class ExtentSet {
 public:
   using iterator = extent_ref_list::iterator;
   using const_iterator = extent_ref_list::const_iterator;
+
+  ExtentSet() = default;
+  ExtentSet(CachedExtentRef &ref) : extents{{ref}} {}
   
   void merge(ExtentSet &&other) { /* TODO */ }
 

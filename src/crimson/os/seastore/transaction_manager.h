@@ -33,9 +33,11 @@ class Transaction {
   friend class TransactionManager;
   
   ExtentSet read_set;
-  record_t pending_record;
+  ExtentSet write_set;
 public:
   void add_to_read_set(const ExtentSet &eset) { /* TODO */ }
+  void add_to_write_set(const ExtentSet &eset) { /* TODO */ }
+
   std::pair<ExtentSet, extent_list_t>
   get_extents(const extent_list_t &eset) {
     return {ExtentSet{}, extent_list_t{}};
@@ -59,9 +61,10 @@ class TransactionManager {
     const extent_list_t &extents);
 
   using get_mutable_extent_ertr = SegmentManager::read_ertr;
-  get_mutable_extent_ertr::future<CachedExtentRef> get_mutable_extents(
+  get_mutable_extent_ertr::future<CachedExtentRef> get_mutable_extent(
     Transaction &t,
-    const extent_list_t &extents);
+    laddr_t offset,
+    loff_t len);
     
 public:
   TransactionManager(SegmentManager &segment_manager);
@@ -91,11 +94,15 @@ public:
     laddr_t offset,
     loff_t len,
     F &&f) {
-    return get_mutable_extents(
-      t, {{offset, len}}
-    ).safe_then([this, &t, f=std::move(f)](auto &extent) mutable {
+    return get_mutable_extent(
+      t, offset, len
+    ).safe_then([this, type, offset, &t, f=std::move(f)](auto extent) mutable {
       auto bl = f(extent->ptr);
-      // remember bl;
+      if (!extent->is_pending()) {
+	extent.add_pending_delta(
+	  {type, offset, extent->get_poffset(), std::move(bl)}
+	);
+      }
       return mutate_ertr::now();
     });
   }

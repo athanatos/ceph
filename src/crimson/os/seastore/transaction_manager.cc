@@ -95,11 +95,24 @@ TransactionManager::read_extents(
 }
 
 TransactionManager::get_mutable_extent_ertr::future<CachedExtentRef>
-TransactionManager::get_mutable_extents(
+TransactionManager::get_mutable_extent(
   Transaction &t,
-  const extent_list_t &extents)
+  laddr_t offset,
+  loff_t len)
 {
-  return get_mutable_extent_ertr::make_ready_future<CachedExtentRef>(nullptr);
+  return read_extents(t, {{offset, len}}).safe_then(
+    [this, offset, len, &t](auto extent_set) {
+    auto extent = CachedExtentRef(); //extent_set.duplicate_contiguous(offset, len);
+    if (extent) {
+      t.add_to_write_set(ExtentSet{extent});
+    } else {
+      extent = cache.get_extent_buffer(offset, len);
+      for (auto &i: extent_set) {
+	extent->copy_in(*i);
+      }
+    }
+    return extent;
+  });
 }
 
 TransactionManager::submit_transaction_ertr::future<>
