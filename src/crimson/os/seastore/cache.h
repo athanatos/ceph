@@ -28,7 +28,8 @@ class CachedExtent : public boost::intrusive_ref_counter<
   enum extent_state_t {
     PENDING,
     CLEAN,
-    DIRTY
+    DIRTY,
+    INVALID
   } state = extent_state_t::PENDING;
 
   std::list<delta_info_t> pending_deltas;
@@ -78,12 +79,6 @@ public:
 
   void insert(CachedExtentRef &ref) { /* TODO */ }
 
-  CachedExtentRef try_duplicate_contiguous(
-    laddr_t offset,
-    loff_t len) {
-    return CachedExtentRef(); /* TODO */
-  }
-
   iterator begin() {
     return extents.begin();
   }
@@ -112,6 +107,20 @@ public:
 
   void present_reserved_extents(
     ExtentSet &extents);
+
+  CachedExtentRef duplicate_for_write(
+    ExtentSet &extent_set,
+    laddr_t offset,
+    loff_t len) {
+    return CachedExtentRef();
+  }
+
+  CachedExtentRef try_duplicate_contiguous(
+    laddr_t offset,
+    loff_t len) {
+    return CachedExtentRef(); /* TODO */
+  }
+
 
   using wait_extents_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;

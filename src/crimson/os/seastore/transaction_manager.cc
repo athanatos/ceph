@@ -102,23 +102,21 @@ TransactionManager::get_mutable_extent(
 {
   return read_extents(t, {{offset, len}}).safe_then(
     [this, offset, len, &t](auto extent_set) {
-    auto extent = extent_set.try_duplicate_contiguous(offset, len);
-    if (extent) {
+      auto extent = cache.duplicate_for_write(extent_set, offset, len);
       t.add_to_write_set(extent);
-    } else {
-      extent = cache.get_extent_buffer(offset, len);
-      for (auto &i: extent_set) {
-	extent->copy_in(*i);
-      }
-    }
-    return extent;
-  });
+      return extent;
+    });
 }
 
 TransactionManager::submit_transaction_ertr::future<>
 TransactionManager::submit_transaction(
   TransactionRef &&t)
 {
+  // grab pins for all pending extents in the write set
+  // validate read set
+  // invalidate replaced extents stealing pins
+  // construct lba transaction thingy [<laddr, pin, len, { ref_diff, optional<paddr> }>...]
+  // submit replacement extents to cache with new lba pins and version
   return submit_transaction_ertr::now();
 }
 

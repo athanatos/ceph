@@ -99,7 +99,7 @@ public:
     ).safe_then([this, type, offset, &t, f=std::move(f)](auto extent) mutable {
       auto bl = f(extent->ptr);
       if (!extent->is_pending()) {
-	extent.add_pending_delta(
+	extent->add_pending_delta(
 	  {type, offset, extent->get_poffset(), std::move(bl)}
 	);
       }
