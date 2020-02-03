@@ -102,9 +102,9 @@ TransactionManager::get_mutable_extent(
 {
   return read_extents(t, {{offset, len}}).safe_then(
     [this, offset, len, &t](auto extent_set) {
-    auto extent = CachedExtentRef(); //extent_set.duplicate_contiguous(offset, len);
+    auto extent = extent_set.try_duplicate_contiguous(offset, len);
     if (extent) {
-      t.add_to_write_set(ExtentSet{extent});
+      t.add_to_write_set(extent);
     } else {
       extent = cache.get_extent_buffer(offset, len);
       for (auto &i: extent_set) {

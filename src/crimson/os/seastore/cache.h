@@ -78,6 +78,12 @@ public:
 
   void insert(CachedExtentRef &ref) { /* TODO */ }
 
+  CachedExtentRef try_duplicate_contiguous(
+    laddr_t offset,
+    loff_t len) {
+    return CachedExtentRef(); /* TODO */
+  }
+
   iterator begin() {
     return extents.begin();
   }
