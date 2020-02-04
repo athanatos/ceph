@@ -7,14 +7,18 @@
 
 #include <boost/intrusive_ptr.hpp>
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
+
 #include <seastar/core/future.hh>
 
 #include "include/ceph_assert.h"
-#include "crimson/os/seastore/seastore_types.h"
 #include "include/buffer_fwd.h"
 #include "include/interval_set.h"
 #include "common/interval_map.h"
+
 #include "crimson/osd/exceptions.h"
+
+#include "crimson/os/seastore/seastore_types.h"
+#include "crimson/os/seastore/segment_manager.h"
 
 namespace crimson::os::seastore {
 
@@ -41,7 +45,8 @@ class LBAManager {
 public:
   using get_mapping_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
-  virtual get_mapping_ertr::future<lba_pin_list_t> get_mappings(
+  using get_mapping_ret = get_mapping_ertr::future<lba_pin_list_t>;
+  virtual get_mapping_ret get_mappings(
     laddr_t offset, loff_t length) = 0;
 
   virtual ~LBAManager() {}
@@ -49,7 +54,7 @@ public:
 using LBAManagerRef = std::unique_ptr<LBAManager>;
 
 namespace lba_manager {
-LBAManagerRef create_lba_manager();
-
+LBAManagerRef create_lba_manager(SegmentManager &segment_manager);
 }
+
 }

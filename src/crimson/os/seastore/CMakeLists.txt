@@ -4,6 +4,7 @@ add_library(crimson-seastore
   transaction_manager.cc
   journal.cc
   lba_manager.cc
+  lba_manager/btree/btree_lba_manager.cc
   seastore.cc)
 target_link_libraries(crimson-seastore
   crimson)
