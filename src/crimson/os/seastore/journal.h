@@ -151,7 +151,6 @@ public:
    * write_with_offset
    *
    * @param record_f called with next block offset, returns record
-   *        -- may be called twice in the event of a journal rollover
    */
   using write_with_offset_ertr = crimson::errorator<
     crimson::ct_error::erange,
@@ -160,14 +159,9 @@ public:
   using record_func_t = std::function<record_t(paddr_t)>;
   using write_with_offset_ret = write_with_offset_ertr::future<>;
   write_with_offset_ret write_with_offset(record_func_t &&record_f) {
-    auto record = record_f(next_block_addr());
-    auto [mdlength, dlength] = get_encoded_record_length(record);
-    auto total = mdlength + dlength;
-    if (total > max_record_length) {
-      return crimson::ct_error::erange::make();
-    }
-    if (needs_roll(total)) {
-      return roll_journal_segment().safe_then(
+    return (needs_roll(max_record_length)
+      ? roll_journal_segment()
+      : roll_journal_segment_ertr::now()).safe_then(
 	[this, record_f=std::move(record_f)]() -> write_with_offset_ret {
 	  auto record = record_f(next_block_addr());
 	  auto [mdlength, dlength] = get_encoded_record_length(record);
@@ -177,9 +171,6 @@ public:
 	  }
 	  return write_record(mdlength, dlength, std::move(record));
 	});
-    } else {
-      return write_record(mdlength, dlength, std::move(record));
-    }
   }
 
   using delta_handler_t = std::function<
