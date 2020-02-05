@@ -146,6 +146,13 @@ public:
     >;
   init_ertr::future<> open_for_write();
 
+
+  /**
+   * write_with_offset
+   *
+   * @param record_f called with next block offset, returns record
+   *        -- may be called twice in the event of a journal rollover
+   */
   using write_ertr = crimson::errorator<
     crimson::ct_error::erange,
     crimson::ct_error::input_output_error
