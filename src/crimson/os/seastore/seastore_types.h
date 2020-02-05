@@ -11,18 +11,30 @@
 
 namespace crimson::os::seastore {
 
-using segment_seq_t = uint32_t;
-static constexpr segment_seq_t NO_SEGMENT =
-  std::numeric_limits<segment_seq_t>::max();
-
 using checksum_t = uint32_t;
 
+// Identifies segment location on disk, see SegmentManager
 using segment_id_t = uint32_t;
-constexpr segment_id_t NULL_SEG_ID = std::numeric_limits<segment_id_t>::max();
+constexpr segment_id_t NULL_SEG_ID =
+  std::numeric_limits<segment_id_t>::max();
 
+// Offset within a segment on disk, see SegmentManager
 using segment_off_t = uint32_t;
-constexpr segment_off_t NULL_SEG_OFF = std::numeric_limits<segment_id_t>::max();
+constexpr segment_off_t NULL_SEG_OFF =
+  std::numeric_limits<segment_id_t>::max();
 
+/* Monotonically increasing segment seq, uniquely identifies
+ * the incarnation of a segment */
+using segment_seq_t = uint32_t;
+static constexpr segment_seq_t NULL_SEG_SEQ =
+  std::numeric_limits<segment_seq_t>::max();
+
+// Offset of delta within a record
+using record_delta_idx_t = uint32_t;
+constexpr record_delta_idx_t NULL_DELTA_IDX =
+  std::numeric_limits<record_delta_idx_t>::max();
+
+// <segment, offset> offset on disk, see SegmentManager
 struct paddr_t {
   segment_id_t segment = NULL_SEG_ID;
   segment_off_t offset = NULL_SEG_OFF;
@@ -32,17 +44,20 @@ struct paddr_t {
     denc(v.offset, p);
   }
 };
-
 constexpr paddr_t P_ADDR_NULL = paddr_t{};
 
+// logical addr, see LBAManager, TransactionManager
 using laddr_t = uint64_t;
 constexpr laddr_t L_ADDR_NULL = std::numeric_limits<laddr_t>::max();
 constexpr laddr_t L_ADDR_ROOT = std::numeric_limits<laddr_t>::max() - 1;
 constexpr laddr_t L_ADDR_LBAT = std::numeric_limits<laddr_t>::max() - 2;
 
+// logical offset, see LBAManager, TransactionManager
 using loff_t = uint64_t;
 constexpr loff_t L_OFF_NULL = std::numeric_limits<laddr_t>::max();
 
+/* identifies type of extent, used for interpretting deltas, managing
+ * writeback */
 enum class extent_types_t : uint8_t {
   ROOT = 0,
   LADDR_TREE = 1,
@@ -50,46 +65,51 @@ enum class extent_types_t : uint8_t {
   NONE = 0xFF
 };
 
-struct delta_info_t {
-  extent_types_t type;  ///< delta type
-  laddr_t laddr;        ///< logical address, null iff delta != LBA_BLOCK
-  paddr_t paddr;        ///< physical address
-  segment_off_t length; ///< extent length
-  ceph::bufferlist bl;  ///< payload
-
-  DENC(delta_info_t, v, p) {
-    denc(v.type, p);
-    denc(v.laddr, p);
-    denc(v.paddr, p);
-    denc(v.length, p);
-    denc(v.bl, p);
-  }
-};
-
-struct extent_info_t {
-  extent_types_t type;  ///< delta type
-  laddr_t laddr;        ///< logical address, null iff delta != LBA_BLOCK
+/* description of a new physical extent */
+struct extent_t {
   ceph::bufferlist bl;  ///< payload, bl.length() == length, aligned
 };
 
+/* <seq, off, idx> identifies a particular version of a particular
+ * extent (idx == NULL indicating original extent, idx != NULL 
+ * indicating most recent delta
+ */
 struct extent_version_t {
-  segment_seq_t seq = NO_SEGMENT;
+  segment_seq_t seq = NULL_SEG_SEQ;
   segment_off_t off = NULL_SEG_OFF;
+  record_delta_idx_t idx = NULL_DELTA_IDX;
 
   DENC(extent_version_t, v, p) {
     denc(v.seq, p);
     denc(v.off, p);
+    denc(v.idx, p);
   }
 };
 constexpr extent_version_t EXTENT_VERSION_NULL = extent_version_t{};
-WRITE_CMP_OPERATORS_2(extent_version_t, seq, off)
+WRITE_CMP_OPERATORS_3(extent_version_t, seq, off, idx)
 
-using journal_seq_t = uint64_t;
-static constexpr journal_seq_t NO_DELTAS =
-  std::numeric_limits<journal_seq_t>::max();
+/* description of a mutation to a physical extent */
+struct delta_info_t {
+  extent_types_t type = extent_types_t::NONE;  ///< delta type
+  paddr_t paddr;                               ///< physical address
+  /* logical address -- needed for repopulating cache */
+  laddr_t laddr = L_ADDR_NULL;
+  segment_off_t length = NULL_SEG_OFF;         ///< extent length
+  extent_version_t pversion;                   ///< prior version
+  ceph::bufferlist bl;                         ///< payload
+
+  DENC(delta_info_t, v, p) {
+    denc(v.type, p);
+    denc(v.paddr, p);
+    denc(v.laddr, p);
+    denc(v.length, p);
+    denc(v.pversion, p);
+    denc(v.bl, p);
+  }
+};
 
 struct record_t {
-  std::vector<extent_info_t> extents;
+  std::vector<extent_t> extents;
   std::vector<delta_info_t> deltas;
 };
 

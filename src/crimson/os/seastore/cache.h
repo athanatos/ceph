@@ -115,13 +115,6 @@ public:
     return CachedExtentRef();
   }
 
-  CachedExtentRef try_duplicate_contiguous(
-    laddr_t offset,
-    loff_t len) {
-    return CachedExtentRef(); /* TODO */
-  }
-
-
   using wait_extents_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   // TODO: eio isn't actually important here, but we probably
@@ -133,6 +126,11 @@ public:
   CachedExtentRef get_extent_buffer(
     laddr_t offset,
     loff_t length);
+
+  using replay_delta_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  using replay_delta_ret = replay_delta_ertr::future<>;
+  replay_delta_ret replay_delta(const delta_info_t &delta);
     
   std::ostream &print(
     std::ostream &out) const {

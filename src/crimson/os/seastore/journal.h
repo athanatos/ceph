@@ -19,6 +19,10 @@
 
 namespace crimson::os::seastore {
 
+using journal_seq_t = uint64_t;
+static constexpr journal_seq_t NO_DELTAS =
+  std::numeric_limits<journal_seq_t>::max();
+
 /**
  * Segment header
  *
@@ -39,24 +43,6 @@ struct segment_header_t {
     denc(v.journal_segment_id, p);
     denc(v.physical_segment_id, p);
     denc(v.journal_replay_lb, p);
-  }
-};
-
-struct extent_header_t {
-  // Fixed portion
-  extent_types_t type = extent_types_t::NONE;
-  laddr_t laddr;
-  segment_off_t length = 0;
-
-  extent_header_t() = default;
-
-  extent_header_t(extent_info_t info)
-    : type(info.type), laddr(info.laddr), length(info.bl.length()) {}
-
-  DENC(extent_header_t, v, p) {
-    denc(v.type, p);
-    denc(v.laddr, p);
-    denc(v.length, p);
   }
 };
 
@@ -203,5 +189,4 @@ private:
 }
 WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::segment_header_t)
 WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::record_header_t)
-WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::extent_header_t)
 

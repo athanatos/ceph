@@ -66,7 +66,6 @@ ceph::bufferlist Journal::encode_record(
   }
   bufferlist databl;
   for (auto &i: record.extents) {
-    ::encode(extent_header_t{i}, metadatabl);
     databl.claim_append(i.bl);
   }
   if (metadatabl.length() % block_size != 0) {
@@ -104,7 +103,6 @@ std::pair<segment_off_t, segment_off_t> Journal::get_encoded_record_length(
   }
   for (const auto &i: record.extents) {
     data += i.bl.length();
-    metadata += ceph::encoded_sizeof_bounded<extent_header_t>();
   }
   metadata = p2roundup(metadata, (size_t)block_size);
   return std::make_pair(metadata, data);
