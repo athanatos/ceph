@@ -102,26 +102,41 @@ using extent_list_t = std::list<std::pair<laddr_t, loff_t>>;
 
 class Cache {
 public:
+  /**
+   * get_reserve_extents
+   *
+   * @param extents requested set of extents
+   * @return <present, pending, fetch> caller is expected to perform reads
+   *         for the extents in fetch, call present_reserved_extents on
+   *         the result, and then call await_pending on pending
+   */
   std::tuple<ExtentSet, extent_list_t, extent_list_t> get_reserve_extents(
     const extent_list_t &extents);
 
   void present_reserved_extents(
     ExtentSet &extents);
 
+  using await_pending_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  // TODO: eio isn't actually important here, but we probably
+  // want a way to signal that the original transaction isn't
+  // going to complete the read
+  using await_pending_fut = await_pending_ertr::future<ExtentSet>;
+  await_pending_fut await_pending(const extent_list_t &pending);
+
+  /**
+   * Allocates mutable buffer from extent_set on offset~len
+   *
+   * @param extent_set spanning extents obtained from get_reserve_extents
+   * @param offset, len offset~len
+   * @return mutable extent, may either be dirty or pending
+   */
   CachedExtentRef duplicate_for_write(
     ExtentSet &extent_set,
     laddr_t offset,
     loff_t len) {
     return CachedExtentRef();
   }
-
-  using wait_extents_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error>;
-  // TODO: eio isn't actually important here, but we probably
-  // want a way to signal that the original transaction isn't
-  // going to complete the read
-  wait_extents_ertr::future<ExtentSet> await_pending(
-    const extent_list_t &pending);
 
   CachedExtentRef get_extent_buffer(
     laddr_t offset,

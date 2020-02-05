@@ -3,6 +3,7 @@ add_library(crimson-seastore
   segment_manager.cc
   transaction_manager.cc
   journal.cc
+  cache.cc
   lba_manager.cc
   lba_manager/btree/btree_lba_manager.cc
   seastore.cc)
