@@ -138,6 +138,10 @@ public:
     return CachedExtentRef();
   }
 
+  void update_extents(
+    ExtentSet &extents,
+    const std::list<std::pair<paddr_t, segment_off_t>> &to_release);
+
   CachedExtentRef get_extent_buffer(
     laddr_t offset,
     loff_t length);

@@ -32,6 +32,12 @@ CachedExtentRef Cache::get_extent_buffer(
   return CachedExtentRef(); // TODO
 }
 
+void Cache::update_extents(
+  ExtentSet &extents,
+  const std::list<std::pair<paddr_t, segment_off_t>> &to_release)
+{
+}
+
 Cache::replay_delta_ret
 Cache::replay_delta(const delta_info_t &delta)
 {
