@@ -108,9 +108,15 @@ std::pair<segment_off_t, segment_off_t> Journal::get_encoded_record_length(
   return std::make_pair(metadata, data);
 }
 
-bool Journal::needs_roll(segment_off_t length) const {
+bool Journal::needs_roll(segment_off_t length) const
+{
   return length + written_to >
     current_journal_segment->get_write_capacity();
+}
+
+paddr_t Journal::next_block_addr() const
+{
+  return {current_journal_segment->get_segment_id(), written_to + block_size};
 }
 
 Journal::roll_journal_segment_ertr::future<>
