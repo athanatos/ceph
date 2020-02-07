@@ -22,12 +22,17 @@
 
 namespace crimson::os::seastore {
 
+class LBATransaction {
+public:
+  virtual void set_block_offset(paddr_t addr) = 0;
+  virtual ~LBATransaction() {}
+};
+using LBATransactionRef = std::unique_ptr<LBATransaction>;
+
 class LBAPin;
 using LBAPinRef = std::unique_ptr<LBAPin>;
 
 class LBAPin {
-  friend class lba_pin_split_merge;
-
 public:
   virtual loff_t get_length() const = 0;
   virtual paddr_t get_paddr() const = 0;
@@ -48,6 +53,36 @@ public:
   using get_mapping_ret = get_mapping_ertr::future<lba_pin_list_t>;
   virtual get_mapping_ret get_mappings(
     laddr_t offset, loff_t length) = 0;
+
+  using alloc_extent_relative_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  using alloc_extent_relative_ret = alloc_extent_relative_ertr::future<LBAPinRef>;
+  virtual alloc_extent_relative_ret alloc_extent_relative(
+    laddr_t hint,
+    loff_t len,
+    LBATransaction &t);
+
+  using move_extent_relative_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  using move_extent_relative_ret = move_extent_relative_ertr::future<LBAPinRef>;
+  virtual move_extent_relative_ret move_extent_relative(
+    LBAPinRef &ref,
+    segment_off_t record_offset,
+    LBATransaction &t);
+
+  using move_extent_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  using move_extent_ret = move_extent_ertr::future<LBAPinRef>;
+  virtual move_extent_relative_ret move_extent(
+    LBAPinRef &ref,
+    laddr_t off, loff_t len, paddr_t addr,
+    LBATransaction &t);
+
+  using submit_lba_transaction_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  using submit_lba_transaction_ret = submit_lba_transaction_ertr::future<>;
+  virtual submit_lba_transaction_ret submit_lba_transaction(
+    LBATransaction &t);
 
   virtual ~LBAManager() {}
 };

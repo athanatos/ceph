@@ -74,10 +74,11 @@ public:
 
   ExtentSet() = default;
   ExtentSet(CachedExtentRef &ref) : extents{{ref}} {}
-  
+
   void merge(ExtentSet &&other) { /* TODO */ }
 
   void insert(CachedExtentRef &ref) { /* TODO */ }
+  void insert(const ExtentSet &other) { /* TODO */ }
 
   iterator begin() {
     return extents.begin();

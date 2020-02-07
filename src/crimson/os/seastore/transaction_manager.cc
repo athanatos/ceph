@@ -100,6 +100,12 @@ TransactionManager::get_mutable_extent(
   laddr_t offset,
   loff_t len)
 {
+  /* This portion needs to
+   * 1) pull relevant extents overlapping offset~len
+   * 2) determine whether we're replacing or mutating
+   * 3a) replacing: call lba_manager to chop up existing overlapping extents
+   * 3g) mutating: just apply mutation
+   */
   return read_extents(t, {{offset, len}}).safe_then(
     [this, offset, len, &t](auto extent_set) {
       auto extent = cache.duplicate_for_write(extent_set, offset, len);
@@ -112,9 +118,10 @@ TransactionManager::submit_transaction_ertr::future<>
 TransactionManager::submit_transaction(
   TransactionRef &&t)
 {
-  // grab pins for all pending extents in the write set
-  // validate read set
+  // validate check set
   // invalidate replaced extents stealing pins
+  // pass lba_transaction along with current block journal offset and record
+  //   to 
   // construct lba transaction thingy [<laddr, pin, len, { ref_diff, optional<paddr> }>...]
   // submit replacement extents to cache with new lba pins and version
   return submit_transaction_ertr::now();

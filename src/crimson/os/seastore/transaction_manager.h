@@ -31,12 +31,22 @@ class Journal;
 
 class Transaction {
   friend class TransactionManager;
+
+  LBATransactionRef lba_transaction;
   
-  ExtentSet read_set;
+  ExtentSet read_check_set;
+  ExtentSet current_set;
   ExtentSet write_set;
-public:
-  void add_to_read_set(const ExtentSet &eset) { /* TODO */ }
-  void add_to_write_set(const ExtentSet &eset) { /* TODO */ }
+  ExtentSet invalidated_extents;
+
+  void add_to_read_set(const ExtentSet &eset) {
+    read_check_set.insert(eset);
+    current_set.insert(eset);
+  }
+  void add_to_write_set(const ExtentSet &eset) {
+    write_set.insert(eset);
+    current_set.insert(eset);
+  }
 
   std::pair<ExtentSet, extent_list_t>
   get_extents(const extent_list_t &eset) {
@@ -46,6 +56,8 @@ public:
 using TransactionRef = std::unique_ptr<Transaction>;
 
 class TransactionManager {
+  friend class Transaction;
+
   Cache cache;
   SegmentManager &segment_manager;
   LBAManagerRef lba_manager;
