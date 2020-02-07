@@ -42,6 +42,7 @@ public:
 };
 
 using lba_pin_list_t = std::list<LBAPinRef>;
+using lba_pin_ref_list_t = std::list<LBAPinRef&>;
 
 /**
  * Abstract interface for managing the logical to physical mapping
@@ -60,7 +61,26 @@ public:
   virtual alloc_extent_relative_ret alloc_extent_relative(
     laddr_t hint,
     loff_t len,
+    segment_off_t offset,
     LBATransaction &t);
+
+  using set_extent_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error,
+    crimson::ct_error::invarg>;
+  using set_extent_ret = set_extent_ertr::future<LBAPinRef>;
+  virtual set_extent_ret set_extent(
+    laddr_t off, loff_t len, paddr_t addr,
+    LBATransaction &t);
+
+  using set_extent_relative_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error,
+    crimson::ct_error::invarg>;
+  using set_extent_relative_ret = set_extent_ertr::future<LBAPinRef>;
+  virtual set_extent_relative_ret set_extent_relative(
+    laddr_t off, loff_t len, segment_off_t record_offset,
+    LBATransaction &t);
+
+  virtual void release_extent(LBAPinRef &ref, LBATransaction &t);
 
   using move_extent_relative_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
@@ -68,7 +88,18 @@ public:
   virtual move_extent_relative_ret move_extent_relative(
     LBAPinRef &ref,
     segment_off_t record_offset,
-    LBATransaction &t);
+    LBATransaction &t) {
+    release_extent(ref, t);
+    return set_extent_relative(
+      ref->get_laddr(),
+      ref->get_length(),
+      record_offset,
+      t).handle_error(
+	move_extent_relative_ertr::pass_further{},
+	crimson::ct_error::invarg::handle([] {
+	  throw std::runtime_error("Should be impossible");
+	}));
+  }
 
   using move_extent_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
@@ -76,7 +107,18 @@ public:
   virtual move_extent_relative_ret move_extent(
     LBAPinRef &ref,
     laddr_t off, loff_t len, paddr_t addr,
-    LBATransaction &t);
+    LBATransaction &t) {
+    release_extent(ref, t);
+    return set_extent(
+      ref->get_laddr(),
+      ref->get_length(),
+      addr,
+      t).handle_error(
+	move_extent_relative_ertr::pass_further{},
+	crimson::ct_error::invarg::handle([] {
+	  throw std::runtime_error("Should be impossible");
+	}));
+  }
 
   using submit_lba_transaction_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
