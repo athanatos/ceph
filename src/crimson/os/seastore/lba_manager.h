@@ -62,7 +62,7 @@ public:
     laddr_t hint,
     loff_t len,
     segment_off_t offset,
-    LBATransaction &t);
+    LBATransaction &t) = 0;
 
   using set_extent_ertr = crimson::errorator<
     crimson::ct_error::input_output_error,
@@ -70,7 +70,7 @@ public:
   using set_extent_ret = set_extent_ertr::future<LBAPinRef>;
   virtual set_extent_ret set_extent(
     laddr_t off, loff_t len, paddr_t addr,
-    LBATransaction &t);
+    LBATransaction &t) = 0;
 
   using set_extent_relative_ertr = crimson::errorator<
     crimson::ct_error::input_output_error,
@@ -78,9 +78,9 @@ public:
   using set_extent_relative_ret = set_extent_ertr::future<LBAPinRef>;
   virtual set_extent_relative_ret set_extent_relative(
     laddr_t off, loff_t len, segment_off_t record_offset,
-    LBATransaction &t);
+    LBATransaction &t) = 0;
 
-  virtual void release_extent(LBAPinRef &ref, LBATransaction &t);
+  virtual void release_extent(LBAPinRef &ref, LBATransaction &t) = 0;
 
   using move_extent_relative_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
@@ -124,7 +124,7 @@ public:
     crimson::ct_error::input_output_error>;
   using submit_lba_transaction_ret = submit_lba_transaction_ertr::future<>;
   virtual submit_lba_transaction_ret submit_lba_transaction(
-    LBATransaction &t);
+    LBATransaction &t) = 0;
 
   virtual ~LBAManager() {}
 };
