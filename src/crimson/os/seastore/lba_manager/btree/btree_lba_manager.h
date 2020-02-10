@@ -20,6 +20,8 @@
 #include "crimson/os/seastore/cache.h"
 #include "crimson/os/seastore/segment_manager.h"
 
+#include "crimson/os/seastore/lba_manager/btree/btree_node.h"
+
 namespace crimson::os::seastore::lba_manager::btree {
 
 class BtreeLBATransaction : LBATransaction {
@@ -37,6 +39,15 @@ class BtreeLBAPin : LBAPin {
   paddr_t paddr;
   laddr_t laddr;
   loff_t length;
+
+  CachedExtentRef extent;
+  BtreeLBAPin(
+    paddr_t paddr,
+    laddr_t laddr,
+    loff_t length,
+    CachedExtentRef extent)
+    : paddr(paddr), laddr(laddr), length(length), extent(extent) {}
+  
 public:
   loff_t get_length() const final {
     return length;
@@ -55,6 +66,10 @@ public:
 class BtreeLBAManager : public LBAManager {
   SegmentManager &segment_manager;
   Cache &cache;
+
+  LBARootNode lba_root;
+  SegmentRootNode segment_root;
+  
 public:
   BtreeLBAManager(
     SegmentManager &segment_manager,
