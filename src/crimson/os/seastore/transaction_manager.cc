@@ -20,7 +20,7 @@ namespace crimson::os::seastore {
 
 TransactionManager::TransactionManager(SegmentManager &segment_manager)
   : segment_manager(segment_manager),
-    lba_manager(lba_manager::create_lba_manager(segment_manager)),
+    lba_manager(lba_manager::create_lba_manager(segment_manager, cache)),
     journal(new Journal(*((JournalSegmentProvider*)nullptr), segment_manager))
 {}
 

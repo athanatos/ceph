@@ -19,8 +19,10 @@ namespace {
 namespace crimson::os::seastore::lba_manager::btree {
 
 BtreeLBAManager::BtreeLBAManager(
-  SegmentManager &segment_manager)
-  : segment_manager(segment_manager) {}
+  SegmentManager &segment_manager,
+  Cache &cache)
+  : segment_manager(segment_manager),
+    cache(cache) {}
 
 
 BtreeLBAManager::get_mapping_ret

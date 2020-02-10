@@ -130,8 +130,11 @@ public:
 };
 using LBAManagerRef = std::unique_ptr<LBAManager>;
 
+class Cache;
 namespace lba_manager {
-LBAManagerRef create_lba_manager(SegmentManager &segment_manager);
+LBAManagerRef create_lba_manager(
+  SegmentManager &segment_manager,
+  Cache &cache);
 }
 
 }

@@ -17,6 +17,7 @@
 
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/lba_manager.h"
+#include "crimson/os/seastore/cache.h"
 #include "crimson/os/seastore/segment_manager.h"
 
 namespace crimson::os::seastore::lba_manager::btree {
@@ -53,8 +54,11 @@ public:
 
 class BtreeLBAManager : public LBAManager {
   SegmentManager &segment_manager;
+  Cache &cache;
 public:
-  BtreeLBAManager(SegmentManager &segment_manager);
+  BtreeLBAManager(
+    SegmentManager &segment_manager,
+    Cache &cache);
 
   get_mapping_ret get_mappings(
     laddr_t offset, loff_t length) final;
