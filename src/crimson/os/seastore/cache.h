@@ -10,10 +10,24 @@
 
 #include "include/buffer.h"
 #include "crimson/os/seastore/seastore_types.h"
-#include "crimson/os/seastore/lba_manager.h"
 #include "crimson/common/errorator.h"
 
 namespace crimson::os::seastore {
+
+class LBAPin {
+public:
+  virtual void set_paddr(paddr_t) = 0;
+  
+  virtual loff_t get_length() const = 0;
+  virtual paddr_t get_paddr() const = 0;
+  virtual laddr_t get_laddr() const = 0;
+
+  virtual ~LBAPin() {}
+};
+using LBAPinRef = std::unique_ptr<LBAPin>;
+
+using lba_pin_list_t = std::list<LBAPinRef>;
+using lba_pin_ref_list_t = std::list<LBAPinRef&>;
 
 class CachedExtent : public boost::intrusive_ref_counter<
   CachedExtent,
@@ -100,6 +114,30 @@ public:
 /* TODO: replace with something that mostly doesn't allocate,
    often used for single elements */
 using extent_list_t = std::list<std::pair<laddr_t, loff_t>>;
+
+class Transaction {
+  friend class TransactionManager;
+
+  ExtentSet read_check_set;
+  ExtentSet current_set;
+  ExtentSet write_set;
+  ExtentSet invalidated_extents;
+
+  void add_to_read_set(const ExtentSet &eset) {
+    read_check_set.insert(eset);
+    current_set.insert(eset);
+  }
+  void add_to_write_set(const ExtentSet &eset) {
+    write_set.insert(eset);
+    current_set.insert(eset);
+  }
+
+  std::pair<ExtentSet, extent_list_t>
+  get_extents(const extent_list_t &eset) {
+    return {ExtentSet{}, extent_list_t{}};
+  }
+};
+using TransactionRef = std::unique_ptr<Transaction>;
 
 class Cache {
 public:

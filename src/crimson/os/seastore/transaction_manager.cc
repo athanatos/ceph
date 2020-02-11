@@ -47,7 +47,7 @@ TransactionManager::read_extents(
 	[this, &read, &t](auto &iter) {
 	  auto &[offset, length] = iter;
 	  return lba_manager->get_mappings(
-	    offset, length, *t.lba_transaction).safe_then(
+	    offset, length, t).safe_then(
 	      [this, &read, &t](auto &&pin_refs) {
 		return seastar::do_with(
 		  std::move(pin_refs),

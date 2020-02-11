@@ -24,51 +24,6 @@
 
 namespace crimson::os::seastore::lba_manager::btree {
 
-enum class lba_operation_type_t : uint8_t {
-  ALLOC,
-  
-};
-
-struct lba_operation_t {
-};
-
-class BtreeLBATransaction : LBATransaction {
-public:
-  ~BtreeLBATransaction() final {}
-};
-using BtreeLBATransactionRef =
-  std::unique_ptr<BtreeLBATransaction>;
-
-class BtreeLBAPin;
-using BtreeLBAPinRef = std::unique_ptr<LBAPin>;
-
-class BtreeLBAPin : LBAPin {
-  paddr_t paddr;
-  laddr_t laddr;
-  loff_t length;
-
-  CachedExtentRef extent;
-  BtreeLBAPin(
-    paddr_t paddr,
-    laddr_t laddr,
-    loff_t length,
-    CachedExtentRef extent)
-    : paddr(paddr), laddr(laddr), length(length), extent(extent) {}
-  
-public:
-  loff_t get_length() const final {
-    return length;
-  }
-  paddr_t get_paddr() const final {
-    return paddr;
-  }
-  laddr_t get_laddr() const final {
-    return laddr;
-  }
-
-  ~BtreeLBAPin() final = default;
-};
-
 /**
  * BtreeLBAManager
  *
@@ -85,7 +40,7 @@ public:
  * 3) the record itself acts as an implicit delta against
  *    the unwritten_segment_update tree
  *
- * get_mappings, alloc_extent_*, etc populate an LBATransaction
+ * get_mappings, alloc_extent_*, etc populate an Transaction
  * which then gets submitted
  */
 class BtreeLBAManager : public LBAManager {
@@ -109,27 +64,27 @@ public:
 
   get_mapping_ret get_mappings(
     laddr_t offset, loff_t length,
-    LBATransaction &t) final;
+    Transaction &t) final;
 
   alloc_extent_relative_ret alloc_extent_relative(
     laddr_t hint,
     loff_t len,
     segment_off_t offset,
-    LBATransaction &t) final;
+    Transaction &t) final;
 
   set_extent_ret set_extent(
     laddr_t off, loff_t len, paddr_t addr,
-    LBATransaction &t) final;
+    Transaction &t) final;
 
   set_extent_relative_ret set_extent_relative(
     laddr_t off, loff_t len, segment_off_t record_offset,
-    LBATransaction &t) final;
+    Transaction &t) final;
 
-  bool decref_extent(LBAPinRef &ref, LBATransaction &t) final;
-  void incref_extent(LBAPinRef &ref, LBATransaction &t) final;
+  bool decref_extent(LBAPinRef &ref, Transaction &t) final;
+  void incref_extent(LBAPinRef &ref, Transaction &t) final;
 
   submit_lba_transaction_ret submit_lba_transaction(
-    LBATransaction &t) final;
+    Transaction &t) final;
 
 };
   

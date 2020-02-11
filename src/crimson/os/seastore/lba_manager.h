@@ -17,34 +17,11 @@
 
 #include "crimson/osd/exceptions.h"
 
+#include "crimson/os/seastore/cache.h"
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/segment_manager.h"
 
 namespace crimson::os::seastore {
-
-class LBATransaction {
-public:
-  virtual void set_block_offset(paddr_t addr) = 0;
-  virtual ~LBATransaction() {}
-};
-using LBATransactionRef = std::unique_ptr<LBATransaction>;
-
-class LBAPin;
-using LBAPinRef = std::unique_ptr<LBAPin>;
-
-class LBAPin {
-public:
-  virtual void set_paddr(paddr_t) = 0;
-  
-  virtual loff_t get_length() const = 0;
-  virtual paddr_t get_paddr() const = 0;
-  virtual laddr_t get_laddr() const = 0;
-
-  virtual ~LBAPin() {}
-};
-
-using lba_pin_list_t = std::list<LBAPinRef>;
-using lba_pin_ref_list_t = std::list<LBAPinRef&>;
 
 /**
  * Abstract interface for managing the logical to physical mapping
@@ -61,7 +38,7 @@ public:
   using get_mapping_ret = get_mapping_ertr::future<lba_pin_list_t>;
   virtual get_mapping_ret get_mappings(
     laddr_t offset, loff_t length,
-    LBATransaction &t) = 0;
+    Transaction &t) = 0;
 
   /**
    * Allocates a new mapping referenced by LBARef
@@ -77,7 +54,7 @@ public:
     laddr_t hint,
     loff_t len,
     segment_off_t offset,
-    LBATransaction &t) = 0;
+    Transaction &t) = 0;
 
   /**
    * Creates a new absolute mapping.
@@ -90,7 +67,7 @@ public:
   using set_extent_ret = set_extent_ertr::future<LBAPinRef>;
   virtual set_extent_ret set_extent(
     laddr_t off, loff_t len, paddr_t addr,
-    LBATransaction &t) = 0;
+    Transaction &t) = 0;
 
   /**
    * Creates a new relative mapping.
@@ -103,19 +80,19 @@ public:
   using set_extent_relative_ret = set_extent_ertr::future<LBAPinRef>;
   virtual set_extent_relative_ret set_extent_relative(
     laddr_t off, loff_t len, segment_off_t record_offset,
-    LBATransaction &t) = 0;
+    Transaction &t) = 0;
 
   /**
    * Decrements ref count on extent
    *
    * @return true if freed
    */
-  virtual bool decref_extent(LBAPinRef &ref, LBATransaction &t) = 0;
+  virtual bool decref_extent(LBAPinRef &ref, Transaction &t) = 0;
 
   /**
    * Increments ref count on extent
    */
-  virtual void incref_extent(LBAPinRef &ref, LBATransaction &t) = 0;
+  virtual void incref_extent(LBAPinRef &ref, Transaction &t) = 0;
 
   /**
    * Moves mapping denoted by ref.
@@ -128,7 +105,7 @@ public:
   virtual move_extent_relative_ret move_extent_relative(
     LBAPinRef &ref,
     segment_off_t record_offset,
-    LBATransaction &t) {
+    Transaction &t) {
     bool freed = decref_extent(ref, t);
     ceph_assert(freed);
     return set_extent_relative(
@@ -153,7 +130,7 @@ public:
   virtual move_extent_relative_ret move_extent(
     LBAPinRef &ref,
     laddr_t off, loff_t len, paddr_t addr,
-    LBATransaction &t) {
+    Transaction &t) {
     bool freed = decref_extent(ref, t);
     ceph_assert(freed);
     return set_extent(
@@ -171,7 +148,7 @@ public:
     crimson::ct_error::input_output_error>;
   using submit_lba_transaction_ret = submit_lba_transaction_ertr::future<>;
   virtual submit_lba_transaction_ret submit_lba_transaction(
-    LBATransaction &t) = 0;
+    Transaction &t) = 0;
 
   virtual ~LBAManager() {}
 };
