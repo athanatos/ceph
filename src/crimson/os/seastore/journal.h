@@ -28,19 +28,19 @@ static constexpr journal_seq_t NO_DELTAS =
  *
  * Every segment contains and encode segment_header_t in the first block.
  * Our strategy for finding the journal replay point is:
- * 1) Find the segment with the highest journal_segment_id
+ * 1) Find the segment with the highest journal_segment_seq
  * 2) Scan forward from committed_journal_lb to find the most recent
  *    journal_commit_lb record
  * 3) Replay starting at the most recent found journal_commit_lb record
  */
 struct segment_header_t {
-  segment_seq_t journal_segment_id;
+  segment_seq_t journal_segment_seq;
   segment_id_t physical_segment_id; // debugging
 
   paddr_t journal_replay_lb;
 
   DENC(segment_header_t, v, p) {
-    denc(v.journal_segment_id, p);
+    denc(v.journal_segment_seq, p);
     denc(v.physical_segment_id, p);
     denc(v.journal_replay_lb, p);
   }
@@ -89,12 +89,12 @@ class Journal {
 
   paddr_t current_replay_point;
 
-  segment_seq_t current_journal_segment_id = 0;
+  segment_seq_t current_journal_segment_seq = 0;
   
   SegmentRef current_journal_segment;
   segment_off_t written_to = 0;
 
-  segment_id_t next_journal_segment_id = NULL_SEG_ID;
+  segment_id_t next_journal_segment_seq = NULL_SEG_ID;
   journal_seq_t current_journal_seq = 0;
 
   using initialize_segment_ertr = crimson::errorator<

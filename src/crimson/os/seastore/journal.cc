@@ -36,7 +36,7 @@ Journal::initialize_segment_ertr::future<> Journal::initialize_segment(
   ceph_assert(segment.get_write_ptr() == 0);
   bufferlist bl;
   auto header = segment_header_t{
-    current_journal_segment_id++,
+    current_journal_segment_seq++,
     segment.get_segment_id(),
     current_replay_point};
   ::encode(header, bl);
@@ -179,7 +179,7 @@ Journal::find_replay_segments_fut Journal::find_replay_segments()
 	    segments.begin(),
 	    segments.end(),
 	    [](const auto &lt, const auto &rt) {
-	      return lt.second.journal_segment_id < rt.second.journal_segment_id;
+	      return lt.second.journal_segment_seq < rt.second.journal_segment_seq;
 	    });
 	  auto replay_from = segments.rbegin()->second.journal_replay_lb;
 	  auto from = std::find_if(
