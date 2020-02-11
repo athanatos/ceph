@@ -62,13 +62,35 @@ public:
   ~BtreeLBAPin() final = default;
 };
 
-
+/**
+ * BtreeLBAManager
+ *
+ * Uses a wandering btree to track two things:
+ * 1) lba state including laddr_t -> paddr_t mapping
+ * 2) reverse paddr_t -> laddr_t mapping for gc
+ *
+ * Generally, any transaction will involve
+ * 1) deltas against lba tree nodes
+ * 2) new lba tree nodes
+ *    - Note, there must necessarily be a delta linking
+ *      these new nodes into the tree -- might be a
+ *      bootstrap_state_t delta if new root
+ * 3) the record itself acts as an implicit delta against
+ *    the unwritten_segment_update tree
+ */
 class BtreeLBAManager : public LBAManager {
   SegmentManager &segment_manager;
   Cache &cache;
 
-  LBARootNode lba_root;
-  SegmentRootNode segment_root;
+  /* Soft state, maintained via special deltas,
+   * never actually written as a block
+   */
+  struct bootstrap_state_t {
+    depth_t lba_depth;
+    depth_t segment_depth;
+    paddr_t lba_root_addr;
+    paddr_t segment_root;
+  } bootstrap_state;
   
 public:
   BtreeLBAManager(
