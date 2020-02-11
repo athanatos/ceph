@@ -148,29 +148,28 @@ public:
 
 
   /**
-   * write_with_offset
+   * write_record
    *
-   * @param record_f called with next block offset, returns record
+   * @param write record and returns offset of first block
    */
-  using write_with_offset_ertr = crimson::errorator<
+  using submit_record_ertr = crimson::errorator<
     crimson::ct_error::erange,
     crimson::ct_error::input_output_error
     >;
-  using record_func_t = std::function<record_t(paddr_t)>;
-  using write_with_offset_ret = write_with_offset_ertr::future<>;
-  write_with_offset_ret write_with_offset(record_func_t &&record_f) {
-    return (needs_roll(max_record_length)
+  using submit_record_ret = submit_record_ertr::future<paddr_t>;
+  submit_record_ret write_with_offset(record_t &&record) {
+    auto [mdlength, dlength] = get_encoded_record_length(record);
+    auto total = mdlength + dlength;
+    if (total > max_record_length) {
+      return crimson::ct_error::erange::make();
+    }
+    auto ret = next_block_addr();
+    return (needs_roll(total)
       ? roll_journal_segment()
       : roll_journal_segment_ertr::now()).safe_then(
-	[this, record_f=std::move(record_f)]() -> write_with_offset_ret {
-	  auto record = record_f(next_block_addr());
-	  auto [mdlength, dlength] = get_encoded_record_length(record);
-	  auto total = mdlength + dlength;
-	  if (total > max_record_length) {
-	    return crimson::ct_error::erange::make();
-	  }
+	[this, mdlength, dlength, record=std::move(record)]() mutable {
 	  return write_record(mdlength, dlength, std::move(record));
-	});
+	}).safe_then([ret] { return ret; });
   }
 
   using delta_handler_t = std::function<
