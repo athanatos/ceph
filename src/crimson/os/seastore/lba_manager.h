@@ -34,6 +34,8 @@ using LBAPinRef = std::unique_ptr<LBAPin>;
 
 class LBAPin {
 public:
+  virtual void set_paddr(paddr_t) = 0;
+  
   virtual loff_t get_length() const = 0;
   virtual paddr_t get_paddr() const = 0;
   virtual laddr_t get_laddr() const = 0;
@@ -49,12 +51,25 @@ using lba_pin_ref_list_t = std::list<LBAPinRef&>;
  */
 class LBAManager {
 public:
+  /**
+   * Fetches mappings for laddr_t in range [offset, offset + len)
+   *
+   * Future will not result until all pins have resolved (set_paddr called)
+   */
   using get_mapping_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   using get_mapping_ret = get_mapping_ertr::future<lba_pin_list_t>;
   virtual get_mapping_ret get_mappings(
-    laddr_t offset, loff_t length) = 0;
+    laddr_t offset, loff_t length,
+    LBATransaction &t) = 0;
 
+  /**
+   * Allocates a new mapping referenced by LBARef
+   *
+   * Offset will be relative to the block offset of the record
+   * This mapping will block from transaction submission until set_paddr
+   * is called on the LBAPin.
+   */
   using alloc_extent_relative_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   using alloc_extent_relative_ret = alloc_extent_relative_ertr::future<LBAPinRef>;
@@ -64,6 +79,11 @@ public:
     segment_off_t offset,
     LBATransaction &t) = 0;
 
+  /**
+   * Creates a new absolute mapping.
+   *
+   * off~len must be unreferenced
+   */
   using set_extent_ertr = crimson::errorator<
     crimson::ct_error::input_output_error,
     crimson::ct_error::invarg>;
@@ -72,6 +92,11 @@ public:
     laddr_t off, loff_t len, paddr_t addr,
     LBATransaction &t) = 0;
 
+  /**
+   * Creates a new relative mapping.
+   *
+   * off~len must be unreferenced
+   */
   using set_extent_relative_ertr = crimson::errorator<
     crimson::ct_error::input_output_error,
     crimson::ct_error::invarg>;
@@ -80,8 +105,23 @@ public:
     laddr_t off, loff_t len, segment_off_t record_offset,
     LBATransaction &t) = 0;
 
-  virtual void release_extent(LBAPinRef &ref, LBATransaction &t) = 0;
+  /**
+   * Decrements ref count on extent
+   *
+   * @return true if freed
+   */
+  virtual bool decref_extent(LBAPinRef &ref, LBATransaction &t) = 0;
 
+  /**
+   * Increments ref count on extent
+   */
+  virtual void incref_extent(LBAPinRef &ref, LBATransaction &t) = 0;
+
+  /**
+   * Moves mapping denoted by ref.
+   *
+   * ref must have only one refcount
+   */
   using move_extent_relative_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   using move_extent_relative_ret = move_extent_relative_ertr::future<LBAPinRef>;
@@ -89,7 +129,8 @@ public:
     LBAPinRef &ref,
     segment_off_t record_offset,
     LBATransaction &t) {
-    release_extent(ref, t);
+    bool freed = decref_extent(ref, t);
+    ceph_assert(freed);
     return set_extent_relative(
       ref->get_laddr(),
       ref->get_length(),
@@ -101,6 +142,11 @@ public:
 	}));
   }
 
+  /**
+   * Moves mapping denoted by ref.
+   *
+   * ref must have only one refcount
+   */
   using move_extent_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   using move_extent_ret = move_extent_ertr::future<LBAPinRef>;
@@ -108,7 +154,8 @@ public:
     LBAPinRef &ref,
     laddr_t off, loff_t len, paddr_t addr,
     LBATransaction &t) {
-    release_extent(ref, t);
+    bool freed = decref_extent(ref, t);
+    ceph_assert(freed);
     return set_extent(
       ref->get_laddr(),
       ref->get_length(),

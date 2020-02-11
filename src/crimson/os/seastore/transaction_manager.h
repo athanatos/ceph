@@ -90,6 +90,11 @@ public:
     return std::make_unique<Transaction>();
   }
 
+  enum class mutate_result_t {
+    SUCCESS,
+    REFERENCED
+  };
+
   /**
    * Add operation mutating specified extent
    *
@@ -100,7 +105,7 @@ public:
    */
   using mutate_ertr = SegmentManager::read_ertr;
   template <typename F>
-  mutate_ertr::future<> mutate(
+  mutate_ertr::future<mutate_result_t> mutate(
     Transaction &t,
     extent_types_t type,
     laddr_t offset,
@@ -115,7 +120,8 @@ public:
 	  {type, offset, extent->get_poffset(), std::move(bl)}
 	);
       }
-      return mutate_ertr::now();
+      return replace_ertr::make_ready_future<mutate_result_t>(
+	mutate_result_t::SUCCESS);
     });
   }
   
@@ -126,13 +132,14 @@ public:
    * allocated
    */
   using replace_ertr = SegmentManager::read_ertr;
-  replace_ertr::future<> replace(
+  replace_ertr::future<mutate_result_t> replace(
     Transaction &t,
     laddr_t offset,
     loff_t len,
     bufferlist bl) {
     // pull relevant portions of lba tree
-    return replace_ertr::now();
+    return replace_ertr::make_ready_future<mutate_result_t>(
+      mutate_result_t::SUCCESS);
   }
 
   /**

@@ -39,15 +39,16 @@ TransactionManager::read_extents(
   all.merge(std::move(from_cache));
   return seastar::do_with(
     std::make_tuple(std::move(need), ExtentSet()),
-    [this](auto &tup) -> read_extent_ret {
+    [this, &t](auto &tup) -> read_extent_ret {
       auto &[need, read] = tup;
       return crimson::do_for_each(
 	need.begin(),
 	need.end(),
-	[this, &read](auto &iter) {
+	[this, &read, &t](auto &iter) {
 	  auto &[offset, length] = iter;
-	  return lba_manager->get_mappings(offset, length).safe_then(
-	    [this, &read](auto &&pin_refs) {
+	  return lba_manager->get_mappings(
+	    offset, length, *t.lba_transaction).safe_then(
+	      [this, &read, &t](auto &&pin_refs) {
 		return seastar::do_with(
 		  std::move(pin_refs),
 		  [this, &read](auto &lba_pins) {

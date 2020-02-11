@@ -27,7 +27,8 @@ BtreeLBAManager::BtreeLBAManager(
 
 BtreeLBAManager::get_mapping_ret
 BtreeLBAManager::get_mappings(
-  laddr_t offset, loff_t length)
+  laddr_t offset, loff_t length,
+  LBATransaction &t)
 {
   return get_mapping_ret(
     get_mapping_ertr::ready_future_marker{},
@@ -66,7 +67,12 @@ BtreeLBAManager::set_extent_relative(
     LBAPinRef());
 }
 
-void BtreeLBAManager::release_extent(LBAPinRef &ref, LBATransaction &t)
+bool BtreeLBAManager::decref_extent(LBAPinRef &ref, LBATransaction &t)
+{
+  return true;
+}
+
+void BtreeLBAManager::incref_extent(LBAPinRef &ref, LBATransaction &t)
 {
 }
 

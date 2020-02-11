@@ -24,9 +24,16 @@
 
 namespace crimson::os::seastore::lba_manager::btree {
 
+enum class lba_operation_type_t : uint8_t {
+  ALLOC,
+  
+};
+
+struct lba_operation_t {
+};
+
 class BtreeLBATransaction : LBATransaction {
 public:
-  void set_block_offset(paddr_t addr) final {}
   ~BtreeLBATransaction() final {}
 };
 using BtreeLBATransactionRef =
@@ -77,6 +84,9 @@ public:
  *      bootstrap_state_t delta if new root
  * 3) the record itself acts as an implicit delta against
  *    the unwritten_segment_update tree
+ *
+ * get_mappings, alloc_extent_*, etc populate an LBATransaction
+ * which then gets submitted
  */
 class BtreeLBAManager : public LBAManager {
   SegmentManager &segment_manager;
@@ -98,7 +108,8 @@ public:
     Cache &cache);
 
   get_mapping_ret get_mappings(
-    laddr_t offset, loff_t length) final;
+    laddr_t offset, loff_t length,
+    LBATransaction &t) final;
 
   alloc_extent_relative_ret alloc_extent_relative(
     laddr_t hint,
@@ -114,7 +125,8 @@ public:
     laddr_t off, loff_t len, segment_off_t record_offset,
     LBATransaction &t) final;
 
-  void release_extent(LBAPinRef &ref, LBATransaction &t) final;
+  bool decref_extent(LBAPinRef &ref, LBATransaction &t) final;
+  void incref_extent(LBAPinRef &ref, LBATransaction &t) final;
 
   submit_lba_transaction_ret submit_lba_transaction(
     LBATransaction &t) final;
