@@ -13,10 +13,14 @@ namespace crimson::os::seastore {
 
 using checksum_t = uint32_t;
 
-// Identifies segment location on disk, see SegmentManager
-using segment_id_t = uint32_t;
+// Identifies segment location on disk, see SegmentManager,
+// may be negative for relative offsets
+using segment_id_t = int32_t; 
 constexpr segment_id_t NULL_SEG_ID =
-  std::numeric_limits<segment_id_t>::max();
+  std::numeric_limits<segment_id_t>::min();
+/* Used to denote relative paddr_t */
+constexpr segment_id_t REL_SEG_ID =
+  std::numeric_limits<segment_id_t>::min() + 1;
 
 // Offset within a segment on disk, see SegmentManager
 using segment_off_t = uint32_t;
@@ -45,6 +49,9 @@ struct paddr_t {
   }
 };
 constexpr paddr_t P_ADDR_NULL = paddr_t{};
+paddr_t make_relative_paddr(segment_off_t off) {
+  return paddr_t{REL_SEG_ID, off};
+}
 
 // logical addr, see LBAManager, TransactionManager
 using laddr_t = uint64_t;
