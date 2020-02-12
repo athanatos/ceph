@@ -61,7 +61,7 @@ public:
   init_ertr::future<> init();
 
   TransactionRef create_transaction() {
-    return std::make_unique<Transaction>();
+    return lba_manager->create_transaction();
   }
 
   enum class mutate_result_t {

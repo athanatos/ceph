@@ -150,6 +150,8 @@ public:
   virtual submit_lba_transaction_ret submit_lba_transaction(
     Transaction &t) = 0;
 
+  virtual TransactionRef create_transaction() = 0;
+
   virtual ~LBAManager() {}
 };
 using LBAManagerRef = std::unique_ptr<LBAManager>;
