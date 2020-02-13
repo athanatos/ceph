@@ -65,6 +65,8 @@ class BtreeLBAManager : public LBAManager {
 
   btree_lba_root_t root;
 
+  
+
 public:
   BtreeLBAManager(
     SegmentManager &segment_manager,
