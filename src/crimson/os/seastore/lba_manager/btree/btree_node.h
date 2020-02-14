@@ -14,6 +14,8 @@
 
 namespace crimson::os::seastore::lba_manager::btree {
 
+constexpr segment_off_t LBA_BLOCK_SIZE = 4096; // TODO
+
 /* BtreeLBAPin
  *
  * References leaf node
@@ -67,6 +69,10 @@ struct LBANode : Node<laddr_t, loff_t> {
     laddr_t addr,
     loff_t len) = 0;
 
+  static std::unique_ptr<LBANode> get_node(
+    depth_t depth,
+    CachedExtentRef extent);
+
   virtual ~LBANode() = default;
 };
 
@@ -94,9 +100,7 @@ private:
     bool operator==(const internal_iterator_t &rhs) const { return true; }
   };
   std::pair<internal_iterator_t, internal_iterator_t>
-  get_internal_entries(laddr_t addr, loff_t len) {
-    return std::make_pair(internal_iterator_t(), internal_iterator_t());
-  }
+  get_internal_entries(laddr_t addr, loff_t len);
 };
 
 struct LBALeafNode : LBANode {
@@ -128,9 +132,7 @@ private:
     }
   };
   std::pair<internal_iterator_t, internal_iterator_t>
-  get_leaf_entries(laddr_t addr, loff_t len) {
-    return std::make_pair(internal_iterator_t(), internal_iterator_t());
-  }
+  get_leaf_entries(laddr_t addr, loff_t len);
 };
 
 struct SegmentInternalNode : Node<paddr_t, segment_off_t> {

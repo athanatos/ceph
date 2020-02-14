@@ -20,6 +20,17 @@ namespace {
 
 namespace crimson::os::seastore::lba_manager::btree {
 
+std::unique_ptr<LBANode> LBANode::get_node(
+  depth_t depth,
+  CachedExtentRef extent)
+{
+  return std::unique_ptr<LBANode>(
+    depth > 0 ?
+    static_cast<LBANode*>(new LBAInternalNode(depth, extent)) :
+    static_cast<LBANode*>(new LBALeafNode(depth, extent)));
+}
+
+
 
 LBAInternalNode::lookup_range_ret LBAInternalNode::lookup_range(
   Cache &cache,
@@ -35,14 +46,10 @@ LBAInternalNode::lookup_range_ret LBAInternalNode::lookup_range(
     std::move(end),
     [this, &cache, &t, &result, addr, len](const auto &val) mutable {
       return cache.get_extent(
-	t, val.get_paddr(), val.get_length()).safe_then(
+	t, val.get_paddr(), LBA_BLOCK_SIZE).safe_then(
 	  [this, &cache, &t, &result, addr, len](auto extent) mutable {
 	    // TODO: add backrefs to ensure cache residence of parents
-	    auto next = std::unique_ptr<LBANode>(
-	      depth > 1 ?
-	      static_cast<LBANode*>(new LBAInternalNode(depth - 1, extent)) :
-	      static_cast<LBANode*>(new LBALeafNode(depth - 1, extent)));
-	    return next->lookup_range(
+	    return LBANode::get_node(depth - 1, extent)->lookup_range(
 	      cache,
 	      t,
 	      addr,
@@ -56,6 +63,13 @@ LBAInternalNode::lookup_range_ret LBAInternalNode::lookup_range(
       return lookup_range_ertr::make_ready_future<lba_pin_list_t>(
 	std::move(*result));
     });
+}
+
+std::pair<LBAInternalNode::internal_iterator_t,
+	  LBAInternalNode::internal_iterator_t>
+LBAInternalNode::get_internal_entries(laddr_t addr, loff_t len)
+{
+  return std::make_pair(internal_iterator_t(), internal_iterator_t());
 }
 
 LBALeafNode::lookup_range_ret LBALeafNode::lookup_range(
@@ -76,6 +90,12 @@ LBALeafNode::lookup_range_ret LBALeafNode::lookup_range(
   }
   return lookup_range_ertr::make_ready_future<lba_pin_list_t>(
     std::move(ret));
+}
+
+std::pair<LBALeafNode::internal_iterator_t, LBALeafNode::internal_iterator_t>
+LBALeafNode::get_leaf_entries(laddr_t addr, loff_t len)
+{
+  return std::make_pair(internal_iterator_t(), internal_iterator_t());
 }
 
 }

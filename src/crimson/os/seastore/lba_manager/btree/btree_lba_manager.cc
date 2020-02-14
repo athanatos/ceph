@@ -30,9 +30,15 @@ BtreeLBAManager::get_mappings(
   laddr_t offset, loff_t length,
   Transaction &t)
 {
-  return get_mapping_ret(
-    get_mapping_ertr::ready_future_marker{},
-    lba_pin_list_t());
+  auto &lt = get_lba_trans(t);
+  return cache.get_extent(
+    t,
+    lt.root.lba_root_addr,
+    LBA_BLOCK_SIZE).safe_then([](auto) {
+      return get_mapping_ret(
+	get_mapping_ertr::ready_future_marker{},
+	lba_pin_list_t());
+    });
 }
 
 BtreeLBAManager::alloc_extent_relative_ret

@@ -65,7 +65,9 @@ class BtreeLBAManager : public LBAManager {
 
   btree_lba_root_t root;
 
-  
+  BtreeLBATransaction &get_lba_trans(Transaction &t) {
+    return static_cast<BtreeLBATransaction&>(t);
+  }
 
 public:
   BtreeLBAManager(
