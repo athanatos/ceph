@@ -24,6 +24,13 @@ struct BtreeLBAPin : LBAPin {
   laddr_t laddr;
   loff_t length;
 public:
+  BtreeLBAPin(
+    CachedExtentRef leaf,
+    paddr_t paddr,
+    laddr_t laddr,
+    loff_t length)
+    : leaf(leaf), paddr(paddr), laddr(laddr), length(length) {}
+
   void set_paddr(paddr_t) final {}
   
   loff_t get_length() const final {
@@ -106,9 +113,9 @@ struct LBALeafNode : LBANode {
 
 private:
   struct internal_entry_t {
+    paddr_t get_paddr() const { return paddr_t(); /* TODO */ }
     laddr_t get_laddr() const { return L_ADDR_NULL; /* TODO */ }
     loff_t get_length() const { return 0; /* TODO */ }
-    paddr_t get_paddr() const { return paddr_t(); /* TODO */ }
   };
   struct internal_iterator_t {
     internal_entry_t placeholder;
@@ -116,6 +123,9 @@ private:
     void operator++(int) {}
     void operator++() {}
     bool operator==(const internal_iterator_t &rhs) const { return true; }
+    bool operator!=(const internal_iterator_t &rhs) const {
+      return !(*this == rhs);
+    }
   };
   std::pair<internal_iterator_t, internal_iterator_t>
   get_leaf_entries(laddr_t addr, loff_t len) {

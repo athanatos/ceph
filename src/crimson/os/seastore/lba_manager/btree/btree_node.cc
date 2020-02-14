@@ -64,7 +64,18 @@ LBALeafNode::lookup_range_ret LBALeafNode::lookup_range(
   laddr_t addr,
   loff_t len)
 {
-  return lookup_range_ret(lookup_range_ertr::ready_future_marker{});
+  auto ret = lba_pin_list_t();
+  auto [i, end] = get_leaf_entries(addr, len);
+  for (; i != end; ++i) {
+    ret.emplace_back(
+      std::make_unique<BtreeLBAPin>(
+	extent,
+	(*i).get_paddr(),
+	(*i).get_laddr(),
+	(*i).get_length()));
+  }
+  return lookup_range_ertr::make_ready_future<lba_pin_list_t>(
+    std::move(ret));
 }
 
 }
