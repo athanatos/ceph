@@ -872,6 +872,12 @@ namespace ct_error {
     ct_error_code<std::errc::operation_not_supported>;
   using not_connected = ct_error_code<std::errc::not_connected>;
   using timed_out = ct_error_code<std::errc::timed_out>;
+  using erange =
+    ct_error_code<std::errc::result_out_of_range>;
+  using ebadf =
+    ct_error_code<std::errc::bad_file_descriptor>;
+  using enospc =
+    ct_error_code<std::errc::no_space_on_device>;
 }
 
 using stateful_errc = stateful_error_t<std::errc>;
