@@ -30,8 +30,6 @@ std::unique_ptr<LBANode> LBANode::get_node(
     static_cast<LBANode*>(new LBALeafNode(depth, extent)));
 }
 
-
-
 LBAInternalNode::lookup_range_ret LBAInternalNode::lookup_range(
   Cache &cache,
   Transaction &t,
@@ -65,6 +63,24 @@ LBAInternalNode::lookup_range_ret LBAInternalNode::lookup_range(
     });
 }
 
+LBAInternalNode::insert_ret LBAInternalNode::insert(
+  Cache &cache,
+  Transaction &transaction,
+  laddr_t laddr,
+  lba_map_val_t val)
+{
+  return insert_ertr::now();
+}
+
+LBAInternalNode::remove_ret LBAInternalNode::remove(
+  Cache &cache,
+  Transaction &transaction,
+  laddr_t)
+{
+  return insert_ertr::now();
+}
+
+
 std::pair<LBAInternalNode::internal_iterator_t,
 	  LBAInternalNode::internal_iterator_t>
 LBAInternalNode::get_internal_entries(laddr_t addr, loff_t len)
@@ -90,6 +106,31 @@ LBALeafNode::lookup_range_ret LBALeafNode::lookup_range(
   }
   return lookup_range_ertr::make_ready_future<lba_pin_list_t>(
     std::move(ret));
+}
+
+LBALeafNode::insert_ret LBALeafNode::insert(
+  Cache &cache,
+  Transaction &transaction,
+  laddr_t laddr,
+  lba_map_val_t val)
+{
+  ceph_assert(!at_max_capacity());
+  /* Mutate the contents generating a delta if dirty rather than pending */
+  /* If dirty, do the thing that causes the extent to be fixed-up once
+   * committed */
+  return insert_ertr::now();
+}
+
+LBALeafNode::remove_ret LBALeafNode::remove(
+  Cache &cache,
+  Transaction &transaction,
+  laddr_t)
+{
+  ceph_assert(!at_min_capacity());
+  /* Mutate the contents generating a delta if dirty rather than pending */
+  /* If dirty, do the thing that causes the extent to be fixed-up once
+   * committed */
+  return insert_ertr::now();
 }
 
 std::pair<LBALeafNode::internal_iterator_t, LBALeafNode::internal_iterator_t>
