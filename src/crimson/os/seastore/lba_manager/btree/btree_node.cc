@@ -4,6 +4,8 @@
 #include <sys/mman.h>
 #include <string.h>
 
+#include <memory>
+
 #include "crimson/common/log.h"
 
 #include "include/buffer.h"
@@ -26,15 +28,33 @@ LBAInternalNode::lookup_range_ret LBAInternalNode::lookup_range(
   loff_t len)
 {
   auto [begin, end] = get_internal_entries(addr, len);
-  auto result = std::make_unique<lba_pin_list_t>();
-  return seastar::do_for_each(
+  auto result_up = std::make_unique<lba_pin_list_t>();
+  auto &result = *result_up;
+  return crimson::do_for_each(
     std::move(begin),
     std::move(end),
-    [this, &cache, &t, addr, len](const auto &val) {
-      return cache.lookup(t, val.get_paddr, val.get_length).safe_then(
-	[&cache, t, addr, len](auto extent) {
-	  return lookup_range_ertr::make_ready_future<lba_pin_list_t>();
-	});
+    [this, &cache, &t, &result, addr, len](const auto &val) mutable {
+      return cache.get_extent(
+	t, val.get_paddr(), val.get_length()).safe_then(
+	  [this, &cache, &t, &result, addr, len](auto extent) mutable {
+	    // TODO: add backrefs to ensure cache residence of parents
+	    auto next = std::unique_ptr<LBANode>(
+	      depth > 1 ?
+	      static_cast<LBANode*>(new LBAInternalNode(depth - 1, extent)) :
+	      static_cast<LBANode*>(new LBALeafNode(depth - 1, extent)));
+	    return next->lookup_range(
+	      cache,
+	      t,
+	      addr,
+	      len).safe_then(
+		[&cache, &t, &result, addr, len](auto pin_list) mutable {
+		  result.splice(result.end(), pin_list,
+				pin_list.begin(), pin_list.end());
+		});
+	  });
+    }).safe_then([result=std::move(result_up)] {
+      return lookup_range_ertr::make_ready_future<lba_pin_list_t>(
+	std::move(*result));
     });
 }
 
@@ -44,9 +64,7 @@ LBALeafNode::lookup_range_ret LBALeafNode::lookup_range(
   laddr_t addr,
   loff_t len)
 {
+  return lookup_range_ret(lookup_range_ertr::ready_future_marker{});
 }
 
-LBALeafNode::lookup_entries_ret LBALeafNode::get_leaf_entries(
-  laddr_t addr, loff_t len)
-{
 }

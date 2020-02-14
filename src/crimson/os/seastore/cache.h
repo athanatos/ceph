@@ -29,6 +29,11 @@ using LBAPinRef = std::unique_ptr<LBAPin>;
 using lba_pin_list_t = std::list<LBAPinRef>;
 using lba_pin_ref_list_t = std::list<LBAPinRef&>;
 
+class CachedExtentPriv {
+public:
+  virtual ~CachedExtentPriv() {}
+};
+
 class CachedExtent : public boost::intrusive_ref_counter<
   CachedExtent,
   boost::thread_unsafe_counter> {
@@ -141,6 +146,20 @@ using TransactionRef = std::unique_ptr<Transaction>;
 
 class Cache {
 public:
+  /**
+   * get_extent
+   */
+  using get_extent_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  using get_extent_ret = get_extent_ertr::future<CachedExtentRef>;
+  get_extent_ret get_extent(
+    Transaction &t,       ///< [in,out] current transaction
+    paddr_t offset,       ///< [in] starting addr
+    segment_off_t length  ///< [in] length
+  );
+    
+  
+  
   /**
    * get_reserve_extents
    *

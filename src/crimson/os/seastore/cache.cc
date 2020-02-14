@@ -5,6 +5,14 @@
 
 namespace crimson::os::seastore {
 
+Cache::get_extent_ret Cache::get_extent(
+  Transaction &t,
+  paddr_t offset,
+  segment_off_t length)
+{
+  return get_extent_ertr::make_ready_future<CachedExtentRef>();
+}
+
 std::tuple<ExtentSet, extent_list_t, extent_list_t>
 Cache::get_reserve_extents(const extent_list_t &extents)
 {

@@ -8,6 +8,7 @@
 #include "include/ceph_assert.h"
 #include "include/buffer_fwd.h"
 
+#include "crimson/os/seastore/lba_manager.h"
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/cache.h"
 
@@ -44,20 +45,27 @@ struct Node {
   CachedExtentRef extent;
   Node(depth_t depth, CachedExtentRef extent) : depth(depth), extent(extent) {}
 
+  virtual ~Node() = default;
+};
+
+struct LBANode : Node<laddr_t, loff_t> {
   using lookup_range_ertr = LBAManager::get_mapping_ertr;
   using lookup_range_ret = LBAManager::get_mapping_ret;
+
+  LBANode(depth_t depth, CachedExtentRef extent) : Node(depth, extent) {}
+
   virtual lookup_range_ret lookup_range(
     Cache &cache,
     Transaction &transaction,
     laddr_t addr,
     loff_t len) = 0;
 
-  virtual ~Node() = default;
+  virtual ~LBANode() = default;
 };
 
-struct LBAInternalNode : Node<laddr_t, loff_t> {
+struct LBAInternalNode : LBANode {
   LBAInternalNode(depth_t depth, CachedExtentRef extent)
-    : Node{depth, extent} {}
+    : LBANode(depth, extent) {}
 
   lookup_range_ret lookup_range(
     Cache &cache,
@@ -84,9 +92,9 @@ private:
   }
 };
 
-struct LBALeafNode : Node<laddr_t, loff_t> {
+struct LBALeafNode : LBANode {
   LBALeafNode(depth_t depth, CachedExtentRef extent)
-    : Node{depth, extent} {
+    : LBANode(depth, extent) {
     ceph_assert(depth == 0);
   }
 
@@ -95,6 +103,24 @@ struct LBALeafNode : Node<laddr_t, loff_t> {
     Transaction &transaction,
     laddr_t addr,
     loff_t len) final;
+
+private:
+  struct internal_entry_t {
+    laddr_t get_laddr() const { return L_ADDR_NULL; /* TODO */ }
+    loff_t get_length() const { return 0; /* TODO */ }
+    paddr_t get_paddr() const { return paddr_t(); /* TODO */ }
+  };
+  struct internal_iterator_t {
+    internal_entry_t placeholder;
+    const internal_entry_t &operator*() const { return placeholder; }
+    void operator++(int) {}
+    void operator++() {}
+    bool operator==(const internal_iterator_t &rhs) const { return true; }
+  };
+  std::pair<internal_iterator_t, internal_iterator_t>
+  get_leaf_entries(laddr_t addr, loff_t len) {
+    return std::make_pair(internal_iterator_t(), internal_iterator_t());
+  }
 };
 
 struct SegmentInternalNode : Node<paddr_t, segment_off_t> {
