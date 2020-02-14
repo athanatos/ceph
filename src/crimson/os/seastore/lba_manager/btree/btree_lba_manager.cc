@@ -34,10 +34,9 @@ BtreeLBAManager::get_mappings(
   return cache.get_extent(
     t,
     lt.root.lba_root_addr,
-    LBA_BLOCK_SIZE).safe_then([](auto) {
-      return get_mapping_ret(
-	get_mapping_ertr::ready_future_marker{},
-	lba_pin_list_t());
+    LBA_BLOCK_SIZE).safe_then([this, &t, &lt, offset, length](auto extent) {
+      return LBANode::get_node(lt.root.lba_depth, extent)->lookup_range(
+	cache, t, offset, length);
     });
 }
 
