@@ -75,6 +75,9 @@ struct LBANode : Node<laddr_t, loff_t> {
     laddr_t addr,
     loff_t len) = 0;
 
+  /**
+   * Precondition: !at_max_capacity()
+   */
   using insert_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
@@ -85,6 +88,9 @@ struct LBANode : Node<laddr_t, loff_t> {
     laddr_t laddr,
     lba_map_val_t val) = 0;
 
+  /**
+   * Precondition: !at_min_capacity()
+   */
   using remove_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
@@ -105,6 +111,7 @@ struct LBANode : Node<laddr_t, loff_t> {
 
   virtual ~LBANode() = default;
 };
+using LBANodeRef = std::unique_ptr<LBANode>;
 
 struct LBAInternalNode : LBANode {
   LBAInternalNode(depth_t depth, CachedExtentRef extent)
@@ -139,10 +146,20 @@ private:
   struct internal_iterator_t {
     internal_entry_t placeholder;
     const internal_entry_t &operator*() const { return placeholder; }
+    const internal_entry_t *operator->() const { return &placeholder; }
     void operator++(int) {}
     void operator++() {}
     bool operator==(const internal_iterator_t &rhs) const { return true; }
   };
+
+  using split_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error
+    >;
+  using split_ret = split_ertr::future<LBANodeRef>;
+  split_ret split_entry(Cache &c, Transaction &t, internal_iterator_t&);
+
+  internal_iterator_t get_insertion_point(laddr_t laddr);
+  
   std::pair<internal_iterator_t, internal_iterator_t>
   get_internal_entries(laddr_t addr, loff_t len);
 };

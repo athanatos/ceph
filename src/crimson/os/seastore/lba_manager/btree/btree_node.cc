@@ -65,10 +65,27 @@ LBAInternalNode::lookup_range_ret LBAInternalNode::lookup_range(
 
 LBAInternalNode::insert_ret LBAInternalNode::insert(
   Cache &cache,
-  Transaction &transaction,
+  Transaction &t,
   laddr_t laddr,
   lba_map_val_t val)
 {
+  auto insertion_pt = get_insertion_point(laddr);
+  return cache.get_extent(
+    t,
+    insertion_pt->get_paddr(),
+    LBA_BLOCK_SIZE).safe_then(
+      [this, insertion_pt, &cache, &t, laddr, val=std::move(val)](
+	auto extent) mutable {
+	auto node = get_node(depth + 1, extent);
+	auto node_fut = node->at_max_capacity() ?
+	  split_entry(cache, t, insertion_pt) :
+	  insert_ertr::make_ready_future<LBANodeRef>(std::move(node));
+	return node_fut;
+	
+      }).safe_then([this, &cache, &t, laddr, val=std::move(val)](
+		     auto node) mutable {
+	node->insert(cache, t, laddr, val);
+      });
   return insert_ertr::now();
 }
 
@@ -77,9 +94,21 @@ LBAInternalNode::remove_ret LBAInternalNode::remove(
   Transaction &transaction,
   laddr_t)
 {
-  return insert_ertr::now();
+  return remove_ertr::now();
 }
 
+LBAInternalNode::split_ret
+LBAInternalNode::split_entry(
+  Cache &c, Transaction &t, internal_iterator_t&)
+{
+  return split_ertr::make_ready_future<LBANodeRef>();
+}
+
+LBAInternalNode::internal_iterator_t
+LBAInternalNode::get_insertion_point(laddr_t laddr)
+{
+  return internal_iterator_t();
+}
 
 std::pair<LBAInternalNode::internal_iterator_t,
 	  LBAInternalNode::internal_iterator_t>
