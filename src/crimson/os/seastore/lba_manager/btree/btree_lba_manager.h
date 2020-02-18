@@ -74,8 +74,12 @@ public:
     SegmentManager &segment_manager,
     Cache &cache);
 
-  get_mapping_ret get_mappings(
+  get_mapping_ret get_mapping(
     laddr_t offset, loff_t length,
+    Transaction &t) final;
+
+  get_mappings_ret get_mappings(
+    lextent_list_t &&list,
     Transaction &t) final;
 
   alloc_extent_relative_ret alloc_extent_relative(

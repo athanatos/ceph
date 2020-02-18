@@ -36,8 +36,20 @@ public:
   using get_mapping_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   using get_mapping_ret = get_mapping_ertr::future<lba_pin_list_t>;
-  virtual get_mapping_ret get_mappings(
+  virtual get_mapping_ret get_mapping(
     laddr_t offset, loff_t length,
+    Transaction &t) = 0;
+
+  /**
+   * Fetches mappings for laddr_t in range [offset, offset + len)
+   *
+   * Future will not result until all pins have resolved (set_paddr called)
+   */
+  using get_mappings_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  using get_mappings_ret = get_mapping_ertr::future<lba_pin_list_t>;
+  virtual get_mappings_ret get_mappings(
+    lextent_list_t &&extent_lisk,
     Transaction &t) = 0;
 
   /**

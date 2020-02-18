@@ -10,6 +10,7 @@
 
 #include "include/buffer.h"
 #include "crimson/os/seastore/seastore_types.h"
+#include "crimson/os/seastore/segment_manager.h"
 #include "crimson/common/errorator.h"
 
 namespace crimson::os::seastore {
@@ -26,13 +27,10 @@ public:
 };
 using LBAPinRef = std::unique_ptr<LBAPin>;
 
+using extent_list_t = std::list<std::pair<laddr_t, loff_t>>;
+using lextent_list_t = std::list<std::pair<laddr_t, loff_t>>;
 using lba_pin_list_t = std::list<LBAPinRef>;
 using lba_pin_ref_list_t = std::list<LBAPinRef&>;
-
-class CachedExtentPriv {
-public:
-  virtual ~CachedExtentPriv() {}
-};
 
 class CachedExtent : public boost::intrusive_ref_counter<
   CachedExtent,
@@ -84,6 +82,9 @@ public:
 };
 using CachedExtentRef = boost::intrusive_ptr<CachedExtent>;
 
+template <typename T>
+using TCachedExtentRef = boost::intrusive_ptr<T>;
+
 class ExtentSet {
   using extent_ref_list = std::list<CachedExtentRef>;
   extent_ref_list extents;
@@ -116,10 +117,6 @@ public:
   }
 };
 
-/* TODO: replace with something that mostly doesn't allocate,
-   often used for single elements */
-using extent_list_t = std::list<std::pair<laddr_t, loff_t>>;
-
 class Transaction {
   friend class TransactionManager;
 
@@ -145,20 +142,43 @@ class Transaction {
 using TransactionRef = std::unique_ptr<Transaction>;
 
 class Cache {
+  SegmentManager &segment_manager;
 public:
+  Cache(SegmentManager &segment_manager) : segment_manager(segment_manager) {}
+  
   /**
    * get_extent
    */
   using get_extent_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
-  using get_extent_ret = get_extent_ertr::future<CachedExtentRef>;
-  get_extent_ret get_extent(
+
+  template <typename T>
+  using get_extent_ret = get_extent_ertr::future<TCachedExtentRef<T>>;
+
+  template <typename T, typename F>
+  get_extent_ret<T> get_extent(
+    F &&f,                ///< [in] constructor
     Transaction &t,       ///< [in,out] current transaction
     paddr_t offset,       ///< [in] starting addr
     segment_off_t length  ///< [in] length
-  );
-    
-  
+  ) {
+    auto ptr = std::make_unique<bufferptr>(length);
+    return segment_manager.read(
+      offset,
+      length,
+      *ptr).safe_then(
+	[this, ptr=std::move(ptr), f=std::forward<F>(f)]() mutable {
+	  return std::move(f)(std::move(ptr));
+	},
+	crimson::ct_error::discard_all{});
+  }
+
+  template <typename T>
+  TCachedExtentRef<T> alloc_new_extent(
+    Transaction &t,
+    segment_off_t length) {
+    return *(static_cast<T*>(nullptr));
+  }
   
   /**
    * get_reserve_extents

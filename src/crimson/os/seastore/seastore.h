@@ -95,8 +95,8 @@ public:
 
 private:
   std::unique_ptr<SegmentManager> segment_manager;
-  std::unique_ptr<TransactionManager> transaction_manager;
   std::unique_ptr<Cache> cache;
+  std::unique_ptr<TransactionManager> transaction_manager;
   std::unique_ptr<OnodeManager> onode_manager;
 
 

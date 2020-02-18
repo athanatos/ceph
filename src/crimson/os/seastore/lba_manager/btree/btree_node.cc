@@ -43,8 +43,10 @@ LBAInternalNode::lookup_range_ret LBAInternalNode::lookup_range(
     std::move(begin),
     std::move(end),
     [this, &cache, &t, &result, addr, len](const auto &val) mutable {
-      return cache.get_extent(
-	t, val.get_paddr(), LBA_BLOCK_SIZE).safe_then(
+      return get_lba_btree_extent(
+	cache,
+	t,
+	val.get_paddr()).safe_then(
 	  [this, &cache, &t, &result, addr, len](auto extent) mutable {
 	    // TODO: add backrefs to ensure cache residence of parents
 	    return LBANode::get_node(depth - 1, extent)->lookup_range(
@@ -70,18 +72,16 @@ LBAInternalNode::insert_ret LBAInternalNode::insert(
   lba_map_val_t val)
 {
   auto insertion_pt = get_insertion_point(laddr);
-  return cache.get_extent(
+  return get_lba_btree_extent(
+    cache,
     t,
-    insertion_pt->get_paddr(),
-    LBA_BLOCK_SIZE).safe_then(
+    insertion_pt->get_paddr()).safe_then(
       [this, insertion_pt, &cache, &t, laddr, val=std::move(val)](
 	auto extent) mutable {
 	auto node = get_node(depth + 1, extent);
-	auto node_fut = node->at_max_capacity() ?
-	  split_entry(cache, t, insertion_pt) :
+	return node->at_max_capacity() ?
+	  split_entry(cache, t, laddr, insertion_pt) :
 	  insert_ertr::make_ready_future<LBANodeRef>(std::move(node));
-	return node_fut;
-	
       }).safe_then([this, &cache, &t, laddr, val=std::move(val)](
 		     auto node) mutable {
 	node->insert(cache, t, laddr, val);
@@ -99,7 +99,7 @@ LBAInternalNode::remove_ret LBAInternalNode::remove(
 
 LBAInternalNode::split_ret
 LBAInternalNode::split_entry(
-  Cache &c, Transaction &t, internal_iterator_t&)
+  Cache &c, Transaction &t, laddr_t addr, internal_iterator_t&)
 {
   return split_ertr::make_ready_future<LBANodeRef>();
 }

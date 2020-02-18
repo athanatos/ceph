@@ -67,8 +67,10 @@ public:
 
   release_ertr::future<> release(segment_id_t id) final;
 
-  read_ertr::future<ceph::bufferlist> read(
-    paddr_t addr, size_t len) final;
+  read_ertr::future<> read(
+    paddr_t addr,
+    size_t len,
+    ceph::bufferptr &out) final;
 
   size_t get_size() const final {
     return config.size;

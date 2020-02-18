@@ -32,8 +32,8 @@ class Journal;
 class TransactionManager {
   friend class Transaction;
 
-  Cache cache;
   SegmentManager &segment_manager;
+  Cache &cache;
   LBAManagerRef lba_manager;
   std::unique_ptr<Journal> journal;
 
@@ -53,7 +53,7 @@ class TransactionManager {
     loff_t len);
     
 public:
-  TransactionManager(SegmentManager &segment_manager);
+  TransactionManager(SegmentManager &segment_manager, Cache &cache);
 
   using init_ertr = crimson::errorator<
     crimson::ct_error::input_output_error

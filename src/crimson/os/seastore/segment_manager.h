@@ -90,9 +90,19 @@ public:
     crimson::ct_error::invarg,
     crimson::ct_error::enoent,
     crimson::ct_error::erange>;
-  virtual read_ertr::future<ceph::bufferlist> read(
+  virtual read_ertr::future<> read(
     paddr_t addr,
-    size_t len) = 0;
+    size_t len,
+    ceph::bufferptr &out) = 0;
+  virtual read_ertr::future<ceph::bufferptr> read(
+    paddr_t addr,
+    size_t len) {
+    auto ptrref = std::make_unique<ceph::bufferptr>(len);
+    return read(addr, len, *ptrref).safe_then(
+      [ptrref=std::move(ptrref)]() mutable {
+	return read_ertr::make_ready_future<bufferptr>(std::move(*ptrref));
+      });
+  }
 
   /* Methods for discovering device geometry, segmentid set, etc */
   virtual size_t get_size() const = 0;

@@ -125,8 +125,10 @@ SegmentManager::release_ertr::future<> EphemeralSegmentManager::release(
   return release_ertr::now();
 }
 
-SegmentManager::read_ertr::future<ceph::bufferlist> EphemeralSegmentManager::read(
-  paddr_t addr, size_t len)
+SegmentManager::read_ertr::future<> EphemeralSegmentManager::read(
+  paddr_t addr,
+  size_t len,
+  ceph::bufferptr &out)
 {
   if (addr.segment >= get_num_segments())
     return crimson::ct_error::invarg::make();
@@ -134,10 +136,8 @@ SegmentManager::read_ertr::future<ceph::bufferlist> EphemeralSegmentManager::rea
   if (addr.offset + len >= config.segment_size)
     return crimson::ct_error::invarg::make();
 
-  ceph::bufferptr ptr(buffer + get_offset(addr), len);
-  ceph::bufferlist bl;
-  bl.append(ptr);
-  return read_ertr::make_ready_future<ceph::bufferlist>(std::move(bl));
+  out.copy_in(0, len, buffer + get_offset(addr));
+  return read_ertr::now();
 }
 
 }

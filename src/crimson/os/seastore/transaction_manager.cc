@@ -18,8 +18,10 @@ namespace {
 
 namespace crimson::os::seastore {
 
-TransactionManager::TransactionManager(SegmentManager &segment_manager)
+TransactionManager::TransactionManager(
+  SegmentManager &segment_manager, Cache &cache)
   : segment_manager(segment_manager),
+    cache(cache),
     lba_manager(lba_manager::create_lba_manager(segment_manager, cache)),
     journal(new Journal(*((JournalSegmentProvider*)nullptr), segment_manager))
 {}
@@ -29,6 +31,7 @@ TransactionManager::init_ertr::future<> TransactionManager::init()
   return journal->open_for_write();
 }
 
+#if 0
 TransactionManager::read_extent_ret
 TransactionManager::read_extents(
   Transaction &t,
@@ -94,6 +97,7 @@ TransactionManager::read_extents(
 	});
     });
 }
+#endif
 
 TransactionManager::get_mutable_extent_ertr::future<CachedExtentRef>
 TransactionManager::get_mutable_extent(

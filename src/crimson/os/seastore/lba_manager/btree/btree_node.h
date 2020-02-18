@@ -156,7 +156,8 @@ private:
     crimson::ct_error::input_output_error
     >;
   using split_ret = split_ertr::future<LBANodeRef>;
-  split_ret split_entry(Cache &c, Transaction &t, internal_iterator_t&);
+  split_ret split_entry(Cache &c, Transaction &t, laddr_t addr,
+			internal_iterator_t&);
 
   internal_iterator_t get_insertion_point(laddr_t laddr);
   
@@ -209,6 +210,17 @@ private:
   std::pair<internal_iterator_t, internal_iterator_t>
   get_leaf_entries(laddr_t addr, loff_t len);
 };
+
+Cache::get_extent_ret<CachedExtent> get_lba_btree_extent(
+  Cache &cache,
+  Transaction &t,
+  paddr_t offset) {
+  return cache.get_extent<CachedExtent>(
+    [](auto ptr) { return CachedExtentRef(); },
+    t,
+    offset,
+    LBA_BLOCK_SIZE);
+}
 
 struct SegmentInternalNode : Node<paddr_t, segment_off_t> {
 };

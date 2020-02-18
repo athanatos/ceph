@@ -26,17 +26,39 @@ BtreeLBAManager::BtreeLBAManager(
 
 
 BtreeLBAManager::get_mapping_ret
-BtreeLBAManager::get_mappings(
+BtreeLBAManager::get_mapping(
   laddr_t offset, loff_t length,
   Transaction &t)
 {
   auto &lt = get_lba_trans(t);
-  return cache.get_extent(
+  return get_lba_btree_extent(
+    cache,
     t,
-    lt.root.lba_root_addr,
-    LBA_BLOCK_SIZE).safe_then([this, &t, &lt, offset, length](auto extent) {
+    lt.root.lba_root_addr).safe_then([this, &t, &lt, offset, length](auto extent) {
       return LBANode::get_node(lt.root.lba_depth, extent)->lookup_range(
 	cache, t, offset, length);
+    });
+}
+
+
+BtreeLBAManager::get_mappings_ret
+BtreeLBAManager::get_mappings(
+  lextent_list_t &&list,
+  Transaction &t)
+{
+  auto l = std::make_unique<lextent_list_t>(std::move(list));
+  auto retptr = std::make_unique<lba_pin_list_t>();
+  auto &ret = *retptr;
+  return crimson::do_for_each(
+    l->begin(),
+    l->end(),
+    [this, &t, &ret](const auto &p) {
+      return get_mapping(p.first, p.second, t).safe_then(
+	[this, &ret](auto res) {
+	  ret.splice(ret.end(), res, res.begin(), res.end());
+	});
+    }).safe_then([this, l=std::move(l), retptr=std::move(retptr)]() mutable {
+      return std::move(*retptr);
     });
 }
 

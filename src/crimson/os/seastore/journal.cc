@@ -157,9 +157,11 @@ Journal::find_replay_segments_fut Journal::find_replay_segments()
 	boost::make_counting_iterator(segment_manager.get_num_segments()),
 	[this, &segments](auto i) {
 	  return segment_manager.read(paddr_t{i, 0}, block_size
-	  ).safe_then([this, &segments, i](const bufferlist bl) mutable {
-	    auto bp = bl.begin();
+	  ).safe_then([this, &segments, i](bufferptr bptr) mutable {
 	    segment_header_t header;
+	    bufferlist bl;
+	    bl.push_back(bptr);
+	    auto bp = bl.cbegin();
 	    try {
 	      ::decode(header, bp);
 	    } catch (...) {
@@ -216,8 +218,10 @@ Journal::replay_segment(
 	[this, &current, &delta_handler, &header] {
 	  return segment_manager.read(current, block_size
 	  ).safe_then(
-	    [this, &current, &header](bufferlist bl) mutable
+	    [this, &current, &header](bufferptr bptr) mutable
 	    -> SegmentManager::read_ertr::future<bufferlist> {
+	      bufferlist bl;
+	      bl.append(bptr);
 	      auto bp = bl.cbegin();
 	      try {
 		::decode(header, bp);
@@ -228,8 +232,8 @@ Journal::replay_segment(
 		return segment_manager.read(
 		  {current.segment, current.offset + block_size},
 		  header.mdlength - block_size).safe_then(
-		    [this, bl=std::move(bl)](auto &&bltail) mutable {
-		      bl.claim_append(bltail);
+		    [this, bl=std::move(bl)](auto &&bptail) mutable {
+		      bl.push_back(bptail);
 		      return std::move(bl);
 		    });
 	      } else {
