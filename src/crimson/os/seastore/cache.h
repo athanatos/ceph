@@ -208,41 +208,6 @@ class Cache {
 public:
   Cache(SegmentManager &segment_manager) : segment_manager(segment_manager) {}
   
-private:
-  /**
-   * get_reserve_extents
-   *
-   * @param extents requested set of extents
-   * @return <present, pending, fetch> caller is expected to perform reads
-   *         for the extents in fetch, call present_reserved_extents on
-   *         the result, and then call await_pending on pending
-   */
-  std::tuple<pextent_list_t, paddr_list_t, paddr_list_t> get_reserve_extents(
-    paddr_list_t &extents);
-
-  void present_reserved_extents(
-    paddr_list_t &extents);
-
-  template <typename T, typename F>
-  pextent_list_t create_pending_exents(
-    paddr_list_t &addrs) {
-    return pextent_list_t();
-  }
-
-  using await_pending_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error>;
-  // TODO: eio isn't actually important here, but we probably
-  // want a way to signal that the original transaction isn't
-  // going to complete the read
-  using await_pending_fut = await_pending_ertr::future<pextent_list_t>;
-  await_pending_fut await_pending(const paddr_list_t &pending);
-
-  using read_extent_ertr = SegmentManager::read_ertr;
-  using read_extent_ret = read_extent_ertr::future<pextent_list_t>;
-  read_extent_ret read_extents(
-    paddr_list_t &extents);
-
-public:
   /**
    * get_extent
    */
@@ -261,6 +226,7 @@ public:
 	TCachedExtentRef<T>(static_cast<T*>(&*i)));
     } else if (auto iter = extents.extent_index.find(offset, paddr_cmp());
 	       iter != extents.extent_index.end()) {
+      // TODO: add part where we block if read is already in progress
       return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
 	TCachedExtentRef<T>(static_cast<T*>(&*iter)));
     } else {
