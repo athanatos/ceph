@@ -108,18 +108,24 @@ public:
 };
 using CachedExtentRef = boost::intrusive_ptr<CachedExtent>;
 
-template <typename T>
+template <typename T, typename C>
 class addr_extent_list_base_t
-  : public std::list<std::pair<T, CachedExtentRef>> {
+  : public std::list<std::pair<T, C>> {
 public:
-  void merge(addr_extent_list_base_t &&other) {}
+  void merge(addr_extent_list_base_t &&other) { /* TODO */ }
 };
 
-using lextent_list_t = addr_extent_list_base_t<laddr_t>;
-using pextent_list_t = addr_extent_list_base_t<paddr_t>;
+using lextent_list_t = addr_extent_list_base_t<laddr_t, CachedExtentRef>;
+using pextent_list_t = addr_extent_list_base_t<paddr_t, CachedExtentRef>;
 
 template <typename T>
 using TCachedExtentRef = boost::intrusive_ptr<T>;
+
+template <typename T>
+using t_pextent_list_t = addr_extent_list_base_t<paddr_t, TCachedExtentRef<T>>;
+
+template <typename T>
+using t_lextent_list_t = addr_extent_list_base_t<laddr_t, TCachedExtentRef<T>>;
 
 /**
  * Index of CachedExtent & by poffset, does not hold a reference,
@@ -154,7 +160,7 @@ public:
 class Transaction {
   friend class Cache;
 
-  std::pair<pextent_list_t, paddr_list_t> get_extents(paddr_list_t &l) {
+  std::pair<pextent_list_t, paddr_list_t> get_extents(const paddr_list_t &l) {
     return std::make_pair(
       pextent_list_t(),
       paddr_list_t());
@@ -174,40 +180,6 @@ class Cache {
 public:
   Cache(SegmentManager &segment_manager) : segment_manager(segment_manager) {}
   
-  /**
-   * get_extent
-   */
-  using get_extent_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error>;
-
-  template <typename T>
-  using get_extent_ret = get_extent_ertr::future<TCachedExtentRef<T>>;
-
-  template <typename T, typename F>
-  get_extent_ret<T> get_extent(
-    F &&f,                ///< [in] constructor
-    Transaction &t,       ///< [in,out] current transaction
-    paddr_t offset,       ///< [in] starting addr
-    segment_off_t length  ///< [in] length
-  ) {
-    auto ptr = std::make_unique<bufferptr>(length);
-    return segment_manager.read(
-      offset,
-      length,
-      *ptr).safe_then(
-	[this, ptr=std::move(ptr), f=std::forward<F>(f)]() mutable {
-	  return std::move(f)(std::move(ptr));
-	},
-	crimson::ct_error::discard_all{});
-  }
-
-  template <typename T>
-  TCachedExtentRef<T> alloc_new_extent(
-    Transaction &t,
-    segment_off_t length) {
-    return *(static_cast<T*>(nullptr));
-  }
-  
 private:
   /**
    * get_reserve_extents
@@ -223,6 +195,12 @@ private:
   void present_reserved_extents(
     paddr_list_t &extents);
 
+  template <typename T, typename F>
+  pextent_list_t create_pending_exents(
+    paddr_list_t &addrs) {
+    return pextent_list_t();
+  }
+
   using await_pending_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   // TODO: eio isn't actually important here, but we probably
@@ -231,13 +209,48 @@ private:
   using await_pending_fut = await_pending_ertr::future<pextent_list_t>;
   await_pending_fut await_pending(const paddr_list_t &pending);
 
-public:
   using read_extent_ertr = SegmentManager::read_ertr;
   using read_extent_ret = read_extent_ertr::future<pextent_list_t>;
   read_extent_ret read_extents(
+    paddr_list_t &extents);
+
+public:
+  /**
+   * get_extent
+   */
+  using get_extent_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+
+  template <typename T>
+  get_extent_ertr::future<TCachedExtentRef<T>> get_extent(
+    Transaction &t,       ///< [in,out] current transaction
+    paddr_t offset,       ///< [in] starting addr
+    segment_off_t length  ///< [in] length
+  ) {
+    return get_extents<T>(
+      t,
+      {{offset, length}}).safe_then([](auto ret) {
+	return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
+	  ret.front().second);
+      });
+  }
+
+  template<typename T>
+  get_extent_ertr::future<t_pextent_list_t<T>> get_extents(
     Transaction &t,
-    pextent_list_t &extents);
+    const paddr_list_t &extents) {
+    auto [all, remaining] = t.get_extents(extents);
+    auto [from_cache, need, pending] = get_reserve_extents(remaining);
+    all.merge(std::move(from_cache));
+    return get_extent_ertr::make_ready_future<t_pextent_list_t<T>>();
+  }
   
+  template <typename T>
+  TCachedExtentRef<T> alloc_new_extent(
+    Transaction &t,
+    segment_off_t length) {
+    return *(static_cast<T*>(nullptr));
+  }
 
   /**
    * Allocates mutable buffer from extent_set on offset~len
@@ -249,13 +262,6 @@ public:
   template <typename T, typename F>
   CachedExtentRef duplicate_for_write(
     CachedExtentRef i) {
-    return CachedExtentRef();
-  }
-
-  template <typename T, typename F>
-  CachedExtentRef get_pending_extent_buffer(
-    Transaction &t,
-    segment_off_t length) {
     return CachedExtentRef();
   }
 

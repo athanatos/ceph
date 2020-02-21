@@ -211,12 +211,11 @@ private:
   get_leaf_entries(laddr_t addr, loff_t len);
 };
 
-Cache::get_extent_ret<CachedExtent> get_lba_btree_extent(
+Cache::get_extent_ertr::future<CachedExtentRef> get_lba_btree_extent(
   Cache &cache,
   Transaction &t,
   paddr_t offset) {
   return cache.get_extent<CachedExtent>(
-    [](auto ptr) { return CachedExtentRef(); },
     t,
     offset,
     LBA_BLOCK_SIZE);

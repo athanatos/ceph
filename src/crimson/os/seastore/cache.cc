@@ -29,13 +29,9 @@ Cache::await_pending_fut Cache::await_pending(const paddr_list_t &pending)
 using read_extent_ertr = SegmentManager::read_ertr;
 using read_extent_ret = read_extent_ertr::future<pextent_list_t>;
 Cache::read_extent_ret Cache::read_extents(
-  Transaction &t,
-  pextent_list_t &extents)
+  paddr_list_t &extents)
 {
 #if 0
-  auto [all, remaining] = t.get_extents(extents);
-  auto [from_cache, need, pending] = cache.get_reserve_extents(remaining);
-  all.merge(std::move(from_cache));
   return seastar::do_with(
     std::make_tuple(std::move(need), ExtentSet()),
     [this, &t](auto &tup) -> read_extent_ret {
