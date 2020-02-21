@@ -33,6 +33,8 @@ using paddr_list_t = std::list<std::pair<paddr_t, segment_off_t>>;
 using lba_pin_list_t = std::list<LBAPinRef>;
 using lba_pin_ref_list_t = std::list<LBAPinRef&>;
 
+class CachedExtent;
+using CachedExtentRef = boost::intrusive_ptr<CachedExtent>;
 class CachedExtent : public boost::intrusive_ref_counter<
   CachedExtent, boost::thread_unsafe_counter> {
   boost::intrusive::set_member_hook<> extent_index_hook;
@@ -62,6 +64,15 @@ class CachedExtent : public boost::intrusive_ref_counter<
     INVALID   // Part of no ExtentIndex sets
   } state = extent_state_t::PENDING;
 
+protected:
+  CachedExtent(ceph::bufferptr &&ptr) : ptr(std::move(ptr)) {}
+
+  friend class Cache;
+  template <typename... Args>
+  static CachedExtentRef make_cached_extent_ref(Args&&... args) {
+    return new CachedExtent(std::forward<Args>(args)...);
+  }
+
 public:
   bool is_pending() const { return state == extent_state_t::PENDING; }
 
@@ -71,6 +82,8 @@ public:
   loff_t get_length() { return ptr.length(); }
   laddr_t get_addr() { return laddr_t{0}; /* TODO: move into LBA specific subclass */}
   paddr_t get_paddr() { return poffset; }
+
+  bufferptr &get_bptr() { return ptr; }
 
   void copy_in(ceph::bufferlist &bl, laddr_t off, loff_t len) {
     #if 0
@@ -105,8 +118,17 @@ public:
   friend bool operator== (const CachedExtent &a, const CachedExtent &b) {
     return a.poffset == b.poffset;
   }
+  friend struct paddr_cmp;
 };
-using CachedExtentRef = boost::intrusive_ptr<CachedExtent>;
+
+struct paddr_cmp {
+  bool operator()(paddr_t lhs, const CachedExtent &rhs) const {
+    return lhs < rhs.poffset;
+  }
+  bool operator()(const CachedExtent &lhs, paddr_t rhs) const {
+    return lhs.poffset < rhs;
+  }
+};
 
 template <typename T, typename C>
 class addr_extent_list_base_t
@@ -132,6 +154,7 @@ using t_lextent_list_t = addr_extent_list_base_t<laddr_t, TCachedExtentRef<T>>;
  * user must ensure each extent is removed prior to deletion
  */
 class ExtentIndex {
+  friend class Cache;
   CachedExtent::index extent_index;
 public:
   void insert(CachedExtent &extent) {
@@ -160,7 +183,11 @@ public:
 class Transaction {
   friend class Cache;
 
-  std::pair<pextent_list_t, paddr_list_t> get_extents(const paddr_list_t &l) {
+  CachedExtentRef get_extent(paddr_t addr) {
+    return CachedExtentRef();
+  }
+
+  std::pair<pextent_list_t, paddr_list_t> get_extent(const paddr_list_t &l) {
     return std::make_pair(
       pextent_list_t(),
       paddr_list_t());
@@ -177,6 +204,7 @@ using TransactionRef = std::unique_ptr<Transaction>;
 
 class Cache {
   SegmentManager &segment_manager;
+  ExtentIndex extents;
 public:
   Cache(SegmentManager &segment_manager) : segment_manager(segment_manager) {}
   
@@ -227,21 +255,39 @@ public:
     paddr_t offset,       ///< [in] starting addr
     segment_off_t length  ///< [in] length
   ) {
-    return get_extents<T>(
-      t,
-      {{offset, length}}).safe_then([](auto ret) {
-	return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
-	  ret.front().second);
-      });
+    if (auto i = t.get_extent(offset)) {
+      // TODO
+      return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
+	TCachedExtentRef<T>(static_cast<T*>(&*i)));
+    } else if (auto iter = extents.extent_index.find(offset, paddr_cmp());
+	       iter != extents.extent_index.end()) {
+      return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
+	TCachedExtentRef<T>(static_cast<T*>(&*iter)));
+    } else {
+      auto ref = T::make_cached_extent_ref(ceph::bufferptr(length));
+      return segment_manager.read(
+	offset,
+	length,
+	ref->get_bptr()).safe_then(
+	  [this, ref=std::move(ref)] {
+	    return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
+	      std::move(ref));
+	  },
+	  get_extent_ertr::pass_further{},
+	  crimson::ct_error::discard_all{});
+    }
   }
 
   template<typename T>
   get_extent_ertr::future<t_pextent_list_t<T>> get_extents(
     Transaction &t,
     const paddr_list_t &extents) {
+#if 0
     auto [all, remaining] = t.get_extents(extents);
     auto [from_cache, need, pending] = get_reserve_extents(remaining);
     all.merge(std::move(from_cache));
+#endif
+    
     return get_extent_ertr::make_ready_future<t_pextent_list_t<T>>();
   }
   
