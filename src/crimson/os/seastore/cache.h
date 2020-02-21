@@ -8,6 +8,8 @@
 #include <boost/intrusive_ptr.hpp>
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
 
+#include "seastar/core/shared_future.hh"
+
 #include "include/buffer.h"
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/segment_manager.h"
@@ -59,10 +61,37 @@ class CachedExtent : public boost::intrusive_ref_counter<
   ceph::bufferptr ptr;
 
   enum extent_state_t {
+    IO_WAIT,  // Blocked until IO completion
     PENDING,  // In Transaction::pending_index
     CLEAN,    // In Cache::extent_index
     INVALID   // Part of no ExtentIndex sets
   } state = extent_state_t::PENDING;
+
+  std::optional<seastar::shared_future<>> io_wait_future;
+
+  seastar::shared_promise<> set_io_wait() {
+    state = extent_state_t::IO_WAIT;
+    auto ret = seastar::shared_promise<>();
+    ceph_assert(!io_wait_future);
+    io_wait_future = ret.get_shared_future();
+    return ret;
+  }
+
+  void complete_io(seastar::shared_promise<> pr) {
+    ceph_assert(io_wait_future);
+    ceph_assert(state == extent_state_t::IO_WAIT);
+    pr.set_value();
+    io_wait_future = std::nullopt;
+  }
+
+  seastar::future<> wait_io() {
+    if (state != extent_state_t::IO_WAIT) {
+      ceph_assert(!io_wait_future);
+      return seastar::now();
+    } else {
+      return *io_wait_future;
+    }
+  }
 
 protected:
   CachedExtent(ceph::bufferptr &&ptr) : ptr(std::move(ptr)) {}
@@ -187,12 +216,6 @@ class Transaction {
     return CachedExtentRef();
   }
 
-  std::pair<pextent_list_t, paddr_list_t> get_extent(const paddr_list_t &l) {
-    return std::make_pair(
-      pextent_list_t(),
-      paddr_list_t());
-  }
-
   void add_to_read_set(const pextent_list_t &eset) {
     // TODO
   }
@@ -221,21 +244,25 @@ public:
     segment_off_t length  ///< [in] length
   ) {
     if (auto i = t.get_extent(offset)) {
-      // TODO
       return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
 	TCachedExtentRef<T>(static_cast<T*>(&*i)));
     } else if (auto iter = extents.extent_index.find(offset, paddr_cmp());
 	       iter != extents.extent_index.end()) {
       // TODO: add part where we block if read is already in progress
-      return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
-	TCachedExtentRef<T>(static_cast<T*>(&*iter)));
+      auto ret = TCachedExtentRef<T>(static_cast<T*>(&*iter));
+      return ret->wait_io().then([ret=std::move(ret)]() mutable {
+	return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
+	  std::move(ret));
+      });
     } else {
       auto ref = T::make_cached_extent_ref(ceph::bufferptr(length));
+      auto pr = ref->set_io_wait();
       return segment_manager.read(
 	offset,
 	length,
 	ref->get_bptr()).safe_then(
-	  [this, ref=std::move(ref)] {
+	  [this, ref=std::move(ref), pr=std::move(pr)]() mutable {
+	    ref->complete_io(std::move(pr));
 	    return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
 	      std::move(ref));
 	  },
