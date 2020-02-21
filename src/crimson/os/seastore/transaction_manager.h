@@ -90,9 +90,12 @@ public:
     ).safe_then([this, type, offset, &t, f=std::move(f)](auto extent) mutable {
       auto bl = f(extent->ptr);
       if (!extent->is_pending()) {
+	#if 0
+	// TODO: add to lba specific subclass
 	extent->add_pending_delta(
 	  {type, offset, extent->get_poffset(), std::move(bl)}
 	);
+	#endif
       }
       return replace_ertr::make_ready_future<mutate_result_t>(
 	mutate_result_t::SUCCESS);

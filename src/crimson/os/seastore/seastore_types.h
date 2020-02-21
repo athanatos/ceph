@@ -48,6 +48,8 @@ struct paddr_t {
     denc(v.offset, p);
   }
 };
+WRITE_CMP_OPERATORS_2(paddr_t, segment, offset)
+WRITE_EQ_OPERATORS_2(paddr_t, segment, offset)
 constexpr paddr_t P_ADDR_NULL = paddr_t{};
 paddr_t make_relative_paddr(segment_off_t off) {
   return paddr_t{REL_SEG_ID, off};

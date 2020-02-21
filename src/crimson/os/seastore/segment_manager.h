@@ -94,7 +94,7 @@ public:
     paddr_t addr,
     size_t len,
     ceph::bufferptr &out) = 0;
-  virtual read_ertr::future<ceph::bufferptr> read(
+  read_ertr::future<ceph::bufferptr> read(
     paddr_t addr,
     size_t len) {
     auto ptrref = std::make_unique<ceph::bufferptr>(len);

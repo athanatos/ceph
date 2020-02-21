@@ -33,40 +33,56 @@ using lba_pin_list_t = std::list<LBAPinRef>;
 using lba_pin_ref_list_t = std::list<LBAPinRef&>;
 
 class CachedExtent : public boost::intrusive_ref_counter<
-  CachedExtent,
-  boost::thread_unsafe_counter> {
-  
-  LBAPinRef pin_ref;
-  extent_version_t version; // changes to EXTENT_VERSION_NULL once invalidated
-  laddr_t offset;
+  CachedExtent, boost::thread_unsafe_counter> {
+  boost::intrusive::set_member_hook<> extent_index_hook;
+  using index_member_options = boost::intrusive::member_hook<
+    CachedExtent,
+    boost::intrusive::set_member_hook<>,
+    &CachedExtent::extent_index_hook>;
+  using index = boost::intrusive::set<CachedExtent, index_member_options>;
+  friend class ExtentIndex;
+
+  boost::intrusive::list_member_hook<> primary_ref_list_hook;
+  using primary_ref_list_member_options = boost::intrusive::member_hook<
+    CachedExtent,
+    boost::intrusive::list_member_hook<>,
+    &CachedExtent::primary_ref_list_hook>;
+  using list = boost::intrusive::list<
+    CachedExtent,
+    primary_ref_list_member_options>;
+  friend class ExtentLRU;
+
   paddr_t poffset;
   ceph::bufferptr ptr;
 
   enum extent_state_t {
-    PENDING,
-    CLEAN,
-    DIRTY,
-    INVALID
+    PENDING,  // In Transaction::pending_index
+    CLEAN,    // In Cache::extent_index
+    INVALID   // Part of no ExtentIndex sets
   } state = extent_state_t::PENDING;
 
-  std::list<delta_info_t> pending_deltas;
 public:
   bool is_pending() const { return state == extent_state_t::PENDING; }
 
-  void set_pin(LBAPinRef &&pin) {}
-  LBAPin &get_pin() { return *pin_ref; }
+  void set_pin(LBAPinRef &&pin) {/* TODO: move into LBA specific subclass */}
+  LBAPin &get_pin() { return *((LBAPin*)nullptr); /* TODO: move into LBA specific subclass */}
 
   loff_t get_length() { return ptr.length(); }
-  laddr_t get_addr() { return offset; }
+  laddr_t get_addr() { return laddr_t{0}; /* TODO: move into LBA specific subclass */}
   paddr_t get_paddr() { return poffset; }
 
   void copy_in(ceph::bufferlist &bl, laddr_t off, loff_t len) {
+    #if 0
+    // TODO: move into LBA specific subclass
     ceph_assert(off >= offset);
     ceph_assert((off + len) <= (offset + ptr.length()));
     bl.begin().copy(len, ptr.c_str() + (off - offset));
+    #endif
   }
 
   void copy_in(CachedExtent &extent) {
+    #if 0
+    // TODO: move into LBA specific subclass
     ceph_assert(extent.offset >= offset);
     ceph_assert((extent.offset + extent.ptr.length()) <=
 		(offset + ptr.length()));
@@ -74,16 +90,34 @@ public:
       ptr.c_str() + (extent.offset - offset),
       extent.ptr.c_str(),
       extent.get_length());
+    #endif
   }
 
-  void add_pending_delta(delta_info_t &&delta) {
-    pending_deltas.push_back(std::move(delta));
+  friend bool operator< (const CachedExtent &a, const CachedExtent &b) {
+    return a.poffset < b.poffset;
+  }
+
+  friend bool operator> (const CachedExtent &a, const CachedExtent &b) {
+    return a.poffset > b.poffset;
+  }
+
+  friend bool operator== (const CachedExtent &a, const CachedExtent &b) {
+    return a.poffset == b.poffset;
   }
 };
 using CachedExtentRef = boost::intrusive_ptr<CachedExtent>;
 
 template <typename T>
 using TCachedExtentRef = boost::intrusive_ptr<T>;
+
+/**
+ * Index of CachedExtent & by poffset, does not hold a reference,
+ * user must ensure each extent is removed prior to deletion
+ */
+class ExtentIndex {
+  CachedExtent::index extent_index;
+public:
+};
 
 class ExtentSet {
   using extent_ref_list = std::list<CachedExtentRef>;
