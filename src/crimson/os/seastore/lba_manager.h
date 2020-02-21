@@ -49,7 +49,7 @@ public:
     crimson::ct_error::input_output_error>;
   using get_mappings_ret = get_mapping_ertr::future<lba_pin_list_t>;
   virtual get_mappings_ret get_mappings(
-    lextent_list_t &&extent_lisk,
+    laddr_list_t &&extent_lisk,
     Transaction &t) = 0;
 
   /**

@@ -79,7 +79,7 @@ public:
     Transaction &t) final;
 
   get_mappings_ret get_mappings(
-    lextent_list_t &&list,
+    laddr_list_t &&list,
     Transaction &t) final;
 
   alloc_extent_relative_ret alloc_extent_relative(

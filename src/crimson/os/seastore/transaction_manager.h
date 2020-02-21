@@ -37,14 +37,13 @@ class TransactionManager {
   LBAManagerRef lba_manager;
   std::unique_ptr<Journal> journal;
 
-  ExtentSet read_set;
-  ExtentSet write_set;
-
+#if 0
   using read_extent_ertr = SegmentManager::read_ertr;
   using read_extent_ret = read_extent_ertr::future<ExtentSet>;
   read_extent_ret read_extents(
     Transaction &t,
     const extent_list_t &extents);
+#endif
 
   using get_mutable_extent_ertr = SegmentManager::read_ertr;
   get_mutable_extent_ertr::future<CachedExtentRef> get_mutable_extent(

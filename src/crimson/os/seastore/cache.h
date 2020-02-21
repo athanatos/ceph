@@ -27,8 +27,9 @@ public:
 };
 using LBAPinRef = std::unique_ptr<LBAPin>;
 
-using extent_list_t = std::list<std::pair<laddr_t, loff_t>>;
-using lextent_list_t = std::list<std::pair<laddr_t, loff_t>>;
+using laddr_list_t = std::list<std::pair<laddr_t, loff_t>>;
+using paddr_list_t = std::list<std::pair<paddr_t, segment_off_t>>;
+
 using lba_pin_list_t = std::list<LBAPinRef>;
 using lba_pin_ref_list_t = std::list<LBAPinRef&>;
 
@@ -108,6 +109,16 @@ public:
 using CachedExtentRef = boost::intrusive_ptr<CachedExtent>;
 
 template <typename T>
+class addr_extent_list_base_t
+  : public std::list<std::pair<T, CachedExtentRef>> {
+public:
+  void merge(addr_extent_list_base_t &&other) {}
+};
+
+using lextent_list_t = addr_extent_list_base_t<laddr_t>;
+using pextent_list_t = addr_extent_list_base_t<paddr_t>;
+
+template <typename T>
 using TCachedExtentRef = boost::intrusive_ptr<T>;
 
 /**
@@ -117,60 +128,43 @@ using TCachedExtentRef = boost::intrusive_ptr<T>;
 class ExtentIndex {
   CachedExtent::index extent_index;
 public:
-};
-
-class ExtentSet {
-  using extent_ref_list = std::list<CachedExtentRef>;
-  extent_ref_list extents;
-public:
-  using iterator = extent_ref_list::iterator;
-  using const_iterator = extent_ref_list::const_iterator;
-
-  ExtentSet() = default;
-  ExtentSet(CachedExtentRef &ref) : extents{{ref}} {}
-
-  void merge(ExtentSet &&other) { /* TODO */ }
-
-  void insert(CachedExtentRef &ref) { /* TODO */ }
-  void insert(const ExtentSet &other) { /* TODO */ }
-
-  iterator begin() {
-    return extents.begin();
+  void insert(CachedExtent &extent) {
+    extent_index.insert(extent);
   }
 
-  const_iterator begin() const {
-    return extents.begin();
+  void merge(ExtentIndex &&other) {
+    for (auto it = other.extent_index.begin();
+	 it != other.extent_index.end();
+	 ) {
+      auto &ext = *it;
+      ++it;
+      other.extent_index.erase(ext);
+      extent_index.insert(ext);
+    }
   }
 
-  iterator end() {
-    return extents.end();
-  }
-
-  const_iterator end() const {
-    return extents.end();
+  template <typename T>
+  void remove(T &l) {
+    for (auto &ext : l) {
+      extent_index.erase(l);
+    }
   }
 };
 
 class Transaction {
-  friend class TransactionManager;
+  friend class Cache;
 
-  ExtentSet read_check_set;
-  ExtentSet current_set;
-  ExtentSet write_set;
-  ExtentSet invalidated_extents;
-
-  void add_to_read_set(const ExtentSet &eset) {
-    read_check_set.insert(eset);
-    current_set.insert(eset);
-  }
-  void add_to_write_set(const ExtentSet &eset) {
-    write_set.insert(eset);
-    current_set.insert(eset);
+  std::pair<pextent_list_t, paddr_list_t> get_extents(paddr_list_t &l) {
+    return std::make_pair(
+      pextent_list_t(),
+      paddr_list_t());
   }
 
-  std::pair<ExtentSet, extent_list_t>
-  get_extents(const extent_list_t &eset) {
-    return {ExtentSet{}, extent_list_t{}};
+  void add_to_read_set(const pextent_list_t &eset) {
+    // TODO
+  }
+  void add_to_write_set(const pextent_list_t &eset) {
+    // TODO
   }
 };
 using TransactionRef = std::unique_ptr<Transaction>;
@@ -214,6 +208,7 @@ public:
     return *(static_cast<T*>(nullptr));
   }
   
+private:
   /**
    * get_reserve_extents
    *
@@ -222,19 +217,27 @@ public:
    *         for the extents in fetch, call present_reserved_extents on
    *         the result, and then call await_pending on pending
    */
-  std::tuple<ExtentSet, extent_list_t, extent_list_t> get_reserve_extents(
-    const extent_list_t &extents);
+  std::tuple<pextent_list_t, paddr_list_t, paddr_list_t> get_reserve_extents(
+    paddr_list_t &extents);
 
   void present_reserved_extents(
-    ExtentSet &extents);
+    paddr_list_t &extents);
 
   using await_pending_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   // TODO: eio isn't actually important here, but we probably
   // want a way to signal that the original transaction isn't
   // going to complete the read
-  using await_pending_fut = await_pending_ertr::future<ExtentSet>;
-  await_pending_fut await_pending(const extent_list_t &pending);
+  using await_pending_fut = await_pending_ertr::future<pextent_list_t>;
+  await_pending_fut await_pending(const paddr_list_t &pending);
+
+public:
+  using read_extent_ertr = SegmentManager::read_ertr;
+  using read_extent_ret = read_extent_ertr::future<pextent_list_t>;
+  read_extent_ret read_extents(
+    Transaction &t,
+    pextent_list_t &extents);
+  
 
   /**
    * Allocates mutable buffer from extent_set on offset~len
@@ -243,20 +246,18 @@ public:
    * @param offset, len offset~len
    * @return mutable extent, may either be dirty or pending
    */
+  template <typename T, typename F>
   CachedExtentRef duplicate_for_write(
-    ExtentSet &extent_set,
-    laddr_t offset,
-    loff_t len) {
+    CachedExtentRef i) {
     return CachedExtentRef();
   }
 
-  void update_extents(
-    ExtentSet &extents,
-    const std::list<std::pair<paddr_t, segment_off_t>> &to_release);
-
-  CachedExtentRef get_extent_buffer(
-    laddr_t offset,
-    loff_t length);
+  template <typename T, typename F>
+  CachedExtentRef get_pending_extent_buffer(
+    Transaction &t,
+    segment_off_t length) {
+    return CachedExtentRef();
+  }
 
   using replay_delta_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;

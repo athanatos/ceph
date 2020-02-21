@@ -111,12 +111,15 @@ TransactionManager::get_mutable_extent(
    * 3a) replacing: call lba_manager to chop up existing overlapping extents
    * 3g) mutating: just apply mutation
    */
+#if 0
   return read_extents(t, {{offset, len}}).safe_then(
     [this, offset, len, &t](auto extent_set) {
       auto extent = cache.duplicate_for_write(extent_set, offset, len);
       t.add_to_write_set(extent);
       return extent;
     });
+#endif
+  return get_mutable_extent_ertr::make_ready_future<CachedExtentRef>();
 }
 
 TransactionManager::submit_transaction_ertr::future<>

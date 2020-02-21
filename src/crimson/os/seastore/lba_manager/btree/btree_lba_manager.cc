@@ -43,10 +43,10 @@ BtreeLBAManager::get_mapping(
 
 BtreeLBAManager::get_mappings_ret
 BtreeLBAManager::get_mappings(
-  lextent_list_t &&list,
+  laddr_list_t &&list,
   Transaction &t)
 {
-  auto l = std::make_unique<lextent_list_t>(std::move(list));
+  auto l = std::make_unique<laddr_list_t>(std::move(list));
   auto retptr = std::make_unique<lba_pin_list_t>();
   auto &ret = *retptr;
   return crimson::do_for_each(
