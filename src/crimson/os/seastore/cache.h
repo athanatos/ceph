@@ -216,6 +216,9 @@ class Transaction {
     return CachedExtentRef();
   }
 
+  void add_to_read_set(CachedExtentRef &ref) {
+    // TODO
+  }
   void add_to_read_set(const pextent_list_t &eset) {
     // TODO
   }
@@ -248,9 +251,9 @@ public:
 	TCachedExtentRef<T>(static_cast<T*>(&*i)));
     } else if (auto iter = extents.extent_index.find(offset, paddr_cmp());
 	       iter != extents.extent_index.end()) {
-      // TODO: add part where we block if read is already in progress
       auto ret = TCachedExtentRef<T>(static_cast<T*>(&*iter));
-      return ret->wait_io().then([ret=std::move(ret)]() mutable {
+      return ret->wait_io().then([&t, ret=std::move(ret)]() mutable {
+	t.add_to_read_set(ret);
 	return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
 	  std::move(ret));
       });
@@ -261,8 +264,9 @@ public:
 	offset,
 	length,
 	ref->get_bptr()).safe_then(
-	  [this, ref=std::move(ref), pr=std::move(pr)]() mutable {
+	  [this, &t, ref=std::move(ref), pr=std::move(pr)]() mutable {
 	    ref->complete_io(std::move(pr));
+	    t.add_to_read_set(ref);
 	    return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
 	      std::move(ref));
 	  },
