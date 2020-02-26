@@ -112,6 +112,8 @@ public:
   laddr_t get_addr() { return laddr_t{0}; /* TODO: move into LBA specific subclass */}
   paddr_t get_paddr() { return poffset; }
 
+  void set_paddr(paddr_t offset) { poffset = offset; }
+
   bufferptr &get_bptr() { return ptr; }
 
   void copy_in(ceph::bufferlist &bl, laddr_t off, loff_t len) {
@@ -212,18 +214,24 @@ public:
 class Transaction {
   friend class Cache;
 
+  segment_off_t offset = 0;
+
+  pextent_list_t read_set;
+  std::list<CachedExtentRef> block_list;
+  ExtentIndex write_set;
+
   CachedExtentRef get_extent(paddr_t addr) {
     return CachedExtentRef();
   }
 
   void add_to_read_set(CachedExtentRef &ref) {
-    // TODO
+    read_set.emplace_back(ref->get_paddr(), ref);
   }
-  void add_to_read_set(const pextent_list_t &eset) {
-    // TODO
-  }
-  void add_to_write_set(const pextent_list_t &eset) {
-    // TODO
+
+  void add_fresh_extent(CachedExtentRef &ref) {
+    block_list.push_back(ref);
+    ref->set_paddr(make_relative_paddr(offset));
+    offset += ref->get_length();
   }
 };
 using TransactionRef = std::unique_ptr<Transaction>;
@@ -231,6 +239,10 @@ using TransactionRef = std::unique_ptr<Transaction>;
 class Cache {
   SegmentManager &segment_manager;
   ExtentIndex extents;
+
+  bufferptr alloc_cache_buf(size_t size) {
+    return ceph::bufferptr(size);
+  }
 public:
   Cache(SegmentManager &segment_manager) : segment_manager(segment_manager) {}
   
@@ -258,7 +270,7 @@ public:
 	  std::move(ret));
       });
     } else {
-      auto ref = T::make_cached_extent_ref(ceph::bufferptr(length));
+      auto ref = T::make_cached_extent_ref(alloc_cache_buf(length));
       auto pr = ref->set_io_wait();
       return segment_manager.read(
 	offset,
@@ -300,7 +312,9 @@ public:
   TCachedExtentRef<T> alloc_new_extent(
     Transaction &t,
     segment_off_t length) {
-    return *(static_cast<T*>(nullptr));
+    auto ret = T::make_cached_extent_ref(alloc_cache_buf(length));
+    t.add_fresh_extent(ret);
+    return ret;
   }
 
   /**

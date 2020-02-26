@@ -157,7 +157,7 @@ public:
     crimson::ct_error::input_output_error
     >;
   using submit_record_ret = submit_record_ertr::future<paddr_t>;
-  submit_record_ret write_with_offset(record_t &&record) {
+  submit_record_ret submit_record(record_t &&record) {
     auto [mdlength, dlength] = get_encoded_record_length(record);
     auto total = mdlength + dlength;
     if (total > max_record_length) {
