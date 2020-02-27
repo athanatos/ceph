@@ -79,21 +79,6 @@ namespace crimson::os::seastore {
  * - Complete all promises with the final record start paddr_t
  */
 
-class LBAPin {
-public:
-  virtual void set_paddr(paddr_t) = 0;
-  
-  virtual loff_t get_length() const = 0;
-  virtual paddr_t get_paddr() const = 0;
-  virtual laddr_t get_laddr() const = 0;
-
-  virtual ~LBAPin() {}
-};
-using LBAPinRef = std::unique_ptr<LBAPin>;
-
-using lba_pin_list_t = std::list<LBAPinRef>;
-using lba_pin_ref_list_t = std::list<LBAPinRef&>;
-
 class CachedExtent;
 using CachedExtentRef = boost::intrusive_ptr<CachedExtent>;
 class CachedExtent : public boost::intrusive_ref_counter<
@@ -156,46 +141,20 @@ protected:
   CachedExtent(ceph::bufferptr &&ptr) : ptr(std::move(ptr)) {}
 
   friend class Cache;
-  template <typename... Args>
+  template <typename T, typename... Args>
   static CachedExtentRef make_cached_extent_ref(Args&&... args) {
-    return new CachedExtent(std::forward<Args>(args)...);
+    return new T(std::forward<Args>(args)...);
   }
 
 public:
   bool is_pending() const { return state == extent_state_t::PENDING; }
 
-  void set_pin(LBAPinRef &&pin) {/* TODO: move into LBA specific subclass */}
-  LBAPin &get_pin() { return *((LBAPin*)nullptr); /* TODO: move into LBA specific subclass */}
-
-  loff_t get_length() { return ptr.length(); }
-  laddr_t get_addr() { return laddr_t{0}; /* TODO: move into LBA specific subclass */}
   paddr_t get_paddr() { return poffset; }
+  size_t get_length() { return ptr.length(); }
 
   void set_paddr(paddr_t offset) { poffset = offset; }
 
   bufferptr &get_bptr() { return ptr; }
-
-  void copy_in(ceph::bufferlist &bl, laddr_t off, loff_t len) {
-    #if 0
-    // TODO: move into LBA specific subclass
-    ceph_assert(off >= offset);
-    ceph_assert((off + len) <= (offset + ptr.length()));
-    bl.begin().copy(len, ptr.c_str() + (off - offset));
-    #endif
-  }
-
-  void copy_in(CachedExtent &extent) {
-    #if 0
-    // TODO: move into LBA specific subclass
-    ceph_assert(extent.offset >= offset);
-    ceph_assert((extent.offset + extent.ptr.length()) <=
-		(offset + ptr.length()));
-    memcpy(
-      ptr.c_str() + (extent.offset - offset),
-      extent.ptr.c_str(),
-      extent.get_length());
-    #endif
-  }
 
   friend bool operator< (const CachedExtent &a, const CachedExtent &b) {
     return a.poffset < b.poffset;
@@ -227,7 +186,6 @@ public:
   void merge(addr_extent_list_base_t &&other) { /* TODO */ }
 };
 
-using lextent_list_t = addr_extent_list_base_t<laddr_t, CachedExtentRef>;
 using pextent_list_t = addr_extent_list_base_t<paddr_t, CachedExtentRef>;
 
 template <typename T>
@@ -235,9 +193,6 @@ using TCachedExtentRef = boost::intrusive_ptr<T>;
 
 template <typename T>
 using t_pextent_list_t = addr_extent_list_base_t<paddr_t, TCachedExtentRef<T>>;
-
-template <typename T>
-using t_lextent_list_t = addr_extent_list_base_t<laddr_t, TCachedExtentRef<T>>;
 
 /**
  * Index of CachedExtent & by poffset, does not hold a reference,
@@ -335,7 +290,8 @@ public:
 	  std::move(ret));
       });
     } else {
-      auto ref = T::make_cached_extent_ref(alloc_cache_buf(length));
+      auto ref = CachedExtent::make_cached_extent_ref<T>(
+	alloc_cache_buf(length));
       auto pr = ref->set_io_wait();
       return segment_manager.read(
 	offset,
@@ -377,7 +333,8 @@ public:
   TCachedExtentRef<T> alloc_new_extent(
     Transaction &t,
     segment_off_t length) {
-    auto ret = T::make_cached_extent_ref(alloc_cache_buf(length));
+    auto ret = CachedExtent::make_cached_extent_ref<T>(
+      alloc_cache_buf(length));
     t.add_fresh_extent(ret);
     return ret;
   }

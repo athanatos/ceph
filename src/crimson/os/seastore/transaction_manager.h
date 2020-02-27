@@ -29,6 +29,44 @@
 namespace crimson::os::seastore {
 class Journal;
 
+class LogicalCachedExtent : public CachedExtent {
+public: 
+  LogicalCachedExtent(
+    ceph::bufferptr &&ptr) : CachedExtent(std::move(ptr)) {}
+
+  void set_pin(LBAPinRef &&pin) {/* TODO */}
+  LBAPin &get_pin() { return *((LBAPin*)nullptr); /* TODO */ }
+
+  laddr_t get_addr() { return laddr_t{0}; /* TODO */ }
+
+  void copy_in(ceph::bufferlist &bl, laddr_t off, loff_t len) {
+    #if 0
+    // TODO: move into LBA specific subclass
+    ceph_assert(off >= offset);
+    ceph_assert((off + len) <= (offset + ptr.length()));
+    bl.begin().copy(len, ptr.c_str() + (off - offset));
+    #endif
+  }
+
+  void copy_in(CachedExtent &extent) {
+    #if 0
+    // TODO: move into LBA specific subclass
+    ceph_assert(extent.offset >= offset);
+    ceph_assert((extent.offset + extent.ptr.length()) <=
+		(offset + ptr.length()));
+    memcpy(
+      ptr.c_str() + (extent.offset - offset),
+      extent.ptr.c_str(),
+      extent.get_length());
+    #endif
+  }
+};
+
+using lextent_list_t = addr_extent_list_base_t<laddr_t, CachedExtentRef>;
+
+template <typename T>
+using t_lextent_list_t = addr_extent_list_base_t<laddr_t, TCachedExtentRef<T>>;
+
 class TransactionManager {
   friend class Transaction;
 
