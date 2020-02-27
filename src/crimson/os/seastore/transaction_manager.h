@@ -62,11 +62,6 @@ public:
   }
 };
 
-using lextent_list_t = addr_extent_list_base_t<laddr_t, CachedExtentRef>;
-
-template <typename T>
-using t_lextent_list_t = addr_extent_list_base_t<laddr_t, TCachedExtentRef<T>>;
-
 class TransactionManager {
   friend class Transaction;
 
