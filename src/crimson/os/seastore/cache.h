@@ -307,7 +307,7 @@ class Cache {
 public:
   Cache(SegmentManager &segment_manager) : segment_manager(segment_manager) {}
 
-  TranactionRef get_transaction() {
+  TransactionRef get_transaction() {
     return std::make_unique<Transaction>();
   }
   
@@ -392,7 +392,7 @@ public:
   template <typename T, typename F>
   CachedExtentRef duplicate_for_write(
     CachedExtentRef i) {
-    auto ret = i->duplicate_for_write();
+    //auto ret = i->duplicate_for_write();
     return CachedExtentRef();
   }
 
