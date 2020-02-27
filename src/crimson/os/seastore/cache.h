@@ -17,6 +17,68 @@
 
 namespace crimson::os::seastore {
 
+/**
+ * Cache
+ *
+ * This component is responsible for buffer management, including
+ * transaction lifecycle.
+ *
+ * Seastore transactions are expressed as an atomic combination of
+ * 1) newly written blocks
+ * 2) logical mutations to existing physical blocks
+ *
+ * See record_t
+ *
+ * As such, any transaction has 3 components:
+ * 1) read_set: references to extents read during the transaction
+ * 2) write_set: references to extents which are either
+ *    a) new physical blocks or
+ *    b) mutations to existing physical blocks
+ * 3) retired_set: extent refs to be retired either due to 2b or 
+ *    due to releasing the extent generally.
+
+ * In the case of 2b, the CachedExtent will have been copied into
+ * a fresh CachedExtentRef such that the source extent ref is present
+ * in the read set and the newly allocated extent is present in the
+ * write_set.
+ *
+ * A transaction has 3 phases:
+ * 1) construction: user calls Cache::get_transaction() and populates
+ *    the returned transaction by calling Cache methods
+ * 2) submission: user calls Cache::try_start_transaction().  If
+ *    succcessful, the user may construct a record and submit the 
+ *    transaction to the journal.
+ * 3) completion: once the transaction is durable, the user must call
+ *    Cache::complete_transaction() with the block offset to complete
+ *    the transaction.
+ *
+ * Internally, in phase 1, the fields in Transaction are filled in.
+ * - reads may block if the referenced extent is being written
+ * - once a read obtains a particular CachedExtentRef for a paddr_t,
+ *   it'll always get the same one until overwritten
+ * - once a paddr_t is overwritten or written, subsequent reads of
+ *   that addr will get the new ref
+ *
+ * In phase 2, if all extents in the read set are valid (not expired),
+ * we can commit (otherwise, we fail and the user must retry).
+ * - Expire all extents in the retired_set (they must all be valid)
+ * - Remove all extents in the retired_set from Cache::extents
+ * - Mark all extents in the write_set wait_io(), add promises to
+ *   transaction
+ * - Merge Transaction::write_set into Cache::extents
+ *
+ * After phase 2, the user will submit the record to the journal.
+ * Once complete, we perform phase 3:
+ * - For each CachedExtent in block_list, call
+ *   CachedExtent::complete_initial_write(paddr_t) with the block's
+ *   final offset (inferred from the extent's position in the block_list
+ *   and extent lengths).
+ * - For each block in mutation_list, call
+ *   CachedExtent::delta_written(paddr_t) with the address of the start
+ *   of the record
+ * - Complete all promises with the final record start paddr_t
+ */
+
 class LBAPin {
 public:
   virtual void set_paddr(paddr_t) = 0;
@@ -28,9 +90,6 @@ public:
   virtual ~LBAPin() {}
 };
 using LBAPinRef = std::unique_ptr<LBAPin>;
-
-using laddr_list_t = std::list<std::pair<laddr_t, loff_t>>;
-using paddr_list_t = std::list<std::pair<paddr_t, segment_off_t>>;
 
 using lba_pin_list_t = std::list<LBAPinRef>;
 using lba_pin_ref_list_t = std::list<LBAPinRef&>;
@@ -62,7 +121,7 @@ class CachedExtent : public boost::intrusive_ref_counter<
 
   enum extent_state_t {
     IO_WAIT,  // Blocked until IO completion
-    PENDING,  // In Transaction::pending_index
+    PENDING,  // In Transaction::write_set
     CLEAN,    // In Cache::extent_index
     INVALID   // Part of no ExtentIndex sets
   } state = extent_state_t::PENDING;
@@ -218,6 +277,8 @@ class Transaction {
 
   pextent_list_t read_set;
   std::list<CachedExtentRef> block_list;
+  std::list<CachedExtentRef> mutation_list;
+  std::list<CachedExtentRef> drop_list;
   ExtentIndex write_set;
 
   CachedExtentRef get_extent(paddr_t addr) {
@@ -245,6 +306,10 @@ class Cache {
   }
 public:
   Cache(SegmentManager &segment_manager) : segment_manager(segment_manager) {}
+
+  TranactionRef get_transaction() {
+    return std::make_unique<Transaction>();
+  }
   
   /**
    * get_extent
@@ -327,6 +392,7 @@ public:
   template <typename T, typename F>
   CachedExtentRef duplicate_for_write(
     CachedExtentRef i) {
+    auto ret = i->duplicate_for_write();
     return CachedExtentRef();
   }
 

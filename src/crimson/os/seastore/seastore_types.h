@@ -65,6 +65,9 @@ constexpr laddr_t L_ADDR_LBAT = std::numeric_limits<laddr_t>::max() - 2;
 using loff_t = uint64_t;
 constexpr loff_t L_OFF_NULL = std::numeric_limits<laddr_t>::max();
 
+using laddr_list_t = std::list<std::pair<laddr_t, loff_t>>;
+using paddr_list_t = std::list<std::pair<paddr_t, segment_off_t>>;
+
 /* identifies type of extent, used for interpretting deltas, managing
  * writeback */
 enum class extent_types_t : uint8_t {
