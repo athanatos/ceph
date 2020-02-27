@@ -105,9 +105,9 @@ class CachedExtent : public boost::intrusive_ref_counter<
   ceph::bufferptr ptr;
 
   enum extent_state_t {
-    IO_WAIT,  // Blocked until IO completion
     PENDING,  // In Transaction::write_set
-    CLEAN,    // In Cache::extent_index
+    IO_WAIT,  // Blocked until IO completion
+    WRITTEN,  // In Cache::extent_index
     INVALID   // Part of no ExtentIndex sets
   } state = extent_state_t::PENDING;
 
