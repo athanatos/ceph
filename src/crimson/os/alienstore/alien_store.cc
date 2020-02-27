@@ -311,7 +311,7 @@ seastar::future<> AlienStore::do_transaction(CollectionRef ch,
     return seastar::with_gate(transaction_gate, [this, ch, &txn, &callback] {
       return tp_mutex.lock().then ([this, ch, &txn, &callback] {
         return tp->submit([=, &txn, &callback] {
-          txn.register_on_commit(callback.get());
+          txn.register_on_commit(callback.release());
           auto c = static_cast<AlienCollection*>(ch.get());
           return store->queue_transaction(c->collection, std::move(txn));
         });
