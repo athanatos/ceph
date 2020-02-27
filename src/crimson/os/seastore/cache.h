@@ -266,12 +266,15 @@ class Transaction {
   segment_off_t offset = 0;
 
   pextent_set_t read_set;
-  std::list<CachedExtentRef> block_list;
-  std::list<CachedExtentRef> mutation_list;
-  std::list<CachedExtentRef> drop_list;
   ExtentIndex write_set;
 
+  std::list<CachedExtentRef> fresh_block_list;
+  std::list<CachedExtentRef> mutated_block_list;
+
+  pextent_set_t drop_set;
+
   CachedExtentRef get_extent(paddr_t addr) {
+    ceph_assert(drop_set.count(addr) == 0);
     if (auto iter = write_set.find_offset(addr);
 	iter != write_set.end()) {
       return CachedExtentRef(&*iter);
@@ -284,13 +287,18 @@ class Transaction {
     }
   }
 
+  void add_to_drop_set(CachedExtentRef &ref) {
+    ceph_assert(drop_set.count(ref->get_paddr()) == 0);
+    drop_set.insert(ref);
+  }
+
   void add_to_read_set(CachedExtentRef &ref) {
     ceph_assert(read_set.count(ref) == 0);
     read_set.insert(ref);
   }
 
   void add_fresh_extent(CachedExtentRef &ref) {
-    block_list.push_back(ref);
+    fresh_block_list.push_back(ref);
     ref->set_paddr(make_relative_paddr(offset));
     offset += ref->get_length();
   }
