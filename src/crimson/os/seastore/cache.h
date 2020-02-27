@@ -168,6 +168,7 @@ public:
     return a.poffset == b.poffset;
   }
   friend struct paddr_cmp;
+  friend struct ref_paddr_cmp;
 };
 
 struct paddr_cmp {
@@ -179,6 +180,19 @@ struct paddr_cmp {
   }
 };
 
+struct ref_paddr_cmp {
+  using is_transparent = paddr_t;
+  bool operator()(const CachedExtentRef &lhs, const CachedExtentRef &rhs) const {
+    return lhs->poffset < rhs->poffset;
+  }
+  bool operator()(const paddr_t &lhs, const CachedExtentRef &rhs) const {
+    return lhs < rhs->poffset;
+  }
+  bool operator()(const CachedExtentRef &lhs, const paddr_t &rhs) const {
+    return lhs->poffset < rhs;
+  }
+};
+
 template <typename T, typename C>
 class addr_extent_list_base_t
   : public std::list<std::pair<T, C>> {
@@ -187,6 +201,19 @@ public:
 };
 
 using pextent_list_t = addr_extent_list_base_t<paddr_t, CachedExtentRef>;
+
+template <typename T, typename C, typename Cmp>
+class addr_extent_set_base_t
+  : public std::set<C, Cmp> {
+public:
+  void merge(addr_extent_set_base_t &&other) { /* TODO */ }
+};
+
+using pextent_set_t = addr_extent_set_base_t<
+  paddr_t,
+  CachedExtentRef,
+  ref_paddr_cmp
+  >;
 
 template <typename T>
 using TCachedExtentRef = boost::intrusive_ptr<T>;
@@ -204,6 +231,14 @@ class ExtentIndex {
 public:
   void insert(CachedExtent &extent) {
     extent_index.insert(extent);
+  }
+
+  auto find_offset(paddr_t offset) {
+    return extent_index.find(offset, paddr_cmp());
+  }
+
+  auto end() {
+    return extent_index.end();
   }
 
   void merge(ExtentIndex &&other) {
@@ -230,18 +265,28 @@ class Transaction {
 
   segment_off_t offset = 0;
 
-  pextent_list_t read_set;
+  pextent_set_t read_set;
   std::list<CachedExtentRef> block_list;
   std::list<CachedExtentRef> mutation_list;
   std::list<CachedExtentRef> drop_list;
   ExtentIndex write_set;
 
   CachedExtentRef get_extent(paddr_t addr) {
-    return CachedExtentRef();
+    if (auto iter = write_set.find_offset(addr);
+	iter != write_set.end()) {
+      return CachedExtentRef(&*iter);
+    } else if (
+      auto iter = read_set.find(addr);
+      iter != read_set.end()) {
+      return *iter;
+    } else {
+      return CachedExtentRef();
+    }
   }
 
   void add_to_read_set(CachedExtentRef &ref) {
-    read_set.emplace_back(ref->get_paddr(), ref);
+    ceph_assert(read_set.count(ref) == 0);
+    read_set.insert(ref);
   }
 
   void add_fresh_extent(CachedExtentRef &ref) {
@@ -281,8 +326,8 @@ public:
     if (auto i = t.get_extent(offset)) {
       return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
 	TCachedExtentRef<T>(static_cast<T*>(&*i)));
-    } else if (auto iter = extents.extent_index.find(offset, paddr_cmp());
-	       iter != extents.extent_index.end()) {
+    } else if (auto iter = extents.find_offset(offset);
+	       iter != extents.end()) {
       auto ret = TCachedExtentRef<T>(static_cast<T*>(&*iter));
       return ret->wait_io().then([&t, ret=std::move(ret)]() mutable {
 	t.add_to_read_set(ret);
