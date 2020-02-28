@@ -199,6 +199,15 @@ int cls_cxx_truncate(cls_method_context_t hctx, int ofs)
   return execute_osd_op(hctx, op);
 }
 
+
+int cls_cxx_write_zero(cls_method_context_t hctx, int ofs, int len)
+{
+  OSDOp op{CEPH_OSD_OP_ZERO};
+  op.op.extent.offset = ofs;
+  op.op.extent.length = len;
+  return execute_osd_op(hctx, op);
+}
+
 int cls_cxx_getxattr(cls_method_context_t hctx,
                      const char *name,
                      bufferlist *outbl)
