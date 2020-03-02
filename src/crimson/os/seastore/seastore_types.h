@@ -82,23 +82,8 @@ struct extent_t {
   ceph::bufferlist bl;  ///< payload, bl.length() == length, aligned
 };
 
-/* <seq, off, idx> identifies a particular version of a particular
- * extent (idx == NULL indicating original extent, idx != NULL 
- * indicating most recent delta
- */
-struct extent_version_t {
-  segment_seq_t seq = NULL_SEG_SEQ;
-  segment_off_t off = NULL_SEG_OFF;
-  record_delta_idx_t idx = NULL_DELTA_IDX;
-
-  DENC(extent_version_t, v, p) {
-    denc(v.seq, p);
-    denc(v.off, p);
-    denc(v.idx, p);
-  }
-};
-constexpr extent_version_t EXTENT_VERSION_NULL = extent_version_t{};
-WRITE_CMP_OPERATORS_3(extent_version_t, seq, off, idx)
+using extent_version_t = uint32_t;
+constexpr extent_version_t EXTENT_VERSION_NULL = 0;
 
 /* description of a mutation to a physical extent */
 struct delta_info_t {
@@ -129,4 +114,3 @@ struct record_t {
 
 WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::paddr_t)
 WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::delta_info_t)
-WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::extent_version_t)

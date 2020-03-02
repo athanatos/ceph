@@ -101,39 +101,39 @@ class CachedExtent : public boost::intrusive_ref_counter<
     primary_ref_list_member_options>;
   friend class ExtentLRU;
 
-  paddr_t poffset;
   ceph::bufferptr ptr;
 
-  enum extent_state_t {
-    PENDING,  // In Transaction::write_set
-    IO_WAIT,  // Blocked until IO completion
-    WRITTEN,  // In Cache::extent_index
-    INVALID   // Part of no ExtentIndex sets
-  } state = extent_state_t::PENDING;
+  /* number of deltas since initial write */
+  extent_version_t version = EXTENT_VERSION_NULL;
 
-  std::optional<seastar::shared_future<>> io_wait_future;
+  enum class extent_state_t : uint8_t {
+    PENDING_INITIAL,  // In Transaction::write_set
+    PENDING_DELTA,    // In Transaction::write_set
+    WRITTEN,          // In Cache::extent_index
+    INVALID           // Part of no ExtentIndex sets
+  } state = extent_state_t::PENDING_INITIAL;
 
-  seastar::shared_promise<> set_io_wait() {
-    state = extent_state_t::IO_WAIT;
-    auto ret = seastar::shared_promise<>();
-    ceph_assert(!io_wait_future);
-    io_wait_future = ret.get_shared_future();
-    return ret;
+  /* address of original block -- relative in state PENDING_INITIAL */
+  paddr_t poffset; 
+
+  std::optional<seastar::shared_promise<>> io_wait_promise;
+
+  void set_io_wait() {
+    ceph_assert(!io_wait_promise);
+    io_wait_promise = seastar::shared_promise<>();
   }
 
-  void complete_io(seastar::shared_promise<> pr) {
-    ceph_assert(io_wait_future);
-    ceph_assert(state == extent_state_t::IO_WAIT);
-    pr.set_value();
-    io_wait_future = std::nullopt;
+  void complete_io() {
+    ceph_assert(io_wait_promise);
+    io_wait_promise->set_value();
+    io_wait_promise = std::nullopt;
   }
 
   seastar::future<> wait_io() {
-    if (state != extent_state_t::IO_WAIT) {
-      ceph_assert(!io_wait_future);
+    if (!io_wait_promise) {
       return seastar::now();
     } else {
-      return *io_wait_future;
+      return io_wait_promise->get_shared_future();
     }
   }
 
@@ -147,7 +147,10 @@ protected:
   }
 
 public:
-  bool is_pending() const { return state == extent_state_t::PENDING; }
+  bool is_pending() const {
+    return state == extent_state_t::PENDING_INITIAL ||
+      state == extent_state_t::PENDING_DELTA;
+  }
 
   paddr_t get_paddr() { return poffset; }
   size_t get_length() { return ptr.length(); }
@@ -233,6 +236,14 @@ public:
     extent_index.insert(extent);
   }
 
+  void erase(CachedExtent &extent) {
+    extent_index.erase(extent);
+  }
+
+  auto get_overlap(paddr_t addr, segment_off_t len) {
+    return std::make_pair(extent_index.end(), extent_index.end());
+  }
+
   auto find_offset(paddr_t offset) {
     return extent_index.find(offset, paddr_cmp());
   }
@@ -271,10 +282,10 @@ class Transaction {
   std::list<CachedExtentRef> fresh_block_list;
   std::list<CachedExtentRef> mutated_block_list;
 
-  pextent_set_t drop_set;
+  pextent_set_t retired_set;
 
   CachedExtentRef get_extent(paddr_t addr) {
-    ceph_assert(drop_set.count(addr) == 0);
+    ceph_assert(retired_set.count(addr) == 0);
     if (auto iter = write_set.find_offset(addr);
 	iter != write_set.end()) {
       return CachedExtentRef(&*iter);
@@ -287,9 +298,9 @@ class Transaction {
     }
   }
 
-  void add_to_drop_set(CachedExtentRef &ref) {
-    ceph_assert(drop_set.count(ref->get_paddr()) == 0);
-    drop_set.insert(ref);
+  void add_to_retired_set(CachedExtentRef &ref) {
+    ceph_assert(retired_set.count(ref->get_paddr()) == 0);
+    retired_set.insert(ref);
   }
 
   void add_to_read_set(CachedExtentRef &ref) {
@@ -345,13 +356,13 @@ public:
     } else {
       auto ref = CachedExtent::make_cached_extent_ref<T>(
 	alloc_cache_buf(length));
-      auto pr = ref->set_io_wait();
+      ref->set_io_wait();
       return segment_manager.read(
 	offset,
 	length,
 	ref->get_bptr()).safe_then(
-	  [this, &t, ref=std::move(ref), pr=std::move(pr)]() mutable {
-	    ref->complete_io(std::move(pr));
+	  [this, &t, ref=std::move(ref)]() mutable {
+	    ref->complete_io();
 	    t.add_to_read_set(ref);
 	    return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
 	      std::move(ref));
@@ -405,6 +416,12 @@ public:
     //auto ret = i->duplicate_for_write();
     return CachedExtentRef();
   }
+
+  bool try_begin_commit(Transaction &t);
+  void complete_commit(
+    Transaction &t,
+    paddr_t final_record_location,
+    paddr_t final_block_start);
 
   using replay_delta_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
