@@ -107,8 +107,8 @@ class CachedExtent : public boost::intrusive_ref_counter<
   extent_version_t version = EXTENT_VERSION_NULL;
 
   enum class extent_state_t : uint8_t {
-    PENDING_INITIAL,  // In Transaction::write_set
-    PENDING_DELTA,    // In Transaction::write_set
+    PENDING_INITIAL,  // In Transaction::write_set, or nothing while writing
+    PENDING_DELTA,    // In Transaction::write_set, or nothing while writing
     WRITTEN,          // In Cache::extent_index
     INVALID           // Part of no ExtentIndex sets
   } state = extent_state_t::PENDING_INITIAL;
@@ -139,6 +139,11 @@ class CachedExtent : public boost::intrusive_ref_counter<
 
 protected:
   CachedExtent(ceph::bufferptr &&ptr) : ptr(std::move(ptr)) {}
+  CachedExtent(const CachedExtent &other)
+    : ptr(other.ptr.c_str(), other.ptr.length()),
+      version(other.version),
+      state(other.state),
+      poffset(other.poffset) {}
 
   friend class Cache;
   template <typename T, typename... Args>
@@ -147,6 +152,12 @@ protected:
   }
 
 public:
+  virtual CachedExtentRef duplicate_for_write() {
+    return new CachedExtent(*this);
+  }
+
+  virtual void on_written(paddr_t record_block_offset) {}
+  
   bool is_pending() const {
     return state == extent_state_t::PENDING_INITIAL ||
       state == extent_state_t::PENDING_DELTA;
@@ -232,16 +243,26 @@ class ExtentIndex {
   friend class Cache;
   CachedExtent::index extent_index;
 public:
+  auto get_overlap(paddr_t addr, segment_off_t len) {
+    return std::make_pair(extent_index.end(), extent_index.end());
+  }
+
+  void clear() {
+    extent_index.clear();
+  }
+
   void insert(CachedExtent &extent) {
+    // sanity check
+    auto [a, b] = get_overlap(
+      extent.get_paddr(),
+      extent.get_length());
+    ceph_assert(a == b);
+
     extent_index.insert(extent);
   }
 
   void erase(CachedExtent &extent) {
     extent_index.erase(extent);
-  }
-
-  auto get_overlap(paddr_t addr, segment_off_t len) {
-    return std::make_pair(extent_index.end(), extent_index.end());
   }
 
   auto find_offset(paddr_t offset) {
@@ -406,21 +427,21 @@ public:
   /**
    * Allocates mutable buffer from extent_set on offset~len
    *
-   * @param extent_set spanning extents obtained from get_reserve_extents
-   * @param offset, len offset~len
-   * @return mutable extent, may either be dirty or pending
+   * @param current transaction
+   * @param extent to duplicate
+   * @return mutable extent
    */
   template <typename T, typename F>
   CachedExtentRef duplicate_for_write(
+    Transaction &t,
     CachedExtentRef i) {
-    //auto ret = i->duplicate_for_write();
+    auto ret = i->duplicate_for_write();
     return CachedExtentRef();
   }
 
   bool try_begin_commit(Transaction &t);
   void complete_commit(
     Transaction &t,
-    paddr_t final_record_location,
     paddr_t final_block_start);
 
   using replay_delta_ertr = crimson::errorator<

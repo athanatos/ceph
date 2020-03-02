@@ -21,28 +21,45 @@ bool Cache::try_begin_commit(Transaction &t)
     extents.erase(*i);
   }
 
-  for (auto &i: t.fresh_block_list) {
-    // Sanity check
-    auto [a, b] = extents.get_overlap(i->get_paddr(), i->get_length());
-    ceph_assert(a == b);
+  // Add new copy of mutated blocks, set_io_wait to block until written
+  for (auto &i: t.mutated_block_list) {
     extents.insert(*i);
     i->set_io_wait();
   }
 
-  //for (auto &i: t.
+  t.write_set.clear();
+  t.read_set.clear();
   return true;
 }
 
 void Cache::complete_commit(
   Transaction &t,
-  paddr_t final_record_location,
   paddr_t final_block_start)
 {
+  paddr_t cur = final_block_start;
+  for (auto &i: t.fresh_block_list) {
+    i->set_paddr(cur);
+    cur.offset += i->get_length();
+    i->state = CachedExtent::extent_state_t::WRITTEN;
+    i->on_written(final_block_start);
+    extents.insert(*i);
+  }
+
+  // Add new copy of mutated blocks, set_io_wait to block until written
+  for (auto &i: t.mutated_block_list) {
+    i->state = CachedExtent::extent_state_t::WRITTEN;
+    i->on_written(final_block_start);
+  }
+
+  for (auto &i: t.fresh_block_list) {
+    i->complete_io();
+  }
 }
 
 Cache::replay_delta_ret
 Cache::replay_delta(const delta_info_t &delta)
 {
+  // TODO
   return replay_delta_ret(replay_delta_ertr::ready_future_marker{});
 }
 
