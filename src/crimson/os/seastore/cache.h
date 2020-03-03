@@ -431,13 +431,9 @@ public:
    * @param extent to duplicate
    * @return mutable extent
    */
-  template <typename T, typename F>
   CachedExtentRef duplicate_for_write(
     Transaction &t,
-    CachedExtentRef i) {
-    auto ret = i->duplicate_for_write();
-    return CachedExtentRef();
-  }
+    CachedExtentRef i);
 
   bool try_begin_commit(Transaction &t);
   void complete_commit(

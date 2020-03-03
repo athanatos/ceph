@@ -5,6 +5,18 @@
 
 namespace crimson::os::seastore {
 
+CachedExtentRef Cache::duplicate_for_write(
+  Transaction &t,
+  CachedExtentRef i) {
+  if (i->is_pending())
+    return i;
+
+  auto ret = i->duplicate_for_write();
+  ret->version++;
+  ret->state = extent_state_t::PENDING_DELTA;
+  return ret;
+}
+
 bool Cache::try_begin_commit(Transaction &t)
 {
   // First, validate read set
