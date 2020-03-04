@@ -30,7 +30,7 @@ namespace crimson::os::seastore {
 class Journal;
 
 class LogicalCachedExtent : public CachedExtent {
-public: 
+public:
   LogicalCachedExtent(
     ceph::bufferptr &&ptr) : CachedExtent(std::move(ptr)) {}
 
@@ -61,6 +61,30 @@ public:
     #endif
   }
 };
+using LogicalCachedExtentRef = boost::intrusive_ptr<LogicalCachedExtent>;
+struct ref_laddr_cmp {
+  using is_transparent = laddr_t;
+  bool operator()(const LogicalCachedExtentRef &lhs,
+		  const LogicalCachedExtentRef &rhs) const {
+    return lhs->get_addr() < rhs->get_addr();
+  }
+  bool operator()(const laddr_t &lhs,
+		  const LogicalCachedExtentRef &rhs) const {
+    return lhs < rhs->get_addr();
+  }
+  bool operator()(const LogicalCachedExtentRef &lhs,
+		  const laddr_t &rhs) const {
+    return lhs->get_addr() < rhs;
+  }
+};
+using lextent_set_t = addr_extent_set_base_t<
+  laddr_t,
+  LogicalCachedExtentRef,
+  ref_laddr_cmp
+  >;
+
+template <typename T>
+using lextent_list_t = addr_extent_list_base_t<paddr_t, TCachedExtentRef<T>>;
 
 class TransactionManager {
   friend class Transaction;
@@ -72,14 +96,14 @@ class TransactionManager {
 
 #if 0
   using read_extent_ertr = SegmentManager::read_ertr;
-  using read_extent_ret = read_extent_ertr::future<ExtentSet>;
+  using read_extent_ret = read_extent_ertr::future<LogicalExtentSet>;
   read_extent_ret read_extents(
     Transaction &t,
     const extent_list_t &extents);
 #endif
 
   using get_mutable_extent_ertr = SegmentManager::read_ertr;
-  get_mutable_extent_ertr::future<CachedExtentRef> get_mutable_extent(
+  get_mutable_extent_ertr::future<LogicalCachedExtentRef> get_mutable_extent(
     Transaction &t,
     laddr_t offset,
     loff_t len);

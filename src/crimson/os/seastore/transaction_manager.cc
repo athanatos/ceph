@@ -99,7 +99,7 @@ TransactionManager::read_extents(
 }
 #endif
 
-TransactionManager::get_mutable_extent_ertr::future<CachedExtentRef>
+TransactionManager::get_mutable_extent_ertr::future<LogicalCachedExtentRef>
 TransactionManager::get_mutable_extent(
   Transaction &t,
   laddr_t offset,
@@ -119,7 +119,7 @@ TransactionManager::get_mutable_extent(
       return extent;
     });
 #endif
-  return get_mutable_extent_ertr::make_ready_future<CachedExtentRef>();
+  return get_mutable_extent_ertr::make_ready_future<LogicalCachedExtentRef>();
 }
 
 TransactionManager::submit_transaction_ertr::future<>

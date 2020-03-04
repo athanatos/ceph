@@ -13,7 +13,7 @@ CachedExtentRef Cache::duplicate_for_write(
 
   auto ret = i->duplicate_for_write();
   ret->version++;
-  ret->state = extent_state_t::PENDING_DELTA;
+  ret->state = CachedExtent::extent_state_t::PENDING_DELTA;
   return ret;
 }
 
