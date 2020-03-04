@@ -320,17 +320,17 @@ class Transaction {
     }
   }
 
-  void add_to_retired_set(CachedExtentRef &ref) {
+  void add_to_retired_set(CachedExtentRef ref) {
     ceph_assert(retired_set.count(ref->get_paddr()) == 0);
     retired_set.insert(ref);
   }
 
-  void add_to_read_set(CachedExtentRef &ref) {
+  void add_to_read_set(CachedExtentRef ref) {
     ceph_assert(read_set.count(ref) == 0);
     read_set.insert(ref);
   }
 
-  void add_fresh_extent(CachedExtentRef &ref) {
+  void add_fresh_extent(CachedExtentRef ref) {
     fresh_block_list.push_back(ref);
     ref->set_paddr(make_relative_paddr(offset));
     offset += ref->get_length();
@@ -387,7 +387,9 @@ public:
 	    ref->complete_io();
 	    t.add_to_read_set(ref);
 	    return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
-	      std::move(ref));
+	      TCachedExtentRef<T>(
+		static_cast<T*>(ref.detach())));
+	    /* TODO: check I didn't break the refcounting */
 	  },
 	  get_extent_ertr::pass_further{},
 	  crimson::ct_error::discard_all{});

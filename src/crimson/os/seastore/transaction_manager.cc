@@ -31,73 +31,43 @@ TransactionManager::init_ertr::future<> TransactionManager::init()
   return journal->open_for_write();
 }
 
-#if 0
 TransactionManager::read_extent_ret
 TransactionManager::read_extents(
   Transaction &t,
-  const extent_list_t &extents)
+  laddr_t offset,
+  loff_t length)
 {
-  auto [all, remaining] = t.get_extents(extents);
-  auto [from_cache, need, pending] = cache.get_reserve_extents(remaining);
-  all.merge(std::move(from_cache));
-  return seastar::do_with(
-    std::make_tuple(std::move(need), ExtentSet()),
-    [this, &t](auto &tup) -> read_extent_ret {
-      auto &[need, read] = tup;
-      return crimson::do_for_each(
-	need.begin(),
-	need.end(),
-	[this, &read, &t](auto &iter) {
-	  auto &[offset, length] = iter;
-	  return lba_manager->get_mappings(
-	    offset, length, t).safe_then(
-	      [this, &read, &t](auto &&pin_refs) {
-		return seastar::do_with(
-		  std::move(pin_refs),
-		  [this, &read](auto &lba_pins) {
-		    return crimson::do_for_each(
-		      lba_pins.begin(),
-		      lba_pins.end(),
-		      [this, &read](auto &pin) {
-			// TODO: invert buffer control so that we pass the buffer
-			// here into segment_manager to avoid a copy
-			return segment_manager.read(
-			  pin->get_paddr(),
-			  pin->get_length()
-			).safe_then([this, &read, &pin](auto bl) mutable {
-			  auto eref = cache.get_extent_buffer(
-			    pin->get_laddr(),
-			    pin->get_length());
-			  eref->set_pin(std::move(pin));
-			  eref->copy_in(bl, pin->get_laddr(), pin->get_length());
-			  read.insert(eref);
-			  return read_extent_ertr::now();
-			});
-		      });
-		  });
-	      });
-	}).safe_then([this, &read]() mutable {
-	  // offer all to transaction
-	  return read_extent_ret(
-	    read_extent_ertr::ready_future_marker{},
-	    std::move(read));
+  std::unique_ptr<lextent_list_t> ret;
+  auto &ret_ref = *ret;
+  std::unique_ptr<lba_pin_list_t> pin_list;
+  auto &pin_list_ref = *pin_list;
+  return lba_manager->get_mapping(
+    offset, length, t
+  ).safe_then([this, &t, &pin_list_ref, &ret_ref](auto pins) {
+    pins.swap(pin_list_ref);
+    return crimson::do_for_each(
+      pin_list_ref.begin(),
+      pin_list_ref.end(),
+      [this, &t, &ret_ref](auto &pin) {
+	// TODO: invert buffer control so that we pass the buffer
+	// here into segment_manager to avoid a copy
+	return cache.get_extent<LogicalCachedExtent>(
+	  t,
+	  pin->get_paddr(),
+	  pin->get_length()
+	).safe_then([this, &pin, &ret_ref](auto ref) mutable {
+	  //ref->set_pin(std::move(pin));
+	  //ret->push_back(ref);
+	  return read_extent_ertr::now();
 	});
-    }).safe_then([this, &t, all=std::move(all), pending=std::move(pending)](
-		   auto &&read) {
-      return cache.await_pending(pending).safe_then(
-	[this, &t, all=std::move(all), read=std::move(read)](
-	  auto &&pending_extents) mutable {
-	  t.add_to_read_set(pending_extents);
-	  t.add_to_read_set(read);
-	  all.merge(std::move(pending_extents));
-	  all.merge(std::move(read));
-	  return read_extent_ret(
-	    read_extent_ertr::ready_future_marker{},
-	    std::move(all));
-	});
-    });
+      });
+  }).safe_then([this, ret=std::move(ret), pin_list=std::move(pin_list),
+		&t]() mutable {
+    return read_extent_ret(
+      read_extent_ertr::ready_future_marker{},
+      std::move(*ret));
+  });
 }
-#endif
 
 TransactionManager::get_mutable_extent_ertr::future<LogicalCachedExtentRef>
 TransactionManager::get_mutable_extent(

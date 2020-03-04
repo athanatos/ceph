@@ -78,7 +78,7 @@ using lextent_set_t = addr_extent_set_base_t<
   >;
 
 using lextent_list_t = addr_extent_list_base_t<
-  paddr_t, TCachedExtentRef<LogicalCachedExtentRef>>;
+  laddr_t, LogicalCachedExtentRef>;
 
 class TransactionManager {
   friend class Transaction;
@@ -88,13 +88,12 @@ class TransactionManager {
   LBAManagerRef lba_manager;
   std::unique_ptr<Journal> journal;
 
-#if 0
   using read_extent_ertr = SegmentManager::read_ertr;
-  using read_extent_ret = read_extent_ertr::future<LogicalExtentSet>;
+  using read_extent_ret = read_extent_ertr::future<lextent_list_t>;
   read_extent_ret read_extents(
     Transaction &t,
-    const extent_list_t &extents);
-#endif
+    laddr_t addr,
+    loff_t len);
 
   using get_mutable_extent_ertr = SegmentManager::read_ertr;
   get_mutable_extent_ertr::future<LogicalCachedExtentRef> get_mutable_extent(
