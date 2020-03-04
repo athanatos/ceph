@@ -90,6 +90,7 @@ class CachedExtent : public boost::intrusive_ref_counter<
     &CachedExtent::extent_index_hook>;
   using index = boost::intrusive::set<CachedExtent, index_member_options>;
   friend class ExtentIndex;
+  friend class Transaction;
 
   boost::intrusive::list_member_hook<> primary_ref_list_hook;
   using primary_ref_list_member_options = boost::intrusive::member_hook<
@@ -151,6 +152,8 @@ protected:
     return new T(std::forward<Args>(args)...);
   }
 
+  void set_paddr(paddr_t offset) { poffset = offset; }
+
 public:
   virtual CachedExtentRef duplicate_for_write() {
     return new CachedExtent(*this);
@@ -165,8 +168,6 @@ public:
 
   paddr_t get_paddr() { return poffset; }
   size_t get_length() { return ptr.length(); }
-
-  void set_paddr(paddr_t offset) { poffset = offset; }
 
   bufferptr &get_bptr() { return ptr; }
 

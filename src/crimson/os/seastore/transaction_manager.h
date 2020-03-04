@@ -37,44 +37,38 @@ public:
   void set_pin(LBAPinRef &&pin) {/* TODO */}
   LBAPin &get_pin() { return *((LBAPin*)nullptr); /* TODO */ }
 
-  laddr_t get_addr() { return laddr_t{0}; /* TODO */ }
+  laddr_t get_laddr() const { return laddr_t{0}; }
 
   void copy_in(ceph::bufferlist &bl, laddr_t off, loff_t len) {
-    #if 0
-    // TODO: move into LBA specific subclass
-    ceph_assert(off >= offset);
-    ceph_assert((off + len) <= (offset + ptr.length()));
-    bl.begin().copy(len, ptr.c_str() + (off - offset));
-    #endif
+    ceph_assert(off >= get_laddr());
+    ceph_assert((off + len) <= (get_laddr() + get_bptr().length()));
+    bl.begin().copy(len, get_bptr().c_str() + (off - get_laddr()));
   }
 
-  void copy_in(CachedExtent &extent) {
-    #if 0
-    // TODO: move into LBA specific subclass
-    ceph_assert(extent.offset >= offset);
-    ceph_assert((extent.offset + extent.ptr.length()) <=
-		(offset + ptr.length()));
+  void copy_in(LogicalCachedExtent &extent) {
+    ceph_assert(extent.get_laddr() >= get_laddr());
+    ceph_assert((extent.get_laddr() + extent.get_bptr().length()) <=
+		(get_laddr() + get_bptr().length()));
     memcpy(
-      ptr.c_str() + (extent.offset - offset),
-      extent.ptr.c_str(),
+      get_bptr().c_str() + (extent.get_laddr() - get_laddr()),
+      extent.get_bptr().c_str(),
       extent.get_length());
-    #endif
   }
 };
-using LogicalCachedExtentRef = boost::intrusive_ptr<LogicalCachedExtent>;
+using LogicalCachedExtentRef = TCachedExtentRef<LogicalCachedExtent>;
 struct ref_laddr_cmp {
   using is_transparent = laddr_t;
   bool operator()(const LogicalCachedExtentRef &lhs,
 		  const LogicalCachedExtentRef &rhs) const {
-    return lhs->get_addr() < rhs->get_addr();
+    return lhs->get_laddr() < rhs->get_laddr();
   }
   bool operator()(const laddr_t &lhs,
 		  const LogicalCachedExtentRef &rhs) const {
-    return lhs < rhs->get_addr();
+    return lhs < rhs->get_laddr();
   }
   bool operator()(const LogicalCachedExtentRef &lhs,
 		  const laddr_t &rhs) const {
-    return lhs->get_addr() < rhs;
+    return lhs->get_laddr() < rhs;
   }
 };
 using lextent_set_t = addr_extent_set_base_t<
@@ -83,8 +77,8 @@ using lextent_set_t = addr_extent_set_base_t<
   ref_laddr_cmp
   >;
 
-template <typename T>
-using lextent_list_t = addr_extent_list_base_t<paddr_t, TCachedExtentRef<T>>;
+using lextent_list_t = addr_extent_list_base_t<
+  paddr_t, TCachedExtentRef<LogicalCachedExtentRef>>;
 
 class TransactionManager {
   friend class Transaction;
