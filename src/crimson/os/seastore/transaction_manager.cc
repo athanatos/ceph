@@ -56,8 +56,8 @@ TransactionManager::read_extents(
 	  pin->get_paddr(),
 	  pin->get_length()
 	).safe_then([this, &pin, &ret_ref](auto ref) mutable {
-	  //ref->set_pin(std::move(pin));
-	  //ret->push_back(ref);
+	  ref->set_pin(std::move(pin));
+	  ret_ref.push_back(std::make_pair(ref->get_laddr(), ref));
 	  return read_extent_ertr::now();
 	});
       });
