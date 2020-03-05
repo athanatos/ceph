@@ -229,8 +229,9 @@ public:
    * @param 
    */
   using submit_transaction_ertr = crimson::errorator<
+    crimson::ct_error::eagain,
     crimson::ct_error::input_output_error>;
-  submit_transaction_ertr::future<> submit_transaction(TransactionRef &&);
+  submit_transaction_ertr::future<> submit_transaction(TransactionRef);
 
   ~TransactionManager();
 };

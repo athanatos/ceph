@@ -917,6 +917,8 @@ namespace ct_error {
     ct_error_code<std::errc::bad_file_descriptor>;
   using enospc =
     ct_error_code<std::errc::no_space_on_device>;
+  using eagain =
+    ct_error_code<std::errc::resource_unavailable_try_again>;
 
   struct pass_further_all {
     template <class ErrorT>

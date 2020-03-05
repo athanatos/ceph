@@ -33,8 +33,15 @@ TransactionManager::init_ertr::future<> TransactionManager::init()
 
 TransactionManager::submit_transaction_ertr::future<>
 TransactionManager::submit_transaction(
-  TransactionRef &&t)
+  TransactionRef t)
 {
+  if (!cache.try_begin_commit(*t)) {
+    return crimson::ct_error::eagain::make();
+  }
+  // do the commit
+
+  paddr_t addr;
+  cache.complete_commit(*t, addr);
   // validate check set
   // invalidate replaced extents stealing pins
   // pass lba_transaction along with current block journal offset and record

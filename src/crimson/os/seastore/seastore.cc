@@ -172,6 +172,9 @@ seastar::future<> SeaStore::do_transaction(
 		    return transaction_manager->submit_transaction(std::move(trans));
 		  }).handle_error(
 		    // TODO: add errorator::do_until
+		    crimson::ct_error::eagain::handle([]() {
+		      // TODO retry
+		    }),
 		    write_ertr::all_same_way([this, &t](auto e) {
 		      logger().error(" transaction dump:\n");
 		      JSONFormatter f(true);
