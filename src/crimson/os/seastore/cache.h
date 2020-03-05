@@ -154,13 +154,39 @@ protected:
 
   void set_paddr(paddr_t offset) { poffset = offset; }
 
-public:
-  virtual CachedExtentRef duplicate_for_write() {
-    return new CachedExtent(*this);
+  extent_version_t get_version() const {
+    return version;
   }
 
-  virtual void on_written(paddr_t record_block_offset) {}
-  
+  virtual CachedExtentRef duplicate_for_write() = 0;
+
+  virtual void on_written(paddr_t record_block_offset) = 0;
+
+  virtual extent_types_t get_type() = 0;
+
+  /**
+   * Must return a valid delta usable in apply_delta() in submit_transaction
+   * if state == PENDING_DELTA.
+   */
+  virtual ceph::bufferlist get_delta() = 0;
+
+  /**
+   * bl is a delta obtained previously from get_delta.  The versions will
+   * match.  Implementation should mutate buffer based on bl.
+   */
+  virtual void apply_delta(ceph::bufferlist &bl);
+
+  /**
+   * Called on dirty CachedExtent implementation after replay.
+   * Implementation should perform any reads/in-memory-setup
+   * necessary. (for instance, the lba implementation uses this
+   * to load in lba_manager blocks)
+   */
+  using complete_load_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  virtual complete_load_ertr::future<> complete_load() = 0;
+
+public:
   bool is_pending() const {
     return state == extent_state_t::PENDING_INITIAL ||
       state == extent_state_t::PENDING_DELTA;
@@ -309,7 +335,7 @@ class Transaction {
   CachedExtentRef get_extent(paddr_t addr) {
     ceph_assert(retired_set.count(addr) == 0);
     if (auto iter = write_set.find_offset(addr);
-	iter != write_set.end()) {
+       iter != write_set.end()) {
       return CachedExtentRef(&*iter);
     } else if (
       auto iter = read_set.find(addr);

@@ -29,7 +29,51 @@
 namespace crimson::os::seastore {
 class Journal;
 
+
 class LogicalCachedExtent : public CachedExtent {
+protected:
+  CachedExtentRef duplicate_for_write() final {
+    return CachedExtentRef(new LogicalCachedExtent(*this));
+  };
+
+  virtual void on_written(paddr_t record_block_offset) {
+  }
+
+  virtual extent_types_t get_type() {
+    ceph_assert(0 == "TODO");
+    return extent_types_t::NONE;
+  }
+
+  /**
+   * Must return a valid delta usable in apply_delta() in submit_transaction
+   * if state == PENDING_DELTA.
+   */
+  virtual ceph::bufferlist get_delta() {
+    ceph_assert(0 == "TODO");
+    return ceph::bufferlist();
+  }
+
+  /**
+   * bl is a delta obtained previously from get_delta.  The versions will
+   * match.  Implementation should mutate buffer based on bl.
+   */
+  virtual void apply_delta(ceph::bufferlist &bl) {
+    ceph_assert(0 == "TODO");
+  }
+
+  /**
+   * Called on dirty CachedExtent implementation after replay.
+   * Implementation should perform any reads/in-memory-setup
+   * necessary. (for instance, the lba implementation uses this
+   * to load in lba_manager blocks)
+   */
+  virtual complete_load_ertr::future<> complete_load() {
+    ceph_assert(0 == "TODO");
+    return complete_load_ertr::now();
+  }
+
+  
+  
 public:
   LogicalCachedExtent(
     ceph::bufferptr &&ptr) : CachedExtent(std::move(ptr)) {}

@@ -22,7 +22,7 @@ namespace crimson::os::seastore::lba_manager::btree {
 
 std::unique_ptr<LBANode> LBANode::get_node(
   depth_t depth,
-  CachedExtentRef extent)
+  LBABtreeCachedExtentRef extent)
 {
   return std::unique_ptr<LBANode>(
     depth > 0 ?

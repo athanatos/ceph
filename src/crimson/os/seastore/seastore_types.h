@@ -89,8 +89,8 @@ constexpr extent_version_t EXTENT_VERSION_NULL = 0;
 struct delta_info_t {
   extent_types_t type = extent_types_t::NONE;  ///< delta type
   paddr_t paddr;                               ///< physical address
-  /* logical address -- needed for repopulating cache */
-  laddr_t laddr = L_ADDR_NULL;
+  /* logical address -- needed for repopulating cache -- TODO don't actually need */
+  // laddr_t laddr = L_ADDR_NULL;
   segment_off_t length = NULL_SEG_OFF;         ///< extent length
   extent_version_t pversion;                   ///< prior version
   ceph::bufferlist bl;                         ///< payload
@@ -98,7 +98,7 @@ struct delta_info_t {
   DENC(delta_info_t, v, p) {
     denc(v.type, p);
     denc(v.paddr, p);
-    denc(v.laddr, p);
+    //denc(v.laddr, p);
     denc(v.length, p);
     denc(v.pversion, p);
     denc(v.bl, p);

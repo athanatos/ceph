@@ -16,18 +16,66 @@ namespace crimson::os::seastore::lba_manager::btree {
 
 constexpr segment_off_t LBA_BLOCK_SIZE = 4096; // TODO
 
+class LBABtreeCachedExtent : public CachedExtent {
+protected:
+  CachedExtentRef duplicate_for_write() final {
+    return CachedExtentRef(new LBABtreeCachedExtent(*this));
+  };
+
+  virtual void on_written(paddr_t record_block_offset) {
+  }
+
+  virtual extent_types_t get_type() {
+    ceph_assert(0 == "TODO");
+    return extent_types_t::LBA_BLOCK;
+  }
+
+  /**
+   * Must return a valid delta usable in apply_delta() in submit_transaction
+   * if state == PENDING_DELTA.
+   */
+  virtual ceph::bufferlist get_delta() {
+    ceph_assert(0 == "TODO");
+    return ceph::bufferlist();
+  }
+
+  /**
+   * bl is a delta obtained previously from get_delta.  The versions will
+   * match.  Implementation should mutate buffer based on bl.
+   */
+  virtual void apply_delta(ceph::bufferlist &bl) {
+    ceph_assert(0 == "TODO");
+  }
+
+  /**
+   * Called on dirty LBABtreeCachedExtent implementation after replay.
+   * Implementation should perform any reads/in-memory-setup
+   * necessary. (for instance, the lba implementation uses this
+   * to load in lba_manager blocks)
+   */
+  virtual complete_load_ertr::future<> complete_load() {
+    ceph_assert(0 == "TODO");
+    return complete_load_ertr::now();
+  }
+
+public:
+  LBABtreeCachedExtent(
+    ceph::bufferptr &&ptr) : CachedExtent(std::move(ptr)) {}
+};
+using LBABtreeCachedExtentRef = TCachedExtentRef<LBABtreeCachedExtent>;
+
 /* BtreeLBAPin
  *
  * References leaf node
  */
 struct BtreeLBAPin : LBAPin {
-  CachedExtentRef leaf;
+  LBABtreeCachedExtentRef leaf;
   paddr_t paddr;
   laddr_t laddr;
   loff_t length;
 public:
   BtreeLBAPin(
-    CachedExtentRef leaf,
+    LBABtreeCachedExtentRef leaf,
     paddr_t paddr,
     laddr_t laddr,
     loff_t length)
@@ -51,8 +99,8 @@ using depth_t = uint32_t;
 template <typename addr_t, typename addr_off_t>
 struct Node {
   depth_t depth;
-  CachedExtentRef extent;
-  Node(depth_t depth, CachedExtentRef extent) : depth(depth), extent(extent) {}
+  LBABtreeCachedExtentRef extent;
+  Node(depth_t depth, LBABtreeCachedExtentRef extent) : depth(depth), extent(extent) {}
 
   virtual ~Node() = default;
 };
@@ -67,7 +115,7 @@ struct LBANode : Node<laddr_t, loff_t> {
   using lookup_range_ertr = LBAManager::get_mapping_ertr;
   using lookup_range_ret = LBAManager::get_mapping_ret;
 
-  LBANode(depth_t depth, CachedExtentRef extent) : Node(depth, extent) {}
+  LBANode(depth_t depth, LBABtreeCachedExtentRef extent) : Node(depth, extent) {}
 
   virtual lookup_range_ret lookup_range(
     Cache &cache,
@@ -107,14 +155,14 @@ struct LBANode : Node<laddr_t, loff_t> {
 
   static std::unique_ptr<LBANode> get_node(
     depth_t depth,
-    CachedExtentRef extent);
+    LBABtreeCachedExtentRef extent);
 
   virtual ~LBANode() = default;
 };
 using LBANodeRef = std::unique_ptr<LBANode>;
 
 struct LBAInternalNode : LBANode {
-  LBAInternalNode(depth_t depth, CachedExtentRef extent)
+  LBAInternalNode(depth_t depth, LBABtreeCachedExtentRef extent)
     : LBANode(depth, extent) {}
 
   lookup_range_ret lookup_range(
@@ -166,7 +214,7 @@ private:
 };
 
 struct LBALeafNode : LBANode {
-  LBALeafNode(depth_t depth, CachedExtentRef extent)
+  LBALeafNode(depth_t depth, LBABtreeCachedExtentRef extent)
     : LBANode(depth, extent) {
     ceph_assert(depth == 0);
   }
@@ -211,11 +259,11 @@ private:
   get_leaf_entries(laddr_t addr, loff_t len);
 };
 
-Cache::get_extent_ertr::future<CachedExtentRef> get_lba_btree_extent(
+Cache::get_extent_ertr::future<LBABtreeCachedExtentRef> get_lba_btree_extent(
   Cache &cache,
   Transaction &t,
   paddr_t offset) {
-  return cache.get_extent<CachedExtent>(
+  return cache.get_extent<LBABtreeCachedExtent>(
     t,
     offset,
     LBA_BLOCK_SIZE);

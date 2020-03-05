@@ -25,6 +25,8 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
       return std::nullopt;
   }
 
+  record_t record;
+
   // Transaction is now a go, set up in-memory cache state
   // invalidate now invalid blocks
   for (auto &i: t.retired_set) {
@@ -34,14 +36,30 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
   }
 
   // Add new copy of mutated blocks, set_io_wait to block until written
+  record.deltas.reserve(t.mutated_block_list.size());
   for (auto &i: t.mutated_block_list) {
     extents.insert(*i);
     i->set_io_wait();
+    record.deltas.push_back(
+      delta_info_t{
+	i->get_type(),
+	i->get_paddr(),
+	i->get_length(),
+	i->get_version(),
+	i->get_delta()
+      });
+  }
+
+  record.extents.reserve(t.fresh_block_list.size());
+  for (auto &i: t.fresh_block_list) {
+    bufferlist bl;
+    bl.append(i->get_bptr());
+    record.extents.push_back(extent_t{std::move(bl)});
   }
 
   t.write_set.clear();
   t.read_set.clear();
-  return std::make_optional<record_t>();
+  return std::make_optional<record_t>(std::move(record));
 }
 
 void Cache::complete_commit(
