@@ -438,7 +438,8 @@ public:
     Transaction &t,
     CachedExtentRef i);
 
-  bool try_begin_commit(Transaction &t);
+  std::optional<record_t> try_construct_record(Transaction &t);
+
   void complete_commit(
     Transaction &t,
     paddr_t final_block_start);

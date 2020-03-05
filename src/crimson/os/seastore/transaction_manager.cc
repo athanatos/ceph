@@ -35,9 +35,11 @@ TransactionManager::submit_transaction_ertr::future<>
 TransactionManager::submit_transaction(
   TransactionRef t)
 {
-  if (!cache.try_begin_commit(*t)) {
+  auto record = !cache.try_construct_record(*t);
+  if (!record) {
     return crimson::ct_error::eagain::make();
   }
+
   // do the commit
 
   paddr_t addr;

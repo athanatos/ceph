@@ -17,12 +17,12 @@ CachedExtentRef Cache::duplicate_for_write(
   return ret;
 }
 
-bool Cache::try_begin_commit(Transaction &t)
+std::optional<record_t> Cache::try_construct_record(Transaction &t)
 {
   // First, validate read set
   for (auto &i: t.read_set) {
     if (i->state == CachedExtent::extent_state_t::INVALID)
-      return false;
+      return std::nullopt;
   }
 
   // Transaction is now a go, set up in-memory cache state
@@ -41,7 +41,7 @@ bool Cache::try_begin_commit(Transaction &t)
 
   t.write_set.clear();
   t.read_set.clear();
-  return true;
+  return std::make_optional<record_t>();
 }
 
 void Cache::complete_commit(
