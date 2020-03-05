@@ -31,67 +31,6 @@ TransactionManager::init_ertr::future<> TransactionManager::init()
   return journal->open_for_write();
 }
 
-TransactionManager::read_extent_ret
-TransactionManager::read_extents(
-  Transaction &t,
-  laddr_t offset,
-  loff_t length)
-{
-  std::unique_ptr<lextent_list_t> ret;
-  auto &ret_ref = *ret;
-  std::unique_ptr<lba_pin_list_t> pin_list;
-  auto &pin_list_ref = *pin_list;
-  return lba_manager->get_mapping(
-    offset, length, t
-  ).safe_then([this, &t, &pin_list_ref, &ret_ref](auto pins) {
-    pins.swap(pin_list_ref);
-    return crimson::do_for_each(
-      pin_list_ref.begin(),
-      pin_list_ref.end(),
-      [this, &t, &ret_ref](auto &pin) {
-	// TODO: invert buffer control so that we pass the buffer
-	// here into segment_manager to avoid a copy
-	return cache.get_extent<LogicalCachedExtent>(
-	  t,
-	  pin->get_paddr(),
-	  pin->get_length()
-	).safe_then([this, &pin, &ret_ref](auto ref) mutable {
-	  ref->set_pin(std::move(pin));
-	  ret_ref.push_back(std::make_pair(ref->get_laddr(), ref));
-	  return read_extent_ertr::now();
-	});
-      });
-  }).safe_then([this, ret=std::move(ret), pin_list=std::move(pin_list),
-		&t]() mutable {
-    return read_extent_ret(
-      read_extent_ertr::ready_future_marker{},
-      std::move(*ret));
-  });
-}
-
-TransactionManager::get_mutable_extent_ertr::future<LogicalCachedExtentRef>
-TransactionManager::get_mutable_extent(
-  Transaction &t,
-  laddr_t offset,
-  loff_t len)
-{
-  /* This portion needs to
-   * 1) pull relevant extents overlapping offset~len
-   * 2) determine whether we're replacing or mutating
-   * 3a) replacing: call lba_manager to chop up existing overlapping extents
-   * 3g) mutating: just apply mutation
-   */
-#if 0
-  return read_extents(t, {{offset, len}}).safe_then(
-    [this, offset, len, &t](auto extent_set) {
-      auto extent = cache.duplicate_for_write(extent_set, offset, len);
-      t.add_to_write_set(extent);
-      return extent;
-    });
-#endif
-  return get_mutable_extent_ertr::make_ready_future<LogicalCachedExtentRef>();
-}
-
 TransactionManager::submit_transaction_ertr::future<>
 TransactionManager::submit_transaction(
   TransactionRef &&t)

@@ -77,8 +77,9 @@ using lextent_set_t = addr_extent_set_base_t<
   ref_laddr_cmp
   >;
 
+template <typename T>
 using lextent_list_t = addr_extent_list_base_t<
-  laddr_t, LogicalCachedExtentRef>;
+  laddr_t, TCachedExtentRef<T>>;
 
 class TransactionManager {
   friend class Transaction;
@@ -87,13 +88,6 @@ class TransactionManager {
   Cache &cache;
   LBAManagerRef lba_manager;
   std::unique_ptr<Journal> journal;
-
-  using read_extent_ertr = SegmentManager::read_ertr;
-  using read_extent_ret = read_extent_ertr::future<lextent_list_t>;
-  read_extent_ret read_extents(
-    Transaction &t,
-    laddr_t addr,
-    loff_t len);
 
   using get_mutable_extent_ertr = SegmentManager::read_ertr;
   get_mutable_extent_ertr::future<LogicalCachedExtentRef> get_mutable_extent(
@@ -119,38 +113,63 @@ public:
   };
 
   /**
-   * Add operation mutating specified extent
-   *
-   * offset~len must be an extent previously returned from alloc_extent
-   *
-   * f(current) should mutate the bytes of current and return a
-   * bufferlist suitable for a record delta
+   * Read extents corresponding to specified lba range
    */
-  using mutate_ertr = SegmentManager::read_ertr;
-  template <typename F>
-  mutate_ertr::future<mutate_result_t> mutate(
+  using read_extent_ertr = SegmentManager::read_ertr;
+
+  template <typename T>
+  using read_extent_ret = read_extent_ertr::future<lextent_list_t<T>>;
+
+  template <typename T>
+  read_extent_ret<T> read_extents(
     Transaction &t,
-    extent_types_t type,
     laddr_t offset,
-    loff_t len,
-    F &&f) {
-    return get_mutable_extent(
-      t, offset, len
-    ).safe_then([this, type, offset, &t, f=std::move(f)](auto extent) mutable {
-      auto bl = f(extent->ptr);
-      if (!extent->is_pending()) {
-	#if 0
-	// TODO: add to lba specific subclass
-	extent->add_pending_delta(
-	  {type, offset, extent->get_poffset(), std::move(bl)}
-	);
-	#endif
-      }
-      return replace_ertr::make_ready_future<mutate_result_t>(
-	mutate_result_t::SUCCESS);
+    loff_t length)
+  {
+    std::unique_ptr<lextent_list_t<T>> ret;
+    auto &ret_ref = *ret;
+    std::unique_ptr<lba_pin_list_t> pin_list;
+    auto &pin_list_ref = *pin_list;
+    return lba_manager->get_mapping(
+      offset, length, t
+    ).safe_then([this, &t, &pin_list_ref, &ret_ref](auto pins) {
+      pins.swap(pin_list_ref);
+      return crimson::do_for_each(
+	pin_list_ref.begin(),
+	pin_list_ref.end(),
+	[this, &t, &ret_ref](auto &pin) {
+	  // TODO: invert buffer control so that we pass the buffer
+	  // here into segment_manager to avoid a copy
+	  return cache.get_extent<T>(
+	    t,
+	    pin->get_paddr(),
+	    pin->get_length()
+	  ).safe_then([this, &pin, &ret_ref](auto ref) mutable {
+	    ref->set_pin(std::move(pin));
+	    ret_ref.push_back(std::make_pair(ref->get_laddr(), ref));
+	    return read_extent_ertr::now();
+	  });
+	});
+    }).safe_then([this, ret=std::move(ret), pin_list=std::move(pin_list),
+		  &t]() mutable {
+      return read_extent_ret<T>(
+	read_extent_ertr::ready_future_marker{},
+	std::move(*ret));
     });
   }
-  
+
+  /**
+   * Obtain mutable copy of extent
+   *
+   * TODO: add interface for exposing whether a delta needs to
+   * be generated
+   */
+  CachedExtentRef get_mutable_extent(Transaction &t, CachedExtentRef ref) {
+    return cache.duplicate_for_write(
+      t,
+      ref);
+  }
+
   /**
    * Add operation replacing specified extent
    *
