@@ -273,8 +273,9 @@ public:
    * @param 
    */
   using submit_transaction_ertr = crimson::errorator<
-    crimson::ct_error::eagain,
-    crimson::ct_error::input_output_error>;
+    crimson::ct_error::eagain, // Caller should retry transaction from beginning
+    crimson::ct_error::input_output_error // Media error
+    >;
   submit_transaction_ertr::future<> submit_transaction(TransactionRef);
 
   ~TransactionManager();
