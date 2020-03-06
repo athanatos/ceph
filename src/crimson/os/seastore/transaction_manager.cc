@@ -35,22 +35,19 @@ TransactionManager::submit_transaction_ertr::future<>
 TransactionManager::submit_transaction(
   TransactionRef t)
 {
-  auto record = !cache.try_construct_record(*t);
+  auto record = cache.try_construct_record(*t);
   if (!record) {
     return crimson::ct_error::eagain::make();
   }
 
-  // do the commit
-
-  paddr_t addr;
-  cache.complete_commit(*t, addr);
-  // validate check set
-  // invalidate replaced extents stealing pins
-  // pass lba_transaction along with current block journal offset and record
-  //   to 
-  // construct lba transaction thingy [<laddr, pin, len, { ref_diff, optional<paddr> }>...]
-  // submit replacement extents to cache with new lba pins and version
-  return submit_transaction_ertr::now();
+  return journal->submit_record(std::move(*record)).safe_then(
+    [this, t=std::move(t)](paddr_t addr) {
+      cache.complete_commit(*t, addr);
+    },
+    submit_transaction_ertr::pass_further{},
+    crimson::ct_error::all_same_way([](auto e) {
+      ceph_assert(0 == "Hit error submitting to journal");
+    }));
 }
 
 TransactionManager::~TransactionManager() {}
