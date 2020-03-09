@@ -79,7 +79,7 @@ public:
     ceph::bufferptr &&ptr) : CachedExtent(std::move(ptr)) {}
 
   void set_pin(LBAPinRef &&pin) {/* TODO */}
-  LBAPinRef get_pin() { return LBAPinRef(); /* TODO */}
+  LBAPin &get_pin() { return *((LBAPin*)nullptr); /* TODO */}
 
   laddr_t get_laddr() const { return laddr_t{0}; }
 
@@ -240,7 +240,7 @@ public:
     LogicalCachedExtentRef &ref) {
     return lba_manager->incref_extent(
       t,
-      *ref->get_pin()).handle_error(
+      ref->get_pin()).handle_error(
 	inc_ref_ertr::pass_further{},
 	ct_error::all_same_way([](auto e) {
 	  ceph_assert(0 == "unhandled error, TODO");

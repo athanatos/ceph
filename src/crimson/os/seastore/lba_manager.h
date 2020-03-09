@@ -140,16 +140,16 @@ public:
   using move_extent_relative_ret = move_extent_relative_ertr::future<LBAPinRef>;
   virtual move_extent_relative_ret move_extent_relative(
     Transaction &t,
-    LBAPinRef &ref,
+    LBAPin &ref,
     segment_off_t record_offset) {
-    return decref_extent(t, *ref
+    return decref_extent(t, ref
     ).safe_then([this](auto freed) {
       ceph_assert(freed);
     }).safe_then([this, &t, &ref, record_offset] {
       return set_extent_relative(
 	t,
-	ref->get_laddr(),
-	ref->get_length(),
+	ref.get_laddr(),
+	ref.get_length(),
 	record_offset).handle_error(
 	  move_extent_relative_ertr::pass_further{},
 	  crimson::ct_error::invarg::handle([] {
@@ -168,16 +168,16 @@ public:
   using move_extent_ret = move_extent_ertr::future<LBAPinRef>;
   virtual move_extent_relative_ret move_extent(
     Transaction &t,
-    LBAPinRef &ref,
+    LBAPin &ref,
     paddr_t addr) {
-    return decref_extent(t, *ref
+    return decref_extent(t, ref
     ).safe_then([this](auto freed) {
       ceph_assert(freed);
     }).safe_then([this, &t, &ref, addr] {
       return set_extent(
 	t,
-	ref->get_laddr(),
-	ref->get_length(),
+	ref.get_laddr(),
+	ref.get_length(),
 	addr).handle_error(
 	  move_extent_relative_ertr::pass_further{},
 	  crimson::ct_error::invarg::handle([] {
