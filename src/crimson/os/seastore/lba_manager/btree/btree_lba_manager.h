@@ -75,29 +75,33 @@ public:
     Cache &cache);
 
   get_mapping_ret get_mapping(
-    laddr_t offset, loff_t length,
-    Transaction &t) final;
+    Transaction &t,
+    laddr_t offset, loff_t length) final;
 
   get_mappings_ret get_mappings(
-    laddr_list_t &&list,
-    Transaction &t) final;
+    Transaction &t,
+    laddr_list_t &&list) final;
 
   alloc_extent_relative_ret alloc_extent_relative(
+    Transaction &t,
     laddr_t hint,
     loff_t len,
-    segment_off_t offset,
-    Transaction &t) final;
+    segment_off_t offset) final;
 
   set_extent_ret set_extent(
-    laddr_t off, loff_t len, paddr_t addr,
-    Transaction &t) final;
+    Transaction &t,
+    laddr_t off, loff_t len, paddr_t addr) final;
 
   set_extent_relative_ret set_extent_relative(
-    laddr_t off, loff_t len, segment_off_t record_offset,
-    Transaction &t) final;
+    Transaction &t,
+    laddr_t off, loff_t len, segment_off_t record_offset) final;
 
-  bool decref_extent(LBAPinRef &ref, Transaction &t) final;
-  void incref_extent(LBAPinRef &ref, Transaction &t) final;
+  decref_extent_ret decref_extent(
+    Transaction &t,
+    LBAPin &ref) final;
+  incref_extent_ret incref_extent(
+    Transaction &t,
+    LBAPin &ref) final;
 
   submit_lba_transaction_ret submit_lba_transaction(
     Transaction &t) final;

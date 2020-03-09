@@ -49,11 +49,11 @@ public:
    * Future will not result until all pins have resolved (set_paddr called)
    */
   using get_mapping_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error>;
+  crimson::ct_error::input_output_error>;
   using get_mapping_ret = get_mapping_ertr::future<lba_pin_list_t>;
   virtual get_mapping_ret get_mapping(
-    laddr_t offset, loff_t length,
-    Transaction &t) = 0;
+    Transaction &t,
+    laddr_t offset, loff_t length) = 0;
 
   /**
    * Fetches mappings for laddr_t in range [offset, offset + len)
@@ -64,8 +64,8 @@ public:
     crimson::ct_error::input_output_error>;
   using get_mappings_ret = get_mapping_ertr::future<lba_pin_list_t>;
   virtual get_mappings_ret get_mappings(
-    laddr_list_t &&extent_lisk,
-    Transaction &t) = 0;
+    Transaction &t,
+    laddr_list_t &&extent_lisk) = 0;
 
   /**
    * Allocates a new mapping referenced by LBARef
@@ -78,10 +78,10 @@ public:
     crimson::ct_error::input_output_error>;
   using alloc_extent_relative_ret = alloc_extent_relative_ertr::future<LBAPinRef>;
   virtual alloc_extent_relative_ret alloc_extent_relative(
+    Transaction &t,
     laddr_t hint,
     loff_t len,
-    segment_off_t offset,
-    Transaction &t) = 0;
+    segment_off_t offset) = 0;
 
   /**
    * Creates a new absolute mapping.
@@ -93,8 +93,8 @@ public:
     crimson::ct_error::invarg>;
   using set_extent_ret = set_extent_ertr::future<LBAPinRef>;
   virtual set_extent_ret set_extent(
-    laddr_t off, loff_t len, paddr_t addr,
-    Transaction &t) = 0;
+    Transaction &t,
+    laddr_t off, loff_t len, paddr_t addr) = 0;
 
   /**
    * Creates a new relative mapping.
@@ -106,20 +106,29 @@ public:
     crimson::ct_error::invarg>;
   using set_extent_relative_ret = set_extent_ertr::future<LBAPinRef>;
   virtual set_extent_relative_ret set_extent_relative(
-    laddr_t off, loff_t len, segment_off_t record_offset,
-    Transaction &t) = 0;
+    Transaction &t,
+    laddr_t off, loff_t len, segment_off_t record_offset) = 0;
 
+
+  using ref_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
   /**
    * Decrements ref count on extent
    *
    * @return true if freed
    */
-  virtual bool decref_extent(LBAPinRef &ref, Transaction &t) = 0;
+  using decref_extent_ret = ref_ertr::future<bool>;
+  virtual decref_extent_ret decref_extent(
+    Transaction &t,
+    LBAPin &ref) = 0;
 
   /**
    * Increments ref count on extent
    */
-  virtual void incref_extent(LBAPinRef &ref, Transaction &t) = 0;
+  using incref_extent_ret = ref_ertr::future<>;
+  virtual incref_extent_ret incref_extent(
+    Transaction &t,
+    LBAPin &ref) = 0;
 
   /**
    * Moves mapping denoted by ref.
@@ -130,20 +139,23 @@ public:
     crimson::ct_error::input_output_error>;
   using move_extent_relative_ret = move_extent_relative_ertr::future<LBAPinRef>;
   virtual move_extent_relative_ret move_extent_relative(
+    Transaction &t,
     LBAPinRef &ref,
-    segment_off_t record_offset,
-    Transaction &t) {
-    bool freed = decref_extent(ref, t);
-    ceph_assert(freed);
-    return set_extent_relative(
-      ref->get_laddr(),
-      ref->get_length(),
-      record_offset,
-      t).handle_error(
-	move_extent_relative_ertr::pass_further{},
-	crimson::ct_error::invarg::handle([] {
-	  throw std::runtime_error("Should be impossible");
-	}));
+    segment_off_t record_offset) {
+    return decref_extent(t, *ref
+    ).safe_then([this](auto freed) {
+      ceph_assert(freed);
+    }).safe_then([this, &t, &ref, record_offset] {
+      return set_extent_relative(
+	t,
+	ref->get_laddr(),
+	ref->get_length(),
+	record_offset).handle_error(
+	  move_extent_relative_ertr::pass_further{},
+	  crimson::ct_error::invarg::handle([] {
+	    throw std::runtime_error("Should be impossible");
+	  }));
+    });
   }
 
   /**
@@ -155,20 +167,23 @@ public:
     crimson::ct_error::input_output_error>;
   using move_extent_ret = move_extent_ertr::future<LBAPinRef>;
   virtual move_extent_relative_ret move_extent(
+    Transaction &t,
     LBAPinRef &ref,
-    laddr_t off, loff_t len, paddr_t addr,
-    Transaction &t) {
-    bool freed = decref_extent(ref, t);
-    ceph_assert(freed);
-    return set_extent(
-      ref->get_laddr(),
-      ref->get_length(),
-      addr,
-      t).handle_error(
-	move_extent_relative_ertr::pass_further{},
-	crimson::ct_error::invarg::handle([] {
-	  throw std::runtime_error("Should be impossible");
-	}));
+    paddr_t addr) {
+    return decref_extent(t, *ref
+    ).safe_then([this](auto freed) {
+      ceph_assert(freed);
+    }).safe_then([this, &t, &ref, addr] {
+      return set_extent(
+	t,
+	ref->get_laddr(),
+	ref->get_length(),
+	addr).handle_error(
+	  move_extent_relative_ertr::pass_further{},
+	  crimson::ct_error::invarg::handle([] {
+	    throw std::runtime_error("Should be impossible");
+	  }));
+    });
   }
 
   using submit_lba_transaction_ertr = crimson::errorator<

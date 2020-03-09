@@ -27,8 +27,8 @@ BtreeLBAManager::BtreeLBAManager(
 
 BtreeLBAManager::get_mapping_ret
 BtreeLBAManager::get_mapping(
-  laddr_t offset, loff_t length,
-  Transaction &t)
+  Transaction &t,
+  laddr_t offset, loff_t length)
 {
   auto &lt = get_lba_trans(t);
   return get_lba_btree_extent(
@@ -43,8 +43,8 @@ BtreeLBAManager::get_mapping(
 
 BtreeLBAManager::get_mappings_ret
 BtreeLBAManager::get_mappings(
-  laddr_list_t &&list,
-  Transaction &t)
+  Transaction &t,
+  laddr_list_t &&list)
 {
   auto l = std::make_unique<laddr_list_t>(std::move(list));
   auto retptr = std::make_unique<lba_pin_list_t>();
@@ -53,7 +53,7 @@ BtreeLBAManager::get_mappings(
     l->begin(),
     l->end(),
     [this, &t, &ret](const auto &p) {
-      return get_mapping(p.first, p.second, t).safe_then(
+      return get_mapping(t, p.first, p.second).safe_then(
 	[this, &ret](auto res) {
 	  ret.splice(ret.end(), res, res.begin(), res.end());
 	});
@@ -64,10 +64,10 @@ BtreeLBAManager::get_mappings(
 
 BtreeLBAManager::alloc_extent_relative_ret
 BtreeLBAManager::alloc_extent_relative(
+  Transaction &t,
   laddr_t hint,
   loff_t len,
-  segment_off_t offset,
-  Transaction &t)
+  segment_off_t offset)
 {
   return alloc_extent_relative_ret(
     alloc_extent_relative_ertr::ready_future_marker{},
@@ -76,8 +76,8 @@ BtreeLBAManager::alloc_extent_relative(
 
 BtreeLBAManager::set_extent_ret
 BtreeLBAManager::set_extent(
-  laddr_t off, loff_t len, paddr_t addr,
-  Transaction &t)
+  Transaction &t,
+  laddr_t off, loff_t len, paddr_t addr)
 {
   return set_extent_ret(
     set_extent_ertr::ready_future_marker{},
@@ -86,21 +86,28 @@ BtreeLBAManager::set_extent(
 
 BtreeLBAManager::set_extent_relative_ret
 BtreeLBAManager::set_extent_relative(
-  laddr_t off, loff_t len, segment_off_t record_offset,
-  Transaction &t)
+  Transaction &t,
+  laddr_t off, loff_t len, segment_off_t record_offset)
 {
   return set_extent_relative_ret(
     set_extent_relative_ertr::ready_future_marker{},
     LBAPinRef());
 }
 
-bool BtreeLBAManager::decref_extent(LBAPinRef &ref, Transaction &t)
+BtreeLBAManager::decref_extent_ret
+BtreeLBAManager::decref_extent(
+  Transaction &t,
+  LBAPin &ref)
 {
-  return true;
+  return ref_ertr::make_ready_future<bool>(true);
 }
 
-void BtreeLBAManager::incref_extent(LBAPinRef &ref, Transaction &t)
+BtreeLBAManager::incref_extent_ret
+BtreeLBAManager::incref_extent(
+  Transaction &t,
+  LBAPin &ref)
 {
+  return ref_ertr::now();
 }
 
 BtreeLBAManager::submit_lba_transaction_ret

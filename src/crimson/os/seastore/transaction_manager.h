@@ -79,7 +79,7 @@ public:
     ceph::bufferptr &&ptr) : CachedExtent(std::move(ptr)) {}
 
   void set_pin(LBAPinRef &&pin) {/* TODO */}
-  LBAPin &get_pin() { return *((LBAPin*)nullptr); /* TODO */ }
+  LBAPinRef get_pin() { return LBAPinRef(); /* TODO */}
 
   laddr_t get_laddr() const { return laddr_t{0}; }
 
@@ -175,7 +175,7 @@ public:
     std::unique_ptr<lba_pin_list_t> pin_list;
     auto &pin_list_ref = *pin_list;
     return lba_manager->get_mapping(
-      offset, length, t
+      t, offset, length
     ).safe_then([this, &t, &pin_list_ref, &ret_ref](auto pins) {
       pins.swap(pin_list_ref);
       return crimson::do_for_each(
@@ -235,6 +235,17 @@ public:
    * Add refcount for range
    */
   using inc_ref_ertr = SegmentManager::read_ertr;
+  inc_ref_ertr::future<> inc_ref(
+    Transaction &t,
+    LogicalCachedExtentRef &ref) {
+    return lba_manager->incref_extent(
+      t,
+      *ref->get_pin()).handle_error(
+	inc_ref_ertr::pass_further{},
+	ct_error::all_same_way([](auto e) {
+	  ceph_assert(0 == "unhandled error, TODO");
+	}));
+  }
   inc_ref_ertr::future<> inc_ref(
     Transaction &t,
     laddr_t offset,
