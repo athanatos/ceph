@@ -250,8 +250,25 @@ public:
     Transaction &t,
     laddr_t offset,
     loff_t len) {
-    // pull relevant portion of lba tree
-    return inc_ref_ertr::now();
+    std::unique_ptr<lba_pin_list_t> pins;
+    lba_pin_list_t &pins_ref = *pins;
+    return lba_manager->get_mapping(
+      t,
+      offset,
+      len
+    ).safe_then([this, &t, &pins_ref](auto pins) {
+      pins_ref.swap(pins);
+      return crimson::do_for_each(
+	pins_ref.begin(),
+	pins_ref.end(),
+	[this, &t](auto &pin) {
+	  return lba_manager->incref_extent(
+	    t,
+	    *pin);
+	});
+    }).safe_then([this, pins=std::move(pins)] {
+      return inc_ref_ertr::now();
+    });
   }
 
   /**
