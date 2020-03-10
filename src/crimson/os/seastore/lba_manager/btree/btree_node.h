@@ -22,38 +22,24 @@ protected:
     return CachedExtentRef(new LBABtreeCachedExtent(*this));
   };
 
-  virtual void on_written(paddr_t record_block_offset) {
+  void on_written(paddr_t record_block_offset) final {
   }
 
-  virtual extent_types_t get_type() {
+  extent_types_t get_type() final {
     ceph_assert(0 == "TODO");
     return extent_types_t::LBA_BLOCK;
   }
 
-  /**
-   * Must return a valid delta usable in apply_delta() in submit_transaction
-   * if state == PENDING_DELTA.
-   */
-  virtual ceph::bufferlist get_delta() {
+  ceph::bufferlist get_delta() final {
     ceph_assert(0 == "TODO");
     return ceph::bufferlist();
   }
 
-  /**
-   * bl is a delta obtained previously from get_delta.  The versions will
-   * match.  Implementation should mutate buffer based on bl.
-   */
-  virtual void apply_delta(ceph::bufferlist &bl) {
+  void apply_delta(ceph::bufferlist &bl) final {
     ceph_assert(0 == "TODO");
   }
 
-  /**
-   * Called on dirty LBABtreeCachedExtent implementation after replay.
-   * Implementation should perform any reads/in-memory-setup
-   * necessary. (for instance, the lba implementation uses this
-   * to load in lba_manager blocks)
-   */
-  virtual complete_load_ertr::future<> complete_load() {
+  complete_load_ertr::future<> complete_load() final {
     ceph_assert(0 == "TODO");
     return complete_load_ertr::now();
   }
