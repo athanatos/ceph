@@ -33,7 +33,8 @@ TransactionManager::init_ertr::future<> TransactionManager::init()
 
 TransactionManager::inc_ref_ertr::future<> TransactionManager::inc_ref(
   Transaction &t,
-  LogicalCachedExtentRef &ref) {
+  LogicalCachedExtentRef &ref)
+{
   return lba_manager->incref_extent(
     t,
     ref->get_pin()).handle_error(
@@ -46,7 +47,8 @@ TransactionManager::inc_ref_ertr::future<> TransactionManager::inc_ref(
 TransactionManager::inc_ref_ertr::future<> TransactionManager::inc_ref(
   Transaction &t,
   laddr_t offset,
-  loff_t len) {
+  loff_t len)
+{
   std::unique_ptr<lba_pin_list_t> pins;
   lba_pin_list_t &pins_ref = *pins;
   return lba_manager->get_mapping(
@@ -70,7 +72,8 @@ TransactionManager::inc_ref_ertr::future<> TransactionManager::inc_ref(
 
 TransactionManager::dec_ref_ertr::future<> TransactionManager::dec_ref(
   Transaction &t,
-  LogicalCachedExtentRef &ref) {
+  LogicalCachedExtentRef &ref)
+{
   return lba_manager->decref_extent(
     t,
     ref->get_pin()).handle_error(
@@ -83,7 +86,8 @@ TransactionManager::dec_ref_ertr::future<> TransactionManager::dec_ref(
 TransactionManager::dec_ref_ertr::future<> TransactionManager::dec_ref(
   Transaction &t,
   laddr_t offset,
-  loff_t len) {
+  loff_t len)
+{
   std::unique_ptr<lba_pin_list_t> pins;
   lba_pin_list_t &pins_ref = *pins;
   return lba_manager->get_mapping(

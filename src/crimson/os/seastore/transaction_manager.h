@@ -255,14 +255,31 @@ public:
     laddr_t offset,
     loff_t len);
 
+  /**
+   * Allocate a new block of type T with an lba hint
+   */
   using alloc_extent_ertr = SegmentManager::read_ertr;
-  alloc_extent_ertr::future<laddr_t> alloc_extent(
+  template <typename T>
+  using alloc_extent_ret = alloc_extent_ertr::future<TCachedExtentRef<T>>;
+  template <typename T>
+  alloc_extent_ret<T> alloc_extent(
     Transaction &t,
     laddr_t hint,
     loff_t len,
     bufferlist bl) {
-    // pull relevant portion of lba tree
-    return alloc_extent_ertr::make_ready_future<laddr_t>();
+    auto ext = cache.alloc_new_extent<T>(
+      t,
+      len);
+    return lba_manager->alloc_extent_relative(
+      t,
+      hint,
+      len,
+      ext.get_paddr()
+    ).safe_then([this, ext=std::move(ext)](auto &&ref) mutable {
+      ext->set_pin(std::move(ref));
+      return alloc_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
+	std::move(ext));
+    });
   }
 
   /**
