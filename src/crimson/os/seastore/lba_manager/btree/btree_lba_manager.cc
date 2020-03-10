@@ -34,8 +34,9 @@ BtreeLBAManager::get_mapping(
   return get_lba_btree_extent(
     cache,
     t,
+    lt.root.lba_depth,
     lt.root.lba_root_addr).safe_then([this, &t, &lt, offset, length](auto extent) {
-      return LBANode::get_node(lt.root.lba_depth, extent)->lookup_range(
+      return extent->lookup_range(
 	cache, t, offset, length);
     });
 }

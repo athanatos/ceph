@@ -20,16 +20,6 @@ namespace {
 
 namespace crimson::os::seastore::lba_manager::btree {
 
-std::unique_ptr<LBANode> LBANode::get_node(
-  depth_t depth,
-  LBABtreeCachedExtentRef extent)
-{
-  return std::unique_ptr<LBANode>(
-    depth > 0 ?
-    static_cast<LBANode*>(new LBAInternalNode(depth, extent)) :
-    static_cast<LBANode*>(new LBALeafNode(depth, extent)));
-}
-
 LBAInternalNode::lookup_range_ret LBAInternalNode::lookup_range(
   Cache &cache,
   Transaction &t,
@@ -46,10 +36,11 @@ LBAInternalNode::lookup_range_ret LBAInternalNode::lookup_range(
       return get_lba_btree_extent(
 	cache,
 	t,
+	depth-1,
 	val.get_paddr()).safe_then(
 	  [this, &cache, &t, &result, addr, len](auto extent) mutable {
 	    // TODO: add backrefs to ensure cache residence of parents
-	    return LBANode::get_node(depth - 1, extent)->lookup_range(
+	    return extent->lookup_range(
 	      cache,
 	      t,
 	      addr,
@@ -75,16 +66,16 @@ LBAInternalNode::insert_ret LBAInternalNode::insert(
   return get_lba_btree_extent(
     cache,
     t,
+    depth-1,
     insertion_pt->get_paddr()).safe_then(
       [this, insertion_pt, &cache, &t, laddr, val=std::move(val)](
 	auto extent) mutable {
-	auto node = get_node(depth + 1, extent);
-	return node->at_max_capacity() ?
+	return extent->at_max_capacity() ?
 	  split_entry(cache, t, laddr, insertion_pt) :
-	  insert_ertr::make_ready_future<LBANodeRef>(std::move(node));
+	  insert_ertr::make_ready_future<LBANodeRef>(std::move(extent));
       }).safe_then([this, &cache, &t, laddr, val=std::move(val)](
-		     auto node) mutable {
-	node->insert(cache, t, laddr, val);
+		     auto extent) mutable {
+	extent->insert(cache, t, laddr, val);
       });
   return insert_ertr::now();
 }
@@ -128,7 +119,7 @@ LBALeafNode::lookup_range_ret LBALeafNode::lookup_range(
   for (; i != end; ++i) {
     ret.emplace_back(
       std::make_unique<BtreeLBAPin>(
-	extent,
+	LBALeafNodeRef(this),
 	(*i).get_paddr(),
 	(*i).get_laddr(),
 	(*i).get_length()));

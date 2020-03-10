@@ -72,8 +72,9 @@ using paddr_list_t = std::list<std::pair<paddr_t, segment_off_t>>;
  * writeback */
 enum class extent_types_t : uint8_t {
   ROOT = 0,
-  LADDR_TREE = 1,
-  LBA_BLOCK = 2,
+  LADDR_INTERNAL = 2,
+  LADDR_LEAF = 3,
+  LBA_BLOCK = 4,
   NONE = 0xFF
 };
 
