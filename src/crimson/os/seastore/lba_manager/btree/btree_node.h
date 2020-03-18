@@ -36,6 +36,9 @@ struct lba_map_val_t {
   // other stuff: checksum, refcount
 };
 
+class BtreeLBAPin;
+using BtreeLBAPinRef = std::unique_ptr<BtreeLBAPin>;
+
 struct LBANode : Node<laddr_t, loff_t> {
   using lookup_range_ertr = LBAManager::get_mapping_ertr;
   using lookup_range_ret = LBAManager::get_mapping_ret;
@@ -55,12 +58,27 @@ struct LBANode : Node<laddr_t, loff_t> {
   using insert_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
-  using insert_ret = insert_ertr::future<>;
+  using insert_ret = insert_ertr::future<BtreeLBAPinRef>;
   virtual insert_ret insert(
     Cache &cache,
     Transaction &transaction,
     laddr_t laddr,
     lba_map_val_t val) = 0;
+
+  /**
+   * Finds minimum hole greater in [min, max) of size at least len
+   *
+   * Returns L_ADDR_NULL if unfound
+   */
+  using find_hole_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  using find_hole_ret = find_hole_ertr::future<laddr_t>;
+  virtual find_hole_ret find_hole(
+    Cache &cache,
+    Transaction &t,
+    laddr_t min,
+    laddr_t max,
+    loff_t len) = 0;
 
   /**
    * Precondition: !at_min_capacity()
@@ -107,6 +125,13 @@ struct LBAInternalNode : LBANode {
     Cache &cache,
     Transaction &transaction,
     laddr_t) final;
+
+  find_hole_ret find_hole(
+    Cache &cache,
+    Transaction &t,
+    laddr_t min,
+    laddr_t max,
+    loff_t len) final;
 
   bool at_max_capacity() const final { return false; /* TODO */ }
   bool at_min_capacity() const final { return false; /* TODO */ }
@@ -186,6 +211,13 @@ struct LBALeafNode : LBANode {
     Cache &cache,
     Transaction &transaction,
     laddr_t) final;
+
+  find_hole_ret find_hole(
+    Cache &cache,
+    Transaction &t,
+    laddr_t min,
+    laddr_t max,
+    loff_t len) final;
 
   bool at_max_capacity() const final { return false; /* TODO */ }
   bool at_min_capacity() const final { return false; /* TODO */ }

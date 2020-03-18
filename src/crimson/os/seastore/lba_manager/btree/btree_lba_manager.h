@@ -69,6 +69,10 @@ class BtreeLBAManager : public LBAManager {
     return static_cast<BtreeLBATransaction&>(t);
   }
 
+  using get_root_ertr = Cache::get_extent_ertr;
+  using get_root_ret = get_root_ertr::future<LBANodeRef>;
+  get_root_ret get_root(Transaction &);
+
 public:
   BtreeLBAManager(
     SegmentManager &segment_manager,

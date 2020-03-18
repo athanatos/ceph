@@ -25,17 +25,25 @@ BtreeLBAManager::BtreeLBAManager(
     cache(cache) {}
 
 
-BtreeLBAManager::get_mapping_ret
-BtreeLBAManager::get_mapping(
-  Transaction &t,
-  laddr_t offset, loff_t length)
+BtreeLBAManager::get_root_ret
+BtreeLBAManager::get_root(Transaction &t)
 {
   auto &lt = get_lba_trans(t);
   return get_lba_btree_extent(
     cache,
     t,
     lt.root.lba_depth,
-    lt.root.lba_root_addr).safe_then([this, &t, &lt, offset, length](auto extent) {
+    lt.root.lba_root_addr);
+}
+
+BtreeLBAManager::get_mapping_ret
+BtreeLBAManager::get_mapping(
+  Transaction &t,
+  laddr_t offset, loff_t length)
+{
+  auto &lt = get_lba_trans(t);
+  return get_root(
+    t).safe_then([this, &t, &lt, offset, length](auto extent) {
       return extent->lookup_range(
 	cache, t, offset, length);
     });
@@ -70,9 +78,31 @@ BtreeLBAManager::alloc_extent_relative(
   loff_t len,
   segment_off_t offset)
 {
-  return alloc_extent_relative_ret(
-    alloc_extent_relative_ertr::ready_future_marker{},
-    LBAPinRef());
+  auto &lt = get_lba_trans(t);
+  return get_root(
+    t).safe_then([this, &t, &lt, hint, len, offset](auto extent) {
+      return extent->find_hole(
+	cache,
+	t,
+	hint,
+	L_ADDR_MAX,
+	len).safe_then([extent = std::move(extent)](auto ret) {
+	  return std::make_pair(ret, std::move(extent));
+	});
+    }).safe_then([this, &t, &lt, hint, len, offset](auto p) {
+      auto &[ret, extent] = p;
+      ceph_assert(ret != L_ADDR_MAX);
+      return extent->insert(
+	cache,
+	t,
+	ret,
+	{ len, make_relative_paddr(offset) }
+      ).safe_then([extent](auto ret) {
+	return alloc_extent_relative_ret(
+	  alloc_extent_relative_ertr::ready_future_marker{},
+	  LBAPinRef(ret.release()));
+      });
+    });
 }
 
 BtreeLBAManager::set_extent_ret

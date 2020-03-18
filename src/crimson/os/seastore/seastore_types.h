@@ -57,13 +57,14 @@ paddr_t make_relative_paddr(segment_off_t off) {
 
 // logical addr, see LBAManager, TransactionManager
 using laddr_t = uint64_t;
+constexpr laddr_t L_ADDR_MAX = std::numeric_limits<laddr_t>::max();
 constexpr laddr_t L_ADDR_NULL = std::numeric_limits<laddr_t>::max();
 constexpr laddr_t L_ADDR_ROOT = std::numeric_limits<laddr_t>::max() - 1;
 constexpr laddr_t L_ADDR_LBAT = std::numeric_limits<laddr_t>::max() - 2;
 
 // logical offset, see LBAManager, TransactionManager
-using loff_t = uint64_t;
-constexpr loff_t L_OFF_NULL = std::numeric_limits<laddr_t>::max();
+using loff_t = uint32_t;
+constexpr loff_t L_OFF_NULL = std::numeric_limits<loff_t>::max();
 
 using laddr_list_t = std::list<std::pair<laddr_t, loff_t>>;
 using paddr_list_t = std::list<std::pair<paddr_t, segment_off_t>>;

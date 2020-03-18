@@ -75,9 +75,8 @@ LBAInternalNode::insert_ret LBAInternalNode::insert(
 	  insert_ertr::make_ready_future<LBANodeRef>(std::move(extent));
       }).safe_then([this, &cache, &t, laddr, val=std::move(val)](
 		     auto extent) mutable {
-	extent->insert(cache, t, laddr, val);
+	return extent->insert(cache, t, laddr, val);
       });
-  return insert_ertr::now();
 }
 
 LBAInternalNode::remove_ret LBAInternalNode::remove(
@@ -86,6 +85,18 @@ LBAInternalNode::remove_ret LBAInternalNode::remove(
   laddr_t)
 {
   return remove_ertr::now();
+}
+
+LBAInternalNode::find_hole_ret LBAInternalNode::find_hole(
+  Cache &cache,
+  Transaction &t,
+  laddr_t min,
+  laddr_t max,
+  loff_t len)
+{
+  return find_hole_ret(
+    find_hole_ertr::ready_future_marker{},
+    L_ADDR_MAX);
 }
 
 LBAInternalNode::split_ret
@@ -138,7 +149,9 @@ LBALeafNode::insert_ret LBALeafNode::insert(
   /* Mutate the contents generating a delta if dirty rather than pending */
   /* If dirty, do the thing that causes the extent to be fixed-up once
    * committed */
-  return insert_ertr::now();
+  return insert_ret(
+    insert_ertr::ready_future_marker{},
+    BtreeLBAPinRef());
 }
 
 LBALeafNode::remove_ret LBALeafNode::remove(
@@ -151,6 +164,18 @@ LBALeafNode::remove_ret LBALeafNode::remove(
   /* If dirty, do the thing that causes the extent to be fixed-up once
    * committed */
   return insert_ertr::now();
+}
+
+LBALeafNode::find_hole_ret LBALeafNode::find_hole(
+  Cache &cache,
+  Transaction &t,
+  laddr_t min,
+  laddr_t max,
+  loff_t len)
+{
+  return find_hole_ret(
+    find_hole_ertr::ready_future_marker{},
+    L_ADDR_MAX);
 }
 
 std::pair<LBALeafNode::internal_iterator_t, LBALeafNode::internal_iterator_t>

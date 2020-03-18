@@ -193,7 +193,7 @@ public:
   }
 
   paddr_t get_paddr() { return poffset; }
-  size_t get_length() { return ptr.length(); }
+  loff_t get_length() { return static_cast<loff_t>(ptr.length()); }
 
   bufferptr &get_bptr() { return ptr; }
 
