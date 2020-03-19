@@ -20,6 +20,93 @@ namespace {
 
 namespace crimson::os::seastore::lba_manager::btree {
 
+struct LBAInternalNode : LBANode {
+  template <typename... T>
+  LBAInternalNode(T&&... t) : LBANode(std::forward<T>(t)...) {}
+
+  CachedExtentRef duplicate_for_write() final {
+    return CachedExtentRef(new LBAInternalNode(*this));
+  };
+
+  lookup_range_ret lookup_range(
+    Cache &cache,
+    Transaction &transaction,
+    laddr_t addr,
+    loff_t len) final;
+
+  insert_ret insert(
+    Cache &cache,
+    Transaction &transaction,
+    laddr_t laddr,
+    lba_map_val_t val) final;
+
+  remove_ret remove(
+    Cache &cache,
+    Transaction &transaction,
+    laddr_t) final;
+
+  find_hole_ret find_hole(
+    Cache &cache,
+    Transaction &t,
+    laddr_t min,
+    laddr_t max,
+    loff_t len) final;
+
+  bool at_max_capacity() const final { return false; /* TODO */ }
+  bool at_min_capacity() const final { return false; /* TODO */ }
+
+protected:
+  void on_written(paddr_t record_block_offset) final {
+  }
+
+  extent_types_t get_type() final {
+    ceph_assert(0 == "TODO");
+    return extent_types_t::LADDR_INTERNAL;
+  }
+
+  ceph::bufferlist get_delta() final {
+    ceph_assert(0 == "TODO");
+    return ceph::bufferlist();
+  }
+
+  void apply_delta(ceph::bufferlist &bl) final {
+    ceph_assert(0 == "TODO");
+  }
+
+  complete_load_ertr::future<> complete_load() final {
+    ceph_assert(0 == "TODO");
+    return complete_load_ertr::now();
+  }
+
+private:
+  struct internal_entry_t {
+    laddr_t get_laddr() const { return L_ADDR_NULL; /* TODO */ }
+    loff_t get_length() const { return 0; /* TODO */ }
+    paddr_t get_paddr() const { return paddr_t(); /* TODO */ }
+  };
+  struct internal_iterator_t {
+    internal_entry_t placeholder;
+    const internal_entry_t &operator*() const { return placeholder; }
+    const internal_entry_t *operator->() const { return &placeholder; }
+    void operator++(int) {}
+    void operator++() {}
+    bool operator==(const internal_iterator_t &rhs) const { return true; }
+  };
+
+  using split_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error
+    >;
+  using split_ret = split_ertr::future<LBANodeRef>;
+  split_ret split_entry(Cache &c, Transaction &t, laddr_t addr,
+			internal_iterator_t&);
+
+  internal_iterator_t get_insertion_point(laddr_t laddr);
+  
+  std::pair<internal_iterator_t, internal_iterator_t>
+  get_internal_entries(laddr_t addr, loff_t len);
+};
+
+
 LBAInternalNode::lookup_range_ret LBAInternalNode::lookup_range(
   Cache &cache,
   Transaction &t,
@@ -119,6 +206,84 @@ LBAInternalNode::get_internal_entries(laddr_t addr, loff_t len)
   return std::make_pair(internal_iterator_t(), internal_iterator_t());
 }
 
+struct LBALeafNode : LBANode {
+  template <typename... T>
+  LBALeafNode(T&&... t) : LBANode(std::forward<T>(t)...) {}
+
+  CachedExtentRef duplicate_for_write() final {
+    return CachedExtentRef(new LBALeafNode(*this));
+  };
+
+  lookup_range_ret lookup_range(
+    Cache &cache,
+    Transaction &transaction,
+    laddr_t addr,
+    loff_t len) final;
+
+  insert_ret insert(
+    Cache &cache,
+    Transaction &transaction,
+    laddr_t laddr,
+    lba_map_val_t val) final;
+
+  remove_ret remove(
+    Cache &cache,
+    Transaction &transaction,
+    laddr_t) final;
+
+  find_hole_ret find_hole(
+    Cache &cache,
+    Transaction &t,
+    laddr_t min,
+    laddr_t max,
+    loff_t len) final;
+
+  bool at_max_capacity() const final { return false; /* TODO */ }
+  bool at_min_capacity() const final { return false; /* TODO */ }
+
+protected:
+  void on_written(paddr_t record_block_offset) final {
+  }
+
+  extent_types_t get_type() final {
+    ceph_assert(0 == "TODO");
+    return extent_types_t::LADDR_LEAF;
+  }
+
+  ceph::bufferlist get_delta() final {
+    ceph_assert(0 == "TODO");
+    return ceph::bufferlist();
+  }
+
+  void apply_delta(ceph::bufferlist &bl) final {
+    ceph_assert(0 == "TODO");
+  }
+
+  complete_load_ertr::future<> complete_load() final {
+    ceph_assert(0 == "TODO");
+    return complete_load_ertr::now();
+  }
+
+private:
+  struct internal_entry_t {
+    paddr_t get_paddr() const { return paddr_t(); /* TODO */ }
+    laddr_t get_laddr() const { return L_ADDR_NULL; /* TODO */ }
+    loff_t get_length() const { return 0; /* TODO */ }
+  };
+  struct internal_iterator_t {
+    internal_entry_t placeholder;
+    const internal_entry_t &operator*() const { return placeholder; }
+    void operator++(int) {}
+    void operator++() {}
+    bool operator==(const internal_iterator_t &rhs) const { return true; }
+    bool operator!=(const internal_iterator_t &rhs) const {
+      return !(*this == rhs);
+    }
+  };
+  std::pair<internal_iterator_t, internal_iterator_t>
+  get_leaf_entries(laddr_t addr, loff_t len);
+};
+
 LBALeafNode::lookup_range_ret LBALeafNode::lookup_range(
   Cache &cache,
   Transaction &t,
@@ -151,7 +316,7 @@ LBALeafNode::insert_ret LBALeafNode::insert(
    * committed */
   return insert_ret(
     insert_ertr::ready_future_marker{},
-    BtreeLBAPinRef());
+    LBAPinRef());
 }
 
 LBALeafNode::remove_ret LBALeafNode::remove(
@@ -183,5 +348,35 @@ LBALeafNode::get_leaf_entries(laddr_t addr, loff_t len)
 {
   return std::make_pair(internal_iterator_t(), internal_iterator_t());
 }
+
+Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
+  Cache &cache,
+  Transaction &t,
+  depth_t depth,
+  paddr_t offset) {
+  if (depth > 0) {
+   return cache.get_extent<LBAInternalNode>(
+      t,
+      offset,
+      LBA_BLOCK_SIZE).safe_then([](auto ret) {
+	return LBANodeRef(ret.detach());
+      });
+    
+  } else {
+    return cache.get_extent<LBALeafNode>(
+      t,
+      offset,
+      LBA_BLOCK_SIZE).safe_then([](auto ret) {
+	return LBANodeRef(ret.detach());
+      });
+  }
+}
+
+BtreeLBAPin::BtreeLBAPin(
+  LBALeafNodeRef leaf,
+  paddr_t paddr,
+  laddr_t laddr,
+  loff_t length)
+  : leaf(leaf), paddr(paddr), laddr(laddr), length(length) {}
 
 }
