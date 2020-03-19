@@ -186,6 +186,7 @@ public:
     });
   }
 
+  // TODO: probably unused, removed
   using submit_lba_transaction_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   using submit_lba_transaction_ret = submit_lba_transaction_ertr::future<>;

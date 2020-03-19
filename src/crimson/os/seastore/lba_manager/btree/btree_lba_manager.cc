@@ -110,9 +110,19 @@ BtreeLBAManager::set_extent(
   Transaction &t,
   laddr_t off, loff_t len, paddr_t addr)
 {
-  return set_extent_ret(
-    set_extent_ertr::ready_future_marker{},
-    LBAPinRef());
+  auto &lt = get_lba_trans(t);
+  return get_root(
+    t).safe_then([this, &t, &lt, off, len, addr](auto root) {
+      return root->insert(
+	cache,
+	t,
+	off,
+	{ len, addr });
+    }).safe_then([](auto ret) {
+      return set_extent_ret(
+	set_extent_ertr::ready_future_marker{},
+	LBAPinRef(ret.release()));
+    });
 }
 
 BtreeLBAManager::set_extent_relative_ret
@@ -120,6 +130,19 @@ BtreeLBAManager::set_extent_relative(
   Transaction &t,
   laddr_t off, loff_t len, segment_off_t record_offset)
 {
+  auto &lt = get_lba_trans(t);
+  return get_root(
+    t).safe_then([this, &t, &lt, off, len, record_offset](auto root) {
+      return root->insert(
+	cache,
+	t,
+	off,
+	{ len, make_relative_paddr(record_offset) });
+    }).safe_then([](auto ret) {
+      return set_extent_ret(
+	set_extent_ertr::ready_future_marker{},
+	LBAPinRef(ret.release()));
+    });
   return set_extent_relative_ret(
     set_extent_relative_ertr::ready_future_marker{},
     LBAPinRef());
