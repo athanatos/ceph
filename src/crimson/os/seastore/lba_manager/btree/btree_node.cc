@@ -6,11 +6,11 @@
 
 #include <memory>
 
+#include "include/buffer.h"
+
 #include "crimson/common/log.h"
 
-#include "include/buffer.h"
 #include "crimson/os/seastore/lba_manager/btree/btree_node.h"
-
 
 namespace {
   seastar::logger& logger() {
@@ -20,6 +20,20 @@ namespace {
 
 namespace crimson::os::seastore::lba_manager::btree {
 
+/**
+ * LBAInternalNode
+ *
+ * Abstracts operations on and layout of internal nodes for the
+ * LBA Tree.
+ *
+ * Layout (4k):
+ *   start_pivot: laddr_t          8b
+ *   num_entries: uint16_t         2b
+ *   (padding)  :                  6b
+ *   keys       : laddr_t[255]     (255*8)b
+ *   values     : paddr_t[255]     (255*8)b
+ *                                 = 4096
+ */
 struct LBAInternalNode : LBANode {
   template <typename... T>
   LBAInternalNode(T&&... t) : LBANode(std::forward<T>(t)...) {}
@@ -79,20 +93,84 @@ protected:
   }
 
 private:
-  struct internal_entry_t {
-    laddr_t get_laddr() const { return L_ADDR_NULL; /* TODO */ }
-    loff_t get_length() const { return 0; /* TODO */ }
-    paddr_t get_paddr() const { return paddr_t(); /* TODO */ }
-  };
-  struct internal_iterator_t {
-    internal_entry_t placeholder;
-    const internal_entry_t &operator*() const { return placeholder; }
-    const internal_entry_t *operator->() const { return &placeholder; }
-    void operator++(int) {}
-    void operator++() {}
-    bool operator==(const internal_iterator_t &rhs) const { return true; }
-  };
+  static constexpr uint16_t CAPACITY = 254;
+  static constexpr off_t LADDR_START = 16;
+  static constexpr off_t PADDR_START = 16;
+  static constexpr off_t offset_of_lb(uint16_t off) {
+    return LADDR_START + (off * 8);
+  }
+  static constexpr off_t offset_of_ub(uint16_t off) {
+    return LADDR_START + ((off + 1) * 8);
+  }
+  static constexpr off_t offset_of_paddr(uint16_t off) {
+    return PADDR_START + (off * 8);
+  }
 
+  struct internal_iterator_t {
+    LBAInternalNode *node;
+    uint16_t offset;
+    internal_iterator_t(
+      LBAInternalNode *parent,
+      uint16_t offset) : node(parent), offset(offset) {}
+
+    internal_iterator_t(const internal_iterator_t &) = default;
+    internal_iterator_t(internal_iterator_t &&) = default;
+    internal_iterator_t &operator=(const internal_iterator_t &) = default;
+    internal_iterator_t &operator=(internal_iterator_t &&) = default;
+
+    internal_iterator_t &operator*() { return *this; }
+    internal_iterator_t *operator->() { return this; }
+
+    internal_iterator_t operator++(int) {
+      auto ret = *this;
+      ++offset;
+      return ret;
+    }
+
+    internal_iterator_t &operator++() {
+      ++offset;
+      return *this;
+    }
+
+    bool operator==(const internal_iterator_t &rhs) const {
+      ceph_assert(node == rhs.node);
+      return rhs.offset == offset;
+    }
+
+    bool operator!=(const internal_iterator_t &rhs) const {
+      return !(*this == rhs);
+    }
+
+    laddr_t get_lb() const {
+      laddr_t ret;
+      bufferlist bl;
+      bl.append(node->get_bptr());
+      auto lbptr = bl.cbegin(offset_of_lb(offset));
+      ::decode(ret, lbptr);
+      return ret;
+    }
+
+    laddr_t get_ub() const {
+      laddr_t ret;
+      bufferlist bl;
+      bl.append(node->get_bptr());
+      auto ubptr = bl.cbegin(offset_of_ub(offset));
+      ::decode(ret, ubptr);
+      return ret;
+    }
+
+    paddr_t get_paddr() const {
+      paddr_t ret;
+      bufferlist bl;
+      bl.append(node->get_bptr());
+      auto ptr = bl.cbegin(offset_of_paddr(offset));
+      ::decode(ret, ptr);
+      return ret;
+    }
+    loff_t get_length() const {
+      return 0;
+    }
+  };
   using split_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
@@ -196,16 +274,32 @@ LBAInternalNode::split_entry(
 LBAInternalNode::internal_iterator_t
 LBAInternalNode::get_insertion_point(laddr_t laddr)
 {
-  return internal_iterator_t();
+  return internal_iterator_t(this, 0);
 }
 
 std::pair<LBAInternalNode::internal_iterator_t,
 	  LBAInternalNode::internal_iterator_t>
 LBAInternalNode::get_internal_entries(laddr_t addr, loff_t len)
 {
-  return std::make_pair(internal_iterator_t(), internal_iterator_t());
+  return std::make_pair(
+    internal_iterator_t(this, 0),
+    internal_iterator_t(this, 0));
 }
 
+/**
+ * LBALeafNode
+ *
+ * Abstracts operations on and layout of leaf nodes for the
+ * LBA Tree.
+ *
+ * Layout (4k):
+ *   start_pivot: laddr_t            8b
+ *   num_entries: uint16_t           2b
+ *   (padding)  :                    6b
+ *   keys       : laddr_t[170]       (170*8)b
+ *   values     : lba_map_val_t[170] (170*16)b
+ *                                   = 4096
+ */
 struct LBALeafNode : LBANode {
   template <typename... T>
   LBALeafNode(T&&... t) : LBANode(std::forward<T>(t)...) {}
@@ -273,12 +367,11 @@ private:
   struct internal_iterator_t {
     internal_entry_t placeholder;
     const internal_entry_t &operator*() const { return placeholder; }
+    const internal_entry_t *operator->() const { return &placeholder; }
     void operator++(int) {}
     void operator++() {}
     bool operator==(const internal_iterator_t &rhs) const { return true; }
-    bool operator!=(const internal_iterator_t &rhs) const {
-      return !(*this == rhs);
-    }
+    bool operator!=(const internal_iterator_t &rhs) const { return !(*this == rhs); }
   };
   std::pair<internal_iterator_t, internal_iterator_t>
   get_leaf_entries(laddr_t addr, loff_t len);
