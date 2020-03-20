@@ -101,38 +101,6 @@ struct LBANode : Node<laddr_t, loff_t> {
 };
 using LBANodeRef = TCachedExtentRef<LBANode>;
 
-struct LBALeafNode;
-using LBALeafNodeRef = TCachedExtentRef<LBALeafNode>;
-
-/* BtreeLBAPin
- *
- * References leaf node
- */
-struct BtreeLBAPin : LBAPin {
-  LBALeafNodeRef leaf;
-  paddr_t paddr;
-  laddr_t laddr;
-  loff_t length;
-public:
-  BtreeLBAPin(
-    LBALeafNodeRef leaf,
-    paddr_t paddr,
-    laddr_t laddr,
-    loff_t length);
-
-  void set_paddr(paddr_t) final {}
-  
-  loff_t get_length() const final {
-    return length;
-  }
-  paddr_t get_paddr() const {
-    return paddr;
-  }
-  laddr_t get_laddr() const {
-    return laddr;
-  }
-};
-
 Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
   Cache &cache,
   Transaction &t,

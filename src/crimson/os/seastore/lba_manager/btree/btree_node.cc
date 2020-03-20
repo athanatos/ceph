@@ -283,6 +283,7 @@ private:
   std::pair<internal_iterator_t, internal_iterator_t>
   get_leaf_entries(laddr_t addr, loff_t len);
 };
+using LBALeafNodeRef = TCachedExtentRef<LBALeafNode>;
 
 LBALeafNode::lookup_range_ret LBALeafNode::lookup_range(
   Cache &cache,
@@ -372,11 +373,35 @@ Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
   }
 }
 
-BtreeLBAPin::BtreeLBAPin(
-  LBALeafNodeRef leaf,
-  paddr_t paddr,
-  laddr_t laddr,
-  loff_t length)
-  : leaf(leaf), paddr(paddr), laddr(laddr), length(length) {}
+
+/* BtreeLBAPin
+ *
+ * References leaf node
+ */
+struct BtreeLBAPin : LBAPin {
+  LBALeafNodeRef leaf;
+  paddr_t paddr;
+  laddr_t laddr;
+  loff_t length;
+public:
+  BtreeLBAPin(
+    LBALeafNodeRef leaf,
+    paddr_t paddr,
+    laddr_t laddr,
+    loff_t length)
+    : leaf(leaf), paddr(paddr), laddr(laddr), length(length) {}
+
+  void set_paddr(paddr_t) final {}
+  
+  loff_t get_length() const final {
+    return length;
+  }
+  paddr_t get_paddr() const {
+    return paddr;
+  }
+  laddr_t get_laddr() const {
+    return laddr;
+  }
+};
 
 }
