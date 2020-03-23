@@ -170,7 +170,16 @@ private:
     loff_t get_length() const {
       return 0;
     }
+    bool contains(laddr_t addr) {
+      return (get_lb() <= addr) && (get_ub() > addr);
+    }
   };
+  internal_iterator_t begin() {
+    return internal_iterator_t(this, 0);
+  }
+  internal_iterator_t end() {
+    return internal_iterator_t(this, CAPACITY+1);
+  }
   using split_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
@@ -305,7 +314,13 @@ LBAInternalNode::merge_entry(
 LBAInternalNode::internal_iterator_t
 LBAInternalNode::get_containing_child(laddr_t laddr)
 {
-  return internal_iterator_t(this, 0);
+  // TODO: binary search
+  for (auto i = begin(); i != end(); ++i) {
+    if (i.contains(laddr))
+      return i;
+  }
+  ceph_assert(0 == "invalid");
+  return end();
 }
 
 std::pair<LBAInternalNode::internal_iterator_t,
