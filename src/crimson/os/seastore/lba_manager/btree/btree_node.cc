@@ -175,10 +175,21 @@ private:
     crimson::ct_error::input_output_error
     >;
   using split_ret = split_ertr::future<LBANodeRef>;
-  split_ret split_entry(Cache &c, Transaction &t, laddr_t addr,
-			internal_iterator_t&);
+  split_ret split_entry(
+    Cache &c, Transaction &t, laddr_t addr,
+    internal_iterator_t,
+    LBANodeRef entry);
 
-  internal_iterator_t get_insertion_point(laddr_t laddr);
+  using merge_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error
+    >;
+  using merge_ret = merge_ertr::future<LBANodeRef>;
+  merge_ret merge_entry(
+    Cache &c, Transaction &t, laddr_t addr,
+    internal_iterator_t,
+    LBANodeRef entry);
+
+  internal_iterator_t get_containing_child(laddr_t laddr);
   
   std::pair<internal_iterator_t, internal_iterator_t>
   get_internal_entries(laddr_t addr, loff_t len);
@@ -227,7 +238,7 @@ LBAInternalNode::insert_ret LBAInternalNode::insert(
   laddr_t laddr,
   lba_map_val_t val)
 {
-  auto insertion_pt = get_insertion_point(laddr);
+  auto insertion_pt = get_containing_child(laddr);
   return get_lba_btree_extent(
     cache,
     t,
@@ -236,7 +247,7 @@ LBAInternalNode::insert_ret LBAInternalNode::insert(
       [this, insertion_pt, &cache, &t, laddr, val=std::move(val)](
 	auto extent) mutable {
 	return extent->at_max_capacity() ?
-	  split_entry(cache, t, laddr, insertion_pt) :
+	  split_entry(cache, t, laddr, insertion_pt, extent) :
 	  insert_ertr::make_ready_future<LBANodeRef>(std::move(extent));
       }).safe_then([this, &cache, &t, laddr, val=std::move(val)](
 		     auto extent) mutable {
@@ -246,10 +257,22 @@ LBAInternalNode::insert_ret LBAInternalNode::insert(
 
 LBAInternalNode::remove_ret LBAInternalNode::remove(
   Cache &cache,
-  Transaction &transaction,
-  laddr_t)
+  Transaction &t,
+  laddr_t laddr)
 {
-  return remove_ertr::now();
+  auto removal_pt = get_containing_child(laddr);
+  return get_lba_btree_extent(
+    cache,
+    t,
+    depth-1,
+    removal_pt->get_paddr()
+  ).safe_then([this, removal_pt, &cache, &t, laddr](auto extent) {
+    return extent->at_min_capacity() ?
+      merge_entry(cache, t, laddr, removal_pt, extent) :
+      remove_ertr::make_ready_future<LBANodeRef>(std::move(extent));
+  }).safe_then([&cache, &t, laddr](auto extent) {
+    return extent->remove(cache, t, laddr);
+  });
 }
 
 LBAInternalNode::find_hole_ret LBAInternalNode::find_hole(
@@ -266,13 +289,21 @@ LBAInternalNode::find_hole_ret LBAInternalNode::find_hole(
 
 LBAInternalNode::split_ret
 LBAInternalNode::split_entry(
-  Cache &c, Transaction &t, laddr_t addr, internal_iterator_t&)
+  Cache &c, Transaction &t, laddr_t addr, internal_iterator_t, LBANodeRef entry)
 {
   return split_ertr::make_ready_future<LBANodeRef>();
 }
 
+LBAInternalNode::merge_ret
+LBAInternalNode::merge_entry(
+  Cache &c, Transaction &t, laddr_t addr, internal_iterator_t, LBANodeRef entry)
+{
+  return split_ertr::make_ready_future<LBANodeRef>();
+}
+
+
 LBAInternalNode::internal_iterator_t
-LBAInternalNode::get_insertion_point(laddr_t laddr)
+LBAInternalNode::get_containing_child(laddr_t laddr)
 {
   return internal_iterator_t(this, 0);
 }
