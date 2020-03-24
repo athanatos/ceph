@@ -66,6 +66,12 @@ struct LBAInternalNode : LBANode {
     laddr_t max,
     loff_t len) final;
 
+  std::tuple<
+    LBANodeRef,
+    LBANodeRef,
+    laddr_t>
+  make_split_children(Cache &cache, Transaction &t) final;
+
   bool at_max_capacity() const final { return false; /* TODO */ }
   bool at_min_capacity() const final { return false; /* TODO */ }
 
@@ -291,6 +297,24 @@ LBAInternalNode::find_hole_ret LBAInternalNode::find_hole(
   laddr_t max,
   loff_t len)
 {
+/*
+  return crimson::do_for_each(
+    begin(),
+    end(),
+    [this, &cache, &t, len](auto &val) mutable {
+      return get_lba_btree_extent(
+	cache,
+	t,
+	depth-1,
+	val.get_paddr()).safe_then(
+	  [this, &cache, &t, len](auto extent) mutable {
+	    // TODO: add backrefs to ensure cache residence of parents
+	    return find_hole_ret(
+	      find_hole_ertr::ready_future_marker{},
+	      L_ADDR_MAX);
+	  });
+    });
+*/
   return find_hole_ret(
     find_hole_ertr::ready_future_marker{},
     L_ADDR_MAX);
@@ -300,6 +324,8 @@ LBAInternalNode::split_ret
 LBAInternalNode::split_entry(
   Cache &c, Transaction &t, laddr_t addr, internal_iterator_t, LBANodeRef entry)
 {
+  ceph_assert(!at_max_capacity());
+  //auto left = cache.alloc_new_extent(t, 
   return split_ertr::make_ready_future<LBANodeRef>();
 }
 
@@ -377,6 +403,12 @@ struct LBALeafNode : LBANode {
     laddr_t min,
     laddr_t max,
     loff_t len) final;
+
+  std::tuple<
+    LBANodeRef,
+    LBANodeRef,
+    laddr_t>
+  make_split_children(Cache &cache, Transaction &t) final;
 
   bool at_max_capacity() const final { return false; /* TODO */ }
   bool at_min_capacity() const final { return false; /* TODO */ }

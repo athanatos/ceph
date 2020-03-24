@@ -40,6 +40,7 @@ class BtreeLBAPin;
 using BtreeLBAPinRef = std::unique_ptr<BtreeLBAPin>;
 
 struct LBANode : Node<laddr_t, loff_t> {
+  using LBANodeRef = TCachedExtentRef<LBANode>;
   using lookup_range_ertr = LBAManager::get_mapping_ertr;
   using lookup_range_ret = LBAManager::get_mapping_ret;
 
@@ -91,7 +92,12 @@ struct LBANode : Node<laddr_t, loff_t> {
     Cache &cache,
     Transaction &transaction,
     laddr_t) = 0;
-  
+
+  virtual std::tuple<
+    LBANodeRef,
+    LBANodeRef,
+    laddr_t>
+  make_split_children(Cache &cache, Transaction &t) = 0;
 
   virtual bool at_max_capacity() const = 0;
   virtual bool at_min_capacity() const = 0;
@@ -99,7 +105,7 @@ struct LBANode : Node<laddr_t, loff_t> {
 
   virtual ~LBANode() = default;
 };
-using LBANodeRef = TCachedExtentRef<LBANode>;
+using LBANodeRef = LBANode::LBANodeRef;
 
 Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
   Cache &cache,
