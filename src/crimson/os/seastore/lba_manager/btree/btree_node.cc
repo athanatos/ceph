@@ -186,6 +186,20 @@ private:
   internal_iterator_t end() {
     return internal_iterator_t(this, CAPACITY+1);
   }
+  std::pair<internal_iterator_t, internal_iterator_t> bound(
+    laddr_t l, laddr_t r) {
+    auto retl = begin();
+    for (; retl != end(); ++retl) {
+      if (retl->get_lb() <= l && retl->get_ub() > l)
+	break;
+    }
+    auto retr = retl;
+    for (; retr != end(); ++retr) {
+      if (retr->get_lb() > r)
+	break;
+    }
+    return std::make_pair(retl, retr);
+  }
   using split_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
@@ -297,27 +311,42 @@ LBAInternalNode::find_hole_ret LBAInternalNode::find_hole(
   laddr_t max,
   loff_t len)
 {
-/*
-  return crimson::do_for_each(
-    begin(),
-    end(),
-    [this, &cache, &t, len](auto &val) mutable {
-      return get_lba_btree_extent(
-	cache,
-	t,
-	depth-1,
-	val.get_paddr()).safe_then(
-	  [this, &cache, &t, len](auto extent) mutable {
-	    // TODO: add backrefs to ensure cache residence of parents
-	    return find_hole_ret(
-	      find_hole_ertr::ready_future_marker{},
-	      L_ADDR_MAX);
+  return seastar::do_with(
+    bound(min, max),
+    L_ADDR_NULL,
+    [this, &cache, &t, min, max, len](auto &val, auto &ret) {
+      auto &[i, e] = val;
+      return crimson::do_until(
+	[this, &cache, &t, &i, &e, &ret, len] {
+	  if (i == e) {
+	    return find_hole_ertr::make_ready_future<std::optional<laddr_t>>(
+	      std::make_optional<laddr_t>(L_ADDR_NULL));
+	  }
+	  return get_lba_btree_extent(
+	    cache,
+	    t,
+	    depth-1,
+	    i->get_paddr()
+	  ).safe_then([this, &cache, &t, &i, len](auto extent) mutable {
+	    return extent->find_hole(
+	      cache,
+	      t,
+	      i->get_lb(),
+	      i->get_ub(),
+	      len);
+	  }).safe_then([&i, &ret](auto addr) mutable {
+	    i++;
+	    if (addr != L_ADDR_NULL) {
+	      ret = addr;
+	    }
+	    return find_hole_ertr::make_ready_future<std::optional<laddr_t>>(
+	      addr == L_ADDR_NULL ? std::nullopt :
+	      std::make_optional<laddr_t>(addr));
 	  });
+	}).safe_then([&ret]() {
+	  return ret;
+	});
     });
-*/
-  return find_hole_ret(
-    find_hole_ertr::ready_future_marker{},
-    L_ADDR_MAX);
 }
 
 LBAInternalNode::split_ret
