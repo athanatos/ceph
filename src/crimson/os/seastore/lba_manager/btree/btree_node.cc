@@ -72,8 +72,9 @@ struct LBAInternalNode : LBANode {
     laddr_t>
   make_split_children(Cache &cache, Transaction &t) final;
 
-  bool at_max_capacity() const final { return false; /* TODO */ }
-  bool at_min_capacity() const final { return false; /* TODO */ }
+  uint16_t get_size() const { return 0; /* TODO */}
+  bool at_max_capacity() const final { return get_size() == CAPACITY; }
+  bool at_min_capacity() const final { return get_size() == CAPACITY / 2; }
 
 protected:
   void on_written(paddr_t record_block_offset) final {
@@ -137,6 +138,10 @@ private:
       return *this;
     }
 
+    uint16_t operator-(const internal_iterator_t &rhs) const {
+      return offset - rhs.offset;
+    }
+
     bool operator==(const internal_iterator_t &rhs) const {
       ceph_assert(node == rhs.node);
       return rhs.offset == offset;
@@ -163,7 +168,6 @@ private:
       ::decode(ret, ubptr);
       return ret;
     }
-
     paddr_t get_paddr() const {
       paddr_t ret;
       bufferlist bl;
@@ -198,6 +202,11 @@ private:
 	break;
     }
     return std::make_pair(retl, retr);
+  }
+  internal_iterator_t get_split_pivot() {
+    return internal_iterator_t(
+      this,
+      get_size() / 2);
   }
   using split_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
@@ -355,7 +364,17 @@ LBAInternalNode::make_split_children(Cache &cache, Transaction &t)
     t, LBA_BLOCK_SIZE);
   auto right = cache.alloc_new_extent<LBAInternalNode>(
     t, LBA_BLOCK_SIZE);
-  return std::make_tuple(left, right, laddr_t());
+  auto piviter = get_split_pivot();
+
+/*
+  left.set_from(left->begin(), *this, begin(), piviter);
+  left.set_size(piviter - begin());
+
+  right.set_from(right->begin(), *this, piviter, end());
+  right.set_size(end() - piviter);
+  */
+
+  return std::make_tuple(left, right, piviter->get_lb());
 }
 
 LBAInternalNode::split_ret
