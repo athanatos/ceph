@@ -81,6 +81,10 @@ namespace crimson::os::seastore {
 
 class CachedExtent;
 using CachedExtentRef = boost::intrusive_ptr<CachedExtent>;
+
+template <typename T>
+using TCachedExtentRef = boost::intrusive_ptr<T>;
+
 class CachedExtent : public boost::intrusive_ref_counter<
   CachedExtent, boost::thread_unsafe_counter> {
   boost::intrusive::set_member_hook<> extent_index_hook;
@@ -148,7 +152,7 @@ protected:
 
   friend class Cache;
   template <typename T, typename... Args>
-  static CachedExtentRef make_cached_extent_ref(Args&&... args) {
+  static TCachedExtentRef<T> make_cached_extent_ref(Args&&... args) {
     return new T(std::forward<Args>(args)...);
   }
 
@@ -255,9 +259,6 @@ using pextent_set_t = addr_extent_set_base_t<
   CachedExtentRef,
   ref_paddr_cmp
   >;
-
-template <typename T>
-using TCachedExtentRef = boost::intrusive_ptr<T>;
 
 template <typename T>
 using t_pextent_list_t = addr_extent_list_base_t<paddr_t, TCachedExtentRef<T>>;

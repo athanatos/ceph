@@ -80,7 +80,6 @@ protected:
   }
 
   extent_types_t get_type() final {
-    ceph_assert(0 == "TODO");
     return extent_types_t::LADDR_INTERNAL;
   }
 
@@ -219,9 +218,6 @@ private:
     LBANodeRef entry);
 
   internal_iterator_t get_containing_child(laddr_t laddr);
-  
-  std::pair<internal_iterator_t, internal_iterator_t>
-  get_internal_entries(laddr_t addr, loff_t len);
 };
 
 
@@ -231,7 +227,7 @@ LBAInternalNode::lookup_range_ret LBAInternalNode::lookup_range(
   laddr_t addr,
   loff_t len)
 {
-  auto [begin, end] = get_internal_entries(addr, len);
+  auto [begin, end] = bound(addr, addr+len);
   auto result_up = std::make_unique<lba_pin_list_t>();
   auto &result = *result_up;
   return crimson::do_for_each(
@@ -349,6 +345,19 @@ LBAInternalNode::find_hole_ret LBAInternalNode::find_hole(
     });
 }
 
+std::tuple<
+  LBANodeRef,
+  LBANodeRef,
+  laddr_t>
+LBAInternalNode::make_split_children(Cache &cache, Transaction &t)
+{
+  auto left = cache.alloc_new_extent<LBAInternalNode>(
+    t, LBA_BLOCK_SIZE);
+  auto right = cache.alloc_new_extent<LBAInternalNode>(
+    t, LBA_BLOCK_SIZE);
+  return std::make_tuple(left, right, laddr_t());
+}
+
 LBAInternalNode::split_ret
 LBAInternalNode::split_entry(
   Cache &c, Transaction &t, laddr_t addr, internal_iterator_t, LBANodeRef entry)
@@ -376,15 +385,6 @@ LBAInternalNode::get_containing_child(laddr_t laddr)
   }
   ceph_assert(0 == "invalid");
   return end();
-}
-
-std::pair<LBAInternalNode::internal_iterator_t,
-	  LBAInternalNode::internal_iterator_t>
-LBAInternalNode::get_internal_entries(laddr_t addr, loff_t len)
-{
-  return std::make_pair(
-    internal_iterator_t(this, 0),
-    internal_iterator_t(this, 0));
 }
 
 /**
