@@ -200,6 +200,7 @@ public:
   loff_t get_length() { return static_cast<loff_t>(ptr.length()); }
 
   bufferptr &get_bptr() { return ptr; }
+  const bufferptr &get_bptr() const { return ptr; }
 
   friend bool operator< (const CachedExtent &a, const CachedExtent &b) {
     return a.poffset < b.poffset;

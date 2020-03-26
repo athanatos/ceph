@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "include/buffer.h"
+#include "include/byteorder.h"
 
 #include "crimson/common/log.h"
 
@@ -72,7 +73,6 @@ struct LBAInternalNode : LBANode {
     laddr_t>
   make_split_children(Cache &cache, Transaction &t) final;
 
-  uint16_t get_size() const { return 0; /* TODO */}
   bool at_max_capacity() const final { return get_size() == CAPACITY; }
   bool at_min_capacity() const final { return get_size() == CAPACITY / 2; }
 
@@ -100,6 +100,8 @@ protected:
 
 private:
   static constexpr uint16_t CAPACITY = 254;
+  static constexpr off_t PIVOT_OFFSET = 0;
+  static constexpr off_t SIZE_OFFSET = 8;
   static constexpr off_t LADDR_START = 16;
   static constexpr off_t PADDR_START = 16;
   static constexpr off_t offset_of_lb(uint16_t off) {
@@ -110,6 +112,30 @@ private:
   }
   static constexpr off_t offset_of_paddr(uint16_t off) {
     return PADDR_START + (off * 8);
+  }
+
+  char *get_ptr(off_t offset) {
+    return get_bptr().c_str() + offset;
+  }
+
+  const char *get_ptr(off_t offset) const {
+    return get_bptr().c_str() + offset;
+  }
+
+  laddr_t get_pivot() const {
+    return *reinterpret_cast<const ceph_le64*>(get_ptr(PIVOT_OFFSET));
+  }
+
+  void set_pivot(laddr_t pivot) {
+    *reinterpret_cast<ceph_le64*>(get_ptr(PIVOT_OFFSET)) = pivot;
+  }
+
+  uint16_t get_size() const {
+    return *reinterpret_cast<const ceph_le16*>(get_ptr(SIZE_OFFSET));
+  }
+
+  void set_size(uint16_t size) {
+    *reinterpret_cast<ceph_le16*>(get_ptr(SIZE_OFFSET)) = size;
   }
 
   struct internal_iterator_t {
@@ -152,32 +178,22 @@ private:
     }
 
     laddr_t get_lb() const {
-      laddr_t ret;
-      bufferlist bl;
-      bl.append(node->get_bptr());
-      auto lbptr = bl.cbegin(offset_of_lb(offset));
-      ::decode(ret, lbptr);
-      return ret;
+      return *reinterpret_cast<const ceph_le64*>(
+	node->get_ptr(offset_of_lb(offset)));
     }
 
     laddr_t get_ub() const {
-      laddr_t ret;
-      bufferlist bl;
-      bl.append(node->get_bptr());
-      auto ubptr = bl.cbegin(offset_of_ub(offset));
-      ::decode(ret, ubptr);
-      return ret;
+      return *reinterpret_cast<const ceph_le64*>(
+	node->get_ptr(offset_of_ub(offset)));
     }
+
     paddr_t get_paddr() const {
-      paddr_t ret;
-      bufferlist bl;
-      bl.append(node->get_bptr());
-      auto ptr = bl.cbegin(offset_of_paddr(offset));
-      ::decode(ret, ptr);
-      return ret;
-    }
-    loff_t get_length() const {
-      return 0;
+      return {
+	*reinterpret_cast<const ceph_le32*>(
+	  node->get_ptr(offset_of_paddr(offset))),
+	*reinterpret_cast<const ceph_le32*>(
+	  node->get_ptr(offset_of_paddr(offset) + 4)),
+      };
     }
     bool contains(laddr_t addr) {
       return (get_lb() <= addr) && (get_ub() > addr);
@@ -354,10 +370,7 @@ LBAInternalNode::find_hole_ret LBAInternalNode::find_hole(
     });
 }
 
-std::tuple<
-  LBANodeRef,
-  LBANodeRef,
-  laddr_t>
+std::tuple<LBANodeRef, LBANodeRef, laddr_t>
 LBAInternalNode::make_split_children(Cache &cache, Transaction &t)
 {
   auto left = cache.alloc_new_extent<LBAInternalNode>(
