@@ -182,9 +182,19 @@ private:
 	node->get_ptr(offset_of_lb(offset)));
     }
 
+    void set_lb(laddr_t lb) {
+      *reinterpret_cast<ceph_le64*>(
+	node->get_ptr(offset_of_lb(offset))) = lb;
+    }
+
     laddr_t get_ub() const {
       return *reinterpret_cast<const ceph_le64*>(
 	node->get_ptr(offset_of_ub(offset)));
+    }
+
+    void set_ub(laddr_t ub) {
+      *reinterpret_cast<ceph_le64*>(
+	node->get_ptr(offset_of_ub(offset))) = ub;
     }
 
     paddr_t get_paddr() const {
@@ -192,9 +202,17 @@ private:
 	*reinterpret_cast<const ceph_le32*>(
 	  node->get_ptr(offset_of_paddr(offset))),
 	*reinterpret_cast<const ceph_le32*>(
-	  node->get_ptr(offset_of_paddr(offset) + 4)),
+	  node->get_ptr(offset_of_paddr(offset) + 4))
       };
+    };
+
+    void set_paddr(paddr_t addr) {
+      *reinterpret_cast<ceph_le32*>(
+	node->get_ptr(offset_of_paddr(offset))) = addr.segment;
+      *reinterpret_cast<ceph_le32*>(
+	node->get_ptr(offset_of_paddr(offset) + 4)) = addr.offset;
     }
+
     bool contains(laddr_t addr) {
       return (get_lb() <= addr) && (get_ub() > addr);
     }
