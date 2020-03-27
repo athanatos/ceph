@@ -379,6 +379,10 @@ public:
   TransactionRef get_transaction() {
     return std::make_unique<Transaction>();
   }
+
+  void retire_extent(Transaction &t, CachedExtentRef ref) {
+    t.add_to_retired_set(ref);
+  }
   
   /**
    * get_extent

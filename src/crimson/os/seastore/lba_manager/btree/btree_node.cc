@@ -499,6 +499,8 @@ LBAInternalNode::split_entry(
   iter->set_paddr(right->get_paddr());
   set_size(get_size() + 1);
 
+  c.retire_extent(t, entry);
+
   return split_ertr::make_ready_future<LBANodeRef>(
     pivot > addr ? left : right
   );
@@ -527,22 +529,24 @@ LBAInternalNode::merge_entry(
   ).safe_then([this, &c, &t, addr, iter, entry, donor_iter, is_left](
 		auto donor) mutable {
     if (donor->at_min_capacity()) {
-      if (is_left) {
+      auto [l, r] = is_left ?
+	std::make_pair(donor, entry) : std::make_pair(entry, donor);
+      auto [liter, riter] = is_left ?
+	std::make_pair(donor_iter, iter) : std::make_pair(iter, donor_iter);
+      
+      auto replacement = l->make_full_merge(
+	c,
+	t,
+	r);
+      journal_full_merge(liter, replacement->get_paddr());
+      liter->set_paddr(replacement->get_paddr());
 
-	auto replacement = donor->make_full_merge(
-	  c,
-	  t,
-	  entry);
-	journal_full_merge(donor_iter, replacement->get_paddr());
-	donor_iter->set_paddr(replacement->get_paddr());
+      copy_from_local(riter, riter + 1, end());
+      set_size(get_size() - 1);
 
-	copy_from_local(iter, iter + 1, end());
-	set_size(get_size() - 1);
-	return split_ertr::make_ready_future<LBANodeRef>(replacement);
-      } else {
-	//journal_full_merge(iter, donor_iter);
-	return split_ertr::make_ready_future<LBANodeRef>();
-      }
+      c.retire_extent(t, l);
+      c.retire_extent(t, r);
+      return split_ertr::make_ready_future<LBANodeRef>(replacement);
     } else {
       return split_ertr::make_ready_future<LBANodeRef>();
     }
