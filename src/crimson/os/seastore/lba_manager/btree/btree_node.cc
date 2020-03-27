@@ -426,9 +426,11 @@ LBAInternalNode::make_split_children(Cache &cache, Transaction &t)
 
   left->copy_from_foreign(left->begin(), begin(), piviter);
   left->set_size(piviter - begin());
+  left->set_pivot(get_pivot());
 
   right->copy_from_foreign(right->begin(), piviter, end());
   right->set_size(end() - piviter);
+  right->set_pivot(piviter->get_lb());
 
   return std::make_tuple(left, right, piviter->get_lb());
 }
