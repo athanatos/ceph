@@ -440,8 +440,10 @@ LBAInternalNode::split_entry(
   Cache &c, Transaction &t, laddr_t addr, internal_iterator_t, LBANodeRef entry)
 {
   ceph_assert(!at_max_capacity());
-  //auto left = cache.alloc_new_extent(t, 
-  return split_ertr::make_ready_future<LBANodeRef>();
+  auto [left, right, pivot] = entry->make_split_children(c, t);
+  return split_ertr::make_ready_future<LBANodeRef>(
+    pivot > addr ? left : right
+  );
 }
 
 LBAInternalNode::merge_ret
