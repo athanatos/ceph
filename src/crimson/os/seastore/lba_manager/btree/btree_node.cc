@@ -74,10 +74,12 @@ struct LBAInternalNode : LBANode {
     laddr_t>
   make_split_children(Cache &cache, Transaction &t) final;
 
+  LBANodeRef make_full_merge(
+    Cache &cache, Transaction &t, LBANodeRef &right) final;
+
   bool at_max_capacity() const final { return get_size() == CAPACITY; }
   bool at_min_capacity() const final { return get_size() == CAPACITY / 2; }
 
-protected:
   void on_written(paddr_t record_block_offset) final {
   }
 
@@ -100,11 +102,10 @@ protected:
   }
 
 private:
-  static constexpr uint16_t CAPACITY = 254;
-  static constexpr off_t PIVOT_OFFSET = 0;
-  static constexpr off_t SIZE_OFFSET = 8;
+  static constexpr uint16_t CAPACITY = 255;
+  static constexpr off_t SIZE_OFFSET = 0;
   static constexpr off_t LADDR_START = 16;
-  static constexpr off_t PADDR_START = 16;
+  static constexpr off_t PADDR_START = 2056;
   static constexpr off_t offset_of_lb(uint16_t off) {
     return LADDR_START + (off * 8);
   }
@@ -121,14 +122,6 @@ private:
 
   const char *get_ptr(off_t offset) const {
     return get_bptr().c_str() + offset;
-  }
-
-  laddr_t get_pivot() const {
-    return *reinterpret_cast<const ceph_le64*>(get_ptr(PIVOT_OFFSET));
-  }
-
-  void set_pivot(laddr_t pivot) {
-    *reinterpret_cast<ceph_le64*>(get_ptr(PIVOT_OFFSET)) = pivot;
   }
 
   uint16_t get_size() const {
@@ -170,6 +163,17 @@ private:
       return offset - rhs.offset;
     }
 
+    internal_iterator_t operator+(uint16_t off) const {
+      return internal_iterator_t(
+	node,
+	offset + off);
+    }
+    internal_iterator_t operator-(uint16_t off) const {
+      return internal_iterator_t(
+	node,
+	offset - off);
+    }
+
     bool operator==(const internal_iterator_t &rhs) const {
       ceph_assert(node == rhs.node);
       return rhs.offset == offset;
@@ -190,13 +194,11 @@ private:
     }
 
     laddr_t get_ub() const {
-      return *reinterpret_cast<const ceph_le64*>(
-	node->get_ptr(offset_of_ub(offset)));
-    }
-
-    void set_ub(laddr_t ub) {
-      *reinterpret_cast<ceph_le64*>(
-	node->get_ptr(offset_of_ub(offset))) = ub;
+      auto next = *this + 1;
+      if (next == node->end())
+	return L_ADDR_MAX;
+      else
+	return next->get_lb();
     }
 
     paddr_t get_paddr() const {
@@ -220,8 +222,12 @@ private:
       return (get_lb() <= addr) && (get_ub() > addr);
     }
 
-    char *get_begin_ptr() {
+    char *get_laddr_ptr() {
       return node->get_ptr(offset_of_lb(offset));
+    }
+
+    char *get_paddr_ptr() {
+      return node->get_ptr(offset_of_paddr(offset));
     }
   };
   
@@ -257,7 +263,12 @@ private:
     internal_iterator_t to_src) {
     ceph_assert(tgt->node != from_src->node);
     ceph_assert(to_src->node == from_src->node);
-    memcpy(tgt->get_begin_ptr(), from_src->get_begin_ptr(), to_src - from_src);
+    memcpy(
+      tgt->get_paddr_ptr(), from_src->get_paddr_ptr(),
+      to_src->get_paddr_ptr() - from_src->get_paddr_ptr());
+    memcpy(
+      tgt->get_laddr_ptr(), from_src->get_laddr_ptr(),
+      to_src->get_laddr_ptr() - from_src->get_laddr_ptr());
   }
 
   void copy_from_local(
@@ -266,7 +277,12 @@ private:
     internal_iterator_t to_src) {
     ceph_assert(tgt->node == from_src->node);
     ceph_assert(to_src->node == from_src->node);
-    memmove(tgt->get_begin_ptr(), from_src->get_begin_ptr(), to_src - from_src);
+    memmove(
+      tgt->get_paddr_ptr(), from_src->get_paddr_ptr(),
+      to_src->get_paddr_ptr() - from_src->get_paddr_ptr());
+    memmove(
+      tgt->get_laddr_ptr(), from_src->get_laddr_ptr(),
+      to_src->get_laddr_ptr() - from_src->get_laddr_ptr());
   }
 
   using split_ertr = crimson::errorator<
@@ -288,6 +304,17 @@ private:
     LBANodeRef entry);
 
   internal_iterator_t get_containing_child(laddr_t laddr);
+
+  // delta operation
+  void journal_split(
+    internal_iterator_t to_split,
+    paddr_t new_left,
+    laddr_t new_pivot,
+    paddr_t new_right);
+  // delta operation
+  void journal_full_merge(
+    internal_iterator_t left,
+    paddr_t new_right);
 };
 
 
@@ -426,31 +453,100 @@ LBAInternalNode::make_split_children(Cache &cache, Transaction &t)
 
   left->copy_from_foreign(left->begin(), begin(), piviter);
   left->set_size(piviter - begin());
-  left->set_pivot(get_pivot());
 
   right->copy_from_foreign(right->begin(), piviter, end());
   right->set_size(end() - piviter);
-  right->set_pivot(piviter->get_lb());
 
   return std::make_tuple(left, right, piviter->get_lb());
 }
 
+LBANodeRef LBAInternalNode::make_full_merge(
+  Cache &cache,
+  Transaction &t,
+  LBANodeRef &_right)
+{
+  ceph_assert(_right->get_type() == extent_types_t::LADDR_INTERNAL);
+  LBAInternalNode *right = static_cast<LBAInternalNode*>(_right.get());
+  auto replacement = cache.alloc_new_extent<LBAInternalNode>(
+    t, LBA_BLOCK_SIZE);
+
+  replacement->copy_from_foreign(
+    replacement->end(),
+    begin(),
+    end());
+  replacement->set_size(get_size());
+  replacement->copy_from_foreign(
+    replacement->end(),
+    right->begin(),
+    right->end());
+  replacement->set_size(get_size() + right->get_size());
+  return replacement;
+}
+
 LBAInternalNode::split_ret
 LBAInternalNode::split_entry(
-  Cache &c, Transaction &t, laddr_t addr, internal_iterator_t, LBANodeRef entry)
+  Cache &c, Transaction &t, laddr_t addr,
+  internal_iterator_t iter, LBANodeRef entry)
 {
   ceph_assert(!at_max_capacity());
   auto [left, right, pivot] = entry->make_split_children(c, t);
+
+  journal_split(iter, left->get_paddr(), pivot, right->get_paddr());
+
+  copy_from_local(iter + 1, iter, end());
+  iter->set_paddr(left->get_paddr());
+  iter++;
+  iter->set_paddr(right->get_paddr());
+  set_size(get_size() + 1);
+
   return split_ertr::make_ready_future<LBANodeRef>(
     pivot > addr ? left : right
   );
 }
 
+void LBAInternalNode::journal_split(
+  internal_iterator_t to_split,
+  paddr_t new_left,
+  laddr_t new_pivot,
+  paddr_t new_right) {
+  // TODO
+}
+
 LBAInternalNode::merge_ret
 LBAInternalNode::merge_entry(
-  Cache &c, Transaction &t, laddr_t addr, internal_iterator_t, LBANodeRef entry)
+  Cache &c, Transaction &t, laddr_t addr,
+  internal_iterator_t iter, LBANodeRef entry)
 {
-  return split_ertr::make_ready_future<LBANodeRef>();
+  auto is_left = iter == end();
+  auto donor_iter = is_left ? iter - 1 : iter + 1;
+  return get_lba_btree_extent(
+    c,
+    t,
+    depth,
+    donor_iter->get_paddr()
+  ).safe_then([this, &c, &t, addr, iter, entry, donor_iter, is_left](
+		auto donor) mutable {
+    if (donor->at_min_capacity()) {
+      if (is_left) {
+
+	auto replacement = donor->make_full_merge(
+	  c,
+	  t,
+	  entry);
+	journal_full_merge(donor_iter, replacement->get_paddr());
+	donor_iter->set_paddr(replacement->get_paddr());
+
+	copy_from_local(iter, iter + 1, end());
+	set_size(get_size() - 1);
+	return split_ertr::make_ready_future<LBANodeRef>(replacement);
+      } else {
+	//journal_full_merge(iter, donor_iter);
+	return split_ertr::make_ready_future<LBANodeRef>();
+      }
+    } else {
+      return split_ertr::make_ready_future<LBANodeRef>();
+    }
+  });
 }
 
 
@@ -518,10 +614,12 @@ struct LBALeafNode : LBANode {
     laddr_t>
   make_split_children(Cache &cache, Transaction &t) final;
 
+  LBANodeRef make_full_merge(
+    Cache &cache, Transaction &t, LBANodeRef &right) final;
+
   bool at_max_capacity() const final { return false; /* TODO */ }
   bool at_min_capacity() const final { return false; /* TODO */ }
 
-protected:
   void on_written(paddr_t record_block_offset) final {
   }
 

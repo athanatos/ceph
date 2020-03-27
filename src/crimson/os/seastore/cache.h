@@ -162,6 +162,7 @@ protected:
     return version;
   }
 
+public:
   virtual CachedExtentRef duplicate_for_write() = 0;
 
   virtual void on_written(paddr_t record_block_offset) = 0;
@@ -190,7 +191,6 @@ protected:
     crimson::ct_error::input_output_error>;
   virtual complete_load_ertr::future<> complete_load() = 0;
 
-public:
   bool is_pending() const {
     return state == extent_state_t::PENDING_INITIAL ||
       state == extent_state_t::PENDING_DELTA;

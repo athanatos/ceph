@@ -99,6 +99,9 @@ struct LBANode : Node<laddr_t, loff_t> {
     laddr_t>
   make_split_children(Cache &cache, Transaction &t) = 0;
 
+  virtual LBANodeRef make_full_merge(
+    Cache &cache, Transaction &t, LBANodeRef &right) = 0;
+
   virtual bool at_max_capacity() const = 0;
   virtual bool at_min_capacity() const = 0;
 
