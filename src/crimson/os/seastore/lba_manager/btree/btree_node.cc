@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include <memory>
+#include <string.h>
 
 #include "include/buffer.h"
 #include "include/byteorder.h"
@@ -165,6 +166,7 @@ private:
     }
 
     uint16_t operator-(const internal_iterator_t &rhs) const {
+      ceph_assert(rhs.node == node);
       return offset - rhs.offset;
     }
 
@@ -198,12 +200,13 @@ private:
     }
 
     paddr_t get_paddr() const {
-      return {
-	*reinterpret_cast<const ceph_le32*>(
+      return paddr_t{
+	*reinterpret_cast<const ceph_les32*>(
 	  node->get_ptr(offset_of_paddr(offset))),
-	*reinterpret_cast<const ceph_le32*>(
-	  node->get_ptr(offset_of_paddr(offset) + 4))
-      };
+	static_cast<segment_off_t>(
+	  *reinterpret_cast<const ceph_les32*>(
+	    node->get_ptr(offset_of_paddr(offset))) + 4)
+	  };
     };
 
     void set_paddr(paddr_t addr) {
@@ -216,7 +219,12 @@ private:
     bool contains(laddr_t addr) {
       return (get_lb() <= addr) && (get_ub() > addr);
     }
+
+    char *get_begin_ptr() {
+      return node->get_ptr(offset_of_lb(offset));
+    }
   };
+  
   internal_iterator_t begin() {
     return internal_iterator_t(this, 0);
   }
@@ -242,6 +250,25 @@ private:
       this,
       get_size() / 2);
   }
+
+  void copy_from_foreign(
+    internal_iterator_t tgt,
+    internal_iterator_t from_src,
+    internal_iterator_t to_src) {
+    ceph_assert(tgt->node != from_src->node);
+    ceph_assert(to_src->node == from_src->node);
+    memcpy(tgt->get_begin_ptr(), from_src->get_begin_ptr(), to_src - from_src);
+  }
+
+  void copy_from_local(
+    internal_iterator_t tgt,
+    internal_iterator_t from_src,
+    internal_iterator_t to_src) {
+    ceph_assert(tgt->node == from_src->node);
+    ceph_assert(to_src->node == from_src->node);
+    memmove(tgt->get_begin_ptr(), from_src->get_begin_ptr(), to_src - from_src);
+  }
+
   using split_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
@@ -397,13 +424,11 @@ LBAInternalNode::make_split_children(Cache &cache, Transaction &t)
     t, LBA_BLOCK_SIZE);
   auto piviter = get_split_pivot();
 
-/*
-  left.set_from(left->begin(), *this, begin(), piviter);
-  left.set_size(piviter - begin());
+  left->copy_from_foreign(left->begin(), begin(), piviter);
+  left->set_size(piviter - begin());
 
-  right.set_from(right->begin(), *this, piviter, end());
-  right.set_size(end() - piviter);
-  */
+  right->copy_from_foreign(right->begin(), piviter, end());
+  right->set_size(end() - piviter);
 
   return std::make_tuple(left, right, piviter->get_lb());
 }
