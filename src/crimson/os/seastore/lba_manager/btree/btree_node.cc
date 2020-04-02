@@ -77,6 +77,12 @@ struct LBAInternalNode : LBANode {
   LBANodeRef make_full_merge(
     Cache &cache, Transaction &t, LBANodeRef &right) final;
 
+  std::tuple<
+    LBANodeRef,
+    LBANodeRef,
+    laddr_t>
+  make_balanced(Cache &cache, Transaction &t, LBANodeRef &right) final;
+
   bool at_max_capacity() const final { return get_size() == CAPACITY; }
   bool at_min_capacity() const final { return get_size() == CAPACITY / 2; }
 
@@ -483,6 +489,37 @@ LBANodeRef LBAInternalNode::make_full_merge(
   return replacement;
 }
 
+std::tuple<LBANodeRef, LBANodeRef, laddr_t>
+LBAInternalNode::make_balanced(
+  Cache &cache,
+  Transaction &t,
+  LBANodeRef &_right)
+{
+  ceph_assert(_right->get_type() == extent_types_t::LADDR_INTERNAL);
+  LBAInternalNode *right = static_cast<LBAInternalNode*>(_right.get());
+  auto replacement_l = cache.alloc_new_extent<LBAInternalNode>(
+    t, LBA_BLOCK_SIZE);
+  auto replacement_r = cache.alloc_new_extent<LBAInternalNode>(
+    t, LBA_BLOCK_SIZE);
+
+  auto total = get_size() + right->get_size();
+
+#if 0
+  replacement->copy_from_foreign(
+    replacement->end(),
+    begin(),
+    end());
+  replacement->set_size(get_size());
+  replacement->copy_from_foreign(
+    replacement->end(),
+    right->begin(),
+    right->end());
+  replacement->set_size(get_size() + right->get_size());
+  return replacement;
+#endif
+  return std::make_tuple(LBANodeRef(), LBANodeRef(), laddr_t());
+}
+
 LBAInternalNode::split_ret
 LBAInternalNode::split_entry(
   Cache &c, Transaction &t, laddr_t addr,
@@ -528,12 +565,11 @@ LBAInternalNode::merge_entry(
     donor_iter->get_paddr()
   ).safe_then([this, &c, &t, addr, iter, entry, donor_iter, is_left](
 		auto donor) mutable {
+    auto [l, r] = is_left ?
+      std::make_pair(donor, entry) : std::make_pair(entry, donor);
+    auto [liter, riter] = is_left ?
+      std::make_pair(donor_iter, iter) : std::make_pair(iter, donor_iter);
     if (donor->at_min_capacity()) {
-      auto [l, r] = is_left ?
-	std::make_pair(donor, entry) : std::make_pair(entry, donor);
-      auto [liter, riter] = is_left ?
-	std::make_pair(donor_iter, iter) : std::make_pair(iter, donor_iter);
-      
       auto replacement = l->make_full_merge(
 	c,
 	t,
@@ -548,6 +584,9 @@ LBAInternalNode::merge_entry(
       c.retire_extent(t, r);
       return split_ertr::make_ready_future<LBANodeRef>(replacement);
     } else {
+      auto [replacement_l, replacement_r, pivot] = 
+	l->make_balanced(c, t, r);
+      
       return split_ertr::make_ready_future<LBANodeRef>();
     }
   });
@@ -620,6 +659,12 @@ struct LBALeafNode : LBANode {
 
   LBANodeRef make_full_merge(
     Cache &cache, Transaction &t, LBANodeRef &right) final;
+
+  std::tuple<
+    LBANodeRef,
+    LBANodeRef,
+    laddr_t>
+  make_balanced(Cache &cache, Transaction &t, LBANodeRef &right) final;
 
   bool at_max_capacity() const final { return false; /* TODO */ }
   bool at_min_capacity() const final { return false; /* TODO */ }

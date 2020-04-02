@@ -102,6 +102,12 @@ struct LBANode : Node<laddr_t, loff_t> {
   virtual LBANodeRef make_full_merge(
     Cache &cache, Transaction &t, LBANodeRef &right) = 0;
 
+  virtual std::tuple<
+    LBANodeRef,
+    LBANodeRef,
+    laddr_t>
+  make_balanced(Cache &cache, Transaction &t, LBANodeRef &right) = 0;
+
   virtual bool at_max_capacity() const = 0;
   virtual bool at_min_capacity() const = 0;
 
