@@ -536,21 +536,25 @@ LBAInternalNode::make_balanced(
       right->end());
     replacement_right->set_size(total - pivot_idx);
   } else {
+    replacement_left->copy_from_foreign(
+      replacement_left->end(),
+      begin(),
+      end());
+    replacement_left->set_size(get_size());
+
+    replacement_left->copy_from_foreign(
+      replacement_left->end(),
+      right->begin(),
+      right->iter_idx(get_size() - pivot_idx));
+    replacement_left->set_size(pivot_idx);
+
+    replacement_right->copy_from_foreign(
+      replacement_right->end(),
+      right->iter_idx(get_size() - pivot_idx),
+      right->end());
+    replacement_right->set_size(total - pivot_idx);
   }
-  
-#if 0
-  replacement->copy_from_foreign(
-    replacement->end(),
-    begin(),
-    end());
-  replacement->set_size(get_size());
-  replacement->copy_from_foreign(
-    replacement->end(),
-    right->begin(),
-    right->end());
-  replacement->set_size(get_size() + right->get_size());
-  return replacement;
-#endif
+
   return std::make_tuple(
     replacement_left,
     replacement_right,
