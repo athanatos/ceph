@@ -702,6 +702,8 @@ struct LBALeafNode : LBANode {
   template <typename... T>
   LBALeafNode(T&&... t) : LBANode(std::forward<T>(t)...) {}
 
+  static constexpr extent_types_t type = extent_types_t::LADDR_LEAF;
+
   CachedExtentRef duplicate_for_write() final {
     return CachedExtentRef(new LBALeafNode(*this));
   };
@@ -730,14 +732,31 @@ struct LBALeafNode : LBANode {
     laddr_t max,
     loff_t len) final;
 
-  std::tuple<
-    LBANodeRef,
-    LBANodeRef,
-    laddr_t>
-  make_split_children(Cache &cache, Transaction &t) final;
+  template <typename T>
+  friend std::tuple<LBANodeRef, LBANodeRef, laddr_t>
+  do_make_split_children(T &parent, Cache &cache, Transaction &t);
+
+  std::tuple<LBANodeRef, LBANodeRef, laddr_t>
+  make_split_children(Cache &cache, Transaction &t) final {
+    return do_make_split_children<LBALeafNode>(*this, cache, t);
+  }
+
+  template <typename T>
+  friend LBANodeRef do_make_full_merge(
+    T &left, Cache &cache, Transaction &t, LBANodeRef &right);
 
   LBANodeRef make_full_merge(
-    Cache &cache, Transaction &t, LBANodeRef &right) final;
+    Cache &cache, Transaction &t, LBANodeRef &right) final {
+    return do_make_full_merge<LBALeafNode>(*this, cache, t, right);
+  }
+
+  template <typename T>
+  friend std::tuple<LBANodeRef, LBANodeRef, laddr_t>
+  do_make_balanced(
+    T &left,
+    Cache &cache, Transaction &t,
+    LBANodeRef &right, laddr_t pivot,
+    bool prefer_left);
 
   std::tuple<
     LBANodeRef,
@@ -746,7 +765,13 @@ struct LBALeafNode : LBANode {
   make_balanced(
     Cache &cache, Transaction &t,
     LBANodeRef &right, laddr_t pivot,
-    bool prefer_left) final;
+    bool prefer_left) final {
+    return do_make_balanced<LBALeafNode>(
+      *this,
+      cache, t,
+      right, pivot,
+      prefer_left);
+  }
 
   bool at_max_capacity() const final { return false; /* TODO */ }
   bool at_min_capacity() const final { return false; /* TODO */ }
@@ -774,20 +799,195 @@ struct LBALeafNode : LBANode {
   }
 
 private:
-  struct internal_entry_t {
-    paddr_t get_paddr() const { return paddr_t(); /* TODO */ }
-    laddr_t get_laddr() const { return L_ADDR_NULL; /* TODO */ }
-    loff_t get_length() const { return 0; /* TODO */ }
-  };
+  // TODO
+  static constexpr uint16_t CAPACITY = 0;
+  static constexpr off_t SIZE_OFFSET = 0;
+  static constexpr off_t LADDR_START = 0;
+  static constexpr off_t PADDR_START = 0;
+  static constexpr off_t offset_of_lb(uint16_t off) {
+    return LADDR_START + (off * 8);
+  }
+  static constexpr off_t offset_of_ub(uint16_t off) {
+    return LADDR_START + ((off + 1) * 8);
+  }
+  static constexpr off_t offset_of_paddr(uint16_t off) {
+    return PADDR_START + (off * 8);
+  }
+
+  char *get_ptr(off_t offset) {
+    return get_bptr().c_str() + offset;
+  }
+
+  const char *get_ptr(off_t offset) const {
+    return get_bptr().c_str() + offset;
+  }
+
+  uint16_t get_size() const {
+    return *reinterpret_cast<const ceph_le16*>(get_ptr(SIZE_OFFSET));
+  }
+
+  void set_size(uint16_t size) {
+    *reinterpret_cast<ceph_le16*>(get_ptr(SIZE_OFFSET)) = size;
+  }
+
   struct internal_iterator_t {
-    internal_entry_t placeholder;
-    const internal_entry_t &operator*() const { return placeholder; }
-    const internal_entry_t *operator->() const { return &placeholder; }
-    void operator++(int) {}
-    void operator++() {}
-    bool operator==(const internal_iterator_t &rhs) const { return true; }
-    bool operator!=(const internal_iterator_t &rhs) const { return !(*this == rhs); }
+    LBALeafNode *node;
+    uint16_t offset;
+    internal_iterator_t(
+      LBALeafNode *parent,
+      uint16_t offset) : node(parent), offset(offset) {}
+
+    internal_iterator_t(const internal_iterator_t &) = default;
+    internal_iterator_t(internal_iterator_t &&) = default;
+    internal_iterator_t &operator=(const internal_iterator_t &) = default;
+    internal_iterator_t &operator=(internal_iterator_t &&) = default;
+
+    internal_iterator_t &operator*() { return *this; }
+    internal_iterator_t *operator->() { return this; }
+
+    internal_iterator_t operator++(int) {
+      auto ret = *this;
+      ++offset;
+      return ret;
+    }
+
+    internal_iterator_t &operator++() {
+      ++offset;
+      return *this;
+    }
+
+    uint16_t operator-(const internal_iterator_t &rhs) const {
+      ceph_assert(rhs.node == node);
+      return offset - rhs.offset;
+    }
+
+    internal_iterator_t operator+(uint16_t off) const {
+      return internal_iterator_t(
+	node,
+	offset + off);
+    }
+    internal_iterator_t operator-(uint16_t off) const {
+      return internal_iterator_t(
+	node,
+	offset - off);
+    }
+
+    bool operator==(const internal_iterator_t &rhs) const {
+      ceph_assert(node == rhs.node);
+      return rhs.offset == offset;
+    }
+
+    bool operator!=(const internal_iterator_t &rhs) const {
+      return !(*this == rhs);
+    }
+
+    laddr_t get_lb() const {
+      return *reinterpret_cast<const ceph_le64*>(
+	node->get_ptr(offset_of_lb(offset)));
+    }
+
+    loff_t get_length() const {
+      return 0;
+    }
+
+    void set_lb(laddr_t lb) {
+      *reinterpret_cast<ceph_le64*>(
+	node->get_ptr(offset_of_lb(offset))) = lb;
+    }
+
+    laddr_t get_ub() const {
+      auto next = *this + 1;
+      if (next == node->end())
+	return L_ADDR_MAX;
+      else
+	return next->get_lb();
+    }
+
+    paddr_t get_paddr() const {
+      return paddr_t{
+	*reinterpret_cast<const ceph_les32*>(
+	  node->get_ptr(offset_of_paddr(offset))),
+	static_cast<segment_off_t>(
+	  *reinterpret_cast<const ceph_les32*>(
+	    node->get_ptr(offset_of_paddr(offset))) + 4)
+	  };
+    };
+
+    void set_paddr(paddr_t addr) {
+      *reinterpret_cast<ceph_le32*>(
+	node->get_ptr(offset_of_paddr(offset))) = addr.segment;
+      *reinterpret_cast<ceph_le32*>(
+	node->get_ptr(offset_of_paddr(offset) + 4)) = addr.offset;
+    }
+
+    bool contains(laddr_t addr) {
+      return (get_lb() <= addr) && (get_ub() > addr);
+    }
+
+    char *get_laddr_ptr() {
+      return node->get_ptr(offset_of_lb(offset));
+    }
+
+    char *get_paddr_ptr() {
+      return node->get_ptr(offset_of_paddr(offset));
+    }
   };
+
+  internal_iterator_t begin() {
+    return internal_iterator_t(this, 0);
+  }
+  internal_iterator_t end() {
+    return internal_iterator_t(this, get_size());
+  }
+  internal_iterator_t iter_idx(uint16_t off) {
+    return internal_iterator_t(this, off);
+  }
+  std::pair<internal_iterator_t, internal_iterator_t> bound(
+    laddr_t l, laddr_t r) {
+    auto retl = begin();
+    for (; retl != end(); ++retl) {
+      if (retl->get_lb() <= l && retl->get_ub() > l)
+	break;
+    }
+    auto retr = retl;
+    for (; retr != end(); ++retr) {
+      if (retr->get_lb() > r)
+	break;
+    }
+    return std::make_pair(retl, retr);
+  }
+  internal_iterator_t get_split_pivot() {
+    return iter_idx(get_size() / 2);
+  }
+
+  void copy_from_foreign(
+    internal_iterator_t tgt,
+    internal_iterator_t from_src,
+    internal_iterator_t to_src) {
+    ceph_assert(tgt->node != from_src->node);
+    ceph_assert(to_src->node == from_src->node);
+    memcpy(
+      tgt->get_paddr_ptr(), from_src->get_paddr_ptr(),
+      to_src->get_paddr_ptr() - from_src->get_paddr_ptr());
+    memcpy(
+      tgt->get_laddr_ptr(), from_src->get_laddr_ptr(),
+      to_src->get_laddr_ptr() - from_src->get_laddr_ptr());
+  }
+
+  void copy_from_local(
+    internal_iterator_t tgt,
+    internal_iterator_t from_src,
+    internal_iterator_t to_src) {
+    ceph_assert(tgt->node == from_src->node);
+    ceph_assert(to_src->node == from_src->node);
+    memmove(
+      tgt->get_paddr_ptr(), from_src->get_paddr_ptr(),
+      to_src->get_paddr_ptr() - from_src->get_paddr_ptr());
+    memmove(
+      tgt->get_laddr_ptr(), from_src->get_laddr_ptr(),
+      to_src->get_laddr_ptr() - from_src->get_laddr_ptr());
+  }
+
   std::pair<internal_iterator_t, internal_iterator_t>
   get_leaf_entries(laddr_t addr, loff_t len);
 };
@@ -806,7 +1006,7 @@ LBALeafNode::lookup_range_ret LBALeafNode::lookup_range(
       std::make_unique<BtreeLBAPin>(
 	LBALeafNodeRef(this),
 	(*i).get_paddr(),
-	(*i).get_laddr(),
+	(*i).get_lb(),
 	(*i).get_length()));
   }
   return lookup_range_ertr::make_ready_future<lba_pin_list_t>(
@@ -855,7 +1055,9 @@ LBALeafNode::find_hole_ret LBALeafNode::find_hole(
 std::pair<LBALeafNode::internal_iterator_t, LBALeafNode::internal_iterator_t>
 LBALeafNode::get_leaf_entries(laddr_t addr, loff_t len)
 {
-  return std::make_pair(internal_iterator_t(), internal_iterator_t());
+  return std::make_pair(
+    internal_iterator_t(this, 0),
+    internal_iterator_t(this, 0));
 }
 
 Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
