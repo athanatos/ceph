@@ -22,6 +22,123 @@ namespace {
 
 namespace crimson::os::seastore::lba_manager::btree {
 
+template <typename T>
+std::tuple<LBANodeRef, LBANodeRef, laddr_t>
+do_make_split_children(
+  T &parent,
+  Cache &cache,
+  Transaction &t)
+{
+  auto left = cache.alloc_new_extent<T>(
+    t, LBA_BLOCK_SIZE);
+  auto right = cache.alloc_new_extent<T>(
+    t, LBA_BLOCK_SIZE);
+  auto piviter = parent.get_split_pivot();
+
+  left->copy_from_foreign(left->begin(), parent.begin(), piviter);
+  left->set_size(piviter - parent.begin());
+
+  right->copy_from_foreign(right->begin(), piviter, parent.end());
+  right->set_size(parent.end() - piviter);
+
+  return std::make_tuple(left, right, piviter->get_lb());
+}
+
+template <typename T>
+LBANodeRef do_make_full_merge(
+  T &left,
+  Cache &cache,
+  Transaction &t,
+  LBANodeRef &_right)
+{
+  ceph_assert(_right->get_type() == T::type);
+  T &right = *static_cast<T*>(_right.get());
+  auto replacement = cache.alloc_new_extent<T>(
+    t, LBA_BLOCK_SIZE);
+
+  replacement->copy_from_foreign(
+    replacement->end(),
+    left.begin(),
+    left.end());
+  replacement->set_size(left.get_size());
+  replacement->copy_from_foreign(
+    replacement->end(),
+    right.begin(),
+    right.end());
+  replacement->set_size(left.get_size() + right.get_size());
+  return replacement;
+}
+
+template <typename T>
+std::tuple<LBANodeRef, LBANodeRef, laddr_t>
+do_make_balanced(
+  T &left,
+  Cache &cache,
+  Transaction &t,
+  LBANodeRef &_right,
+  laddr_t pivot,
+  bool prefer_left)
+{
+  ceph_assert(_right->get_type() == T::type);
+  T &right = *static_cast<T*>(_right.get());
+  auto replacement_left = cache.alloc_new_extent<T>(
+    t, LBA_BLOCK_SIZE);
+  auto replacement_right = cache.alloc_new_extent<T>(
+    t, LBA_BLOCK_SIZE);
+
+  auto total = left.get_size() + right.get_size();
+  auto pivot_idx = (left.get_size() + right.get_size()) / 2;
+  if (total % 2 && prefer_left) {
+    pivot_idx++;
+  }
+  auto replacement_pivot = pivot_idx > left.get_size() ? 
+    right.iter_idx(pivot_idx - left.get_size())->get_lb() :
+    left.iter_idx(pivot_idx)->get_lb();
+
+  if (pivot_idx < left.get_size()) {
+    replacement_left->copy_from_foreign(
+      replacement_left->end(),
+      left.begin(),
+      left.iter_idx(pivot_idx));
+    replacement_left->set_size(pivot_idx);
+
+    replacement_right->copy_from_foreign(
+      replacement_right->end(),
+      left.iter_idx(pivot_idx),
+      left.end());
+
+    replacement_right->set_size(left.get_size() - pivot_idx);
+    replacement_right->copy_from_foreign(
+      replacement_right->end(),
+      right.begin(),
+      right.end());
+    replacement_right->set_size(total - pivot_idx);
+  } else {
+    replacement_left->copy_from_foreign(
+      replacement_left->end(),
+      left.begin(),
+      left.end());
+    replacement_left->set_size(left.get_size());
+
+    replacement_left->copy_from_foreign(
+      replacement_left->end(),
+      right.begin(),
+      right.iter_idx(left.get_size() - pivot_idx));
+    replacement_left->set_size(pivot_idx);
+
+    replacement_right->copy_from_foreign(
+      replacement_right->end(),
+      right.iter_idx(left.get_size() - pivot_idx),
+      right.end());
+    replacement_right->set_size(total - pivot_idx);
+  }
+
+  return std::make_tuple(
+    replacement_left,
+    replacement_right,
+    replacement_pivot);
+}
+
 /**
  * LBAInternalNode
  *
@@ -39,6 +156,8 @@ namespace crimson::os::seastore::lba_manager::btree {
 struct LBAInternalNode : LBANode {
   template <typename... T>
   LBAInternalNode(T&&... t) : LBANode(std::forward<T>(t)...) {}
+
+  static constexpr extent_types_t type = extent_types_t::LADDR_INTERNAL;
 
   CachedExtentRef duplicate_for_write() final {
     return CachedExtentRef(new LBAInternalNode(*this));
@@ -68,14 +187,31 @@ struct LBAInternalNode : LBANode {
     laddr_t max,
     loff_t len) final;
 
-  std::tuple<
-    LBANodeRef,
-    LBANodeRef,
-    laddr_t>
-  make_split_children(Cache &cache, Transaction &t) final;
+  template <typename T>
+  friend std::tuple<LBANodeRef, LBANodeRef, laddr_t>
+  do_make_split_children(T &parent, Cache &cache, Transaction &t);
+
+  std::tuple<LBANodeRef, LBANodeRef, laddr_t>
+  make_split_children(Cache &cache, Transaction &t) final {
+    return do_make_split_children<LBAInternalNode>(*this, cache, t);
+  }
+
+  template <typename T>
+  friend LBANodeRef do_make_full_merge(
+    T &left, Cache &cache, Transaction &t, LBANodeRef &right);
 
   LBANodeRef make_full_merge(
-    Cache &cache, Transaction &t, LBANodeRef &right) final;
+    Cache &cache, Transaction &t, LBANodeRef &right) final {
+    return do_make_full_merge<LBAInternalNode>(*this, cache, t, right);
+  }
+
+  template <typename T>
+  friend std::tuple<LBANodeRef, LBANodeRef, laddr_t>
+  do_make_balanced(
+    T &left,
+    Cache &cache, Transaction &t,
+    LBANodeRef &right, laddr_t pivot,
+    bool prefer_left);
 
   std::tuple<
     LBANodeRef,
@@ -84,7 +220,13 @@ struct LBAInternalNode : LBANode {
   make_balanced(
     Cache &cache, Transaction &t,
     LBANodeRef &right, laddr_t pivot,
-    bool prefer_left) final;
+    bool prefer_left) final {
+    return do_make_balanced<LBAInternalNode>(
+      *this,
+      cache, t,
+      right, pivot,
+      prefer_left);
+  }
 
   bool at_max_capacity() const final { return get_size() == CAPACITY; }
   bool at_min_capacity() const final { return get_size() == CAPACITY / 2; }
@@ -450,115 +592,6 @@ LBAInternalNode::find_hole_ret LBAInternalNode::find_hole(
 	  return ret;
 	});
     });
-}
-
-std::tuple<LBANodeRef, LBANodeRef, laddr_t>
-LBAInternalNode::make_split_children(Cache &cache, Transaction &t)
-{
-  auto left = cache.alloc_new_extent<LBAInternalNode>(
-    t, LBA_BLOCK_SIZE);
-  auto right = cache.alloc_new_extent<LBAInternalNode>(
-    t, LBA_BLOCK_SIZE);
-  auto piviter = get_split_pivot();
-
-  left->copy_from_foreign(left->begin(), begin(), piviter);
-  left->set_size(piviter - begin());
-
-  right->copy_from_foreign(right->begin(), piviter, end());
-  right->set_size(end() - piviter);
-
-  return std::make_tuple(left, right, piviter->get_lb());
-}
-
-LBANodeRef LBAInternalNode::make_full_merge(
-  Cache &cache,
-  Transaction &t,
-  LBANodeRef &_right)
-{
-  ceph_assert(_right->get_type() == extent_types_t::LADDR_INTERNAL);
-  LBAInternalNode *right = static_cast<LBAInternalNode*>(_right.get());
-  auto replacement = cache.alloc_new_extent<LBAInternalNode>(
-    t, LBA_BLOCK_SIZE);
-
-  replacement->copy_from_foreign(
-    replacement->end(),
-    begin(),
-    end());
-  replacement->set_size(get_size());
-  replacement->copy_from_foreign(
-    replacement->end(),
-    right->begin(),
-    right->end());
-  replacement->set_size(get_size() + right->get_size());
-  return replacement;
-}
-
-std::tuple<LBANodeRef, LBANodeRef, laddr_t>
-LBAInternalNode::make_balanced(
-  Cache &cache,
-  Transaction &t,
-  LBANodeRef &_right,
-  laddr_t pivot,
-  bool prefer_left)
-{
-  ceph_assert(_right->get_type() == extent_types_t::LADDR_INTERNAL);
-  LBAInternalNode *right = static_cast<LBAInternalNode*>(_right.get());
-  auto replacement_left = cache.alloc_new_extent<LBAInternalNode>(
-    t, LBA_BLOCK_SIZE);
-  auto replacement_right = cache.alloc_new_extent<LBAInternalNode>(
-    t, LBA_BLOCK_SIZE);
-
-  auto total = get_size() + right->get_size();
-  auto pivot_idx = (get_size() + right->get_size()) / 2;
-  if (total % 2 && prefer_left) {
-    pivot_idx++;
-  }
-  auto replacement_pivot = pivot_idx > get_size() ? 
-    right->iter_idx(pivot_idx - get_size())->get_lb() :
-    iter_idx(pivot_idx)->get_lb();
-
-  if (pivot_idx < get_size()) {
-    replacement_left->copy_from_foreign(
-      replacement_left->end(),
-      begin(),
-      iter_idx(pivot_idx));
-    replacement_left->set_size(pivot_idx);
-
-    replacement_right->copy_from_foreign(
-      replacement_right->end(),
-      iter_idx(pivot_idx),
-      end());
-
-    replacement_right->set_size(get_size() - pivot_idx);
-    replacement_right->copy_from_foreign(
-      replacement_right->end(),
-      right->begin(),
-      right->end());
-    replacement_right->set_size(total - pivot_idx);
-  } else {
-    replacement_left->copy_from_foreign(
-      replacement_left->end(),
-      begin(),
-      end());
-    replacement_left->set_size(get_size());
-
-    replacement_left->copy_from_foreign(
-      replacement_left->end(),
-      right->begin(),
-      right->iter_idx(get_size() - pivot_idx));
-    replacement_left->set_size(pivot_idx);
-
-    replacement_right->copy_from_foreign(
-      replacement_right->end(),
-      right->iter_idx(get_size() - pivot_idx),
-      right->end());
-    replacement_right->set_size(total - pivot_idx);
-  }
-
-  return std::make_tuple(
-    replacement_left,
-    replacement_right,
-    replacement_pivot);
 }
 
 LBAInternalNode::split_ret
