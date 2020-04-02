@@ -81,7 +81,10 @@ struct LBAInternalNode : LBANode {
     LBANodeRef,
     LBANodeRef,
     laddr_t>
-  make_balanced(Cache &cache, Transaction &t, LBANodeRef &right) final;
+  make_balanced(
+    Cache &cache, Transaction &t,
+    LBANodeRef &right, laddr_t pivot,
+    bool prefer_left) final;
 
   bool at_max_capacity() const final { return get_size() == CAPACITY; }
   bool at_min_capacity() const final { return get_size() == CAPACITY / 2; }
@@ -241,7 +244,10 @@ private:
     return internal_iterator_t(this, 0);
   }
   internal_iterator_t end() {
-    return internal_iterator_t(this, CAPACITY+1);
+    return internal_iterator_t(this, get_size());
+  }
+  internal_iterator_t iter_idx(uint16_t off) {
+    return internal_iterator_t(this, off);
   }
   std::pair<internal_iterator_t, internal_iterator_t> bound(
     laddr_t l, laddr_t r) {
@@ -258,9 +264,7 @@ private:
     return std::make_pair(retl, retr);
   }
   internal_iterator_t get_split_pivot() {
-    return internal_iterator_t(
-      this,
-      get_size() / 2);
+    return iter_idx(get_size() / 2);
   }
 
   void copy_from_foreign(
@@ -493,17 +497,47 @@ std::tuple<LBANodeRef, LBANodeRef, laddr_t>
 LBAInternalNode::make_balanced(
   Cache &cache,
   Transaction &t,
-  LBANodeRef &_right)
+  LBANodeRef &_right,
+  laddr_t pivot,
+  bool prefer_left)
 {
   ceph_assert(_right->get_type() == extent_types_t::LADDR_INTERNAL);
   LBAInternalNode *right = static_cast<LBAInternalNode*>(_right.get());
-  auto replacement_l = cache.alloc_new_extent<LBAInternalNode>(
+  auto replacement_left = cache.alloc_new_extent<LBAInternalNode>(
     t, LBA_BLOCK_SIZE);
-  auto replacement_r = cache.alloc_new_extent<LBAInternalNode>(
+  auto replacement_right = cache.alloc_new_extent<LBAInternalNode>(
     t, LBA_BLOCK_SIZE);
 
   auto total = get_size() + right->get_size();
+  auto pivot_idx = (get_size() + right->get_size()) / 2;
+  if (total % 2 && prefer_left) {
+    pivot_idx++;
+  }
+  auto replacement_pivot = pivot_idx > get_size() ? 
+    right->iter_idx(pivot_idx - get_size())->get_lb() :
+    iter_idx(pivot_idx)->get_lb();
 
+  if (pivot_idx < get_size()) {
+    replacement_left->copy_from_foreign(
+      replacement_left->end(),
+      begin(),
+      iter_idx(pivot_idx));
+    replacement_left->set_size(pivot_idx);
+
+    replacement_right->copy_from_foreign(
+      replacement_right->end(),
+      iter_idx(pivot_idx),
+      end());
+
+    replacement_right->set_size(get_size() - pivot_idx);
+    replacement_right->copy_from_foreign(
+      replacement_right->end(),
+      right->begin(),
+      right->end());
+    replacement_right->set_size(total - pivot_idx);
+  } else {
+  }
+  
 #if 0
   replacement->copy_from_foreign(
     replacement->end(),
@@ -517,7 +551,10 @@ LBAInternalNode::make_balanced(
   replacement->set_size(get_size() + right->get_size());
   return replacement;
 #endif
-  return std::make_tuple(LBANodeRef(), LBANodeRef(), laddr_t());
+  return std::make_tuple(
+    replacement_left,
+    replacement_right,
+    replacement_pivot);
 }
 
 LBAInternalNode::split_ret
@@ -585,7 +622,12 @@ LBAInternalNode::merge_entry(
       return split_ertr::make_ready_future<LBANodeRef>(replacement);
     } else {
       auto [replacement_l, replacement_r, pivot] = 
-	l->make_balanced(c, t, r);
+	l->make_balanced(
+	  c,
+	  t,
+	  r,
+	  riter->get_lb(),
+	  !is_left);
       
       return split_ertr::make_ready_future<LBANodeRef>();
     }
@@ -664,7 +706,10 @@ struct LBALeafNode : LBANode {
     LBANodeRef,
     LBANodeRef,
     laddr_t>
-  make_balanced(Cache &cache, Transaction &t, LBANodeRef &right) final;
+  make_balanced(
+    Cache &cache, Transaction &t,
+    LBANodeRef &right, laddr_t pivot,
+    bool prefer_left) final;
 
   bool at_max_capacity() const final { return false; /* TODO */ }
   bool at_min_capacity() const final { return false; /* TODO */ }
