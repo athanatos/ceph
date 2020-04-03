@@ -124,7 +124,12 @@ struct LBANodeIterHelper : LBANode {
   template <typename... U>
   LBANodeIterHelper(U&&... t) : LBANode(std::forward<U>(t)...) {}
 
-  virtual uint16_t get_size() const = 0;
+  bool at_max_capacity() const final {
+    return static_cast<const T*>(this)->get_size() == T::CAPACITY;
+  }
+  bool at_min_capacity() const final {
+    return static_cast<const T*>(this)->get_size() == T::CAPACITY / 2;
+  }
 
   using internal_iterator_t = node_iterator_t<T>;
   internal_iterator_t begin() {
@@ -135,7 +140,7 @@ struct LBANodeIterHelper : LBANode {
   internal_iterator_t end() {
     return internal_iterator_t(
       static_cast<T*>(this),
-      get_size());
+      static_cast<T*>(this)->get_size());
   }
   internal_iterator_t iter_idx(uint16_t off) {
     return internal_iterator_t(
@@ -157,7 +162,7 @@ struct LBANodeIterHelper : LBANode {
     return std::make_pair(retl, retr);
   }
   internal_iterator_t get_split_pivot() {
-    return iter_idx(get_size() / 2);
+    return iter_idx(static_cast<T*>(this)->get_size() / 2);
   }
 
   void copy_from_foreign(
@@ -381,9 +386,6 @@ struct LBAInternalNode : LBANodeIterHelper<LBAInternalNode> {
       prefer_left);
   }
 
-  bool at_max_capacity() const final { return get_size() == CAPACITY; }
-  bool at_min_capacity() const final { return get_size() == CAPACITY / 2; }
-
   void on_written(paddr_t record_block_offset) final {
   }
 
@@ -463,7 +465,7 @@ struct LBAInternalNode : LBANodeIterHelper<LBAInternalNode> {
       get_ptr(offset_of_paddr(offset) + 4)) = addr.offset;
   }
 
-  uint16_t get_size() const final {
+  uint16_t get_size() const {
     return *reinterpret_cast<const ceph_le16*>(get_ptr(SIZE_OFFSET));
   }
 
@@ -791,9 +793,6 @@ struct LBALeafNode : LBANodeIterHelper<LBAInternalNode> {
       prefer_left);
   }
 
-  bool at_max_capacity() const final { return false; /* TODO */ }
-  bool at_min_capacity() const final { return false; /* TODO */ }
-
   void on_written(paddr_t record_block_offset) final {
   }
 
@@ -877,7 +876,7 @@ struct LBALeafNode : LBANodeIterHelper<LBAInternalNode> {
   }
 
 
-  uint16_t get_size() const final {
+  uint16_t get_size() const {
     return *reinterpret_cast<const ceph_le16*>(get_ptr(SIZE_OFFSET));
   }
 
