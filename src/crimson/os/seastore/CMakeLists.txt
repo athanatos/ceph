@@ -6,7 +6,7 @@ add_library(crimson-seastore
   cache.cc
   lba_manager.cc
   lba_manager/btree/btree_lba_manager.cc
-  lba_manager/btree/btree_node.cc
+  lba_manager/btree/lba_btree_node_impl.cc
   seastore.cc)
 target_link_libraries(crimson-seastore
   crimson)

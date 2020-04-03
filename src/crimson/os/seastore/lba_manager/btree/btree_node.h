@@ -14,105 +14,285 @@
 
 namespace crimson::os::seastore::lba_manager::btree {
 
-constexpr segment_off_t LBA_BLOCK_SIZE = 4096; // TODO
+template <typename T>
+struct node_iterator_t {
+  T *node;
+  uint16_t offset;
+  node_iterator_t(
+    T *parent,
+    uint16_t offset) : node(parent), offset(offset) {}
+  
+  node_iterator_t(const node_iterator_t &) = default;
+  node_iterator_t(node_iterator_t &&) = default;
+  node_iterator_t &operator=(const node_iterator_t &) = default;
+  node_iterator_t &operator=(node_iterator_t &&) = default;
+  
+  node_iterator_t &operator*() { return *this; }
+  node_iterator_t *operator->() { return this; }
+  
+  node_iterator_t operator++(int) {
+    auto ret = *this;
+    ++offset;
+    return ret;
+  }
+  
+  node_iterator_t &operator++() {
+    ++offset;
+    return *this;
+  }
+  
+  uint16_t operator-(const node_iterator_t &rhs) const {
+    ceph_assert(rhs.node == node);
+    return offset - rhs.offset;
+  }
+  
+  node_iterator_t operator+(uint16_t off) const {
+    return node_iterator_t(
+      node,
+      offset + off);
+  }
+  node_iterator_t operator-(uint16_t off) const {
+    return node_iterator_t(
+      node,
+      offset - off);
+  }
+  
+  bool operator==(const node_iterator_t &rhs) const {
+    ceph_assert(node == rhs.node);
+    return rhs.offset == offset;
+  }
+  
+  bool operator!=(const node_iterator_t &rhs) const {
+    return !(*this == rhs);
+  }
+  
+  laddr_t get_lb() const {
+    return node->get_lb(offset);
+  }
+  
+  loff_t get_length() const {
+    return 0;
+  }
+  
+  void set_lb(laddr_t lb) {
+    node->set_lb(offset, lb);
+  }
+  
+  laddr_t get_ub() const {
+    auto next = *this + 1;
+    if (next == node->end())
+      return L_ADDR_MAX;
+    else
+      return next->get_lb();
+  }
+  
+  paddr_t get_paddr() const {
+    return node->get_paddr(offset);
+  };
+  
+  void set_paddr(paddr_t addr) {
+    node->set_paddr(offset, addr);
+  }
+  
+  bool contains(laddr_t addr) {
+    return (get_lb() <= addr) && (get_ub() > addr);
+  }
+  
+  uint16_t get_offset() const {
+    return offset;
+  }
 
-using depth_t = uint32_t;
-
-struct lba_map_val_t {
-  loff_t len = 0;
-  paddr_t paddr;
-  // other stuff: checksum, refcount
+  char *get_key_ptr() {
+    return node->get_key_ptr(offset);
+  }
+  
+  char *get_val_ptr() {
+    return node->get_val_ptr(offset);
+  }
 };
 
-class BtreeLBAPin;
-using BtreeLBAPinRef = std::unique_ptr<BtreeLBAPin>;
+template <typename T>
+struct LBANodeIterHelper {
+  using internal_iterator_t = node_iterator_t<T>;
+  internal_iterator_t begin() {
+    return internal_iterator_t(
+      static_cast<T*>(this),
+      0);
+  }
+  internal_iterator_t end() {
+    return internal_iterator_t(
+      static_cast<T*>(this),
+      static_cast<T*>(this)->get_size());
+  }
+  internal_iterator_t iter_idx(uint16_t off) {
+    return internal_iterator_t(
+      static_cast<T*>(this),
+      off);
+  }
+  std::pair<internal_iterator_t, internal_iterator_t> bound(
+    laddr_t l, laddr_t r) {
+    auto retl = begin();
+    for (; retl != end(); ++retl) {
+      if (retl->get_lb() <= l && retl->get_ub() > l)
+	break;
+    }
+    auto retr = retl;
+    for (; retr != end(); ++retr) {
+      if (retr->get_lb() > r)
+	break;
+    }
+    return std::make_pair(retl, retr);
+  }
+  internal_iterator_t get_split_pivot() {
+    return iter_idx(static_cast<T*>(this)->get_size() / 2);
+  }
 
-struct LBANode : CachedExtent {
-  using LBANodeRef = TCachedExtentRef<LBANode>;
-  using lookup_range_ertr = LBAManager::get_mapping_ertr;
-  using lookup_range_ret = LBAManager::get_mapping_ret;
+  void copy_from_foreign(
+    internal_iterator_t tgt,
+    internal_iterator_t from_src,
+    internal_iterator_t to_src) {
+    ceph_assert(tgt->node != from_src->node);
+    ceph_assert(to_src->node == from_src->node);
+    memcpy(
+      tgt->get_val_ptr(), from_src->get_val_ptr(),
+      to_src->get_val_ptr() - from_src->get_val_ptr());
+    memcpy(
+      tgt->get_key_ptr(), from_src->get_key_ptr(),
+      to_src->get_key_ptr() - from_src->get_key_ptr());
+  }
 
-  template <typename... T>
-  LBANode(T&&... t) : CachedExtent(std::forward<T>(t)...) {}
+  void copy_from_local(
+    internal_iterator_t tgt,
+    internal_iterator_t from_src,
+    internal_iterator_t to_src) {
+    ceph_assert(tgt->node == from_src->node);
+    ceph_assert(to_src->node == from_src->node);
+    memmove(
+      tgt->get_val_ptr(), from_src->get_val_ptr(),
+      to_src->get_val_ptr() - from_src->get_val_ptr());
+    memmove(
+      tgt->get_key_ptr(), from_src->get_key_ptr(),
+      to_src->get_key_ptr() - from_src->get_key_ptr());
+  }
 
-  depth_t depth;
-  void set_depth(depth_t _depth) { depth = _depth; }
-
-  virtual lookup_range_ret lookup_range(
-    Cache &cache,
-    Transaction &transaction,
-    laddr_t addr,
-    loff_t len) = 0;
-
-  /**
-   * Precondition: !at_max_capacity()
-   */
-  using insert_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error
-    >;
-  using insert_ret = insert_ertr::future<LBAPinRef>;
-  virtual insert_ret insert(
-    Cache &cache,
-    Transaction &transaction,
-    laddr_t laddr,
-    lba_map_val_t val) = 0;
-
-  /**
-   * Finds minimum hole greater in [min, max) of size at least len
-   *
-   * Returns L_ADDR_NULL if unfound
-   */
-  using find_hole_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error>;
-  using find_hole_ret = find_hole_ertr::future<laddr_t>;
-  virtual find_hole_ret find_hole(
-    Cache &cache,
-    Transaction &t,
-    laddr_t min,
-    laddr_t max,
-    loff_t len) = 0;
-
-  /**
-   * Precondition: !at_min_capacity()
-   */
-  using remove_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error
-    >;
-  using remove_ret = remove_ertr::future<>;
-  virtual remove_ret remove(
-    Cache &cache,
-    Transaction &transaction,
-    laddr_t) = 0;
-
-  virtual std::tuple<
-    LBANodeRef,
-    LBANodeRef,
-    laddr_t>
-  make_split_children(Cache &cache, Transaction &t) = 0;
-
-  virtual LBANodeRef make_full_merge(
-    Cache &cache, Transaction &t, LBANodeRef &right) = 0;
-
-  virtual std::tuple<
-    LBANodeRef,
-    LBANodeRef,
-    laddr_t>
-  make_balanced(
-    Cache &cache, Transaction &t, LBANodeRef &right,
-    laddr_t pivot, bool prefer_left) = 0;
-
-  virtual bool at_max_capacity() const = 0;
-  virtual bool at_min_capacity() const = 0;
-
-
-  virtual ~LBANode() = default;
 };
-using LBANodeRef = LBANode::LBANodeRef;
 
-Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
+
+template <typename T>
+std::tuple<LBANodeRef, LBANodeRef, laddr_t>
+do_make_split_children(
+  T &parent,
+  Cache &cache,
+  Transaction &t)
+{
+  auto left = cache.alloc_new_extent<T>(
+    t, LBA_BLOCK_SIZE);
+  auto right = cache.alloc_new_extent<T>(
+    t, LBA_BLOCK_SIZE);
+  auto piviter = parent.get_split_pivot();
+
+  left->copy_from_foreign(left->begin(), parent.begin(), piviter);
+  left->set_size(piviter - parent.begin());
+
+  right->copy_from_foreign(right->begin(), piviter, parent.end());
+  right->set_size(parent.end() - piviter);
+
+  return std::make_tuple(left, right, piviter->get_lb());
+}
+
+template <typename T>
+LBANodeRef do_make_full_merge(
+  T &left,
   Cache &cache,
   Transaction &t,
-  depth_t depth,
-  paddr_t offset);
+  LBANodeRef &_right)
+{
+  ceph_assert(_right->get_type() == T::type);
+  T &right = *static_cast<T*>(_right.get());
+  auto replacement = cache.alloc_new_extent<T>(
+    t, LBA_BLOCK_SIZE);
+
+  replacement->copy_from_foreign(
+    replacement->end(),
+    left.begin(),
+    left.end());
+  replacement->set_size(left.get_size());
+  replacement->copy_from_foreign(
+    replacement->end(),
+    right.begin(),
+    right.end());
+  replacement->set_size(left.get_size() + right.get_size());
+  return replacement;
+}
+
+template <typename T>
+std::tuple<LBANodeRef, LBANodeRef, laddr_t>
+do_make_balanced(
+  T &left,
+  Cache &cache,
+  Transaction &t,
+  LBANodeRef &_right,
+  laddr_t pivot,
+  bool prefer_left)
+{
+  ceph_assert(_right->get_type() == T::type);
+  T &right = *static_cast<T*>(_right.get());
+  auto replacement_left = cache.alloc_new_extent<T>(
+    t, LBA_BLOCK_SIZE);
+  auto replacement_right = cache.alloc_new_extent<T>(
+    t, LBA_BLOCK_SIZE);
+
+  auto total = left.get_size() + right.get_size();
+  auto pivot_idx = (left.get_size() + right.get_size()) / 2;
+  if (total % 2 && prefer_left) {
+    pivot_idx++;
+  }
+  auto replacement_pivot = pivot_idx > left.get_size() ? 
+    right.iter_idx(pivot_idx - left.get_size())->get_lb() :
+    left.iter_idx(pivot_idx)->get_lb();
+
+  if (pivot_idx < left.get_size()) {
+    replacement_left->copy_from_foreign(
+      replacement_left->end(),
+      left.begin(),
+      left.iter_idx(pivot_idx));
+    replacement_left->set_size(pivot_idx);
+
+    replacement_right->copy_from_foreign(
+      replacement_right->end(),
+      left.iter_idx(pivot_idx),
+      left.end());
+
+    replacement_right->set_size(left.get_size() - pivot_idx);
+    replacement_right->copy_from_foreign(
+      replacement_right->end(),
+      right.begin(),
+      right.end());
+    replacement_right->set_size(total - pivot_idx);
+  } else {
+    replacement_left->copy_from_foreign(
+      replacement_left->end(),
+      left.begin(),
+      left.end());
+    replacement_left->set_size(left.get_size());
+
+    replacement_left->copy_from_foreign(
+      replacement_left->end(),
+      right.begin(),
+      right.iter_idx(left.get_size() - pivot_idx));
+    replacement_left->set_size(pivot_idx);
+
+    replacement_right->copy_from_foreign(
+      replacement_right->end(),
+      right.iter_idx(left.get_size() - pivot_idx),
+      right.end());
+    replacement_right->set_size(total - pivot_idx);
+  }
+
+  return std::make_tuple(
+    replacement_left,
+    replacement_right,
+    replacement_pivot);
+}
 
 }
