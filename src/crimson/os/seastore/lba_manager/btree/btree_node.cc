@@ -23,6 +23,104 @@ namespace {
 namespace crimson::os::seastore::lba_manager::btree {
 
 template <typename T>
+struct node_iterator_t {
+  T *node;
+  uint16_t offset;
+  node_iterator_t(
+    T *parent,
+    uint16_t offset) : node(parent), offset(offset) {}
+  
+  node_iterator_t(const node_iterator_t &) = default;
+  node_iterator_t(node_iterator_t &&) = default;
+  node_iterator_t &operator=(const node_iterator_t &) = default;
+  node_iterator_t &operator=(node_iterator_t &&) = default;
+  
+  node_iterator_t &operator*() { return *this; }
+  node_iterator_t *operator->() { return this; }
+  
+  node_iterator_t operator++(int) {
+    auto ret = *this;
+    ++offset;
+    return ret;
+  }
+  
+  node_iterator_t &operator++() {
+    ++offset;
+    return *this;
+  }
+  
+  uint16_t operator-(const node_iterator_t &rhs) const {
+    ceph_assert(rhs.node == node);
+    return offset - rhs.offset;
+  }
+  
+  node_iterator_t operator+(uint16_t off) const {
+    return node_iterator_t(
+      node,
+      offset + off);
+  }
+  node_iterator_t operator-(uint16_t off) const {
+    return node_iterator_t(
+      node,
+      offset - off);
+  }
+  
+  bool operator==(const node_iterator_t &rhs) const {
+    ceph_assert(node == rhs.node);
+    return rhs.offset == offset;
+  }
+  
+  bool operator!=(const node_iterator_t &rhs) const {
+    return !(*this == rhs);
+  }
+  
+  laddr_t get_lb() const {
+    return node->get_lb(offset);
+  }
+  
+  loff_t get_length() const {
+    return 0;
+  }
+  
+  void set_lb(laddr_t lb) {
+    node->set_lb(offset, lb);
+  }
+  
+  laddr_t get_ub() const {
+    auto next = *this + 1;
+    if (next == node->end())
+      return L_ADDR_MAX;
+    else
+      return next->get_lb();
+  }
+  
+  paddr_t get_paddr() const {
+    return node->get_paddr(offset);
+  };
+  
+  void set_paddr(paddr_t addr) {
+    node->set_paddr(offset, addr);
+  }
+  
+  bool contains(laddr_t addr) {
+    return (get_lb() <= addr) && (get_ub() > addr);
+  }
+  
+  uint16_t get_offset() const {
+    return offset;
+  }
+
+  char *get_key_ptr() {
+    return node->get_key_ptr(offset);
+  }
+  
+  char *get_val_ptr() {
+    return node->get_val_ptr(offset);
+  }
+};
+
+
+template <typename T>
 std::tuple<LBANodeRef, LBANodeRef, laddr_t>
 do_make_split_children(
   T &parent,
@@ -258,6 +356,42 @@ struct LBAInternalNode : LBANode {
     return get_bptr().c_str() + offset;
   }
 
+  // iterator helpers
+  laddr_t get_lb(uint16_t offset) const {
+    return *reinterpret_cast<const ceph_le64*>(
+      get_ptr(offset_of_lb(offset)));
+  }
+
+  void set_lb(uint16_t offset, laddr_t lb) {
+    *reinterpret_cast<ceph_le64*>(
+      get_ptr(offset_of_lb(offset))) = lb;
+  }
+
+  paddr_t get_paddr(uint16_t offset) const {
+    return paddr_t{
+      *reinterpret_cast<const ceph_les32*>(
+	get_ptr(offset_of_paddr(offset))),
+	static_cast<segment_off_t>(
+	  *reinterpret_cast<const ceph_les32*>(
+	    get_ptr(offset_of_paddr(offset))) + 4)
+	};
+  }
+
+  char *get_key_ptr(uint16_t offset) {
+    return get_ptr(offset_of_lb(offset));
+  }
+
+  char *get_val_ptr(uint16_t offset) {
+    return get_ptr(offset_of_paddr(offset));
+  }
+
+  void set_paddr(uint16_t offset, paddr_t addr) {
+    *reinterpret_cast<ceph_le32*>(
+      get_ptr(offset_of_paddr(offset))) = addr.segment;
+    *reinterpret_cast<ceph_le32*>(
+      get_ptr(offset_of_paddr(offset) + 4)) = addr.offset;
+  }
+
   uint16_t get_size() const {
     return *reinterpret_cast<const ceph_le16*>(get_ptr(SIZE_OFFSET));
   }
@@ -266,105 +400,7 @@ struct LBAInternalNode : LBANode {
     *reinterpret_cast<ceph_le16*>(get_ptr(SIZE_OFFSET)) = size;
   }
 
-  struct internal_iterator_t {
-    LBAInternalNode *node;
-    uint16_t offset;
-    internal_iterator_t(
-      LBAInternalNode *parent,
-      uint16_t offset) : node(parent), offset(offset) {}
-
-    internal_iterator_t(const internal_iterator_t &) = default;
-    internal_iterator_t(internal_iterator_t &&) = default;
-    internal_iterator_t &operator=(const internal_iterator_t &) = default;
-    internal_iterator_t &operator=(internal_iterator_t &&) = default;
-
-    internal_iterator_t &operator*() { return *this; }
-    internal_iterator_t *operator->() { return this; }
-
-    internal_iterator_t operator++(int) {
-      auto ret = *this;
-      ++offset;
-      return ret;
-    }
-
-    internal_iterator_t &operator++() {
-      ++offset;
-      return *this;
-    }
-
-    uint16_t operator-(const internal_iterator_t &rhs) const {
-      ceph_assert(rhs.node == node);
-      return offset - rhs.offset;
-    }
-
-    internal_iterator_t operator+(uint16_t off) const {
-      return internal_iterator_t(
-	node,
-	offset + off);
-    }
-    internal_iterator_t operator-(uint16_t off) const {
-      return internal_iterator_t(
-	node,
-	offset - off);
-    }
-
-    bool operator==(const internal_iterator_t &rhs) const {
-      ceph_assert(node == rhs.node);
-      return rhs.offset == offset;
-    }
-
-    bool operator!=(const internal_iterator_t &rhs) const {
-      return !(*this == rhs);
-    }
-
-    laddr_t get_lb() const {
-      return *reinterpret_cast<const ceph_le64*>(
-	node->get_ptr(offset_of_lb(offset)));
-    }
-
-    void set_lb(laddr_t lb) {
-      *reinterpret_cast<ceph_le64*>(
-	node->get_ptr(offset_of_lb(offset))) = lb;
-    }
-
-    laddr_t get_ub() const {
-      auto next = *this + 1;
-      if (next == node->end())
-	return L_ADDR_MAX;
-      else
-	return next->get_lb();
-    }
-
-    paddr_t get_paddr() const {
-      return paddr_t{
-	*reinterpret_cast<const ceph_les32*>(
-	  node->get_ptr(offset_of_paddr(offset))),
-	static_cast<segment_off_t>(
-	  *reinterpret_cast<const ceph_les32*>(
-	    node->get_ptr(offset_of_paddr(offset))) + 4)
-	  };
-    };
-
-    void set_paddr(paddr_t addr) {
-      *reinterpret_cast<ceph_le32*>(
-	node->get_ptr(offset_of_paddr(offset))) = addr.segment;
-      *reinterpret_cast<ceph_le32*>(
-	node->get_ptr(offset_of_paddr(offset) + 4)) = addr.offset;
-    }
-
-    bool contains(laddr_t addr) {
-      return (get_lb() <= addr) && (get_ub() > addr);
-    }
-
-    char *get_laddr_ptr() {
-      return node->get_ptr(offset_of_lb(offset));
-    }
-
-    char *get_paddr_ptr() {
-      return node->get_ptr(offset_of_paddr(offset));
-    }
-  };
-  
+  using internal_iterator_t = node_iterator_t<LBAInternalNode>;
   internal_iterator_t begin() {
     return internal_iterator_t(this, 0);
   }
@@ -399,11 +435,11 @@ struct LBAInternalNode : LBANode {
     ceph_assert(tgt->node != from_src->node);
     ceph_assert(to_src->node == from_src->node);
     memcpy(
-      tgt->get_paddr_ptr(), from_src->get_paddr_ptr(),
-      to_src->get_paddr_ptr() - from_src->get_paddr_ptr());
+      tgt->get_val_ptr(), from_src->get_val_ptr(),
+      to_src->get_val_ptr() - from_src->get_val_ptr());
     memcpy(
-      tgt->get_laddr_ptr(), from_src->get_laddr_ptr(),
-      to_src->get_laddr_ptr() - from_src->get_laddr_ptr());
+      tgt->get_key_ptr(), from_src->get_key_ptr(),
+      to_src->get_key_ptr() - from_src->get_key_ptr());
   }
 
   void copy_from_local(
@@ -413,11 +449,11 @@ struct LBAInternalNode : LBANode {
     ceph_assert(tgt->node == from_src->node);
     ceph_assert(to_src->node == from_src->node);
     memmove(
-      tgt->get_paddr_ptr(), from_src->get_paddr_ptr(),
-      to_src->get_paddr_ptr() - from_src->get_paddr_ptr());
+      tgt->get_val_ptr(), from_src->get_val_ptr(),
+      to_src->get_val_ptr() - from_src->get_val_ptr());
     memmove(
-      tgt->get_laddr_ptr(), from_src->get_laddr_ptr(),
-      to_src->get_laddr_ptr() - from_src->get_laddr_ptr());
+      tgt->get_key_ptr(), from_src->get_key_ptr(),
+      to_src->get_key_ptr() - from_src->get_key_ptr());
   }
 
   using split_ertr = crimson::errorator<
@@ -766,6 +802,7 @@ struct LBALeafNode : LBANode {
   }
 
   // TODO
+  using internal_iterator_t = node_iterator_t<LBALeafNode>;
   static constexpr uint16_t CAPACITY = 0;
   static constexpr off_t SIZE_OFFSET = 0;
   static constexpr off_t LADDR_START = 0;
@@ -788,6 +825,43 @@ struct LBALeafNode : LBANode {
     return get_bptr().c_str() + offset;
   }
 
+  // iterator helpers
+  laddr_t get_lb(uint16_t offset) const {
+    return *reinterpret_cast<const ceph_le64*>(
+      get_ptr(offset_of_lb(offset)));
+  }
+
+  void set_lb(uint16_t offset, laddr_t lb) {
+    *reinterpret_cast<ceph_le64*>(
+      get_ptr(offset_of_lb(offset))) = lb;
+  }
+
+  paddr_t get_paddr(uint16_t offset) const {
+    return paddr_t{
+      *reinterpret_cast<const ceph_les32*>(
+	get_ptr(offset_of_paddr(offset))),
+	static_cast<segment_off_t>(
+	  *reinterpret_cast<const ceph_les32*>(
+	    get_ptr(offset_of_paddr(offset))) + 4)
+	};
+  }
+
+  char *get_key_ptr(uint16_t offset) {
+    return get_ptr(offset_of_lb(offset));
+  }
+
+  char *get_val_ptr(uint16_t offset) {
+    return get_ptr(offset_of_paddr(offset));
+  }
+
+  void set_paddr(uint16_t offset, paddr_t addr) {
+    *reinterpret_cast<ceph_le32*>(
+      get_ptr(offset_of_paddr(offset))) = addr.segment;
+    *reinterpret_cast<ceph_le32*>(
+      get_ptr(offset_of_paddr(offset) + 4)) = addr.offset;
+  }
+
+
   uint16_t get_size() const {
     return *reinterpret_cast<const ceph_le16*>(get_ptr(SIZE_OFFSET));
   }
@@ -795,109 +869,6 @@ struct LBALeafNode : LBANode {
   void set_size(uint16_t size) {
     *reinterpret_cast<ceph_le16*>(get_ptr(SIZE_OFFSET)) = size;
   }
-
-  struct internal_iterator_t {
-    LBALeafNode *node;
-    uint16_t offset;
-    internal_iterator_t(
-      LBALeafNode *parent,
-      uint16_t offset) : node(parent), offset(offset) {}
-
-    internal_iterator_t(const internal_iterator_t &) = default;
-    internal_iterator_t(internal_iterator_t &&) = default;
-    internal_iterator_t &operator=(const internal_iterator_t &) = default;
-    internal_iterator_t &operator=(internal_iterator_t &&) = default;
-
-    internal_iterator_t &operator*() { return *this; }
-    internal_iterator_t *operator->() { return this; }
-
-    internal_iterator_t operator++(int) {
-      auto ret = *this;
-      ++offset;
-      return ret;
-    }
-
-    internal_iterator_t &operator++() {
-      ++offset;
-      return *this;
-    }
-
-    uint16_t operator-(const internal_iterator_t &rhs) const {
-      ceph_assert(rhs.node == node);
-      return offset - rhs.offset;
-    }
-
-    internal_iterator_t operator+(uint16_t off) const {
-      return internal_iterator_t(
-	node,
-	offset + off);
-    }
-    internal_iterator_t operator-(uint16_t off) const {
-      return internal_iterator_t(
-	node,
-	offset - off);
-    }
-
-    bool operator==(const internal_iterator_t &rhs) const {
-      ceph_assert(node == rhs.node);
-      return rhs.offset == offset;
-    }
-
-    bool operator!=(const internal_iterator_t &rhs) const {
-      return !(*this == rhs);
-    }
-
-    laddr_t get_lb() const {
-      return *reinterpret_cast<const ceph_le64*>(
-	node->get_ptr(offset_of_lb(offset)));
-    }
-
-    loff_t get_length() const {
-      return 0;
-    }
-
-    void set_lb(laddr_t lb) {
-      *reinterpret_cast<ceph_le64*>(
-	node->get_ptr(offset_of_lb(offset))) = lb;
-    }
-
-    laddr_t get_ub() const {
-      auto next = *this + 1;
-      if (next == node->end())
-	return L_ADDR_MAX;
-      else
-	return next->get_lb();
-    }
-
-    paddr_t get_paddr() const {
-      return paddr_t{
-	*reinterpret_cast<const ceph_les32*>(
-	  node->get_ptr(offset_of_paddr(offset))),
-	static_cast<segment_off_t>(
-	  *reinterpret_cast<const ceph_les32*>(
-	    node->get_ptr(offset_of_paddr(offset))) + 4)
-	  };
-    };
-
-    void set_paddr(paddr_t addr) {
-      *reinterpret_cast<ceph_le32*>(
-	node->get_ptr(offset_of_paddr(offset))) = addr.segment;
-      *reinterpret_cast<ceph_le32*>(
-	node->get_ptr(offset_of_paddr(offset) + 4)) = addr.offset;
-    }
-
-    bool contains(laddr_t addr) {
-      return (get_lb() <= addr) && (get_ub() > addr);
-    }
-
-    char *get_laddr_ptr() {
-      return node->get_ptr(offset_of_lb(offset));
-    }
-
-    char *get_paddr_ptr() {
-      return node->get_ptr(offset_of_paddr(offset));
-    }
-  };
 
   internal_iterator_t begin() {
     return internal_iterator_t(this, 0);
@@ -933,11 +904,11 @@ struct LBALeafNode : LBANode {
     ceph_assert(tgt->node != from_src->node);
     ceph_assert(to_src->node == from_src->node);
     memcpy(
-      tgt->get_paddr_ptr(), from_src->get_paddr_ptr(),
-      to_src->get_paddr_ptr() - from_src->get_paddr_ptr());
+      tgt->get_val_ptr(), from_src->get_val_ptr(),
+      to_src->get_val_ptr() - from_src->get_val_ptr());
     memcpy(
-      tgt->get_laddr_ptr(), from_src->get_laddr_ptr(),
-      to_src->get_laddr_ptr() - from_src->get_laddr_ptr());
+      tgt->get_key_ptr(), from_src->get_key_ptr(),
+      to_src->get_key_ptr() - from_src->get_key_ptr());
   }
 
   void copy_from_local(
@@ -947,11 +918,11 @@ struct LBALeafNode : LBANode {
     ceph_assert(tgt->node == from_src->node);
     ceph_assert(to_src->node == from_src->node);
     memmove(
-      tgt->get_paddr_ptr(), from_src->get_paddr_ptr(),
-      to_src->get_paddr_ptr() - from_src->get_paddr_ptr());
+      tgt->get_val_ptr(), from_src->get_val_ptr(),
+      to_src->get_val_ptr() - from_src->get_val_ptr());
     memmove(
-      tgt->get_laddr_ptr(), from_src->get_laddr_ptr(),
-      to_src->get_laddr_ptr() - from_src->get_laddr_ptr());
+      tgt->get_key_ptr(), from_src->get_key_ptr(),
+      to_src->get_key_ptr() - from_src->get_key_ptr());
   }
 
   std::pair<internal_iterator_t, internal_iterator_t>
