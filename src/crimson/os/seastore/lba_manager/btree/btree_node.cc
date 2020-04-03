@@ -120,17 +120,7 @@ struct node_iterator_t {
 };
 
 template <typename T>
-struct LBANodeIterHelper : LBANode {
-  template <typename... U>
-  LBANodeIterHelper(U&&... t) : LBANode(std::forward<U>(t)...) {}
-
-  bool at_max_capacity() const final {
-    return static_cast<const T*>(this)->get_size() == T::CAPACITY;
-  }
-  bool at_min_capacity() const final {
-    return static_cast<const T*>(this)->get_size() == T::CAPACITY / 2;
-  }
-
+struct LBANodeIterHelper {
   using internal_iterator_t = node_iterator_t<T>;
   internal_iterator_t begin() {
     return internal_iterator_t(
@@ -327,9 +317,10 @@ do_make_balanced(
  *   values     : paddr_t[255]     (255*8)b
  *                                 = 4096
  */
-struct LBAInternalNode : LBANodeIterHelper<LBAInternalNode> {
+struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
   template <typename... T>
-  LBAInternalNode(T&&... t) : LBANodeIterHelper(std::forward<T>(t)...) {}
+  LBAInternalNode(T&&... t) :
+    LBANode(std::forward<T>(t)...) {}
 
   static constexpr extent_types_t type = extent_types_t::LADDR_INTERNAL;
 
@@ -463,6 +454,14 @@ struct LBAInternalNode : LBANodeIterHelper<LBAInternalNode> {
       get_ptr(offset_of_paddr(offset))) = addr.segment;
     *reinterpret_cast<ceph_le32*>(
       get_ptr(offset_of_paddr(offset) + 4)) = addr.offset;
+  }
+
+  bool at_max_capacity() const final {
+    return get_size() == CAPACITY;
+  }
+
+  bool at_min_capacity() const final {
+    return get_size() == CAPACITY / 2;
   }
 
   uint16_t get_size() const {
@@ -734,9 +733,9 @@ LBAInternalNode::get_containing_child(laddr_t laddr)
  *   values     : lba_map_val_t[170] (170*16)b
  *                                   = 4096
  */
-struct LBALeafNode : LBANodeIterHelper<LBAInternalNode> {
+struct LBALeafNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
   template <typename... T>
-  LBALeafNode(T&&... t) : LBANodeIterHelper(std::forward<T>(t)...) {}
+  LBALeafNode(T&&... t) : LBANode(std::forward<T>(t)...) {}
 
   static constexpr extent_types_t type = extent_types_t::LADDR_LEAF;
 
@@ -875,6 +874,13 @@ struct LBALeafNode : LBANodeIterHelper<LBAInternalNode> {
       get_ptr(offset_of_paddr(offset) + 4)) = addr.offset;
   }
 
+  bool at_max_capacity() const final {
+    return get_size() == CAPACITY;
+  }
+
+  bool at_min_capacity() const final {
+    return get_size() == CAPACITY / 2;
+  }
 
   uint16_t get_size() const {
     return *reinterpret_cast<const ceph_le16*>(get_ptr(SIZE_OFFSET));
