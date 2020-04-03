@@ -20,7 +20,7 @@
 #include "crimson/os/seastore/cache.h"
 #include "crimson/os/seastore/segment_manager.h"
 
-#include "crimson/os/seastore/lba_manager/btree/btree_node.h"
+#include "crimson/os/seastore/lba_manager/btree/lba_btree_node.h"
 
 namespace crimson::os::seastore::lba_manager::btree {
 

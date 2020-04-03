@@ -11,12 +11,6 @@
 
 #include "crimson/common/log.h"
 
-namespace {
-  seastar::logger& logger() {
-    return crimson::get_logger(ceph_subsys_filestore);
-  }
-}
-
 namespace crimson::os::seastore::lba_manager::btree {
 
 using depth_t = uint32_t;
@@ -111,5 +105,11 @@ struct LBANode : CachedExtent {
   virtual ~LBANode() = default;
 };
 using LBANodeRef = LBANode::LBANodeRef;
+
+Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
+  Cache &cache,
+  Transaction &t,
+  depth_t depth,
+  paddr_t offset);
 
 }

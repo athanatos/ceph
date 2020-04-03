@@ -324,4 +324,6 @@ Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
   }
 }
 
+}
+
 

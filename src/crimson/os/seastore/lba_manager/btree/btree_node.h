@@ -14,6 +14,8 @@
 
 namespace crimson::os::seastore::lba_manager::btree {
 
+constexpr segment_off_t LBA_BLOCK_SIZE = 4096; // TODO
+
 template <typename T>
 struct node_iterator_t {
   T *node;
@@ -178,8 +180,8 @@ struct LBANodeIterHelper {
 };
 
 
-template <typename T>
-std::tuple<LBANodeRef, LBANodeRef, laddr_t>
+template <typename T, typename C, typename P>
+std::tuple<TCachedExtentRef<C>, TCachedExtentRef<C>, P>
 do_make_split_children(
   T &parent,
   Cache &cache,
@@ -200,12 +202,12 @@ do_make_split_children(
   return std::make_tuple(left, right, piviter->get_lb());
 }
 
-template <typename T>
-LBANodeRef do_make_full_merge(
+template <typename T, typename C>
+TCachedExtentRef<C> do_make_full_merge(
   T &left,
   Cache &cache,
   Transaction &t,
-  LBANodeRef &_right)
+  TCachedExtentRef<C> &_right)
 {
   ceph_assert(_right->get_type() == T::type);
   T &right = *static_cast<T*>(_right.get());
@@ -225,14 +227,14 @@ LBANodeRef do_make_full_merge(
   return replacement;
 }
 
-template <typename T>
-std::tuple<LBANodeRef, LBANodeRef, laddr_t>
+template <typename T, typename C, typename P>
+std::tuple<TCachedExtentRef<C>, TCachedExtentRef<C>, P>
 do_make_balanced(
   T &left,
   Cache &cache,
   Transaction &t,
-  LBANodeRef &_right,
-  laddr_t pivot,
+  TCachedExtentRef<C> &_right,
+  P pivot,
   bool prefer_left)
 {
   ceph_assert(_right->get_type() == T::type);
