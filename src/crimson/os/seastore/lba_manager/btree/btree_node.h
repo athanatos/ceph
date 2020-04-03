@@ -18,18 +18,6 @@ constexpr segment_off_t LBA_BLOCK_SIZE = 4096; // TODO
 
 using depth_t = uint32_t;
 
-template <typename addr_t, typename addr_off_t>
-struct Node : public CachedExtent {
-  depth_t depth;
-
-  template <typename... T>
-  Node(T&&... t) : CachedExtent(std::forward<T>(t)...) {}
-
-  void set_depth(depth_t _depth) { depth = _depth; }
-
-  virtual ~Node() = default;
-};
-
 struct lba_map_val_t {
   loff_t len = 0;
   paddr_t paddr;
@@ -39,13 +27,16 @@ struct lba_map_val_t {
 class BtreeLBAPin;
 using BtreeLBAPinRef = std::unique_ptr<BtreeLBAPin>;
 
-struct LBANode : Node<laddr_t, loff_t> {
+struct LBANode : CachedExtent {
   using LBANodeRef = TCachedExtentRef<LBANode>;
   using lookup_range_ertr = LBAManager::get_mapping_ertr;
   using lookup_range_ret = LBAManager::get_mapping_ret;
 
   template <typename... T>
-  LBANode(T&&... t) : Node(std::forward<T>(t)...) {}
+  LBANode(T&&... t) : CachedExtent(std::forward<T>(t)...) {}
+
+  depth_t depth;
+  void set_depth(depth_t _depth) { depth = _depth; }
 
   virtual lookup_range_ret lookup_range(
     Cache &cache,
@@ -123,11 +114,5 @@ Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
   Transaction &t,
   depth_t depth,
   paddr_t offset);
-
-struct SegmentInternalNode : Node<paddr_t, segment_off_t> {
-};
-
-struct SegmentLeafNode : Node<paddr_t, segment_off_t> {
-};
 
 }
