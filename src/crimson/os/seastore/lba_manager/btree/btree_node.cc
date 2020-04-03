@@ -187,31 +187,15 @@ struct LBAInternalNode : LBANode {
     laddr_t max,
     loff_t len) final;
 
-  template <typename T>
-  friend std::tuple<LBANodeRef, LBANodeRef, laddr_t>
-  do_make_split_children(T &parent, Cache &cache, Transaction &t);
-
   std::tuple<LBANodeRef, LBANodeRef, laddr_t>
   make_split_children(Cache &cache, Transaction &t) final {
     return do_make_split_children<LBAInternalNode>(*this, cache, t);
   }
 
-  template <typename T>
-  friend LBANodeRef do_make_full_merge(
-    T &left, Cache &cache, Transaction &t, LBANodeRef &right);
-
   LBANodeRef make_full_merge(
     Cache &cache, Transaction &t, LBANodeRef &right) final {
     return do_make_full_merge<LBAInternalNode>(*this, cache, t, right);
   }
-
-  template <typename T>
-  friend std::tuple<LBANodeRef, LBANodeRef, laddr_t>
-  do_make_balanced(
-    T &left,
-    Cache &cache, Transaction &t,
-    LBANodeRef &right, laddr_t pivot,
-    bool prefer_left);
 
   std::tuple<
     LBANodeRef,
@@ -252,7 +236,6 @@ struct LBAInternalNode : LBANode {
     return complete_load_ertr::now();
   }
 
-private:
   static constexpr uint16_t CAPACITY = 255;
   static constexpr off_t SIZE_OFFSET = 0;
   static constexpr off_t LADDR_START = 16;
@@ -732,31 +715,15 @@ struct LBALeafNode : LBANode {
     laddr_t max,
     loff_t len) final;
 
-  template <typename T>
-  friend std::tuple<LBANodeRef, LBANodeRef, laddr_t>
-  do_make_split_children(T &parent, Cache &cache, Transaction &t);
-
   std::tuple<LBANodeRef, LBANodeRef, laddr_t>
   make_split_children(Cache &cache, Transaction &t) final {
     return do_make_split_children<LBALeafNode>(*this, cache, t);
   }
 
-  template <typename T>
-  friend LBANodeRef do_make_full_merge(
-    T &left, Cache &cache, Transaction &t, LBANodeRef &right);
-
   LBANodeRef make_full_merge(
     Cache &cache, Transaction &t, LBANodeRef &right) final {
     return do_make_full_merge<LBALeafNode>(*this, cache, t, right);
   }
-
-  template <typename T>
-  friend std::tuple<LBANodeRef, LBANodeRef, laddr_t>
-  do_make_balanced(
-    T &left,
-    Cache &cache, Transaction &t,
-    LBANodeRef &right, laddr_t pivot,
-    bool prefer_left);
 
   std::tuple<
     LBANodeRef,
@@ -798,7 +765,6 @@ struct LBALeafNode : LBANode {
     return complete_load_ertr::now();
   }
 
-private:
   // TODO
   static constexpr uint16_t CAPACITY = 0;
   static constexpr off_t SIZE_OFFSET = 0;
