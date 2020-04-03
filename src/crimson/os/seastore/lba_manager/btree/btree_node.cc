@@ -119,6 +119,77 @@ struct node_iterator_t {
   }
 };
 
+template <typename T>
+struct LBANodeIterHelper : LBANode {
+  template <typename... U>
+  LBANodeIterHelper(U&&... t) : LBANode(std::forward<U>(t)...) {}
+
+  virtual uint16_t get_size() const = 0;
+
+  using internal_iterator_t = node_iterator_t<T>;
+  internal_iterator_t begin() {
+    return internal_iterator_t(
+      static_cast<T*>(this),
+      0);
+  }
+  internal_iterator_t end() {
+    return internal_iterator_t(
+      static_cast<T*>(this),
+      get_size());
+  }
+  internal_iterator_t iter_idx(uint16_t off) {
+    return internal_iterator_t(
+      static_cast<T*>(this),
+      off);
+  }
+  std::pair<internal_iterator_t, internal_iterator_t> bound(
+    laddr_t l, laddr_t r) {
+    auto retl = begin();
+    for (; retl != end(); ++retl) {
+      if (retl->get_lb() <= l && retl->get_ub() > l)
+	break;
+    }
+    auto retr = retl;
+    for (; retr != end(); ++retr) {
+      if (retr->get_lb() > r)
+	break;
+    }
+    return std::make_pair(retl, retr);
+  }
+  internal_iterator_t get_split_pivot() {
+    return iter_idx(get_size() / 2);
+  }
+
+  void copy_from_foreign(
+    internal_iterator_t tgt,
+    internal_iterator_t from_src,
+    internal_iterator_t to_src) {
+    ceph_assert(tgt->node != from_src->node);
+    ceph_assert(to_src->node == from_src->node);
+    memcpy(
+      tgt->get_val_ptr(), from_src->get_val_ptr(),
+      to_src->get_val_ptr() - from_src->get_val_ptr());
+    memcpy(
+      tgt->get_key_ptr(), from_src->get_key_ptr(),
+      to_src->get_key_ptr() - from_src->get_key_ptr());
+  }
+
+  void copy_from_local(
+    internal_iterator_t tgt,
+    internal_iterator_t from_src,
+    internal_iterator_t to_src) {
+    ceph_assert(tgt->node == from_src->node);
+    ceph_assert(to_src->node == from_src->node);
+    memmove(
+      tgt->get_val_ptr(), from_src->get_val_ptr(),
+      to_src->get_val_ptr() - from_src->get_val_ptr());
+    memmove(
+      tgt->get_key_ptr(), from_src->get_key_ptr(),
+      to_src->get_key_ptr() - from_src->get_key_ptr());
+  }
+
+};
+
 
 template <typename T>
 std::tuple<LBANodeRef, LBANodeRef, laddr_t>
@@ -251,9 +322,9 @@ do_make_balanced(
  *   values     : paddr_t[255]     (255*8)b
  *                                 = 4096
  */
-struct LBAInternalNode : LBANode {
+struct LBAInternalNode : LBANodeIterHelper<LBAInternalNode> {
   template <typename... T>
-  LBAInternalNode(T&&... t) : LBANode(std::forward<T>(t)...) {}
+  LBAInternalNode(T&&... t) : LBANodeIterHelper(std::forward<T>(t)...) {}
 
   static constexpr extent_types_t type = extent_types_t::LADDR_INTERNAL;
 
@@ -392,68 +463,12 @@ struct LBAInternalNode : LBANode {
       get_ptr(offset_of_paddr(offset) + 4)) = addr.offset;
   }
 
-  uint16_t get_size() const {
+  uint16_t get_size() const final {
     return *reinterpret_cast<const ceph_le16*>(get_ptr(SIZE_OFFSET));
   }
 
   void set_size(uint16_t size) {
     *reinterpret_cast<ceph_le16*>(get_ptr(SIZE_OFFSET)) = size;
-  }
-
-  using internal_iterator_t = node_iterator_t<LBAInternalNode>;
-  internal_iterator_t begin() {
-    return internal_iterator_t(this, 0);
-  }
-  internal_iterator_t end() {
-    return internal_iterator_t(this, get_size());
-  }
-  internal_iterator_t iter_idx(uint16_t off) {
-    return internal_iterator_t(this, off);
-  }
-  std::pair<internal_iterator_t, internal_iterator_t> bound(
-    laddr_t l, laddr_t r) {
-    auto retl = begin();
-    for (; retl != end(); ++retl) {
-      if (retl->get_lb() <= l && retl->get_ub() > l)
-	break;
-    }
-    auto retr = retl;
-    for (; retr != end(); ++retr) {
-      if (retr->get_lb() > r)
-	break;
-    }
-    return std::make_pair(retl, retr);
-  }
-  internal_iterator_t get_split_pivot() {
-    return iter_idx(get_size() / 2);
-  }
-
-  void copy_from_foreign(
-    internal_iterator_t tgt,
-    internal_iterator_t from_src,
-    internal_iterator_t to_src) {
-    ceph_assert(tgt->node != from_src->node);
-    ceph_assert(to_src->node == from_src->node);
-    memcpy(
-      tgt->get_val_ptr(), from_src->get_val_ptr(),
-      to_src->get_val_ptr() - from_src->get_val_ptr());
-    memcpy(
-      tgt->get_key_ptr(), from_src->get_key_ptr(),
-      to_src->get_key_ptr() - from_src->get_key_ptr());
-  }
-
-  void copy_from_local(
-    internal_iterator_t tgt,
-    internal_iterator_t from_src,
-    internal_iterator_t to_src) {
-    ceph_assert(tgt->node == from_src->node);
-    ceph_assert(to_src->node == from_src->node);
-    memmove(
-      tgt->get_val_ptr(), from_src->get_val_ptr(),
-      to_src->get_val_ptr() - from_src->get_val_ptr());
-    memmove(
-      tgt->get_key_ptr(), from_src->get_key_ptr(),
-      to_src->get_key_ptr() - from_src->get_key_ptr());
   }
 
   using split_ertr = crimson::errorator<
@@ -717,9 +732,9 @@ LBAInternalNode::get_containing_child(laddr_t laddr)
  *   values     : lba_map_val_t[170] (170*16)b
  *                                   = 4096
  */
-struct LBALeafNode : LBANode {
+struct LBALeafNode : LBANodeIterHelper<LBAInternalNode> {
   template <typename... T>
-  LBALeafNode(T&&... t) : LBANode(std::forward<T>(t)...) {}
+  LBALeafNode(T&&... t) : LBANodeIterHelper(std::forward<T>(t)...) {}
 
   static constexpr extent_types_t type = extent_types_t::LADDR_LEAF;
 
@@ -862,67 +877,12 @@ struct LBALeafNode : LBANode {
   }
 
 
-  uint16_t get_size() const {
+  uint16_t get_size() const final {
     return *reinterpret_cast<const ceph_le16*>(get_ptr(SIZE_OFFSET));
   }
 
   void set_size(uint16_t size) {
     *reinterpret_cast<ceph_le16*>(get_ptr(SIZE_OFFSET)) = size;
-  }
-
-  internal_iterator_t begin() {
-    return internal_iterator_t(this, 0);
-  }
-  internal_iterator_t end() {
-    return internal_iterator_t(this, get_size());
-  }
-  internal_iterator_t iter_idx(uint16_t off) {
-    return internal_iterator_t(this, off);
-  }
-  std::pair<internal_iterator_t, internal_iterator_t> bound(
-    laddr_t l, laddr_t r) {
-    auto retl = begin();
-    for (; retl != end(); ++retl) {
-      if (retl->get_lb() <= l && retl->get_ub() > l)
-	break;
-    }
-    auto retr = retl;
-    for (; retr != end(); ++retr) {
-      if (retr->get_lb() > r)
-	break;
-    }
-    return std::make_pair(retl, retr);
-  }
-  internal_iterator_t get_split_pivot() {
-    return iter_idx(get_size() / 2);
-  }
-
-  void copy_from_foreign(
-    internal_iterator_t tgt,
-    internal_iterator_t from_src,
-    internal_iterator_t to_src) {
-    ceph_assert(tgt->node != from_src->node);
-    ceph_assert(to_src->node == from_src->node);
-    memcpy(
-      tgt->get_val_ptr(), from_src->get_val_ptr(),
-      to_src->get_val_ptr() - from_src->get_val_ptr());
-    memcpy(
-      tgt->get_key_ptr(), from_src->get_key_ptr(),
-      to_src->get_key_ptr() - from_src->get_key_ptr());
-  }
-
-  void copy_from_local(
-    internal_iterator_t tgt,
-    internal_iterator_t from_src,
-    internal_iterator_t to_src) {
-    ceph_assert(tgt->node == from_src->node);
-    ceph_assert(to_src->node == from_src->node);
-    memmove(
-      tgt->get_val_ptr(), from_src->get_val_ptr(),
-      to_src->get_val_ptr() - from_src->get_val_ptr());
-    memmove(
-      tgt->get_key_ptr(), from_src->get_key_ptr(),
-      to_src->get_key_ptr() - from_src->get_key_ptr());
   }
 
   std::pair<internal_iterator_t, internal_iterator_t>
