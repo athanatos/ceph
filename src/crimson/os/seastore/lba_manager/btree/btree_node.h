@@ -87,13 +87,14 @@ struct node_iterator_t {
     else
       return next->get_lb();
   }
-  
-  paddr_t get_paddr() const {
-    return node->get_paddr(offset);
+
+  auto get_val() const {
+    return node->get_val(offset);
   };
   
-  void set_paddr(paddr_t addr) {
-    node->set_paddr(offset, addr);
+  template <typename U>
+  void set_val(U addr) {
+    node->set_val(offset, addr);
   }
   
   bool contains(laddr_t addr) {

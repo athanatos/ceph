@@ -24,9 +24,8 @@ namespace crimson::os::seastore::lba_manager::btree {
  * LBA Tree.
  *
  * Layout (4k):
- *   start_pivot: laddr_t          8b
  *   num_entries: uint16_t         2b
- *   (padding)  :                  6b
+ *   (padding)  :                  14b
  *   keys       : laddr_t[255]     (255*8)b
  *   values     : paddr_t[255]     (255*8)b
  *                                 = 4096
@@ -147,7 +146,7 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
       get_ptr(offset_of_lb(offset))) = lb;
   }
 
-  paddr_t get_paddr(uint16_t offset) const {
+  paddr_t get_val(uint16_t offset) const {
     return paddr_t{
       *reinterpret_cast<const ceph_les32*>(
 	get_ptr(offset_of_paddr(offset))),
@@ -157,19 +156,19 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
 	};
   }
 
+  void set_val(uint16_t offset, paddr_t addr) {
+    *reinterpret_cast<ceph_les32*>(
+      get_ptr(offset_of_paddr(offset))) = addr.segment;
+    *reinterpret_cast<ceph_les32*>(
+      get_ptr(offset_of_paddr(offset) + 4)) = addr.offset;
+  }
+
   char *get_key_ptr(uint16_t offset) {
     return get_ptr(offset_of_lb(offset));
   }
 
   char *get_val_ptr(uint16_t offset) {
     return get_ptr(offset_of_paddr(offset));
-  }
-
-  void set_paddr(uint16_t offset, paddr_t addr) {
-    *reinterpret_cast<ceph_le32*>(
-      get_ptr(offset_of_paddr(offset))) = addr.segment;
-    *reinterpret_cast<ceph_le32*>(
-      get_ptr(offset_of_paddr(offset) + 4)) = addr.offset;
   }
 
   bool at_max_capacity() const final {
@@ -227,9 +226,8 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
  * LBA Tree.
  *
  * Layout (4k):
- *   start_pivot: laddr_t            8b
  *   num_entries: uint16_t           2b
- *   (padding)  :                    6b
+ *   (padding)  :                    14b
  *   keys       : laddr_t[170]       (170*8)b
  *   values     : lba_map_val_t[170] (170*16)b
  *                                   = 4096
@@ -319,18 +317,18 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
 
   // TODO
   using internal_iterator_t = node_iterator_t<LBALeafNode>;
-  static constexpr uint16_t CAPACITY = 0;
+  static constexpr uint16_t CAPACITY = 170;
   static constexpr off_t SIZE_OFFSET = 0;
-  static constexpr off_t LADDR_START = 0;
-  static constexpr off_t PADDR_START = 0;
+  static constexpr off_t LADDR_START = 16;
+  static constexpr off_t MAP_VAL_START = 1376;
   static constexpr off_t offset_of_lb(uint16_t off) {
     return LADDR_START + (off * 8);
   }
   static constexpr off_t offset_of_ub(uint16_t off) {
     return LADDR_START + ((off + 1) * 8);
   }
-  static constexpr off_t offset_of_paddr(uint16_t off) {
-    return PADDR_START + (off * 8);
+  static constexpr off_t offset_of_map_val(uint16_t off) {
+    return MAP_VAL_START + (off * 16);
   }
 
   char *get_ptr(off_t offset) {
@@ -352,14 +350,27 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
       get_ptr(offset_of_lb(offset))) = lb;
   }
 
-  paddr_t get_paddr(uint16_t offset) const {
-    return paddr_t{
-      *reinterpret_cast<const ceph_les32*>(
-	get_ptr(offset_of_paddr(offset))),
+  lba_map_val_t get_val(uint16_t offset) const {
+    return lba_map_val_t{
+      *reinterpret_cast<const ceph_le32*>(
+	get_ptr(offset_of_map_val(offset))),
+      paddr_t{
+	*reinterpret_cast<const ceph_les32*>(
+	  get_ptr(offset_of_map_val(offset)) + 8),
 	static_cast<segment_off_t>(
-	  *reinterpret_cast<const ceph_les32*>(
-	    get_ptr(offset_of_paddr(offset))) + 4)
-	};
+	  *reinterpret_cast<const ceph_le32*>(
+	    get_ptr(offset_of_map_val(offset))) + 12)
+      }
+    };
+  }
+
+  void set_val(uint16_t offset, lba_map_val_t addr) {
+    *reinterpret_cast<ceph_le32*>(
+      get_ptr(offset_of_map_val(offset))) = addr.len;
+    *reinterpret_cast<ceph_les32*>(
+      get_ptr(offset_of_map_val(offset)) + 8) = addr.paddr.segment;
+    *reinterpret_cast<ceph_les32*>(
+      get_ptr(offset_of_map_val(offset) + 12)) = addr.paddr.offset;
   }
 
   char *get_key_ptr(uint16_t offset) {
@@ -367,14 +378,7 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
   }
 
   char *get_val_ptr(uint16_t offset) {
-    return get_ptr(offset_of_paddr(offset));
-  }
-
-  void set_paddr(uint16_t offset, paddr_t addr) {
-    *reinterpret_cast<ceph_le32*>(
-      get_ptr(offset_of_paddr(offset))) = addr.segment;
-    *reinterpret_cast<ceph_le32*>(
-      get_ptr(offset_of_paddr(offset) + 4)) = addr.offset;
+    return get_ptr(offset_of_map_val(offset));
   }
 
   bool at_max_capacity() const final {

@@ -37,7 +37,7 @@ LBAInternalNode::lookup_range_ret LBAInternalNode::lookup_range(
 	cache,
 	t,
 	depth-1,
-	val.get_paddr()).safe_then(
+	val.get_val()).safe_then(
 	  [this, &cache, &t, &result, addr, len](auto extent) mutable {
 	    // TODO: add backrefs to ensure cache residence of parents
 	    return extent->lookup_range(
@@ -67,7 +67,7 @@ LBAInternalNode::insert_ret LBAInternalNode::insert(
     cache,
     t,
     depth-1,
-    insertion_pt->get_paddr()).safe_then(
+    insertion_pt->get_val()).safe_then(
       [this, insertion_pt, &cache, &t, laddr, val=std::move(val)](
 	auto extent) mutable {
 	return extent->at_max_capacity() ?
@@ -89,7 +89,7 @@ LBAInternalNode::remove_ret LBAInternalNode::remove(
     cache,
     t,
     depth-1,
-    removal_pt->get_paddr()
+    removal_pt->get_val()
   ).safe_then([this, removal_pt, &cache, &t, laddr](auto extent) {
     return extent->at_min_capacity() ?
       merge_entry(cache, t, laddr, removal_pt, extent) :
@@ -121,7 +121,7 @@ LBAInternalNode::find_hole_ret LBAInternalNode::find_hole(
 	    cache,
 	    t,
 	    depth-1,
-	    i->get_paddr()
+	    i->get_val()
 	  ).safe_then([this, &cache, &t, &i, len](auto extent) mutable {
 	    return extent->find_hole(
 	      cache,
@@ -155,9 +155,9 @@ LBAInternalNode::split_entry(
   journal_split(iter, left->get_paddr(), pivot, right->get_paddr());
 
   copy_from_local(iter + 1, iter, end());
-  iter->set_paddr(left->get_paddr());
+  iter->set_val(left->get_paddr());
   iter++;
-  iter->set_paddr(right->get_paddr());
+  iter->set_val(right->get_paddr());
   set_size(get_size() + 1);
 
   c.retire_extent(t, entry);
@@ -186,7 +186,7 @@ LBAInternalNode::merge_entry(
     c,
     t,
     depth,
-    donor_iter->get_paddr()
+    donor_iter->get_val()
   ).safe_then([this, &c, &t, addr, iter, entry, donor_iter, is_left](
 		auto donor) mutable {
     auto [l, r] = is_left ?
@@ -199,7 +199,7 @@ LBAInternalNode::merge_entry(
 	t,
 	r);
       journal_full_merge(liter, replacement->get_paddr());
-      liter->set_paddr(replacement->get_paddr());
+      liter->set_val(replacement->get_paddr());
 
       copy_from_local(riter, riter + 1, end());
       set_size(get_size() - 1);
@@ -246,7 +246,7 @@ LBALeafNode::lookup_range_ret LBALeafNode::lookup_range(
     ret.emplace_back(
       std::make_unique<BtreeLBAPin>(
 	LBALeafNodeRef(this),
-	(*i).get_paddr(),
+	(*i).get_val().paddr,
 	(*i).get_lb(),
 	(*i).get_length()));
   }
