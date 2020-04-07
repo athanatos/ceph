@@ -26,3 +26,4 @@ TEST_F(transaction_manager_test_t, basic)
 {
   // TODO
 }
+
