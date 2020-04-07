@@ -17,15 +17,12 @@ namespace {
 
 namespace crimson::os::seastore {
 
-Journal::Journal(
-  JournalSegmentProvider &segment_provider,
-  SegmentManager &segment_manager)
+Journal::Journal(SegmentManager &segment_manager)
   : block_size(segment_manager.get_block_size()),
     max_record_length(
       segment_manager.get_segment_size() -
       p2align(ceph::encoded_sizeof_bounded<segment_header_t>(),
 	      size_t(block_size))),
-    segment_provider(segment_provider),
     segment_manager(segment_manager) {}
 
 
@@ -128,8 +125,8 @@ Journal::roll_journal_segment()
       // making use of the new segment, maybe this bit needs to take
       // the first transaction of the new segment?  Or the segment
       // header should include deltas?
-      segment_provider.put_segment(old_segment_id);
-      return segment_provider.get_segment();
+      segment_provider->put_segment(old_segment_id);
+      return segment_provider->get_segment();
     }).safe_then([this](auto segment) {
       return segment_manager.open(segment);
     }).safe_then([this](auto sref) {

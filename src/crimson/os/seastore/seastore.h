@@ -25,6 +25,8 @@ class SegmentManager;
 class OnodeManager;
 class Onode;
 using OnodeRef = boost::intrusive_ptr<Onode>;
+class Journal;
+class LBAManager;
 class TransactionManager;
 class Transaction;
 using TransactionRef = std::unique_ptr<Transaction>;
@@ -57,6 +59,10 @@ public:
   get_attrs_ertr::future<attrs_t> get_attrs(
     CollectionRef c,
     const ghobject_t& oid);
+
+  seastar::future<struct stat> stat(
+    CollectionRef c,
+    const ghobject_t& oid) = 0;
 
   seastar::future<omap_values_t> omap_get_values(
     CollectionRef c,
@@ -96,6 +102,8 @@ public:
 private:
   std::unique_ptr<SegmentManager> segment_manager;
   std::unique_ptr<Cache> cache;
+  std::unique_ptr<Journal> journal;
+  std::unique_ptr<LBAManager> lba_manager;
   std::unique_ptr<TransactionManager> transaction_manager;
   std::unique_ptr<OnodeManager> onode_manager;
 

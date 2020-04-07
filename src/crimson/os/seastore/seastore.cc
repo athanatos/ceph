@@ -39,7 +39,15 @@ SeaStore::SeaStore(const std::string& path)
   : segment_manager(segment_manager::create_ephemeral(
 		      segment_manager::DEFAULT_TEST_EPHEMERAL)),
     cache(std::make_unique<Cache>(*segment_manager)),
-    transaction_manager(new TransactionManager(*segment_manager, *cache)),
+    journal(new Journal(*segment_manager)),
+    lba_manager(
+      lba_manager::create_lba_manager(*segment_manager, *cache)),
+    transaction_manager(
+      new TransactionManager(
+	*segment_manager,
+	*journal,
+	*cache,
+	*lba_manager)),
     onode_manager(onode_manager::create_ephemeral())
 {}
 
@@ -122,6 +130,14 @@ SeaStore::get_attrs_ertr::future<SeaStore::attrs_t> SeaStore::get_attrs(
   logger().debug("{} {} {}",
 		 __func__, c->get_cid(), oid);
   return crimson::ct_error::enoent::make();
+}
+
+seastar::future<struct stat> SeaStore::stat(
+  CollectionRef c,
+  const ghobject_t& oid)
+{
+  struct stat st;
+  return seastar::make_ready_future<struct stat>(st);
 }
 
 seastar::future<SeaStore::omap_values_t>

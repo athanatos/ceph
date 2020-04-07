@@ -13,13 +13,18 @@ using namespace crimson::os::seastore;
 
 struct transaction_manager_test_t : public seastar_test_case_t {
   std::unique_ptr<SegmentManager> segment_manager;
+  Journal journal;
   Cache cache;
+  LBAManagerRef lba_manager;
   TransactionManager tm;
 
   transaction_manager_test_t()
     : segment_manager(create_ephemeral(segment_manager::DEFAULT_TEST_EPHEMERAL)),
+      journal(*segment_manager),
       cache(*segment_manager),
-      tm(*segment_manager, cache) {}
+      lba_manager(
+	lba_manager::create_lba_manager(*segment_manager, cache)),
+      tm(*segment_manager, journal, cache, *lba_manager) {}
 };
 
 TEST_F(transaction_manager_test_t, basic)

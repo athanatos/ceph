@@ -19,23 +19,28 @@ namespace {
 namespace crimson::os::seastore {
 
 TransactionManager::TransactionManager(
-  SegmentManager &segment_manager, Cache &cache)
+  SegmentManager &segment_manager,
+  Journal &journal,
+  Cache &cache,
+  LBAManager &lba_manager)
   : segment_manager(segment_manager),
     cache(cache),
-    lba_manager(lba_manager::create_lba_manager(segment_manager, cache)),
-    journal(new Journal(*this, segment_manager))
-{}
+    lba_manager(lba_manager),
+    journal(journal)
+{
+  journal.set_segment_provider(this);
+}
 
 TransactionManager::init_ertr::future<> TransactionManager::init()
 {
-  return journal->open_for_write();
+  return journal.open_for_write();
 }
 
 TransactionManager::inc_ref_ertr::future<> TransactionManager::inc_ref(
   Transaction &t,
   LogicalCachedExtentRef &ref)
 {
-  return lba_manager->incref_extent(
+  return lba_manager.incref_extent(
     t,
     ref->get_pin()).handle_error(
       inc_ref_ertr::pass_further{},
@@ -51,7 +56,7 @@ TransactionManager::inc_ref_ertr::future<> TransactionManager::inc_ref(
 {
   std::unique_ptr<lba_pin_list_t> pins;
   lba_pin_list_t &pins_ref = *pins;
-  return lba_manager->get_mapping(
+  return lba_manager.get_mapping(
     t,
     offset,
     len
@@ -61,7 +66,7 @@ TransactionManager::inc_ref_ertr::future<> TransactionManager::inc_ref(
       pins_ref.begin(),
       pins_ref.end(),
       [this, &t](auto &pin) {
-	return lba_manager->incref_extent(
+	return lba_manager.incref_extent(
 	  t,
 	  *pin);
       });
@@ -74,7 +79,7 @@ TransactionManager::dec_ref_ertr::future<> TransactionManager::dec_ref(
   Transaction &t,
   LogicalCachedExtentRef &ref)
 {
-  return lba_manager->decref_extent(
+  return lba_manager.decref_extent(
     t,
     ref->get_pin()).handle_error(
       dec_ref_ertr::pass_further{},
@@ -90,7 +95,7 @@ TransactionManager::dec_ref_ertr::future<> TransactionManager::dec_ref(
 {
   std::unique_ptr<lba_pin_list_t> pins;
   lba_pin_list_t &pins_ref = *pins;
-  return lba_manager->get_mapping(
+  return lba_manager.get_mapping(
     t,
     offset,
     len
@@ -100,7 +105,7 @@ TransactionManager::dec_ref_ertr::future<> TransactionManager::dec_ref(
       pins_ref.begin(),
       pins_ref.end(),
       [this, &t](auto &pin) {
-	return lba_manager->decref_extent(
+	return lba_manager.decref_extent(
 	  t,
 	  *pin).safe_then([](auto) {});
       });
@@ -118,7 +123,7 @@ TransactionManager::submit_transaction(
     return crimson::ct_error::eagain::make();
   }
 
-  return journal->submit_record(std::move(*record)).safe_then(
+  return journal.submit_record(std::move(*record)).safe_then(
     [this, t=std::move(t)](paddr_t addr) {
       cache.complete_commit(*t, addr);
     },

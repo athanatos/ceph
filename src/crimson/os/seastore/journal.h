@@ -85,7 +85,7 @@ class Journal {
   const segment_off_t block_size;
   const segment_off_t max_record_length;
 
-  JournalSegmentProvider &segment_provider;
+  JournalSegmentProvider *segment_provider = nullptr;
   SegmentManager &segment_manager;
 
   paddr_t current_replay_point;
@@ -127,9 +127,11 @@ class Journal {
   find_replay_segments_fut find_replay_segments();
 
 public:
-  Journal(
-    JournalSegmentProvider &segment_provider,
-    SegmentManager &segment_manager);
+  Journal(SegmentManager &segment_manager);
+
+  void set_segment_provider(JournalSegmentProvider *provider) {
+    segment_provider = provider;
+  }
 
   /**
    * Return <mdlength, dlength> pair denoting length of

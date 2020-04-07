@@ -130,8 +130,8 @@ class TransactionManager : public JournalSegmentProvider {
 
   SegmentManager &segment_manager;
   Cache &cache;
-  LBAManagerRef lba_manager;
-  std::unique_ptr<Journal> journal;
+  LBAManager &lba_manager;
+  Journal &journal;
 
   using get_mutable_extent_ertr = SegmentManager::read_ertr;
   get_mutable_extent_ertr::future<LogicalCachedExtentRef> get_mutable_extent(
@@ -140,7 +140,11 @@ class TransactionManager : public JournalSegmentProvider {
     loff_t len);
     
 public:
-  TransactionManager(SegmentManager &segment_manager, Cache &cache);
+  TransactionManager(
+    SegmentManager &segment_manager,
+    Journal &journal,
+    Cache &cache,
+    LBAManager &lba_manager);
 
   segment_id_t next = 1;
   get_segment_ret get_segment() final {
@@ -161,7 +165,7 @@ public:
   init_ertr::future<> init();
 
   TransactionRef create_transaction() {
-    return lba_manager->create_transaction();
+    return lba_manager.create_transaction();
   }
 
   enum class mutate_result_t {
@@ -187,7 +191,7 @@ public:
     auto &ret_ref = *ret;
     std::unique_ptr<lba_pin_list_t> pin_list;
     auto &pin_list_ref = *pin_list;
-    return lba_manager->get_mapping(
+    return lba_manager.get_mapping(
       t, offset, length
     ).safe_then([this, &t, &pin_list_ref, &ret_ref](auto pins) {
       pins.swap(pin_list_ref);
@@ -283,7 +287,7 @@ public:
     auto ext = cache.alloc_new_extent<T>(
       t,
       len);
-    return lba_manager->alloc_extent_relative(
+    return lba_manager.alloc_extent_relative(
       t,
       hint,
       len,
