@@ -93,8 +93,8 @@ struct node_iterator_t {
   };
   
   template <typename U>
-  void set_val(U addr) {
-    node->set_val(offset, addr);
+  void set_val(U val) {
+    node->set_val(offset, val);
   }
   
   bool contains(laddr_t addr) {
@@ -145,6 +145,14 @@ struct LBANodeIterHelper {
 	break;
     }
     return std::make_pair(retl, retr);
+  }
+  internal_iterator_t upper_bound(laddr_t l) {
+    auto ret = begin();
+    for (; ret != end(); ++ret) {
+      if (ret->get_lb() > l)
+	break;
+    }
+    return ret;
   }
   internal_iterator_t get_split_pivot() {
     return iter_idx(static_cast<T*>(this)->get_size() / 2);

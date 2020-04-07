@@ -232,7 +232,7 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
  *   values     : lba_map_val_t[170] (170*16)b
  *                                   = 4096
  */
-struct LBALeafNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
+struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
   template <typename... T>
   LBALeafNode(T&&... t) : LBANode(std::forward<T>(t)...) {}
 

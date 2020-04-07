@@ -264,9 +264,20 @@ LBALeafNode::insert_ret LBALeafNode::insert(
   /* Mutate the contents generating a delta if dirty rather than pending */
   /* If dirty, do the thing that causes the extent to be fixed-up once
    * committed */
+  auto insert_pt = upper_bound(laddr);
+  if (insert_pt != end()) {
+    copy_from_local(insert_pt + 1, insert_pt, end());
+  }
+  set_size(get_size() + 1);
+  insert_pt.set_lb(laddr);
+  insert_pt.set_val(val);
   return insert_ret(
     insert_ertr::ready_future_marker{},
-    LBAPinRef());
+    std::make_unique<BtreeLBAPin>(
+      LBALeafNodeRef(this),
+      val.paddr,
+      laddr,
+      val.len));
 }
 
 LBALeafNode::remove_ret LBALeafNode::remove(
