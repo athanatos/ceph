@@ -60,11 +60,11 @@ seastar::future<> SeaStore::mkfs(uuid_d new_osd_fsid)
   return seastar::now();
 }
 
-store_statfs_t SeaStore::stat() const
+seastar::future<store_statfs_t> SeaStore::stat() const
 {
   logger().debug("{}", __func__);
   store_statfs_t st;
-  return st;
+  return seastar::make_ready_future<store_statfs_t>(st);
 }
 
 seastar::future<std::vector<ghobject_t>, ghobject_t>

@@ -42,7 +42,7 @@ public:
   seastar::future<> umount() final;
 
   seastar::future<> mkfs(uuid_d new_osd_fsid) final;
-  store_statfs_t stat() const final;
+  seastar::future<store_statfs_t> stat() const final;
 
   read_errorator::future<ceph::bufferlist> read(
     CollectionRef c,
