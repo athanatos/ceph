@@ -243,7 +243,10 @@ template <typename T, typename C>
 class addr_extent_list_base_t
   : public std::list<std::pair<T, C>> {
 public:
-  void merge(addr_extent_list_base_t &&other) { /* TODO */ }
+  void merge(addr_extent_list_base_t &&other) {
+    ceph_assert(0);
+    /* TODO */
+  }
 };
 
 using pextent_list_t = addr_extent_list_base_t<paddr_t, CachedExtentRef>;

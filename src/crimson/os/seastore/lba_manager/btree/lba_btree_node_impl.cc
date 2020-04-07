@@ -261,9 +261,6 @@ LBALeafNode::insert_ret LBALeafNode::insert(
   lba_map_val_t val)
 {
   ceph_assert(!at_max_capacity());
-  /* Mutate the contents generating a delta if dirty rather than pending */
-  /* If dirty, do the thing that causes the extent to be fixed-up once
-   * committed */
   auto insert_pt = upper_bound(laddr);
   if (insert_pt != end()) {
     copy_from_local(insert_pt + 1, insert_pt, end());
@@ -287,9 +284,6 @@ LBALeafNode::remove_ret LBALeafNode::remove(
   laddr_t laddr)
 {
   ceph_assert(!at_min_capacity());
-  /* Mutate the contents generating a delta if dirty rather than pending */
-  /* If dirty, do the thing that causes the extent to be fixed-up once
-   * committed */
   auto removal_pt = find(laddr);
   if (removal_pt == end()) {
     ceph_assert(0 == "should be impossible");
