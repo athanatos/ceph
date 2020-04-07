@@ -7,12 +7,9 @@ if(WITH_BLUESTORE)
   add_subdirectory(alienstore)
 endif()
 
-target_link_libraries(crimson-os
-  crimson-cyanstore
-  crimson-alienstore
-
 add_subdirectory(seastore)
 target_link_libraries(crimson-os
   crimson-cyanstore
+  crimson-alienstore
   crimson-seastore
   crimson)
