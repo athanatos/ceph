@@ -10,7 +10,7 @@
 #include <seastar/core/future-util.hh>
 #include <seastar/core/reactor.hh>
 
-#include "../src/gtest/gtest.h"
+#include "gtest/gtest.h"
 
 //   unittest_transaction_manager --memory 256M --smp 1)
 

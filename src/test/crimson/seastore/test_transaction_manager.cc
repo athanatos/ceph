@@ -1,7 +1,7 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
-#include "gtest/gtest.h"
+#include "test/crimson/gtest_seastar.h"
 
 #include "crimson/os/seastore/cache.h"
 #include "crimson/os/seastore/transaction_manager.h"
@@ -11,7 +11,7 @@ using namespace crimson;
 using namespace crimson::os;
 using namespace crimson::os::seastore;
 
-struct transaction_manager_test_t : public ::testing::Test {
+struct transaction_manager_test_t : public seastar_test_case_t {
   std::unique_ptr<SegmentManager> segment_manager;
   Cache cache;
   TransactionManager tm;
