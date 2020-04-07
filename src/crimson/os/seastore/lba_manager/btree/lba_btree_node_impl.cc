@@ -175,6 +175,12 @@ void LBAInternalNode::journal_split(
   // TODO
 }
 
+void LBAInternalNode::journal_full_merge(
+  internal_iterator_t left,
+  paddr_t new_right) {
+  // TODO
+}
+
 LBAInternalNode::merge_ret
 LBAInternalNode::merge_entry(
   Cache &c, Transaction &t, laddr_t addr,

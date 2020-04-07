@@ -179,7 +179,7 @@ public:
    * bl is a delta obtained previously from get_delta.  The versions will
    * match.  Implementation should mutate buffer based on bl.
    */
-  virtual void apply_delta(ceph::bufferlist &bl);
+  virtual void apply_delta(ceph::bufferlist &bl) = 0;
 
   /**
    * Called on dirty CachedExtent implementation after replay.
@@ -215,6 +215,8 @@ public:
   }
   friend struct paddr_cmp;
   friend struct ref_paddr_cmp;
+
+  virtual ~CachedExtent() {};
 };
 
 struct paddr_cmp {

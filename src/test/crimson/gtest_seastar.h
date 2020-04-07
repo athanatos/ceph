@@ -1,6 +1,8 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#pragma once
+
 #include <stdio.h>
 #include <signal.h>
 
@@ -8,12 +10,13 @@
 #include <seastar/core/future-util.hh>
 #include <seastar/core/reactor.hh>
 
-#include <gtest/gtest.h>
+#include "../src/gtest/gtest.h"
+
+//   unittest_transaction_manager --memory 256M --smp 1)
 
 struct seastar_test_case_t : public ::testing::Test {
-  seastar::app_template app;
-  
   void SetUp() final {
+#if 0
     seastar::app_template app;
     SeastarContext sc;
     auto job = sc.with_seastar([&] {
@@ -31,6 +34,7 @@ struct seastar_test_case_t : public ::testing::Test {
 		   });
     sc.run(app, av.size(), av.data());
     job.join();
+#endif
   }
 
   void TearDown() final {
