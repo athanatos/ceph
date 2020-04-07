@@ -72,7 +72,8 @@ class JournalSegmentProvider {
 public:
   using get_segment_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
-  virtual get_segment_ertr::future<segment_id_t> get_segment() = 0;
+  using get_segment_ret = get_segment_ertr::future<segment_id_t>;
+  virtual get_segment_ret get_segment() = 0;
   
   /* TODO: we'll want to use this to propogate information about segment contents */
   virtual void put_segment(segment_id_t segment) = 0;

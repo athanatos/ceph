@@ -23,7 +23,7 @@ TransactionManager::TransactionManager(
   : segment_manager(segment_manager),
     cache(cache),
     lba_manager(lba_manager::create_lba_manager(segment_manager, cache)),
-    journal(new Journal(*((JournalSegmentProvider*)nullptr), segment_manager))
+    journal(new Journal(*this, segment_manager))
 {}
 
 TransactionManager::init_ertr::future<> TransactionManager::init()

@@ -125,7 +125,7 @@ template <typename T>
 using lextent_list_t = addr_extent_list_base_t<
   laddr_t, TCachedExtentRef<T>>;
 
-class TransactionManager {
+class TransactionManager : public JournalSegmentProvider {
   friend class Transaction;
 
   SegmentManager &segment_manager;
@@ -141,6 +141,19 @@ class TransactionManager {
     
 public:
   TransactionManager(SegmentManager &segment_manager, Cache &cache);
+
+  segment_id_t next = 1;
+  get_segment_ret get_segment() final {
+    // TODO -- part of gc
+    return get_segment_ret(
+      get_segment_ertr::ready_future_marker{},
+      next++);
+  }
+
+  void put_segment(segment_id_t segment) final {
+    // TODO -- part of gc
+    return;
+  }
 
   using init_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
