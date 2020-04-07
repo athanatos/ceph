@@ -399,6 +399,15 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
 
   std::pair<internal_iterator_t, internal_iterator_t>
   get_leaf_entries(laddr_t addr, loff_t len);
+
+  // delta operation
+  void journal_insertion(
+    laddr_t laddr,
+    lba_map_val_t val);
+
+  // delta operation
+  void journal_removal(
+    laddr_t laddr);
 };
 using LBALeafNodeRef = TCachedExtentRef<LBALeafNode>;
 

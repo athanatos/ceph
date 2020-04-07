@@ -154,6 +154,14 @@ struct LBANodeIterHelper {
     }
     return ret;
   }
+  internal_iterator_t find(laddr_t l) {
+    auto ret = begin();
+    for (; ret != end(); ++ret) {
+      if (ret->get_lb() == l)
+	break;
+    }
+    return ret;
+  }
   internal_iterator_t get_split_pivot() {
     return iter_idx(static_cast<T*>(this)->get_size() / 2);
   }

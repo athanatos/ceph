@@ -271,6 +271,7 @@ LBALeafNode::insert_ret LBALeafNode::insert(
   set_size(get_size() + 1);
   insert_pt.set_lb(laddr);
   insert_pt.set_val(val);
+  journal_insertion(laddr, val);
   return insert_ret(
     insert_ertr::ready_future_marker{},
     std::make_unique<BtreeLBAPin>(
@@ -283,13 +284,35 @@ LBALeafNode::insert_ret LBALeafNode::insert(
 LBALeafNode::remove_ret LBALeafNode::remove(
   Cache &cache,
   Transaction &transaction,
-  laddr_t)
+  laddr_t laddr)
 {
   ceph_assert(!at_min_capacity());
   /* Mutate the contents generating a delta if dirty rather than pending */
   /* If dirty, do the thing that causes the extent to be fixed-up once
    * committed */
-  return insert_ertr::now();
+  auto removal_pt = find(laddr);
+  if (removal_pt == end()) {
+    ceph_assert(0 == "should be impossible");
+    return remove_ertr::now();
+  }
+
+  journal_removal(laddr);
+  copy_from_local(removal_pt, removal_pt, end());
+  set_size(get_size() - 1);
+  return remove_ertr::now();
+}
+
+void LBALeafNode::journal_insertion(
+  laddr_t laddr,
+  lba_map_val_t val)
+{
+  // TODO
+}
+
+void LBALeafNode::journal_removal(
+  laddr_t laddr)
+{
+  // TODO
 }
 
 LBALeafNode::find_hole_ret LBALeafNode::find_hole(
@@ -299,6 +322,16 @@ LBALeafNode::find_hole_ret LBALeafNode::find_hole(
   laddr_t max,
   loff_t len)
 {
+  for (auto i = begin(); i != end(); ++i) {
+    auto ub = i == end() ? max : i->get_ub();
+    auto val = i->get_val();
+    ceph_assert(ub > (min + val.len));
+    if (ub - (min + val.len) < len) {
+      return find_hole_ret(
+	find_hole_ertr::ready_future_marker{},
+	min + val.len);
+    }
+  }
   return find_hole_ret(
     find_hole_ertr::ready_future_marker{},
     L_ADDR_MAX);
@@ -307,9 +340,7 @@ LBALeafNode::find_hole_ret LBALeafNode::find_hole(
 std::pair<LBALeafNode::internal_iterator_t, LBALeafNode::internal_iterator_t>
 LBALeafNode::get_leaf_entries(laddr_t addr, loff_t len)
 {
-  return std::make_pair(
-    internal_iterator_t(this, 0),
-    internal_iterator_t(this, 0));
+  return bound(addr, addr + len);
 }
 
 Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
