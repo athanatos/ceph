@@ -26,6 +26,7 @@ struct btree_lba_manager_test_t : public seastar_test_case_t {
 
 TEST_F(btree_lba_manager_test_t, basic)
 {
+  auto transaction = lba_manager.create_transaction();
   // TODO
 }
 

@@ -32,7 +32,8 @@ namespace crimson::os::seastore {
 
 struct SeastoreCollection final : public FuturizedCollection {
   template <typename... T>
-  SeastoreCollection(T&&... args) : FuturizedCollection(std::forward<T>(args)...) {}
+  SeastoreCollection(T&&... args) :
+    FuturizedCollection(std::forward<T>(args)...) {}
 };
 
 SeaStore::SeaStore(const std::string& path)
