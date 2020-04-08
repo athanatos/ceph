@@ -15,6 +15,7 @@
 #include "crimson/os/seastore/segment_manager.h"
 #include "crimson/common/errorator.h"
 #include "crimson/os/seastore/cached_extent.h"
+#include "crimson/os/seastore/root_block.h"
 
 namespace crimson::os::seastore {
 
@@ -77,6 +78,8 @@ public:
 
 class Transaction {
   friend class Cache;
+
+  RootBlockRef root; /* null until mutated */
 
   segment_off_t offset = 0;
 
@@ -183,6 +186,9 @@ using TransactionRef = std::unique_ptr<Transaction>;
  */
 class Cache {
   SegmentManager &segment_manager;
+
+  /* Contains current root (may be unstable) */
+  RootBlockRef root;
   ExtentIndex extents;
 
   bufferptr alloc_cache_buf(size_t size) {
@@ -204,7 +210,6 @@ public:
    */
   using get_extent_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
-
   template <typename T>
   get_extent_ertr::future<TCachedExtentRef<T>> get_extent(
     Transaction &t,       ///< [in,out] current transaction
@@ -240,6 +245,24 @@ public:
 	  },
 	  get_extent_ertr::pass_further{},
 	  crimson::ct_error::discard_all{});
+    }
+  }
+
+  using get_root_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  using get_root_ret = get_root_ertr::future<RootBlockRef>;
+  get_root_ret get_root(Transaction &t) {
+    if (t.root) {
+      return get_root_ret(
+	get_root_ertr::ready_future_marker{},
+	t.root);
+    } else {
+      auto ret = root;
+      return ret->wait_io().then([this, &t, ret] {
+	return get_root_ret(
+	  get_root_ertr::ready_future_marker{},
+	  ret);
+      });
     }
   }
 

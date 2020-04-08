@@ -44,8 +44,10 @@ struct paddr_t {
   segment_off_t offset = NULL_SEG_OFF;
 
   DENC(paddr_t, v, p) {
+    DENC_START(1, 1, p);
     denc(v.segment, p);
     denc(v.offset, p);
+    DENC_FINISH(p);
   }
 };
 WRITE_CMP_OPERATORS_2(paddr_t, segment, offset)
@@ -98,12 +100,14 @@ struct delta_info_t {
   ceph::bufferlist bl;                         ///< payload
 
   DENC(delta_info_t, v, p) {
+    DENC_START(1, 1, p);
     denc(v.type, p);
     denc(v.paddr, p);
     //denc(v.laddr, p);
     denc(v.length, p);
     denc(v.pversion, p);
     denc(v.bl, p);
+    DENC_FINISH(p);
   }
 };
 

@@ -5,7 +5,6 @@
 
 #include "crimson/os/seastore/journal.h"
 
-#include "include/denc.h"
 #include "include/intarith.h"
 #include "crimson/os/seastore/segment_manager.h"
 

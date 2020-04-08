@@ -40,9 +40,11 @@ struct segment_header_t {
   paddr_t journal_replay_lb;
 
   DENC(segment_header_t, v, p) {
+    DENC_START(1, 1, p);
     denc(v.journal_segment_seq, p);
     denc(v.physical_segment_id, p);
     denc(v.journal_replay_lb, p);
+    DENC_FINISH(p);
   }
 };
 
@@ -56,12 +58,14 @@ struct record_header_t {
   size_t extents;               // number of extents
 
   DENC(record_header_t, v, p) {
+    DENC_START(1, 1, p);
     denc(v.mdlength, p);
     denc(v.dlength, p);
     denc(v.seq, p);
     denc(v.full_checksum, p);
     denc(v.deltas, p);
     denc(v.extents, p);
+    DENC_FINISH(p);
   }
 };
 
