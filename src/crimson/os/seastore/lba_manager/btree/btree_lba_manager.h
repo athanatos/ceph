@@ -37,6 +37,7 @@ struct btree_lba_root_t {
 
 class BtreeLBATransaction : public Transaction {
 public:
+  RootBlockRef root_block;
   btree_lba_root_t root;
 };
 
@@ -63,6 +64,7 @@ class BtreeLBAManager : public LBAManager {
   SegmentManager &segment_manager;
   Cache &cache;
 
+  RootBlockRef root_block;
   btree_lba_root_t root;
 
   BtreeLBATransaction &get_lba_trans(Transaction &t) {

@@ -5,9 +5,6 @@
 
 #include <iostream>
 
-#include <boost/intrusive_ptr.hpp>
-#include <boost/smart_ptr/intrusive_ref_counter.hpp>
-
 #include "seastar/core/shared_future.hh"
 
 #include "include/buffer.h"

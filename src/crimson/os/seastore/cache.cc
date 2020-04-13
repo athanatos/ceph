@@ -14,6 +14,8 @@ CachedExtentRef Cache::duplicate_for_write(
   auto ret = i->duplicate_for_write();
   ret->version++;
   ret->state = CachedExtent::extent_state_t::PENDING_DELTA;
+
+  // TODO: special handling for root?
   return ret;
 }
 

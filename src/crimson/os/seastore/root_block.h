@@ -8,7 +8,7 @@
 namespace crimson::os::seastore {
 
 struct root_block_t {
-  bufferlist lba_root;
+  bufferptr lba_root;
 
   DENC(root_block_t, v, p) {
     DENC_START(1, 1, p);
@@ -45,11 +45,9 @@ struct RootBlock : CachedExtent {
     ceph_assert(0 == "TODO");
   }
 
-  complete_load_ertr::future<> complete_load() final {
-    auto biter = get_bptr().cbegin();
-    root.decode(biter);
-    return complete_load_ertr::now();
-  }
+  void set_lba_root(bufferptr bl);
+
+  complete_load_ertr::future<> complete_load() final;
 };
 using RootBlockRef = RootBlock::Ref;
 

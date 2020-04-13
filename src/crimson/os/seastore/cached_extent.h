@@ -5,10 +5,14 @@
 
 #include <iostream>
 
+#include <boost/intrusive/list.hpp>
 #include <boost/intrusive_ptr.hpp>
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
 
+#include "seastar/core/shared_future.hh"
+
 #include "include/buffer.h"
+#include "crimson/common/errorator.h"
 #include "crimson/os/seastore/seastore_types.h"
 
 namespace crimson::os::seastore {
