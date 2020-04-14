@@ -41,6 +41,7 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
   record.deltas.reserve(t.mutated_block_list.size());
   for (auto &i: t.mutated_block_list) {
     extents.insert(*i);
+    i->prepare_write();
     i->set_io_wait();
     record.deltas.push_back(
       delta_info_t{
@@ -95,5 +96,20 @@ Cache::replay_delta(const delta_info_t &delta)
   return replay_delta_ret(replay_delta_ertr::ready_future_marker{});
 }
 
+Cache::get_root_ret Cache::get_root(Transaction &t)
+{
+  if (t.root) {
+    return get_root_ret(
+      get_root_ertr::ready_future_marker{},
+      t.root);
+  } else {
+    auto ret = root;
+    return ret->wait_io().then([this, &t, ret] {
+      return get_root_ret(
+	get_root_ertr::ready_future_marker{},
+	ret);
+    });
+  }
+}
 
 }

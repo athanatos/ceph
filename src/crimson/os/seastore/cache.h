@@ -201,6 +201,14 @@ public:
   void retire_extent(Transaction &t, CachedExtentRef ref) {
     t.add_to_retired_set(ref);
   }
+
+  /**
+   * get_root
+   */
+  using get_root_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  using get_root_ret = get_root_ertr::future<RootBlockRef>;
+  get_root_ret get_root(Transaction &t);
   
   /**
    * get_extent
@@ -242,24 +250,6 @@ public:
 	  },
 	  get_extent_ertr::pass_further{},
 	  crimson::ct_error::discard_all{});
-    }
-  }
-
-  using get_root_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error>;
-  using get_root_ret = get_root_ertr::future<RootBlockRef>;
-  get_root_ret get_root(Transaction &t) {
-    if (t.root) {
-      return get_root_ret(
-	get_root_ertr::ready_future_marker{},
-	t.root);
-    } else {
-      auto ret = root;
-      return ret->wait_io().then([this, &t, ret] {
-	return get_root_ret(
-	  get_root_ertr::ready_future_marker{},
-	  ret);
-      });
     }
   }
 

@@ -13,8 +13,6 @@
 
 namespace crimson::os::seastore::lba_manager::btree {
 
-using depth_t = uint32_t;
-
 struct lba_map_val_t {
   loff_t len = 0;
   paddr_t paddr;

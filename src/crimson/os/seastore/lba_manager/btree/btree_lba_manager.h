@@ -24,17 +24,6 @@
 
 namespace crimson::os::seastore::lba_manager::btree {
 
-/* Soft state, maintained via special deltas,
- * never actually written as a block
- */
-struct btree_lba_root_t {
-  depth_t lba_depth;
-  depth_t segment_depth;
-  paddr_t lba_root_addr;
-  paddr_t segment_root;
-};
-  
-
 class BtreeLBATransaction : public Transaction {
 public:
   RootBlockRef root_block;
@@ -79,6 +68,8 @@ public:
   BtreeLBAManager(
     SegmentManager &segment_manager,
     Cache &cache);
+
+  init_ret init() final;
 
   get_mapping_ret get_mapping(
     Transaction &t,

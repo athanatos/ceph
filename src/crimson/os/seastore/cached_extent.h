@@ -106,6 +106,8 @@ protected:
 public:
   virtual CachedExtentRef duplicate_for_write() = 0;
 
+  virtual void prepare_write() {}
+
   virtual void on_written(paddr_t record_block_offset) = 0;
 
   virtual extent_types_t get_type() = 0;

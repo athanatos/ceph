@@ -7,8 +7,32 @@
 
 namespace crimson::os::seastore {
 
+using depth_t = uint32_t;
+
+/* Soft state, maintained via special deltas,
+ * never actually written as a block
+ *
+ * Belongs in lba_manager/btree, TODO: generalize this to
+ * permit more than one lba_manager implementation
+ */
+struct btree_lba_root_t {
+  depth_t lba_depth;
+  depth_t segment_depth;
+  paddr_t lba_root_addr;
+  paddr_t segment_root;
+
+  DENC(btree_lba_root_t, v, p) {
+    DENC_START(1, 1, p);
+    denc(v.lba_depth, p);
+    denc(v.segment_depth, p);
+    denc(v.lba_root_addr, p);
+    denc(v.segment_root, p);
+    DENC_FINISH(p);
+  }
+};
+
 struct root_block_t {
-  bufferptr lba_root;
+  btree_lba_root_t lba_root;
 
   DENC(root_block_t, v, p) {
     DENC_START(1, 1, p);
@@ -29,6 +53,8 @@ struct RootBlock : CachedExtent {
     return CachedExtentRef(new RootBlock(*this));
   };
 
+  void prepare_write() final;
+
   void on_written(paddr_t record_block_offset) final {
   }
 
@@ -45,12 +71,14 @@ struct RootBlock : CachedExtent {
     ceph_assert(0 == "TODO");
   }
 
-  void set_lba_root(bufferptr bl);
-
   complete_load_ertr::future<> complete_load() final;
+
+  void set_lba_root(btree_lba_root_t lba_root);
+
 };
 using RootBlockRef = RootBlock::Ref;
 
 }
 
+WRITE_CLASS_DENC(crimson::os::seastore::btree_lba_root_t)
 WRITE_CLASS_DENC(crimson::os::seastore::root_block_t)

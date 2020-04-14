@@ -24,6 +24,10 @@ BtreeLBAManager::BtreeLBAManager(
   : segment_manager(segment_manager),
     cache(cache) {}
 
+BtreeLBAManager::init_ret BtreeLBAManager::init()
+{
+  return init_ertr::now();
+}
 
 BtreeLBAManager::get_root_ret
 BtreeLBAManager::get_root(Transaction &t)
