@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <signal.h>
+#include <thread>
 
 #include <seastar/core/app-template.hh>
 #include <seastar/core/future-util.hh>
@@ -12,9 +13,22 @@
 
 #include "gtest/gtest.h"
 
-//   unittest_transaction_manager --memory 256M --smp 1)
+struct seastar_gtest_env_t {
+  seastar::app_template app;
+  seastar::file_desc begin_fd;
+  seastar::readable_eventfd on_end;
 
-struct seastar_test_case_t : public ::testing::Test {
+  std::thread thread;
+
+  seastar_gtest_env_t();
+  ~seastar_gtest_env_t();
+
+  void run();
+};
+    
+struct seastar_test_suite_t : public ::testing::Test {
+  static seastar_gtest_env_t seastar_env;
+
   void SetUp() final {
 #if 0
     seastar::app_template app;

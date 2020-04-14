@@ -13,7 +13,7 @@ using namespace crimson::os::seastore;
 using namespace crimson::os::seastore::lba_manager;
 using namespace crimson::os::seastore::lba_manager::btree;
 
-struct btree_lba_manager_test_t : public seastar_test_case_t {
+struct btree_lba_manager_test_t : public seastar_test_suite_t {
   std::unique_ptr<SegmentManager> segment_manager;
   Cache cache;
   BtreeLBAManager lba_manager;
