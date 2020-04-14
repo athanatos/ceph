@@ -32,12 +32,13 @@ BtreeLBAManager::init_ret BtreeLBAManager::init()
 BtreeLBAManager::get_root_ret
 BtreeLBAManager::get_root(Transaction &t)
 {
-  auto &lt = get_lba_trans(t);
-  return get_lba_btree_extent(
-    cache,
-    t,
-    lt.root.lba_depth,
-    lt.root.lba_root_addr);
+  return cache.get_root(t).safe_then([this, &t](auto root) {
+    return get_lba_btree_extent(
+      cache,
+      t,
+      root->get_lba_root().lba_depth,
+      root->get_lba_root().lba_root_addr);
+  });
 }
 
 BtreeLBAManager::get_mapping_ret
@@ -45,9 +46,8 @@ BtreeLBAManager::get_mapping(
   Transaction &t,
   laddr_t offset, loff_t length)
 {
-  auto &lt = get_lba_trans(t);
   return get_root(
-    t).safe_then([this, &t, &lt, offset, length](auto extent) {
+    t).safe_then([this, &t, offset, length](auto extent) {
       return extent->lookup_range(
 	cache, t, offset, length);
     });
@@ -82,9 +82,8 @@ BtreeLBAManager::alloc_extent_relative(
   loff_t len,
   segment_off_t offset)
 {
-  auto &lt = get_lba_trans(t);
   return get_root(
-    t).safe_then([this, &t, &lt, hint, len, offset](auto extent) {
+    t).safe_then([this, &t, hint, len, offset](auto extent) {
       return extent->find_hole(
 	cache,
 	t,
@@ -93,7 +92,7 @@ BtreeLBAManager::alloc_extent_relative(
 	len).safe_then([extent = std::move(extent)](auto ret) {
 	  return std::make_pair(ret, std::move(extent));
 	});
-    }).safe_then([this, &t, &lt, hint, len, offset](auto p) {
+    }).safe_then([this, &t, hint, len, offset](auto p) {
       auto &[ret, extent] = p;
       ceph_assert(ret != L_ADDR_MAX);
       return extent->insert(
@@ -114,9 +113,8 @@ BtreeLBAManager::set_extent(
   Transaction &t,
   laddr_t off, loff_t len, paddr_t addr)
 {
-  auto &lt = get_lba_trans(t);
   return get_root(
-    t).safe_then([this, &t, &lt, off, len, addr](auto root) {
+    t).safe_then([this, &t, off, len, addr](auto root) {
       return root->insert(
 	cache,
 	t,
@@ -134,9 +132,8 @@ BtreeLBAManager::set_extent_relative(
   Transaction &t,
   laddr_t off, loff_t len, segment_off_t record_offset)
 {
-  auto &lt = get_lba_trans(t);
   return get_root(
-    t).safe_then([this, &t, &lt, off, len, record_offset](auto root) {
+    t).safe_then([this, &t, off, len, record_offset](auto root) {
       return root->insert(
 	cache,
 	t,

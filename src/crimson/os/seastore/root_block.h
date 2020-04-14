@@ -74,6 +74,9 @@ struct RootBlock : CachedExtent {
   complete_load_ertr::future<> complete_load() final;
 
   void set_lba_root(btree_lba_root_t lba_root);
+  btree_lba_root_t &get_lba_root() {
+    return root.lba_root;
+  }
 
 };
 using RootBlockRef = RootBlock::Ref;

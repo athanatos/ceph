@@ -24,12 +24,6 @@
 
 namespace crimson::os::seastore::lba_manager::btree {
 
-class BtreeLBATransaction : public Transaction {
-public:
-  RootBlockRef root_block;
-  btree_lba_root_t root;
-};
-
 /**
  * BtreeLBAManager
  *
@@ -52,13 +46,6 @@ public:
 class BtreeLBAManager : public LBAManager {
   SegmentManager &segment_manager;
   Cache &cache;
-
-  RootBlockRef root_block;
-  btree_lba_root_t root;
-
-  BtreeLBATransaction &get_lba_trans(Transaction &t) {
-    return static_cast<BtreeLBATransaction&>(t);
-  }
 
   using get_root_ertr = Cache::get_extent_ertr;
   using get_root_ret = get_root_ertr::future<LBANodeRef>;
@@ -104,8 +91,7 @@ public:
     Transaction &t) final;
 
   TransactionRef create_transaction() final {
-    auto t = new BtreeLBATransaction;
-    t->root = root;
+    auto t = new Transaction;
     return TransactionRef(t);
   }
 };
