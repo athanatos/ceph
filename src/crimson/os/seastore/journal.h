@@ -153,6 +153,14 @@ public:
     >;
   init_ertr::future<> open_for_write();
 
+  /**
+   * close
+   *
+   * TODO: should probably flush and disallow further writes
+   */
+  using close_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  close_ertr::future<> close() { return close_ertr::now(); }
 
   /**
    * write_record

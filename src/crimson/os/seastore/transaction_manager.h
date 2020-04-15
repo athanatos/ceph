@@ -159,10 +159,20 @@ public:
     return;
   }
 
-  using init_ertr = crimson::errorator<
+  using initialize_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
-  init_ertr::future<> init();
+  initialize_ertr::future<> initialize();
+
+  using mount_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error
+    >;
+  mount_ertr::future<> mount();
+
+  using close_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error
+    >;
+  close_ertr::future<> close();
 
   TransactionRef create_transaction() {
     return lba_manager.create_transaction();

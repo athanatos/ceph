@@ -89,6 +89,21 @@ void Cache::complete_commit(
   }
 }
 
+Cache::initialize_ertr::future<> Cache::initialize()
+{
+  return initialize_ertr::now();
+}
+
+Cache::complete_mount_ertr::future<> Cache::complete_mount()
+{
+  return complete_mount_ertr::now();
+}
+
+Cache::close_ertr::future<> Cache::close()
+{
+  return close_ertr::now();
+}
+
 Cache::replay_delta_ret
 Cache::replay_delta(const delta_info_t &delta)
 {

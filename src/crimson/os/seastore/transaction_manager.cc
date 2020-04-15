@@ -31,9 +31,29 @@ TransactionManager::TransactionManager(
   journal.set_segment_provider(this);
 }
 
-TransactionManager::init_ertr::future<> TransactionManager::init()
+TransactionManager::initialize_ertr::future<> TransactionManager::initialize()
 {
-  return journal.open_for_write();
+  return journal.open_for_write().safe_then([this] {
+    return cache.initialize();
+  }).safe_then([this] {
+    return journal.close();
+  });
+}
+
+TransactionManager::mount_ertr::future<> TransactionManager::mount()
+{
+  return journal.replay([this](const auto &e) {
+    return cache.replay_delta(e);
+  }).safe_then([this] {
+    return cache.complete_mount();
+  }).safe_then([this] {
+    return journal.open_for_write();
+  });
+}
+
+TransactionManager::close_ertr::future<> TransactionManager::close() {
+  return cache.close();
+  journal.close();
 }
 
 TransactionManager::inc_ref_ertr::future<> TransactionManager::inc_ref(

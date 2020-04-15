@@ -301,6 +301,18 @@ public:
     Transaction &t,
     paddr_t final_block_start);
 
+  using initialize_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  initialize_ertr::future<> initialize();
+
+  using complete_mount_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  complete_mount_ertr::future<> complete_mount();
+
+  using close_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  close_ertr::future<> close();
+
   using replay_delta_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   using replay_delta_ret = replay_delta_ertr::future<>;
