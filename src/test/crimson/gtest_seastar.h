@@ -40,31 +40,19 @@ struct seastar_gtest_env_t {
 struct seastar_test_suite_t : public ::testing::Test {
   static seastar_gtest_env_t seastar_env;
 
-  void SetUp() final {
-#if 0
-    seastar::app_template app;
-    SeastarContext sc;
-    auto job = sc.with_seastar([&] {
-      auto fut = seastar::alien::submit_to(0, [addr, role, count] {
-	return seastar_echo(addr, role, count);
-      });
-      fut.wait();
-    });
-    std::vector<char*> av{argv[0]};
-    std::transform(begin(unrecognized_options),
-		   end(unrecognized_options),
-		   std::back_inserter(av),
-		   [](auto& s) {
-		     return const_cast<char*>(s.c_str());
-		   });
-    sc.run(app, av.size(), av.data());
-    job.join();
-#endif
-  }
-
   template <typename Func>
   void run(Func &&func) {
     seastar_env.run(std::forward<Func>(func));
+  }
+
+  virtual future<> setup_up_fut() { return seastar::now(); }
+  void SetUp() final {
+    return run([this] { set_up_fut(); });
+  }
+
+  virtual future<> tear_down_fut() { return seastar::now(); }
+  void TearDown() final {
+    return run([this] { tear_down_fut(); });
   }
 
   void TearDown() final {
