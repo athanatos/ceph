@@ -45,16 +45,13 @@ struct seastar_test_suite_t : public ::testing::Test {
     seastar_env.run(std::forward<Func>(func));
   }
 
-  virtual future<> setup_up_fut() { return seastar::now(); }
+  virtual seastar::future<> set_up_fut() { return seastar::now(); }
   void SetUp() final {
-    return run([this] { set_up_fut(); });
+    return run([this] { return set_up_fut(); });
   }
 
-  virtual future<> tear_down_fut() { return seastar::now(); }
+  virtual seastar::future<> tear_down_fut() { return seastar::now(); }
   void TearDown() final {
-    return run([this] { tear_down_fut(); });
-  }
-
-  void TearDown() final {
+    return run([this] { return tear_down_fut(); });
   }
 };
