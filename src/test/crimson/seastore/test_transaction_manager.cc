@@ -11,7 +11,7 @@ using namespace crimson;
 using namespace crimson::os;
 using namespace crimson::os::seastore;
 
-struct transaction_manager_test_t : public seastar_test_case_t {
+struct transaction_manager_test_t : public seastar_test_suite_t {
   std::unique_ptr<SegmentManager> segment_manager;
   Journal journal;
   Cache cache;
@@ -25,10 +25,18 @@ struct transaction_manager_test_t : public seastar_test_case_t {
       lba_manager(
 	lba_manager::create_lba_manager(*segment_manager, cache)),
       tm(*segment_manager, journal, cache, *lba_manager) {}
+
+  seastar::future<> set_up_fut() final {
+    return seastar::now();
+  }
+
+  seastar::future<> tear_down_fut() final {
+    return seastar::now();
+  }
 };
 
 TEST_F(transaction_manager_test_t, basic)
 {
-  // TODO
+  run([] { return seastar::now(); });
 }
 
