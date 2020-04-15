@@ -10,20 +10,31 @@
 #include <seastar/core/app-template.hh>
 #include <seastar/core/future-util.hh>
 #include <seastar/core/reactor.hh>
+#include <seastar/core/alien.hh>
 
 #include "gtest/gtest.h"
 
 struct seastar_gtest_env_t {
   seastar::app_template app;
   seastar::file_desc begin_fd;
-  seastar::readable_eventfd on_end;
+  std::unique_ptr<seastar::readable_eventfd> on_end;
 
+  int argc = 0;
+  char **argv = nullptr;
   std::thread thread;
 
   seastar_gtest_env_t();
   ~seastar_gtest_env_t();
 
-  void run();
+  void init(int argc, char **argv);
+  void stop();
+  void reactor();
+
+  template <typename Func>
+  void run(Func &&func) {
+    auto fut = seastar::alien::submit_to(0, std::forward<Func>(func));
+    fut.wait();
+  }
 };
     
 struct seastar_test_suite_t : public ::testing::Test {
@@ -49,6 +60,11 @@ struct seastar_test_suite_t : public ::testing::Test {
     sc.run(app, av.size(), av.data());
     job.join();
 #endif
+  }
+
+  template <typename Func>
+  void run(Func &&func) {
+    seastar_env.run(std::forward<Func>(func));
   }
 
   void TearDown() final {

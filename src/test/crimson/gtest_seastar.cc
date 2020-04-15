@@ -6,9 +6,15 @@
 seastar_gtest_env_t seastar_test_suite_t::seastar_env;
 
 seastar_gtest_env_t::seastar_gtest_env_t() :
-  begin_fd{seastar::file_desc::eventfd(0, 0)},
-  thread{[this] { run(); }}
+  begin_fd{seastar::file_desc::eventfd(0, 0)} {}
+
+void seastar_gtest_env_t::init(int _argc, char **_argv)
 {
+  argc = _argc;
+  argv = new char *[argc];
+  for (int i = 0; i < argc; ++i) argv[i] = strdup(_argv[i]);
+
+  thread = std::thread([this] { reactor(); });
   eventfd_t result = 0;
   if (int r = ::eventfd_read(begin_fd.get(), &result); r < 0) {
     std::cerr << "unable to eventfd_read():" << errno << std::endl;
@@ -16,35 +22,47 @@ seastar_gtest_env_t::seastar_gtest_env_t() :
   }
 }
 
-seastar_gtest_env_t::~seastar_gtest_env_t()
+void seastar_gtest_env_t::stop()
 {
-  on_end.write_side().signal(1);
+  run([this] {
+    on_end->write_side().signal(1);
+    return seastar::now();
+  });
   thread.join();
 }
 
-void seastar_gtest_env_t::run()
+seastar_gtest_env_t::~seastar_gtest_env_t()
 {
-  char** argv = nullptr;
-  app.run(0, argv, [this] {
+  if (argv) {
+    for (int i = 0; i < argc; ++i) free(argv[i]);
+    delete[] argv;
+  }
+}
+
+void seastar_gtest_env_t::reactor()
+{
+  app.run(argc, argv, [this] {
+    on_end.reset(new seastar::readable_eventfd);
     return seastar::now().then([this] {
       ::eventfd_write(begin_fd.get(), 1);
 	return seastar::now();
     }).then([this] {
-      return on_end.wait().then([](size_t){});
+      return on_end->wait().then([](size_t){});
     }).handle_exception([](auto ep) {
       std::cerr << "Error: " << ep << std::endl;
-    }).finally([] {
-      seastar::engine().exit(0);
+    }).finally([this] {
+      on_end.reset();
     });
   });
 }
 
 int main(int argc, char **argv)
 {
+  seastar_test_suite_t::seastar_env.init(argc, argv);
 
-  std::vector<const char*> args(argv, argv + argc);
   ::testing::InitGoogleTest(&argc, argv);
   int ret = RUN_ALL_TESTS();
 
+  seastar_test_suite_t::seastar_env.stop();
   return ret;
 }
