@@ -267,6 +267,23 @@ Journal::read_record_metadata_ret Journal::read_record_metadata(
     });
 }
 
+std::optional<std::vector<delta_info_t>> Journal::try_decode_deltas(
+  record_header_t header,
+  bufferlist &bl)
+{
+  auto bliter = bl.cbegin();
+  bliter += ceph::encoded_sizeof_bounded<record_header_t>();
+  std::vector<delta_info_t> deltas(header.deltas);
+  for (auto &&i : deltas) {
+    try {
+      ::decode(i, bliter);
+    } catch (...) {
+      return std::nullopt;
+    }
+  }
+  return deltas;
+}
+
 Journal::replay_ertr::future<>
 Journal::replay_segment(
   paddr_t start,
@@ -286,24 +303,20 @@ Journal::replay_segment(
 	      auto &[header, bl] = *p;
 	      current.offset += header.mdlength + header.dlength;
 
-	      auto bp = bl.cbegin();
-	      bp += ceph::encoded_sizeof_bounded<record_header_t>();
+	      auto deltas = try_decode_deltas(
+		header,
+		bl);
+	      if (deltas) {
+		replay_ertr::make_ready_future<bool>(true);
+	      }
+
 	      return seastar::do_with(
-		std::move(bp),
-		[this, &delta_handler, &header](auto &bp) {
+		std::move(*deltas),
+		[this, &delta_handler](auto &deltas) {
 		  return crimson::do_for_each(
-		    boost::make_counting_iterator(size_t{0}),
-		    boost::make_counting_iterator(header.deltas),
-		    [this, &delta_handler, &bp](auto) -> SegmentManager::read_ertr::future<> {
-		      delta_info_t dt;
-		      try {
-			::decode(dt, bp);
-		      } catch (...) {
-			// need to do other validation, but failures should generally
-			// mean we've found the end of the journal
-			return crimson::ct_error::input_output_error::make();
-		      }
-		      return delta_handler(dt);
+		    deltas,
+		    [this, &delta_handler](auto &info) {
+		      return delta_handler(info);
 		    });
 		});
 	    }).safe_then([] {

@@ -204,6 +204,10 @@ private:
   read_record_metadata_ret read_record_metadata(
     paddr_t start);
 
+  std::optional<std::vector<delta_info_t>> try_decode_deltas(
+    record_header_t header,
+    bufferlist &bl);
+
   replay_ertr::future<>
   replay_segment(
     paddr_t start,
