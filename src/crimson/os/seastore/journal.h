@@ -197,6 +197,13 @@ public:
   replay_ret replay(delta_handler_t &&);
 
 private:
+  using read_record_metadata_ertr = SegmentManager::read_ertr;
+  using read_record_metadata_ret = read_record_metadata_ertr::future<
+    std::optional<std::pair<record_header_t, bufferlist>>
+    >;
+  read_record_metadata_ret read_record_metadata(
+    paddr_t start);
+
   replay_ertr::future<>
   replay_segment(
     paddr_t start,

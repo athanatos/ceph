@@ -229,6 +229,44 @@ Journal::find_replay_segments_fut Journal::find_replay_segments()
     });
 }
 
+Journal::read_record_metadata_ret Journal::read_record_metadata(
+  paddr_t start)
+{
+  return segment_manager.read(start, block_size
+  ).safe_then(
+    [this, start](bufferptr bptr) mutable
+    -> read_record_metadata_ret {
+      logger().debug("replay_segment: reading {}", start);
+      bufferlist bl;
+      bl.append(bptr);
+      auto bp = bl.cbegin();
+      record_header_t header;
+      try {
+	::decode(header, bp);
+      } catch (...) {
+	return read_record_metadata_ret(
+	  read_record_metadata_ertr::ready_future_marker{},
+	  std::nullopt);
+      }
+      if (header.mdlength > block_size) {
+	return segment_manager.read(
+	  {start.segment, start.offset + block_size},
+	  header.mdlength - block_size).safe_then(
+	    [this, header=std::move(header), bl=std::move(bl)](
+	      auto &&bptail) mutable {
+	      bl.push_back(bptail);
+	      return read_record_metadata_ret(
+		read_record_metadata_ertr::ready_future_marker{},
+		std::make_pair(std::move(header), std::move(bl)));
+	    });
+      } else {
+	  return read_record_metadata_ret(
+	    read_record_metadata_ertr::ready_future_marker{},
+	    std::make_pair(std::move(header), std::move(bl)));
+      }
+    });
+}
+
 Journal::replay_ertr::future<>
 Journal::replay_segment(
   paddr_t start,
@@ -236,41 +274,23 @@ Journal::replay_segment(
 {
   logger().debug("replay_segment: starting at {}", start);
   return seastar::do_with(
-    std::make_tuple(std::move(start), record_header_t()),
-    [this, &delta_handler](auto &&in) {
-      auto &&[current, header] = in;
+    std::move(start),
+    [this, &delta_handler](auto &current) {
       return crimson::do_until(
-	[this, &current, &delta_handler, &header] {
-	  return segment_manager.read(current, block_size
-	  ).safe_then(
-	    [this, &current, &header](bufferptr bptr) mutable
-	    -> SegmentManager::read_ertr::future<bufferlist> {
-	      logger().debug("replay_segment: reading {}", current);
-	      bufferlist bl;
-	      bl.append(bptr);
-	      auto bp = bl.cbegin();
-	      try {
-		::decode(header, bp);
-	      } catch (...) {
-		return replay_ertr::make_ready_future<bufferlist>(std::move(bl));
+	[this, &current, &delta_handler] {
+	  return read_record_metadata(current).safe_then
+	    ([this, &current, &delta_handler](auto p) {
+	      if (!p) {
+		replay_ertr::make_ready_future<bool>(true);
 	      }
-	      if (header.mdlength > block_size) {
-		return segment_manager.read(
-		  {current.segment, current.offset + block_size},
-		  header.mdlength - block_size).safe_then(
-		    [this, bl=std::move(bl)](auto &&bptail) mutable {
-		      bl.push_back(bptail);
-		      return std::move(bl);
-		    });
-	      } else {
-		return replay_ertr::make_ready_future<bufferlist>(std::move(bl));
-	      }
-	    }).safe_then([this, &delta_handler, &header](auto bl){
+	      auto &[header, bl] = *p;
+	      current.offset += header.mdlength + header.dlength;
+
 	      auto bp = bl.cbegin();
 	      bp += ceph::encoded_sizeof_bounded<record_header_t>();
 	      return seastar::do_with(
 		std::move(bp),
-		[this, &delta_handler, &header](auto &&bp) {
+		[this, &delta_handler, &header](auto &bp) {
 		  return crimson::do_for_each(
 		    boost::make_counting_iterator(size_t{0}),
 		    boost::make_counting_iterator(header.deltas),
@@ -286,8 +306,7 @@ Journal::replay_segment(
 		      return delta_handler(dt);
 		    });
 		});
-	    }).safe_then([&header, &current](){
-	      current.offset += header.mdlength + header.dlength;
+	    }).safe_then([] {
 	      return SegmentManager::read_ertr::make_ready_future<bool>(false);
 	    }).handle_error(
 	      // TODO: this needs to correctly propogate information about failed
