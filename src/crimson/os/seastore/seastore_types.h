@@ -4,6 +4,7 @@
 #pragma once
 
 #include <limits>
+#include <iostream>
 
 #include "include/denc.h"
 #include "include/buffer.h"
@@ -56,6 +57,8 @@ constexpr paddr_t P_ADDR_NULL = paddr_t{};
 constexpr paddr_t make_relative_paddr(segment_off_t off) {
   return paddr_t{REL_SEG_ID, off};
 }
+
+std::ostream &operator<<(std::ostream &out, const paddr_t &rhs);
 
 // logical addr, see LBAManager, TransactionManager
 using laddr_t = uint64_t;

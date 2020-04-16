@@ -170,7 +170,7 @@ Journal::find_replay_segments_fut Journal::find_replay_segments()
 	    bl.push_back(bptr);
 
 	    logger().debug(
-	      "replay segment {} block crc {}",
+	      "find_replay_segments: segment {} block crc {}",
 	      i,
 	      bl.begin().crc32c(block_size, 0));
 
@@ -178,7 +178,10 @@ Journal::find_replay_segments_fut Journal::find_replay_segments()
 	    try {
 	      ::decode(header, bp);
 	    } catch (...) {
-	      logger().debug("cannot decode");
+	      logger().debug(
+		"find_replay_segments: segment {} unable to decode "
+		"header, skipping",
+		i);
 	      return find_replay_segments_ertr::now();
 	    }
 	    segments.emplace_back(std::make_pair(i, std::move(header)));
@@ -188,6 +191,9 @@ Journal::find_replay_segments_fut Journal::find_replay_segments()
 	    crimson::ct_error::discard_all{}
 	  );
 	}).safe_then([this, &segments]() mutable -> find_replay_segments_fut {
+	  logger().debug(
+	    "find_replay_segments: have {} segments",
+	    segments.size());
 	  if (segments.empty()) {
 	    return crimson::ct_error::input_output_error::make();
 	  }
@@ -195,17 +201,21 @@ Journal::find_replay_segments_fut Journal::find_replay_segments()
 	    segments.begin(),
 	    segments.end(),
 	    [](const auto &lt, const auto &rt) {
-	      return lt.second.journal_segment_seq < rt.second.journal_segment_seq;
+	      return lt.second.journal_segment_seq <
+		rt.second.journal_segment_seq;
 	    });
+
 	  auto replay_from = segments.rbegin()->second.journal_replay_lb;
-	  auto from = std::find_if(
-	    segments.begin(),
-	    segments.end(),
-	    [&replay_from](const auto &seg) -> bool {
-	      return seg.first == replay_from.segment;
-	    });
-	  if (from == segments.end()) {
-	    return crimson::ct_error::input_output_error::make();
+	  auto from = segments.begin();
+	  if (replay_from != P_ADDR_NULL) {
+	    from = std::find_if(
+	      segments.begin(),
+	      segments.end(),
+	      [&replay_from](const auto &seg) -> bool {
+		return seg.first == replay_from.segment;
+	      });
+	  } else {
+	    replay_from = paddr_t{from->first, block_size};
 	  }
 	  auto ret = std::vector<paddr_t>(segments.end() - from);
 	  std::transform(
@@ -224,6 +234,7 @@ Journal::replay_segment(
   paddr_t start,
   delta_handler_t &delta_handler)
 {
+  logger().debug("replay_segment: starting at {}", start);
   return seastar::do_with(
     std::make_tuple(std::move(start), record_header_t()),
     [this, &delta_handler](auto &&in) {
@@ -234,6 +245,7 @@ Journal::replay_segment(
 	  ).safe_then(
 	    [this, &current, &header](bufferptr bptr) mutable
 	    -> SegmentManager::read_ertr::future<bufferlist> {
+	      logger().debug("replay_segment: reading {}", current);
 	      bufferlist bl;
 	      bl.append(bptr);
 	      auto bp = bl.cbegin();
@@ -282,6 +294,7 @@ Journal::replay_segment(
 	      // record reads
 	      replay_ertr::pass_further{},
 	      crimson::ct_error::all_same_way([] {
+		logger().debug("replay_segment: error");
 		return replay_ertr::make_ready_future<bool>(true);
 	      })
 	    );
@@ -297,6 +310,7 @@ Journal::replay_ret Journal::replay(delta_handler_t &&delta_handler)
       auto &[handler, segments] = item;
       return find_replay_segments(
       ).safe_then([this, &handler, &segments](auto osegments) {
+	logger().debug("replay: found {} segments", segments.size());
 	segments.swap(osegments);
 	return crimson::do_for_each(
 	  segments,
