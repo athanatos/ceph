@@ -27,8 +27,9 @@ struct transaction_manager_test_t : public seastar_test_suite_t {
       tm(*segment_manager, journal, cache, *lba_manager) {}
 
   seastar::future<> set_up_fut() final {
-    return tm.initialize(
-    ).safe_then([this] {
+    return segment_manager->init().safe_then([this] {
+      return tm.initialize();
+    }).safe_then([this] {
       return tm.mount();
     }).handle_error(
       crimson::ct_error::all_same_way([] {
@@ -41,7 +42,7 @@ struct transaction_manager_test_t : public seastar_test_suite_t {
     return tm.close(
     ).handle_error(
       crimson::ct_error::all_same_way([] {
-	ASSERT_FALSE("Unable to mount");
+	ASSERT_FALSE("Unable to close");
       })
     );
   }

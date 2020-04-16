@@ -56,12 +56,7 @@ class EphemeralSegmentManager final : public SegmentManager {
 public:
   EphemeralSegmentManager(ephemeral_config_t config);
 
-  
-  using init_ertr = crimson::errorator<
-    crimson::ct_error::enospc,
-    crimson::ct_error::invarg,
-    crimson::ct_error::erange>;
-  init_ertr::future<> init();
+  init_ertr::future<> init() final;
 
   open_ertr::future<SegmentRef> open(segment_id_t id) final;
 

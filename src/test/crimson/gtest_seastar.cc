@@ -60,6 +60,10 @@ int main(int argc, char **argv)
 {
   seastar_test_suite_t::seastar_env.init(argc, argv);
 
+  seastar::global_logger_registry().set_all_loggers_level(
+    seastar::log_level::debug
+  );
+
   ::testing::InitGoogleTest(&argc, argv);
   int ret = RUN_ALL_TESTS();
 

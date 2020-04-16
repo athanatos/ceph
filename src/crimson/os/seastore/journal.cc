@@ -118,13 +118,21 @@ paddr_t Journal::next_block_addr() const
 Journal::roll_journal_segment_ertr::future<>
 Journal::roll_journal_segment()
 {
-  return current_journal_segment->close().safe_then(
-    [this, old_segment_id = current_journal_segment->get_segment_id()] {
+  auto old_segment_id = current_journal_segment ?
+    current_journal_segment->get_segment_id() :
+    NULL_SEG_ID;
+    
+  return (current_journal_segment ?
+	  current_journal_segment->close() :
+	  Segment::close_ertr::now()).safe_then(
+    [this, old_segment_id] {
       // TODO: pretty sure this needs to be atomic in some sense with
       // making use of the new segment, maybe this bit needs to take
       // the first transaction of the new segment?  Or the segment
       // header should include deltas?
-      segment_provider->put_segment(old_segment_id);
+      if (old_segment_id != NULL_SEG_ID) {
+	segment_provider->put_segment(old_segment_id);
+      }
       return segment_provider->get_segment();
     }).safe_then([this](auto segment) {
       return segment_manager.open(segment);
@@ -154,6 +162,7 @@ Journal::find_replay_segments_fut Journal::find_replay_segments()
 	[this, &segments](auto i) {
 	  return segment_manager.read(paddr_t{i, 0}, block_size
 	  ).safe_then([this, &segments, i](bufferptr bptr) mutable {
+	    logger().debug("segment {} bptr size {}", i, bptr.length());
 	    segment_header_t header;
 	    bufferlist bl;
 	    bl.push_back(bptr);

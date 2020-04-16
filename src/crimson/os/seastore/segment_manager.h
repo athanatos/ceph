@@ -73,6 +73,12 @@ constexpr size_t PADDR_SIZE = sizeof(paddr_t);
 
 class SegmentManager {
 public:
+  using init_ertr = crimson::errorator<
+    crimson::ct_error::enospc,
+    crimson::ct_error::invarg,
+    crimson::ct_error::erange>;
+  virtual init_ertr::future<> init() = 0;
+
   using open_ertr = crimson::errorator<
     crimson::ct_error::input_output_error,
     crimson::ct_error::invarg,
