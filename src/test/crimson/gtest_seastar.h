@@ -33,7 +33,7 @@ struct seastar_gtest_env_t {
   template <typename Func>
   void run(Func &&func) {
     auto fut = seastar::alien::submit_to(0, std::forward<Func>(func));
-    fut.wait();
+    fut.get();
   }
 };
     

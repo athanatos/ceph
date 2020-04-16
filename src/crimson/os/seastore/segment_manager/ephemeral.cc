@@ -59,6 +59,13 @@ Segment::write_ertr::future<> EphemeralSegmentManager::segment_write(
   paddr_t addr,
   ceph::bufferlist bl)
 {
+  logger().debug(
+    "segment_write to segment {} at offset {}, physical offset {}, len {}, crc {}",
+    addr.segment,
+    addr.offset,
+    get_offset(addr),
+    bl.length(),
+    bl.crc32c(0));
   if (segment_state[addr.segment] != segment_state_t::OPEN)
     return crimson::ct_error::invarg::make();
 
@@ -95,6 +102,8 @@ EphemeralSegmentManager::init_ertr::future<> EphemeralSegmentManager::init()
     return crimson::ct_error::enospc::make();
 
   buffer = (char*)addr;
+
+  ::memset(buffer, 0, config.size);
   return init_ertr::now();
 }
 
@@ -137,6 +146,17 @@ SegmentManager::read_ertr::future<> EphemeralSegmentManager::read(
     return crimson::ct_error::invarg::make();
 
   out.copy_in(0, len, buffer + get_offset(addr));
+
+  bufferlist bl;
+  bl.push_back(out);
+  logger().debug(
+    "segment_read to segment {} at offset {}, physical offset {}, length {}, crc {}",
+    addr.segment,
+    addr.offset,
+    get_offset(addr),
+    len,
+    bl.begin().crc32c(config.block_size, 0));
+
   return read_ertr::now();
 }
 

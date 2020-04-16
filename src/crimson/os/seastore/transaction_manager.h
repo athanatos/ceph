@@ -146,7 +146,7 @@ public:
     Cache &cache,
     LBAManager &lba_manager);
 
-  segment_id_t next = 1;
+  segment_id_t next = 0;
   get_segment_ret get_segment() final {
     // TODO -- part of gc
     return get_segment_ret(

@@ -28,6 +28,7 @@ Journal::Journal(SegmentManager &segment_manager)
 Journal::initialize_segment_ertr::future<> Journal::initialize_segment(
   Segment &segment)
 {
+  logger().debug("initialize_segment {}", segment.get_segment_id());
   // write out header
   ceph_assert(segment.get_write_ptr() == 0);
   bufferlist bl;
@@ -36,6 +37,7 @@ Journal::initialize_segment_ertr::future<> Journal::initialize_segment(
     segment.get_segment_id(),
     current_replay_point};
   ::encode(header, bl);
+
   written_to = segment_manager.get_block_size();
   return segment.write(0, bl).handle_error(
     init_ertr::pass_further{},
@@ -166,10 +168,17 @@ Journal::find_replay_segments_fut Journal::find_replay_segments()
 	    segment_header_t header;
 	    bufferlist bl;
 	    bl.push_back(bptr);
+
+	    logger().debug(
+	      "replay segment {} block crc {}",
+	      i,
+	      bl.begin().crc32c(block_size, 0));
+
 	    auto bp = bl.cbegin();
 	    try {
 	      ::decode(header, bp);
 	    } catch (...) {
+	      logger().debug("cannot decode");
 	      return find_replay_segments_ertr::now();
 	    }
 	    segments.emplace_back(std::make_pair(i, std::move(header)));
