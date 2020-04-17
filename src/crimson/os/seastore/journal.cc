@@ -86,10 +86,10 @@ Journal::write_record_ertr::future<> Journal::write_record(
   ceph::bufferlist to_write = encode_record(
     mdlength, dlength, std::move(record));
   written_to += p2roundup(to_write.length(), block_size);
+  logger().debug("write_record, mdlength {}, dlength {}", mdlength, dlength);
   return current_journal_segment->write(written_to, to_write).handle_error(
     write_record_ertr::pass_further{},
     crimson::ct_error::all_same_way([] { ceph_assert(0 == "TODO"); }));
-    
 }
 
 std::pair<segment_off_t, segment_off_t> Journal::get_encoded_record_length(

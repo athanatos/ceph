@@ -34,13 +34,16 @@ TransactionManager::TransactionManager(
 TransactionManager::mkfs_ertr::future<> TransactionManager::mkfs()
 {
   return journal.open_for_write().safe_then([this] {
+    logger().debug("mkfs: about to do_with");
     return seastar::do_with(
       lba_manager.create_transaction(),
       [this](auto &transaction) {
+	logger().debug("mkfs: about to cache.mkfs");
 	return cache.mkfs(*transaction
 	).safe_then([this, &transaction] {
 	  return lba_manager.mkfs(*transaction);
 	}).safe_then([this, &transaction] {
+	  logger().debug("mkfs: about to submit_transaction");
 	  return submit_transaction(std::move(transaction)).handle_error(
 	    crimson::ct_error::eagain::handle([] {
 	      ceph_assert(0 == "eagain impossible");
@@ -162,6 +165,8 @@ TransactionManager::submit_transaction(
   if (!record) {
     return crimson::ct_error::eagain::make();
   }
+
+  logger().debug("submit_transaction");
 
   return journal.submit_record(std::move(*record)).safe_then(
     [this, t=std::move(t)](paddr_t addr) {
