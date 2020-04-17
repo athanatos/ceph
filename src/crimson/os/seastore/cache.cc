@@ -84,13 +84,14 @@ void Cache::complete_commit(
     i->on_written(final_block_start);
   }
 
-  for (auto &i: t.fresh_block_list) {
+  for (auto &i: t.mutated_block_list) {
     i->complete_io();
   }
 }
 
 Cache::mkfs_ertr::future<> Cache::mkfs(Transaction &t)
 {
+  root = alloc_new_extent<RootBlock>(t, RootBlock::SIZE);
   return mkfs_ertr::now();
 }
 

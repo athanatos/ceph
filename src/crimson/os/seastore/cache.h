@@ -16,63 +16,6 @@
 
 namespace crimson::os::seastore {
 
-/**
- * Index of CachedExtent & by poffset, does not hold a reference,
- * user must ensure each extent is removed prior to deletion
- */
-class ExtentIndex {
-  friend class Cache;
-  CachedExtent::index extent_index;
-public:
-  auto get_overlap(paddr_t addr, segment_off_t len) {
-    return std::make_pair(extent_index.end(), extent_index.end());
-  }
-
-  void clear() {
-    extent_index.clear();
-  }
-
-  void insert(CachedExtent &extent) {
-    // sanity check
-    auto [a, b] = get_overlap(
-      extent.get_paddr(),
-      extent.get_length());
-    ceph_assert(a == b);
-
-    extent_index.insert(extent);
-  }
-
-  void erase(CachedExtent &extent) {
-    extent_index.erase(extent);
-  }
-
-  auto find_offset(paddr_t offset) {
-    return extent_index.find(offset, paddr_cmp());
-  }
-
-  auto end() {
-    return extent_index.end();
-  }
-
-  void merge(ExtentIndex &&other) {
-    for (auto it = other.extent_index.begin();
-	 it != other.extent_index.end();
-	 ) {
-      auto &ext = *it;
-      ++it;
-      other.extent_index.erase(ext);
-      extent_index.insert(ext);
-    }
-  }
-
-  template <typename T>
-  void remove(T &l) {
-    for (auto &ext : l) {
-      extent_index.erase(l);
-    }
-  }
-};
-
 class Transaction {
   friend class Cache;
 

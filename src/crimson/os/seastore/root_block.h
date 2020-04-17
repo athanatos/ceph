@@ -42,6 +42,7 @@ struct root_block_t {
 };
 
 struct RootBlock : CachedExtent {
+  constexpr static segment_off_t SIZE = 4<<10;
   using Ref = TCachedExtentRef<RootBlock>;
 
   root_block_t root;

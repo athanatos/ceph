@@ -1,4 +1,5 @@
 add_library(crimson-seastore
+  cached_extent.cc
   seastore_types.cc
   segment_manager/ephemeral.cc 
   segment_manager.cc
