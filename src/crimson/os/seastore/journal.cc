@@ -265,17 +265,6 @@ Journal::read_record_metadata_ret Journal::read_record_metadata(
 	    std::make_pair(std::move(header), std::move(bl))
 	  );
       }
-    }).safe_then([&start](auto p) {
-      if (!p) {
-	logger().debug(
-	  "read_record_metadata unable to read {}",
-	  start);
-      } else {
-	logger().debug(
-	  "read_record_metadata header metadata size {}",
-	  p->second.length());
-      }
-      return p;
     });
 }
 
@@ -306,11 +295,13 @@ Journal::replay_segment(
     std::move(start),
     [this, &delta_handler](auto &current) {
       return crimson::do_until(
-	[this, &current, &delta_handler] {
+	[this, &current, &delta_handler]() -> replay_ertr::future<bool> {
+	  return replay_ertr::make_ready_future<bool>(true);
 	  return read_record_metadata(current).safe_then
-	    ([this, &current, &delta_handler](auto p) {
+	    ([this, &current, &delta_handler](auto p)
+	     -> replay_ertr::future<bool> {
 	      if (!p.has_value()) {
-		replay_ertr::make_ready_future<bool>(true);
+		return replay_ertr::make_ready_future<bool>(true);
 	      }
 	      auto &[header, bl] = *p;
 	      current.offset += header.mdlength + header.dlength;
@@ -318,8 +309,8 @@ Journal::replay_segment(
 	      auto deltas = try_decode_deltas(
 		header,
 		bl);
-	      if (deltas) {
-		replay_ertr::make_ready_future<bool>(true);
+	      if (!deltas) {
+		return replay_ertr::make_ready_future<bool>(true);
 	      }
 
 	      return seastar::do_with(
@@ -330,18 +321,10 @@ Journal::replay_segment(
 		    [this, &delta_handler](auto &info) {
 		      return delta_handler(info);
 		    });
+		}).safe_then([] {
+		  return replay_ertr::make_ready_future<bool>(false);
 		});
-	    }).safe_then([] {
-	      return SegmentManager::read_ertr::make_ready_future<bool>(false);
-	    }).handle_error(
-	      // TODO: this needs to correctly propogate information about failed
-	      // record reads
-	      replay_ertr::pass_further{},
-	      crimson::ct_error::all_same_way([] {
-		logger().debug("replay_segment: error");
-		return replay_ertr::make_ready_future<bool>(true);
-	      })
-	    );
+	    });
 	});
     });
 }

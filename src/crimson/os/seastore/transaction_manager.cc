@@ -48,7 +48,12 @@ TransactionManager::mount_ertr::future<> TransactionManager::mount()
     return cache.complete_mount();
   }).safe_then([this] {
     return journal.open_for_write();
-  });
+  }).handle_error(
+    mount_ertr::pass_further{},
+    crimson::ct_error::all_same_way([] {
+      ceph_assert(0 == "unhandled error");
+      return mount_ertr::now();
+    }));
 }
 
 TransactionManager::close_ertr::future<> TransactionManager::close() {

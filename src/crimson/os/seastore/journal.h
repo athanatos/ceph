@@ -187,17 +187,13 @@ public:
 	}).safe_then([ret] { return ret; });
   }
 
-  using delta_handler_t = std::function<
-    SegmentManager::read_ertr::future<>(const delta_info_t&)>;
-  using replay_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error
-    // Something for decode failures?
-    >;
+  using replay_ertr = SegmentManager::read_ertr;
   using replay_ret = replay_ertr::future<>;
+  using delta_handler_t = std::function<replay_ret(const delta_info_t&)>;
   replay_ret replay(delta_handler_t &&);
 
 private:
-  using read_record_metadata_ertr = SegmentManager::read_ertr;
+  using read_record_metadata_ertr = replay_ertr;
   using read_record_metadata_ret = read_record_metadata_ertr::future<
     std::optional<std::pair<record_header_t, bufferlist>>
     >;
