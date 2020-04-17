@@ -262,8 +262,20 @@ Journal::read_record_metadata_ret Journal::read_record_metadata(
       } else {
 	  return read_record_metadata_ret(
 	    read_record_metadata_ertr::ready_future_marker{},
-	    std::make_pair(std::move(header), std::move(bl)));
+	    std::make_pair(std::move(header), std::move(bl))
+	  );
       }
+    }).safe_then([&start](auto p) {
+      if (!p) {
+	logger().debug(
+	  "read_record_metadata unable to read {}",
+	  start);
+      } else {
+	logger().debug(
+	  "read_record_metadata header metadata size {}",
+	  p->second.length());
+      }
+      return p;
     });
 }
 
@@ -297,7 +309,7 @@ Journal::replay_segment(
 	[this, &current, &delta_handler] {
 	  return read_record_metadata(current).safe_then
 	    ([this, &current, &delta_handler](auto p) {
-	      if (!p) {
+	      if (!p.has_value()) {
 		replay_ertr::make_ready_future<bool>(true);
 	      }
 	      auto &[header, bl] = *p;
