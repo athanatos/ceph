@@ -34,7 +34,22 @@ TransactionManager::TransactionManager(
 TransactionManager::mkfs_ertr::future<> TransactionManager::mkfs()
 {
   return journal.open_for_write().safe_then([this] {
-    return lba_manager.mkfs();
+    return seastar::do_with(
+      lba_manager.create_transaction(),
+      [this](auto &transaction) {
+	return cache.mkfs(*transaction
+	).safe_then([this, &transaction] {
+	  return lba_manager.mkfs(*transaction);
+	}).safe_then([this, &transaction] {
+	  return submit_transaction(std::move(transaction)).handle_error(
+	    crimson::ct_error::eagain::handle([] {
+	      ceph_assert(0 == "eagain impossible");
+	      return mkfs_ertr::now();
+	    }),
+	    mkfs_ertr::pass_further{}
+	  );
+	});
+      });
   }).safe_then([this] {
     return journal.close();
   });

@@ -301,6 +301,10 @@ public:
     Transaction &t,
     paddr_t final_block_start);
 
+  using mkfs_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  mkfs_ertr::future<> mkfs(Transaction &t);
+
   using complete_mount_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   complete_mount_ertr::future<> complete_mount();

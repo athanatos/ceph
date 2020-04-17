@@ -24,7 +24,8 @@ BtreeLBAManager::BtreeLBAManager(
   : segment_manager(segment_manager),
     cache(cache) {}
 
-BtreeLBAManager::mkfs_ret BtreeLBAManager::mkfs()
+BtreeLBAManager::mkfs_ret BtreeLBAManager::mkfs(
+  Transaction &t)
 {
   return mkfs_ertr::now();
 }

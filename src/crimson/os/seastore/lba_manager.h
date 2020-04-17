@@ -46,7 +46,9 @@ public:
   using mkfs_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   using mkfs_ret = mkfs_ertr::future<>;
-  virtual mkfs_ret mkfs() = 0;
+  virtual mkfs_ret mkfs(
+    Transaction &t
+  ) = 0;
   
   /**
    * Fetches mappings for laddr_t in range [offset, offset + len)

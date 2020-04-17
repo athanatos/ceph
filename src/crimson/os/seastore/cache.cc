@@ -89,6 +89,11 @@ void Cache::complete_commit(
   }
 }
 
+Cache::mkfs_ertr::future<> Cache::mkfs(Transaction &t)
+{
+  return mkfs_ertr::now();
+}
+
 Cache::complete_mount_ertr::future<> Cache::complete_mount()
 {
   return complete_mount_ertr::now();

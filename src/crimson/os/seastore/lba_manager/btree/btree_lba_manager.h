@@ -56,7 +56,8 @@ public:
     SegmentManager &segment_manager,
     Cache &cache);
 
-  mkfs_ret mkfs() final;
+  mkfs_ret mkfs(
+    Transaction &t) final;
 
   get_mapping_ret get_mapping(
     Transaction &t,
