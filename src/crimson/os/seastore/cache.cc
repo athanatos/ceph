@@ -89,11 +89,6 @@ void Cache::complete_commit(
   }
 }
 
-Cache::initialize_ertr::future<> Cache::initialize()
-{
-  return initialize_ertr::now();
-}
-
 Cache::complete_mount_ertr::future<> Cache::complete_mount()
 {
   return complete_mount_ertr::now();

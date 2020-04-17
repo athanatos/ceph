@@ -24,9 +24,9 @@ BtreeLBAManager::BtreeLBAManager(
   : segment_manager(segment_manager),
     cache(cache) {}
 
-BtreeLBAManager::init_ret BtreeLBAManager::init()
+BtreeLBAManager::mkfs_ret BtreeLBAManager::mkfs()
 {
-  return init_ertr::now();
+  return mkfs_ertr::now();
 }
 
 BtreeLBAManager::get_root_ret

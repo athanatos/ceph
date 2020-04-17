@@ -43,10 +43,10 @@ using lba_pin_ref_list_t = std::list<LBAPinRef&>;
  */
 class LBAManager {
 public:
-  using init_ertr = crimson::errorator<
+  using mkfs_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
-  using init_ret = init_ertr::future<>;
-  virtual init_ret init() = 0;
+  using mkfs_ret = mkfs_ertr::future<>;
+  virtual mkfs_ret mkfs() = 0;
   
   /**
    * Fetches mappings for laddr_t in range [offset, offset + len)

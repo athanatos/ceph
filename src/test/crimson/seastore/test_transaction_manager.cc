@@ -28,7 +28,7 @@ struct transaction_manager_test_t : public seastar_test_suite_t {
 
   seastar::future<> set_up_fut() final {
     return segment_manager->init().safe_then([this] {
-      return tm.initialize();
+      return tm.mkfs();
     }).safe_then([this] {
       return tm.mount();
     }).handle_error(

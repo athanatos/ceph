@@ -31,10 +31,10 @@ TransactionManager::TransactionManager(
   journal.set_segment_provider(this);
 }
 
-TransactionManager::initialize_ertr::future<> TransactionManager::initialize()
+TransactionManager::mkfs_ertr::future<> TransactionManager::mkfs()
 {
   return journal.open_for_write().safe_then([this] {
-    return cache.initialize();
+    return lba_manager.mkfs();
   }).safe_then([this] {
     return journal.close();
   });

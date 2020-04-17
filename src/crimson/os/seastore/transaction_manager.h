@@ -159,10 +159,10 @@ public:
     return;
   }
 
-  using initialize_ertr = crimson::errorator<
+  using mkfs_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
-  initialize_ertr::future<> initialize();
+  mkfs_ertr::future<> mkfs();
 
   using mount_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
