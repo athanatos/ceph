@@ -10,7 +10,7 @@ void RootBlock::prepare_write()
   bufferlist tmp;
   ::encode(root, tmp);
   auto bpiter = tmp.begin();
-  bpiter.copy_deep(tmp.length(), get_bptr());
+  bpiter.copy(tmp.length(), get_bptr().c_str());
 }
 
 CachedExtent::complete_load_ertr::future<> RootBlock::complete_load()

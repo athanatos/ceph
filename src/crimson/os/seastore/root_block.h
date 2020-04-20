@@ -7,16 +7,6 @@
 
 namespace crimson::os::seastore {
 
-struct root_location_delta_t {
-  paddr_t root_location;
-
-  DENC(root_location_delta_t, v, p) {
-    DENC_START(1, 1, p);
-    denc(v.root_location, p);
-    DENC_FINISH(p);
-  }
-};
-
 using depth_t = uint32_t;
 
 /* Belongs in lba_manager/btree, TODO: generalize this to
@@ -93,4 +83,3 @@ using RootBlockRef = RootBlock::Ref;
 
 WRITE_CLASS_DENC(crimson::os::seastore::btree_lba_root_t)
 WRITE_CLASS_DENC(crimson::os::seastore::root_block_t)
-WRITE_CLASS_DENC(crimson::os::seastore::root_location_delta_t)
