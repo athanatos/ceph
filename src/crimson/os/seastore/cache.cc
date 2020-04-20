@@ -57,6 +57,20 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
   for (auto &i: t.fresh_block_list) {
     bufferlist bl;
     bl.append(i->get_bptr());
+    if (i->get_type() == extent_types_t::ROOT) {
+      bufferlist bl;
+      root_location_delta_t location;
+      location.root_location = i->get_paddr();
+      ::encode(location, bl);
+      record.deltas.push_back(
+	delta_info_t{
+	  extent_types_t::ROOT_LOCATION,
+	  paddr_t{},
+	  0,
+	  0,
+	  std::move(bl)
+	});
+    }
     record.extents.push_back(extent_t{std::move(bl)});
   }
 

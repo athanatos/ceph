@@ -77,7 +77,8 @@ using paddr_list_t = std::list<std::pair<paddr_t, segment_off_t>>;
 /* identifies type of extent, used for interpretting deltas, managing
  * writeback */
 enum class extent_types_t : uint8_t {
-  ROOT = 0,
+  ROOT_LOCATION = 0, // delta only
+  ROOT = 1,
   LADDR_INTERNAL = 2,
   LADDR_LEAF = 3,
   LBA_BLOCK = 4,
