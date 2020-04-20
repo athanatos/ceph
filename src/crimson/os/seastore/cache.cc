@@ -116,7 +116,7 @@ Cache::close_ertr::future<> Cache::close()
 }
 
 Cache::replay_delta_ret
-Cache::replay_delta(const delta_info_t &delta)
+Cache::replay_delta(paddr_t record_base, const delta_info_t &delta)
 {
   if (delta.type == extent_types_t::ROOT_LOCATION) {
     return get_extent<RootBlock>(

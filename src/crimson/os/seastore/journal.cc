@@ -304,6 +304,7 @@ Journal::replay_segment(
 		return replay_ertr::make_ready_future<bool>(true);
 	      }
 	      auto &[header, bl] = *p;
+	      auto record_start = current;
 	      current.offset += header.mdlength + header.dlength;
 
 	      auto deltas = try_decode_deltas(
@@ -315,11 +316,11 @@ Journal::replay_segment(
 
 	      return seastar::do_with(
 		std::move(*deltas),
-		[this, &delta_handler](auto &deltas) {
+		[this, &delta_handler, record_start](auto &deltas) {
 		  return crimson::do_for_each(
 		    deltas,
-		    [this, &delta_handler](auto &info) {
-		      return delta_handler(info);
+		    [this, &delta_handler, record_start](auto &info) {
+		      return delta_handler(record_start, info);
 		    });
 		}).safe_then([] {
 		  return replay_ertr::make_ready_future<bool>(false);

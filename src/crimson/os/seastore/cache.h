@@ -274,7 +274,7 @@ public:
   using replay_delta_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   using replay_delta_ret = replay_delta_ertr::future<>;
-  replay_delta_ret replay_delta(const delta_info_t &delta);
+  replay_delta_ret replay_delta(paddr_t record_base, const delta_info_t &delta);
     
   std::ostream &print(
     std::ostream &out) const {

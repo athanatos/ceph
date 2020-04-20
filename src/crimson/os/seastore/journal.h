@@ -189,7 +189,7 @@ public:
 
   using replay_ertr = SegmentManager::read_ertr;
   using replay_ret = replay_ertr::future<>;
-  using delta_handler_t = std::function<replay_ret(const delta_info_t&)>;
+  using delta_handler_t = std::function<replay_ret(paddr_t record_start, const delta_info_t&)>;
   replay_ret replay(delta_handler_t &&);
 
 private:

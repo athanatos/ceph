@@ -60,8 +60,8 @@ TransactionManager::mkfs_ertr::future<> TransactionManager::mkfs()
 
 TransactionManager::mount_ertr::future<> TransactionManager::mount()
 {
-  return journal.replay([this](const auto &e) {
-    return cache.replay_delta(e);
+  return journal.replay([this](auto paddr, const auto &e) {
+    return cache.replay_delta(paddr, e);
   }).safe_then([this] {
     return cache.complete_mount();
   }).safe_then([this] {
