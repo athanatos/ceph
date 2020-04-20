@@ -152,7 +152,7 @@ public:
     crimson::ct_error::input_output_error>;
   using get_root_ret = get_root_ertr::future<RootBlockRef>;
   get_root_ret get_root(Transaction &t);
-  
+
   /**
    * get_extent
    */
@@ -160,18 +160,13 @@ public:
     crimson::ct_error::input_output_error>;
   template <typename T>
   get_extent_ertr::future<TCachedExtentRef<T>> get_extent(
-    Transaction &t,       ///< [in,out] current transaction
     paddr_t offset,       ///< [in] starting addr
     segment_off_t length  ///< [in] length
   ) {
-    if (auto i = t.get_extent(offset)) {
-      return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
-	TCachedExtentRef<T>(static_cast<T*>(&*i)));
-    } else if (auto iter = extents.find_offset(offset);
+    if (auto iter = extents.find_offset(offset);
 	       iter != extents.end()) {
       auto ret = TCachedExtentRef<T>(static_cast<T*>(&*iter));
-      return ret->wait_io().then([&t, ret=std::move(ret)]() mutable {
-	t.add_to_read_set(ret);
+      return ret->wait_io().then([ret=std::move(ret)]() mutable {
 	return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
 	  std::move(ret));
       });
@@ -183,9 +178,8 @@ public:
 	offset,
 	length,
 	ref->get_bptr()).safe_then(
-	  [this, &t, ref=std::move(ref)]() mutable {
+	  [this, ref=std::move(ref)]() mutable {
 	    ref->complete_io();
-	    t.add_to_read_set(ref);
 	    return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
 	      TCachedExtentRef<T>(
 		static_cast<T*>(ref.detach())));
@@ -193,6 +187,27 @@ public:
 	  },
 	  get_extent_ertr::pass_further{},
 	  crimson::ct_error::discard_all{});
+    }
+  }
+  
+  /**
+   * get_extent
+   */
+  template <typename T>
+  get_extent_ertr::future<TCachedExtentRef<T>> get_extent(
+    Transaction &t,       ///< [in,out] current transaction
+    paddr_t offset,       ///< [in] starting addr
+    segment_off_t length  ///< [in] length
+  ) {
+    if (auto i = t.get_extent(offset)) {
+      return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
+	TCachedExtentRef<T>(static_cast<T*>(&*i)));
+    } else {
+      return get_extent<T>(offset, length).safe_then(
+	[this, &t](auto ref) mutable {
+	  t.add_to_read_set(ref);
+	  return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(std::move(ref));
+	});
     }
   }
 

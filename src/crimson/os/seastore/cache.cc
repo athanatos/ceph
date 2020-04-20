@@ -58,17 +58,13 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
     bufferlist bl;
     bl.append(i->get_bptr());
     if (i->get_type() == extent_types_t::ROOT) {
-      bufferlist bl;
-      root_location_delta_t location;
-      location.root_location = i->get_paddr();
-      ::encode(location, bl);
       record.deltas.push_back(
 	delta_info_t{
 	  extent_types_t::ROOT_LOCATION,
-	  paddr_t{},
+	  i->get_paddr(),
 	  0,
 	  0,
-	  std::move(bl)
+	  bufferlist()
 	});
     }
     record.extents.push_back(extent_t{std::move(bl)});
@@ -122,6 +118,15 @@ Cache::close_ertr::future<> Cache::close()
 Cache::replay_delta_ret
 Cache::replay_delta(const delta_info_t &delta)
 {
+  if (delta.type == extent_types_t::ROOT_LOCATION) {
+    return get_extent<RootBlock>(
+      delta.paddr,
+      RootBlock::SIZE
+    ).safe_then([this](auto ref) {
+      root = ref;
+      return replay_delta_ret(replay_delta_ertr::ready_future_marker{});
+    });
+  }
   // TODO
   return replay_delta_ret(replay_delta_ertr::ready_future_marker{});
 }
