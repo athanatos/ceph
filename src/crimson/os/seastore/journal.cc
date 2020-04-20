@@ -85,9 +85,10 @@ Journal::write_record_ertr::future<> Journal::write_record(
 {
   ceph::bufferlist to_write = encode_record(
     mdlength, dlength, std::move(record));
+  auto target = written_to;
   written_to += p2roundup(to_write.length(), block_size);
   logger().debug("write_record, mdlength {}, dlength {}", mdlength, dlength);
-  return current_journal_segment->write(written_to, to_write).handle_error(
+  return current_journal_segment->write(target, to_write).handle_error(
     write_record_ertr::pass_further{},
     crimson::ct_error::all_same_way([] { ceph_assert(0 == "TODO"); }));
 }
@@ -236,7 +237,7 @@ Journal::read_record_metadata_ret Journal::read_record_metadata(
   ).safe_then(
     [this, start](bufferptr bptr) mutable
     -> read_record_metadata_ret {
-      logger().debug("replay_segment: reading {}", start);
+      logger().debug("read_record_metadata: reading {}", start);
       bufferlist bl;
       bl.append(bptr);
       auto bp = bl.cbegin();
@@ -296,14 +297,21 @@ Journal::replay_segment(
     [this, &delta_handler](auto &current) {
       return crimson::do_until(
 	[this, &current, &delta_handler]() -> replay_ertr::future<bool> {
-	  return replay_ertr::make_ready_future<bool>(true);
 	  return read_record_metadata(current).safe_then
 	    ([this, &current, &delta_handler](auto p)
 	     -> replay_ertr::future<bool> {
 	      if (!p.has_value()) {
 		return replay_ertr::make_ready_future<bool>(true);
 	      }
+
 	      auto &[header, bl] = *p;
+
+	      logger().debug(
+		"replay_segment: next record offset {} mdlength {} dlength {}",
+		current,
+		header.mdlength,
+		header.dlength);
+
 	      auto record_start = current;
 	      current.offset += header.mdlength + header.dlength;
 

@@ -21,7 +21,7 @@ class Transaction {
 
   RootBlockRef root; /* null until mutated */
 
-  segment_off_t offset = 0;
+  segment_off_t offset = 4096; // TODO -- needs to match journal block offset
 
   pextent_set_t read_set;
   ExtentIndex write_set;

@@ -2,6 +2,13 @@
 // vim: ts=8 sw=2 smarttab
 
 #include "crimson/os/seastore/cache.h"
+#include "crimson/common/log.h"
+
+namespace {
+  seastar::logger& logger() {
+    return crimson::get_logger(ceph_subsys_filestore);
+  }
+}
 
 namespace crimson::os::seastore {
 
@@ -56,6 +63,7 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
   record.extents.reserve(t.fresh_block_list.size());
   for (auto &i: t.fresh_block_list) {
     bufferlist bl;
+    i->prepare_write();
     bl.append(i->get_bptr());
     if (i->get_type() == extent_types_t::ROOT) {
       record.deltas.push_back(
@@ -119,11 +127,17 @@ Cache::replay_delta_ret
 Cache::replay_delta(paddr_t record_base, const delta_info_t &delta)
 {
   if (delta.type == extent_types_t::ROOT_LOCATION) {
+    auto root_location = delta.paddr.is_relative() ? record_base.add_relative(delta.paddr) : delta.paddr;
+    logger().debug("replay_delta: found root addr {}", root_location);
     return get_extent<RootBlock>(
-      delta.paddr,
+      root_location,
       RootBlock::SIZE
-    ).safe_then([this](auto ref) {
+    ).safe_then([this, root_location](auto ref) {
+      logger().debug("replay_delta: finished reading root at {}", root_location);
       root = ref;
+      return root->complete_load();
+    }).safe_then([this, root_location] {
+      logger().debug("replay_delta: finished loading root at {}", root_location);
       return replay_delta_ret(replay_delta_ertr::ready_future_marker{});
     });
   }

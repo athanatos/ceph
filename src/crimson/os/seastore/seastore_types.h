@@ -44,6 +44,16 @@ struct paddr_t {
   segment_id_t segment = NULL_SEG_ID;
   segment_off_t offset = NULL_SEG_OFF;
 
+  bool is_relative() const {
+    return segment == REL_SEG_ID;
+  }
+
+  paddr_t add_relative(paddr_t o) const {
+    ceph_assert(o.is_relative());
+    ceph_assert(!is_relative());
+    return paddr_t{segment, offset + o.offset};
+  }
+
   DENC(paddr_t, v, p) {
     DENC_START(1, 1, p);
     denc(v.segment, p);
