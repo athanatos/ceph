@@ -109,7 +109,6 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
   }
 
   complete_load_ertr::future<> complete_load() final {
-    ceph_assert(0 == "TODO");
     return complete_load_ertr::now();
   }
 
@@ -297,7 +296,6 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
   }
 
   extent_types_t get_type() final {
-    ceph_assert(0 == "TODO");
     return extent_types_t::LADDR_LEAF;
   }
 
@@ -311,7 +309,6 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
   }
 
   complete_load_ertr::future<> complete_load() final {
-    ceph_assert(0 == "TODO");
     return complete_load_ertr::now();
   }
 
