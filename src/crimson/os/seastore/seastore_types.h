@@ -72,6 +72,7 @@ std::ostream &operator<<(std::ostream &out, const paddr_t &rhs);
 
 // logical addr, see LBAManager, TransactionManager
 using laddr_t = uint64_t;
+constexpr laddr_t L_ADDR_MIN = std::numeric_limits<laddr_t>::min();
 constexpr laddr_t L_ADDR_MAX = std::numeric_limits<laddr_t>::max();
 constexpr laddr_t L_ADDR_NULL = std::numeric_limits<laddr_t>::max();
 constexpr laddr_t L_ADDR_ROOT = std::numeric_limits<laddr_t>::max() - 1;
