@@ -81,10 +81,10 @@ public:
    * This mapping will block from transaction submission until set_paddr
    * is called on the LBAPin.
    */
-  using alloc_extent_relative_ertr = crimson::errorator<
+  using alloc_extent_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
-  using alloc_extent_relative_ret = alloc_extent_relative_ertr::future<LBAPinRef>;
-  virtual alloc_extent_relative_ret alloc_extent_relative(
+  using alloc_extent_ret = alloc_extent_ertr::future<LBAPinRef>;
+  virtual alloc_extent_ret alloc_extent(
     Transaction &t,
     laddr_t hint,
     loff_t len,
@@ -103,22 +103,9 @@ public:
     Transaction &t,
     laddr_t off, loff_t len, paddr_t addr) = 0;
 
-  /**
-   * Creates a new relative mapping.
-   *
-   * off~len must be unreferenced
-   */
-  using set_extent_relative_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error,
-    crimson::ct_error::invarg>;
-  using set_extent_relative_ret = set_extent_ertr::future<LBAPinRef>;
-  virtual set_extent_relative_ret set_extent_relative(
-    Transaction &t,
-    laddr_t off, loff_t len, segment_off_t record_offset) = 0;
-
-
   using ref_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
+
   /**
    * Decrements ref count on extent
    *
@@ -142,38 +129,10 @@ public:
    *
    * ref must have only one refcount
    */
-  using move_extent_relative_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error>;
-  using move_extent_relative_ret = move_extent_relative_ertr::future<LBAPinRef>;
-  virtual move_extent_relative_ret move_extent_relative(
-    Transaction &t,
-    LBAPin &ref,
-    segment_off_t record_offset) {
-    return decref_extent(t, ref
-    ).safe_then([this](auto freed) {
-      ceph_assert(freed);
-    }).safe_then([this, &t, &ref, record_offset] {
-      return set_extent_relative(
-	t,
-	ref.get_laddr(),
-	ref.get_length(),
-	record_offset).handle_error(
-	  move_extent_relative_ertr::pass_further{},
-	  crimson::ct_error::invarg::handle([] {
-	    throw std::runtime_error("Should be impossible");
-	  }));
-    });
-  }
-
-  /**
-   * Moves mapping denoted by ref.
-   *
-   * ref must have only one refcount
-   */
   using move_extent_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   using move_extent_ret = move_extent_ertr::future<LBAPinRef>;
-  virtual move_extent_relative_ret move_extent(
+  virtual move_extent_ret move_extent(
     Transaction &t,
     LBAPin &ref,
     paddr_t addr) {
@@ -186,7 +145,7 @@ public:
 	ref.get_laddr(),
 	ref.get_length(),
 	addr).handle_error(
-	  move_extent_relative_ertr::pass_further{},
+	  move_extent_ertr::pass_further{},
 	  crimson::ct_error::invarg::handle([] {
 	    throw std::runtime_error("Should be impossible");
 	  }));

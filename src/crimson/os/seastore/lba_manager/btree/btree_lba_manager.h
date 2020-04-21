@@ -67,7 +67,7 @@ public:
     Transaction &t,
     laddr_list_t &&list) final;
 
-  alloc_extent_relative_ret alloc_extent_relative(
+  alloc_extent_ret alloc_extent(
     Transaction &t,
     laddr_t hint,
     loff_t len,
@@ -76,10 +76,6 @@ public:
   set_extent_ret set_extent(
     Transaction &t,
     laddr_t off, loff_t len, paddr_t addr) final;
-
-  set_extent_relative_ret set_extent_relative(
-    Transaction &t,
-    laddr_t off, loff_t len, segment_off_t record_offset) final;
 
   decref_extent_ret decref_extent(
     Transaction &t,

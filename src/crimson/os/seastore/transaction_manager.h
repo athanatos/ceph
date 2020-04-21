@@ -297,7 +297,7 @@ public:
     auto ext = cache.alloc_new_extent<T>(
       t,
       len);
-    return lba_manager.alloc_extent_relative(
+    return lba_manager.alloc_extent(
       t,
       hint,
       len,

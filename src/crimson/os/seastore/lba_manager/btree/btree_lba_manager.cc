@@ -89,8 +89,8 @@ BtreeLBAManager::get_mappings(
     });
 }
 
-BtreeLBAManager::alloc_extent_relative_ret
-BtreeLBAManager::alloc_extent_relative(
+BtreeLBAManager::alloc_extent_ret
+BtreeLBAManager::alloc_extent(
   Transaction &t,
   laddr_t hint,
   loff_t len,
@@ -115,8 +115,8 @@ BtreeLBAManager::alloc_extent_relative(
 	ret,
 	{ len, make_relative_paddr(offset) }
       ).safe_then([extent](auto ret) {
-	return alloc_extent_relative_ret(
-	  alloc_extent_relative_ertr::ready_future_marker{},
+	return alloc_extent_ret(
+	  alloc_extent_ertr::ready_future_marker{},
 	  LBAPinRef(ret.release()));
       });
     });
@@ -139,28 +139,6 @@ BtreeLBAManager::set_extent(
 	set_extent_ertr::ready_future_marker{},
 	LBAPinRef(ret.release()));
     });
-}
-
-BtreeLBAManager::set_extent_relative_ret
-BtreeLBAManager::set_extent_relative(
-  Transaction &t,
-  laddr_t off, loff_t len, segment_off_t record_offset)
-{
-  return get_root(
-    t).safe_then([this, &t, off, len, record_offset](auto root) {
-      return root->insert(
-	cache,
-	t,
-	off,
-	{ len, make_relative_paddr(record_offset) });
-    }).safe_then([](auto ret) {
-      return set_extent_ret(
-	set_extent_ertr::ready_future_marker{},
-	LBAPinRef(ret.release()));
-    });
-  return set_extent_relative_ret(
-    set_extent_relative_ertr::ready_future_marker{},
-    LBAPinRef());
 }
 
 BtreeLBAManager::decref_extent_ret
