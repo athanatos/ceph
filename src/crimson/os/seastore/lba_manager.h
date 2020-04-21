@@ -88,7 +88,7 @@ public:
     Transaction &t,
     laddr_t hint,
     loff_t len,
-    segment_off_t offset) = 0;
+    paddr_t addr) = 0;
 
   /**
    * Creates a new absolute mapping.

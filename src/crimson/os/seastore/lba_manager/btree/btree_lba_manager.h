@@ -71,7 +71,7 @@ public:
     Transaction &t,
     laddr_t hint,
     loff_t len,
-    segment_off_t offset) final;
+    paddr_t addr) final;
 
   set_extent_ret set_extent(
     Transaction &t,
@@ -91,6 +91,15 @@ public:
     auto t = new Transaction;
     return TransactionRef(t);
   }
+private:
+  using insert_mapping_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  using insert_mapping_ret = insert_mapping_ertr::future<LBAPinRef>;
+  insert_mapping_ret insert_mapping(
+    Transaction &t,
+    LBANodeRef root,
+    laddr_t laddr,
+    lba_map_val_t val);
 };
   
 }
