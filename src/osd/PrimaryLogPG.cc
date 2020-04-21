@@ -6995,7 +6995,8 @@ int PrimaryLogPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  result = -EOPNOTSUPP;
 	  break;
 	}
-	if (soid.has_snapset()) {
+	if (ctx->snapc.snaps.size() || 
+	    (ctx->obc->ssc && ctx->obc->ssc->snapset.clones.size()) ) {
 	  result = -EOPNOTSUPP;
 	  break;
 	}
