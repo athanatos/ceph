@@ -22,7 +22,12 @@ CachedExtentRef Cache::duplicate_for_write(
   ret->version++;
   ret->state = CachedExtent::extent_state_t::PENDING_DELTA;
 
-  // TODO: special handling for root?
+  if (ret->get_type() == extent_types_t::ROOT) {
+    t.root = ret->cast<RootBlock>();
+  }
+
+  t.add_mutated_extent(ret);
+
   return ret;
 }
 
@@ -87,6 +92,9 @@ void Cache::complete_commit(
   Transaction &t,
   paddr_t final_block_start)
 {
+  if (t.root)
+    root = t.root;
+
   paddr_t cur = final_block_start;
   for (auto &i: t.fresh_block_list) {
     i->set_paddr(cur);
@@ -109,7 +117,7 @@ void Cache::complete_commit(
 
 Cache::mkfs_ertr::future<> Cache::mkfs(Transaction &t)
 {
-  root = alloc_new_extent<RootBlock>(t, RootBlock::SIZE);
+  t.root = alloc_new_extent<RootBlock>(t, RootBlock::SIZE);
   return mkfs_ertr::now();
 }
 

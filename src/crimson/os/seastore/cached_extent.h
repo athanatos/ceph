@@ -138,6 +138,11 @@ public:
     crimson::ct_error::input_output_error>;
   virtual complete_load_ertr::future<> complete_load() = 0;
 
+  template <typename T>
+  TCachedExtentRef<T> cast() {
+    return TCachedExtentRef<T>(static_cast<T*>(this));
+  }
+
   bool is_pending() const {
     return state == extent_state_t::PENDING_INITIAL ||
       state == extent_state_t::PENDING_DELTA;

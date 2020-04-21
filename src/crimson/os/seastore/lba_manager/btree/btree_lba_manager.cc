@@ -27,7 +27,9 @@ BtreeLBAManager::BtreeLBAManager(
 BtreeLBAManager::mkfs_ret BtreeLBAManager::mkfs(
   Transaction &t)
 {
-  return mkfs_ertr::now();
+  return cache.get_root(t).safe_then([this, &t](auto root) {
+    return mkfs_ertr::now();
+  });
 }
 
 BtreeLBAManager::get_root_ret
