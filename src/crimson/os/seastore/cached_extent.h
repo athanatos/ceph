@@ -131,7 +131,7 @@ public:
   /**
    * Called on dirty CachedExtent implementation after replay.
    * Implementation should perform any reads/in-memory-setup
-   * necessary. (for instance, the lba implementation uses this
+   * necessary. (for instance, the lba implementation will use this
    * to load in lba_manager blocks)
    */
   using complete_load_ertr = crimson::errorator<
