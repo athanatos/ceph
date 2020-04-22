@@ -11,6 +11,7 @@
 #include <seastar/core/future-util.hh>
 #include <seastar/core/reactor.hh>
 #include <seastar/core/alien.hh>
+#include <seastar/core/thread.hh>
 
 #include "gtest/gtest.h"
 
@@ -42,7 +43,15 @@ struct seastar_test_suite_t : public ::testing::Test {
 
   template <typename Func>
   void run(Func &&func) {
-    seastar_env.run(std::forward<Func>(func));
+    return seastar_env.run(std::forward<Func>(func));
+  }
+
+  template <typename Func>
+  void run_async(Func &&func) {
+    run(
+      [func=std::forward<Func>(func)]() mutable {
+	return seastar::async(std::forward<Func>(func));
+      });
   }
 
   virtual seastar::future<> set_up_fut() { return seastar::now(); }

@@ -156,7 +156,6 @@ Cache::replay_delta(paddr_t record_base, const delta_info_t &delta)
 Cache::get_root_ret Cache::get_root(Transaction &t)
 {
   if (t.root) {
-    logger().debug("Cache::get_root: using root ref on transaction");
     return get_root_ret(
       get_root_ertr::ready_future_marker{},
       t.root);

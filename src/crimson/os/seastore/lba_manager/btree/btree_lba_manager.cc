@@ -174,13 +174,18 @@ BtreeLBAManager::insert_mapping_ret BtreeLBAManager::insert_mapping(
     insert_mapping_ertr::ready_future_marker{},
     root);
   if (root->at_max_capacity()) {
-    split = cache.get_root(t).safe_then([this, root, laddr, &t](auto croot) {
-      auto nroot = cache.alloc_new_extent<LBAInternalNode>(t, LBA_BLOCK_SIZE);
-      nroot->set_depth(root->depth + 1);
-      nroot->begin()->set_lb(L_ADDR_MIN);
-      nroot->set_size(1);
-      return nroot->split_entry(cache, t, laddr, nroot->begin(), root);
-    });
+    split = cache.get_root(t).safe_then(
+      [this, root, laddr, &t](RootBlockRef croot) {
+	{
+	  auto mut_croot = cache.duplicate_for_write(t, croot);
+	  croot = mut_croot->cast<RootBlock>();
+	}
+	auto nroot = cache.alloc_new_extent<LBAInternalNode>(t, LBA_BLOCK_SIZE);
+	nroot->set_depth(root->depth + 1);
+	nroot->begin()->set_lb(L_ADDR_MIN);
+	nroot->set_size(1);
+	return nroot->split_entry(cache, t, laddr, nroot->begin(), root);
+      });
   }
   return split.safe_then([this, &t, laddr, val](auto node) {
     return node->insert(cache, t, laddr, val);
