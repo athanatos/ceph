@@ -147,7 +147,7 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
 
   paddr_t get_val(uint16_t offset) const {
     return paddr_t{
-      *reinterpret_cast<const ceph_les32*>(
+      *reinterpret_cast<const ceph_le32*>(
 	get_ptr(offset_of_paddr(offset))),
 	static_cast<segment_off_t>(
 	  *reinterpret_cast<const ceph_les32*>(
@@ -156,7 +156,7 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
   }
 
   void set_val(uint16_t offset, paddr_t addr) {
-    *reinterpret_cast<ceph_les32*>(
+    *reinterpret_cast<ceph_le32*>(
       get_ptr(offset_of_paddr(offset))) = addr.segment;
     *reinterpret_cast<ceph_les32*>(
       get_ptr(offset_of_paddr(offset) + 4)) = addr.offset;
@@ -352,7 +352,7 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
       *reinterpret_cast<const ceph_le32*>(
 	get_ptr(offset_of_map_val(offset))),
       paddr_t{
-	*reinterpret_cast<const ceph_les32*>(
+	*reinterpret_cast<const ceph_le32*>(
 	  get_ptr(offset_of_map_val(offset)) + 8),
 	static_cast<segment_off_t>(
 	  *reinterpret_cast<const ceph_le32*>(
@@ -364,7 +364,7 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
   void set_val(uint16_t offset, lba_map_val_t addr) {
     *reinterpret_cast<ceph_le32*>(
       get_ptr(offset_of_map_val(offset))) = addr.len;
-    *reinterpret_cast<ceph_les32*>(
+    *reinterpret_cast<ceph_le32*>(
       get_ptr(offset_of_map_val(offset)) + 8) = addr.paddr.segment;
     *reinterpret_cast<ceph_les32*>(
       get_ptr(offset_of_map_val(offset) + 12)) = addr.paddr.offset;

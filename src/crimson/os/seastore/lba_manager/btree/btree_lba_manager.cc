@@ -47,6 +47,10 @@ BtreeLBAManager::get_root_ret
 BtreeLBAManager::get_root(Transaction &t)
 {
   return cache.get_root(t).safe_then([this, &t](auto root) {
+
+    logger().debug(
+      "get_root: reading root at {}",
+      root->get_lba_root().lba_root_addr);
     return get_lba_btree_extent(
       cache,
       t,
@@ -98,6 +102,9 @@ BtreeLBAManager::alloc_extent(
 {
   return get_root(
     t).safe_then([this, &t, hint, len, addr](auto extent) {
+      logger().debug(
+	"alloc_extent: beginning search at {}",
+	extent->get_paddr());
       return extent->find_hole(
 	cache,
 	t,
