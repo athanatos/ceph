@@ -31,7 +31,7 @@ struct TestBlock : LogicalCachedExtent {
   void on_written(paddr_t record_block_offset) final {}
 
   static constexpr extent_types_t TYPE = extent_types_t::TEST_BLOCK;
-  extent_types_t get_type() final {
+  extent_types_t get_type() const final {
     return extent_types_t::ROOT;
   }
 

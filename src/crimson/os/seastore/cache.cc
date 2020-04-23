@@ -20,12 +20,13 @@ CachedExtentRef Cache::duplicate_for_write(
 
   auto ret = i->duplicate_for_write();
   ret->version++;
-  ret->state = CachedExtent::extent_state_t::PENDING_DELTA;
+  ret->state = CachedExtent::extent_state_t::MUTATION_PENDING;
 
   if (ret->get_type() == extent_types_t::ROOT) {
     t.root = ret->cast<RootBlock>();
   }
 
+  t.add_to_retired_set(i);
   t.add_mutated_extent(ret);
 
   return ret;
@@ -44,14 +45,19 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
   // Transaction is now a go, set up in-memory cache state
   // invalidate now invalid blocks
   for (auto &i: t.retired_set) {
-    ceph_assert(i->state == CachedExtent::extent_state_t::WRITTEN);
+    logger().debug("try_construct_record: retiring {}", *i);
+    ceph_assert(!i->is_pending());
+    ceph_assert(i->is_valid());
     i->state = CachedExtent::extent_state_t::INVALID;
     extents.erase(*i);
   }
 
+  t.write_set.clear();
+
   // Add new copy of mutated blocks, set_io_wait to block until written
   record.deltas.reserve(t.mutated_block_list.size());
   for (auto &i: t.mutated_block_list) {
+    logger().debug("try_construct_record: mutating {}", *i);
     extents.insert(*i);
     i->prepare_write();
     i->set_io_wait();
@@ -67,6 +73,7 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
 
   record.extents.reserve(t.fresh_block_list.size());
   for (auto &i: t.fresh_block_list) {
+    logger().debug("try_construct_record: fresh block {}", *i);
     bufferlist bl;
     i->prepare_write();
     bl.append(i->get_bptr());
@@ -83,7 +90,6 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
     record.extents.push_back(extent_t{std::move(bl)});
   }
 
-  t.write_set.clear();
   t.read_set.clear();
   return std::make_optional<record_t>(std::move(record));
 }
@@ -97,16 +103,18 @@ void Cache::complete_commit(
 
   paddr_t cur = final_block_start;
   for (auto &i: t.fresh_block_list) {
+    logger().debug("complete_commit: fresh {}", *i);
     i->set_paddr(cur);
     cur.offset += i->get_length();
-    i->state = CachedExtent::extent_state_t::WRITTEN;
+    i->state = CachedExtent::extent_state_t::CLEAN;
     i->on_written(final_block_start);
     extents.insert(*i);
   }
 
   // Add new copy of mutated blocks, set_io_wait to block until written
   for (auto &i: t.mutated_block_list) {
-    i->state = CachedExtent::extent_state_t::WRITTEN;
+    logger().debug("complete_commit: mutated {}", *i);
+    i->state = CachedExtent::extent_state_t::DIRTY;
     i->on_written(final_block_start);
   }
 

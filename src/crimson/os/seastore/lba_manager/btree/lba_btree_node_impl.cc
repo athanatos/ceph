@@ -328,23 +328,24 @@ LBALeafNode::find_hole_ret LBALeafNode::find_hole(
   loff_t len)
 {
   for (auto i = begin(); i != end(); ++i) {
-    auto ub = i == (end() - 1) ? max : i->get_ub();
-    logger().debug(
-      "LBALeafNode::find_hole: offset: {}, {}, {}",
-      i.offset,
-      begin().offset,
-      end().offset);
-    auto val = i->get_val();
-    ceph_assert(ub > (min + val.len));
-    if (ub - (min + val.len) < len) {
+    auto ub = i->get_lb();
+    if (min + len <= ub) {
       return find_hole_ret(
 	find_hole_ertr::ready_future_marker{},
-	min + val.len);
+	min);
+    } else {
+      min = i->get_lb() + i->get_val().len;
     }
   }
-  return find_hole_ret(
-    find_hole_ertr::ready_future_marker{},
-    L_ADDR_MAX);
+  if (min + len <= max) {
+    return find_hole_ret(
+      find_hole_ertr::ready_future_marker{},
+      min);
+  } else {
+    return find_hole_ret(
+      find_hole_ertr::ready_future_marker{},
+      L_ADDR_MAX);
+  }
 }
 
 std::pair<LBALeafNode::internal_iterator_t, LBALeafNode::internal_iterator_t>

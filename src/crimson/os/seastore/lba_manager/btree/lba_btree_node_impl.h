@@ -95,7 +95,7 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
   void on_written(paddr_t record_block_offset) final {
   }
 
-  extent_types_t get_type() final {
+  extent_types_t get_type() const final {
     return extent_types_t::LADDR_INTERNAL;
   }
 
@@ -295,12 +295,12 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
   void on_written(paddr_t record_block_offset) final {
   }
 
-  extent_types_t get_type() final {
+  extent_types_t get_type() const final {
     return extent_types_t::LADDR_LEAF;
   }
 
   ceph::bufferlist get_delta() final {
-    ceph_assert(0 == "TODO");
+    // TODO
     return ceph::bufferlist();
   }
 

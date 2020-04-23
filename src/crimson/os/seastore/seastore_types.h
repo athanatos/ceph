@@ -120,6 +120,8 @@ enum class extent_types_t : uint8_t {
   NONE = 0xFF
 };
 
+std::ostream &operator<<(std::ostream &out, extent_types_t t);
+
 /* description of a new physical extent */
 struct extent_t {
   ceph::bufferlist bl;  ///< payload, bl.length() == length, aligned

@@ -57,11 +57,15 @@ class CachedExtent : public boost::intrusive_ref_counter<
   extent_version_t version = EXTENT_VERSION_NULL;
 
   enum class extent_state_t : uint8_t {
-    PENDING_INITIAL,  // In Transaction::write_set, or nothing while writing
-    PENDING_DELTA,    // In Transaction::write_set, or nothing while writing
-    WRITTEN,          // In Cache::extent_index
-    INVALID           // Part of no ExtentIndex sets
-  } state = extent_state_t::PENDING_INITIAL;
+    INITIAL_WRITE_PENDING, // In Transaction::write_set and fresh_block_list
+    MUTATION_PENDING,      // In Transaction::write_set and mutated_block_list
+    CLEAN,                 // In Cache::extent_index, Transaction::read_set
+                           //  during write, contents match disk, version == 0
+    DIRTY,                 // Same as CLEAN, but contents do not match disk,
+                           //  version > 0
+    INVALID                // Part of no ExtentIndex set
+  } state = extent_state_t::INVALID;
+  friend std::ostream &operator<<(std::ostream &, extent_state_t);
 
   /* address of original block -- relative in state PENDING_INITIAL */
   paddr_t poffset; 
@@ -114,7 +118,17 @@ public:
 
   virtual void on_written(paddr_t record_block_offset) = 0;
 
-  virtual extent_types_t get_type() = 0;
+  virtual extent_types_t get_type() const = 0;
+
+  friend std::ostream &operator<<(std::ostream &, extent_state_t);
+  std::ostream &print(std::ostream &out) const {
+    return out << "CachedExtent(addr=" << this
+	       << ", type=" << get_type()
+	       << ", version=" << version
+	       << ", paddr=" << get_paddr()
+	       << ", state=" << state
+	       << ")";
+  }
 
   /**
    * Must return a valid delta usable in apply_delta() in submit_transaction
@@ -144,12 +158,16 @@ public:
   }
 
   bool is_pending() const {
-    return state == extent_state_t::PENDING_INITIAL ||
-      state == extent_state_t::PENDING_DELTA;
+    return state == extent_state_t::INITIAL_WRITE_PENDING ||
+      state == extent_state_t::MUTATION_PENDING;
   }
 
-  paddr_t get_paddr() { return poffset; }
-  loff_t get_length() { return static_cast<loff_t>(ptr.length()); }
+  bool is_valid() const {
+    return state != extent_state_t::INVALID;
+  }
+
+  paddr_t get_paddr() const { return poffset; }
+  loff_t get_length() const { return static_cast<loff_t>(ptr.length()); }
 
   bufferptr &get_bptr() { return ptr; }
   const bufferptr &get_bptr() const { return ptr; }
@@ -170,6 +188,9 @@ public:
 
   virtual ~CachedExtent();
 };
+
+std::ostream &operator<<(std::ostream &, CachedExtent::extent_state_t);
+std::ostream &operator<<(std::ostream &, const CachedExtent&);
 
 struct paddr_cmp {
   bool operator()(paddr_t lhs, const CachedExtent &rhs) const {

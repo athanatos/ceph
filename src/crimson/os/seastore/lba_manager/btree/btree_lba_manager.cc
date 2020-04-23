@@ -196,7 +196,8 @@ BtreeLBAManager::insert_mapping_ret BtreeLBAManager::insert_mapping(
 	return nroot->split_entry(cache, t, laddr, nroot->begin(), root);
       });
   }
-  return split.safe_then([this, &t, laddr, val](auto node) {
+  return split.safe_then([this, &t, laddr, val](LBANodeRef node) {
+    node = cache.duplicate_for_write(t, node)->cast<LBANode>();
     return node->insert(cache, t, laddr, val);
   });
 }

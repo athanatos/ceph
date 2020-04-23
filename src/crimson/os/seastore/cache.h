@@ -83,9 +83,11 @@ using TransactionRef = std::unique_ptr<Transaction>;
  *
  * As such, any transaction has 3 components:
  * 1) read_set: references to extents read during the transaction
- * 2) write_set: references to extents which are either
- *    a) new physical blocks or
- *    b) mutations to existing physical blocks
+ *       See Transaction::read_set
+ * 2) write_set: references to extents to be written as:
+ *    a) new physical blocks, see Transaction::fresh_block_list
+ *    b) mutations to existing physical blocks,
+ *       see Transaction::mutated_block_list
  * 3) retired_set: extent refs to be retired either due to 2b or 
  *    due to releasing the extent generally.
 
@@ -182,6 +184,8 @@ public:
       auto ref = CachedExtent::make_cached_extent_ref<T>(
 	alloc_cache_buf(length));
       ref->set_io_wait();
+      ref->set_paddr(offset);
+      ref->state = CachedExtent::extent_state_t::CLEAN;
       return segment_manager.read(
 	offset,
 	length,
