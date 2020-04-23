@@ -23,10 +23,14 @@ constexpr segment_id_t NULL_SEG_ID =
 constexpr segment_id_t REL_SEG_ID =
   std::numeric_limits<segment_id_t>::max() - 2;
 
+std::ostream &segment_to_stream(std::ostream &, const segment_id_t &t);
+
 // Offset within a segment on disk, see SegmentManager
 using segment_off_t = uint32_t;
 constexpr segment_off_t NULL_SEG_OFF =
   std::numeric_limits<segment_id_t>::max();
+
+std::ostream &offset_to_stream(std::ostream &, const segment_off_t &t);
 
 /* Monotonically increasing segment seq, uniquely identifies
  * the incarnation of a segment */
@@ -52,6 +56,13 @@ struct paddr_t {
     ceph_assert(o.is_relative());
     ceph_assert(!is_relative());
     return paddr_t{segment, offset + o.offset};
+  }
+
+  paddr_t maybe_relative_to(paddr_t base) const {
+    if (is_relative())
+      return base.add_relative(*this);
+    else
+      return *this;
   }
 
   DENC(paddr_t, v, p) {

@@ -55,7 +55,8 @@ BtreeLBAManager::get_root(Transaction &t)
       cache,
       t,
       root->get_lba_root().lba_depth,
-      root->get_lba_root().lba_root_addr);
+      root->get_lba_root().lba_root_addr.maybe_relative_to(
+	root->get_paddr()));
   });
 }
 
