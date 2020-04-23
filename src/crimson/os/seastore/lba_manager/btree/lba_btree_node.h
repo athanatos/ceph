@@ -108,6 +108,7 @@ Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
   Cache &cache,
   Transaction &t,
   depth_t depth,
-  paddr_t offset);
+  paddr_t offset,
+  paddr_t base);
 
 }

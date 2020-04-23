@@ -58,6 +58,14 @@ struct paddr_t {
     return paddr_t{segment, offset + o.offset};
   }
 
+  paddr_t operator-(paddr_t rhs) const {
+    ceph_assert(rhs.is_relative() && is_relative());
+    return paddr_t{
+      REL_SEG_ID,
+      offset - rhs.offset
+    };
+  }
+
   paddr_t maybe_relative_to(paddr_t base) const {
     if (is_relative())
       return base.add_relative(*this);

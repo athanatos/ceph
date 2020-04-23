@@ -33,11 +33,12 @@ BtreeLBAManager::mkfs_ret BtreeLBAManager::mkfs(
     auto root_leaf = cache.alloc_new_extent<LBALeafNode>(
       t,
       LBA_BLOCK_SIZE);
+    root_leaf->set_size(0);
     root->set_lba_root(
       btree_lba_root_t{
 	0,
 	0,
-	root_leaf->get_paddr(),
+	root_leaf->get_paddr() - root->get_paddr(),
 	paddr_t{}});
     return mkfs_ertr::now();
   });
@@ -55,8 +56,8 @@ BtreeLBAManager::get_root(Transaction &t)
       cache,
       t,
       root->get_lba_root().lba_depth,
-      root->get_lba_root().lba_root_addr.maybe_relative_to(
-	root->get_paddr()));
+      root->get_lba_root().lba_root_addr,
+      root->get_paddr());
   });
 }
 

@@ -37,7 +37,8 @@ LBAInternalNode::lookup_range_ret LBAInternalNode::lookup_range(
 	cache,
 	t,
 	depth-1,
-	val.get_val()).safe_then(
+	val.get_val(),
+	get_paddr()).safe_then(
 	  [this, &cache, &t, &result, addr, len](auto extent) mutable {
 	    // TODO: add backrefs to ensure cache residence of parents
 	    return extent->lookup_range(
@@ -67,7 +68,8 @@ LBAInternalNode::insert_ret LBAInternalNode::insert(
     cache,
     t,
     depth-1,
-    insertion_pt->get_val()).safe_then(
+    insertion_pt->get_val(),
+    get_paddr()).safe_then(
       [this, insertion_pt, &cache, &t, laddr, val=std::move(val)](
 	auto extent) mutable {
 	return extent->at_max_capacity() ?
@@ -89,7 +91,8 @@ LBAInternalNode::remove_ret LBAInternalNode::remove(
     cache,
     t,
     depth-1,
-    removal_pt->get_val()
+    removal_pt->get_val(),
+    get_paddr()
   ).safe_then([this, removal_pt, &cache, &t, laddr](auto extent) {
     return extent->at_min_capacity() ?
       merge_entry(cache, t, laddr, removal_pt, extent) :
@@ -121,7 +124,8 @@ LBAInternalNode::find_hole_ret LBAInternalNode::find_hole(
 	    cache,
 	    t,
 	    depth-1,
-	    i->get_val()
+	    i->get_val(),
+	    get_paddr()
 	  ).safe_then([this, &cache, &t, &i, len](auto extent) mutable {
 	    return extent->find_hole(
 	      cache,
@@ -192,7 +196,8 @@ LBAInternalNode::merge_entry(
     c,
     t,
     depth,
-    donor_iter->get_val()
+    donor_iter->get_val(),
+    get_paddr()
   ).safe_then([this, &c, &t, addr, iter, entry, donor_iter, is_left](
 		auto donor) mutable {
     auto [l, r] = is_left ?
@@ -323,7 +328,12 @@ LBALeafNode::find_hole_ret LBALeafNode::find_hole(
   loff_t len)
 {
   for (auto i = begin(); i != end(); ++i) {
-    auto ub = i == end() ? max : i->get_ub();
+    auto ub = i == (end() - 1) ? max : i->get_ub();
+    logger().debug(
+      "LBALeafNode::find_hole: offset: {}, {}, {}",
+      i.offset,
+      begin().offset,
+      end().offset);
     auto val = i->get_val();
     ceph_assert(ub > (min + val.len));
     if (ub - (min + val.len) < len) {
@@ -347,9 +357,14 @@ Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
   Cache &cache,
   Transaction &t,
   depth_t depth,
-  paddr_t offset) {
+  paddr_t offset,
+  paddr_t base) {
+  offset = offset.maybe_relative_to(base);
   if (depth > 0) {
-   return cache.get_extent<LBAInternalNode>(
+    logger().debug(
+      "get_lba_btree_extent: reading internal at offset {}",
+      offset);
+    return cache.get_extent<LBAInternalNode>(
       t,
       offset,
       LBA_BLOCK_SIZE).safe_then([](auto ret) {
@@ -357,6 +372,9 @@ Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
       });
     
   } else {
+    logger().debug(
+      "get_lba_btree_extent: reading leaf at offset {}",
+      offset);
     return cache.get_extent<LBALeafNode>(
       t,
       offset,

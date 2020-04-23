@@ -138,7 +138,9 @@ class Cache {
   ExtentIndex extents;
 
   bufferptr alloc_cache_buf(size_t size) {
-    return ceph::bufferptr(size);
+    auto bp = ceph::bufferptr(size);
+    bp.zero();
+    return bp;
   }
 public:
   Cache(SegmentManager &segment_manager) : segment_manager(segment_manager) {}
