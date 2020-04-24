@@ -99,6 +99,13 @@ TEST_F(transaction_manager_test_t, basic)
 	TestBlock::SIZE).unsafe_get0();
       tm.submit_transaction(std::move(t)).unsafe_get();
     }
+    {
+      auto t = tm.create_transaction();
+      auto extent = tm.read_extents<TestBlock>(
+	*t,
+	ADDR,
+	TestBlock::SIZE).unsafe_get0();
+    }
   });
 }
 

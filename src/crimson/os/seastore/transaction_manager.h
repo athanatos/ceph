@@ -156,9 +156,11 @@ public:
     laddr_t offset,
     loff_t length)
   {
-    std::unique_ptr<lextent_list_t<T>> ret;
+    std::unique_ptr<lextent_list_t<T>> ret =
+      std::make_unique<lextent_list_t<T>>();
     auto &ret_ref = *ret;
-    std::unique_ptr<lba_pin_list_t> pin_list;
+    std::unique_ptr<lba_pin_list_t> pin_list =
+      std::make_unique<lba_pin_list_t>();
     auto &pin_list_ref = *pin_list;
     return lba_manager.get_mapping(
       t, offset, length
@@ -168,8 +170,6 @@ public:
 	pin_list_ref.begin(),
 	pin_list_ref.end(),
 	[this, &t, &ret_ref](auto &pin) {
-	  // TODO: invert buffer control so that we pass the buffer
-	  // here into segment_manager to avoid a copy
 	  return cache.get_extent<T>(
 	    t,
 	    pin->get_paddr(),

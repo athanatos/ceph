@@ -12,6 +12,32 @@ namespace {
 
 namespace crimson::os::seastore {
 
+void Cache::add_extent(CachedExtentRef ref)
+{
+  assert(ref->is_valid());
+  extents.insert(*ref);
+
+  ceph_assert(!ref->primary_ref_list_hook.is_linked());
+  if (ref->is_dirty()) {
+    intrusive_ptr_add_ref(&*ref);
+    dirty.push_back(*ref);
+  }
+}
+
+void Cache::retire_extent(CachedExtentRef ref)
+{
+  assert(ref->is_valid());
+  extents.erase(*ref);
+
+  if (ref->is_dirty()) {
+    ceph_assert(ref->primary_ref_list_hook.is_linked());
+    dirty.erase(dirty.s_iterator_to(*ref));
+    intrusive_ptr_release(&*ref);
+  } else {
+    ceph_assert(!ref->primary_ref_list_hook.is_linked());
+  }
+}
+
 CachedExtentRef Cache::duplicate_for_write(
   Transaction &t,
   CachedExtentRef i) {
@@ -48,8 +74,8 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
     logger().debug("try_construct_record: retiring {}", *i);
     ceph_assert(!i->is_pending());
     ceph_assert(i->is_valid());
+    retire_extent(i);
     i->state = CachedExtent::extent_state_t::INVALID;
-    extents.erase(*i);
   }
 
   t.write_set.clear();
@@ -58,7 +84,7 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
   record.deltas.reserve(t.mutated_block_list.size());
   for (auto &i: t.mutated_block_list) {
     logger().debug("try_construct_record: mutating {}", *i);
-    extents.insert(*i);
+    add_extent(i);
     i->prepare_write();
     i->set_io_wait();
     record.deltas.push_back(
@@ -108,7 +134,7 @@ void Cache::complete_commit(
     cur.offset += i->get_length();
     i->state = CachedExtent::extent_state_t::CLEAN;
     i->on_written(final_block_start);
-    extents.insert(*i);
+    add_extent(i);
   }
 
   // Add new copy of mutated blocks, set_io_wait to block until written

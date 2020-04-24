@@ -162,6 +162,17 @@ public:
       state == extent_state_t::MUTATION_PENDING;
   }
 
+  bool is_clean() const {
+    ceph_assert(is_valid());
+    return state == extent_state_t::INITIAL_WRITE_PENDING ||
+      state == extent_state_t::CLEAN;
+  }
+
+  bool is_dirty() const {
+    ceph_assert(is_valid());
+    return !is_clean();
+  }
+
   bool is_valid() const {
     return state != extent_state_t::INVALID;
   }

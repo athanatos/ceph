@@ -138,12 +138,16 @@ class Cache {
   /* Contains current root (may be unstable) */
   RootBlockRef root;
   ExtentIndex extents;
+  CachedExtent::list dirty; // holds refs
 
   bufferptr alloc_cache_buf(size_t size) {
     auto bp = ceph::bufferptr(size);
     bp.zero();
     return bp;
   }
+
+  void add_extent(CachedExtentRef ref);
+  void retire_extent(CachedExtentRef ref);
 public:
   Cache(SegmentManager &segment_manager) : segment_manager(segment_manager) {}
 
