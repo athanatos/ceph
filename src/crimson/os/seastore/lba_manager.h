@@ -34,9 +34,11 @@ public:
   virtual ~LBAPin() {}
 };
 using LBAPinRef = std::unique_ptr<LBAPin>;
+std::ostream &operator<<(std::ostream &out, const LBAPin &rhs);
 
 using lba_pin_list_t = std::list<LBAPinRef>;
-using lba_pin_ref_list_t = std::list<LBAPinRef&>;
+
+std::ostream &operator<<(std::ostream &out, const lba_pin_list_t &rhs);
 
 /**
  * Abstract interface for managing the logical to physical mapping

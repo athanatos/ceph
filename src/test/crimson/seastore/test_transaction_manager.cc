@@ -89,7 +89,7 @@ struct transaction_manager_test_t : public seastar_test_suite_t {
 
 TEST_F(transaction_manager_test_t, basic)
 {
-  constexpr laddr_t ADDR = 0xFF;
+  constexpr laddr_t ADDR = 0xFF * (TestBlock::SIZE);
   run_async([this] {
     {
       auto t = tm.create_transaction();

@@ -101,8 +101,19 @@ constexpr laddr_t L_ADDR_LBAT = std::numeric_limits<laddr_t>::max() - 2;
 using loff_t = uint32_t;
 constexpr loff_t L_OFF_NULL = std::numeric_limits<loff_t>::max();
 
-using laddr_list_t = std::list<std::pair<laddr_t, loff_t>>;
-using paddr_list_t = std::list<std::pair<paddr_t, segment_off_t>>;
+struct laddr_list_t : std::list<std::pair<laddr_t, loff_t>> {
+  template <typename... T>
+  laddr_list_t(T&&... args)
+    : std::list<std::pair<laddr_t, loff_t>>(std::forward<T>(args)...) {}
+};
+struct paddr_list_t : std::list<std::pair<paddr_t, loff_t>> {
+  template <typename... T>
+  paddr_list_t(T&&... args)
+    : std::list<std::pair<paddr_t, loff_t>>(std::forward<T>(args)...) {}
+};
+
+std::ostream &operator<<(std::ostream &out, const laddr_list_t &rhs);
+std::ostream &operator<<(std::ostream &out, const paddr_list_t &rhs);
 
 /* identifies type of extent, used for interpretting deltas, managing
  * writeback */

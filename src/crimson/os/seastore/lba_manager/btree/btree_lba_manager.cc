@@ -66,10 +66,16 @@ BtreeLBAManager::get_mapping(
   Transaction &t,
   laddr_t offset, loff_t length)
 {
+  logger().debug("get_mapping: {}, {}", offset, length);
   return get_root(
     t).safe_then([this, &t, offset, length](auto extent) {
       return extent->lookup_range(
 	cache, t, offset, length);
+    }).safe_then([](auto &&e) {
+      logger().debug("get_mapping: got mapping {}", e);
+      return get_mapping_ret(
+	get_mapping_ertr::ready_future_marker{},
+	std::move(e));
     });
 }
 
@@ -79,6 +85,7 @@ BtreeLBAManager::get_mappings(
   Transaction &t,
   laddr_list_t &&list)
 {
+  logger().debug("get_mappings: {}", list);
   auto l = std::make_unique<laddr_list_t>(std::move(list));
   auto retptr = std::make_unique<lba_pin_list_t>();
   auto &ret = *retptr;

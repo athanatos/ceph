@@ -251,6 +251,10 @@ LBALeafNode::lookup_range_ret LBALeafNode::lookup_range(
   laddr_t addr,
   loff_t len)
 {
+  logger().debug(
+    "LBALeafNode::lookup_range {}~{}",
+    addr,
+    len);
   auto ret = lba_pin_list_t();
   auto [i, end] = get_leaf_entries(addr, len);
   for (; i != end; ++i) {
@@ -379,7 +383,10 @@ Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
     return cache.get_extent<LBALeafNode>(
       t,
       offset,
-      LBA_BLOCK_SIZE).safe_then([](auto ret) {
+      LBA_BLOCK_SIZE).safe_then([offset](auto ret) {
+	logger().debug(
+	  "get_lba_btree_extent: read leaf at offset {}",
+	  offset);
 	return LBANodeRef(ret.detach());
       });
   }
