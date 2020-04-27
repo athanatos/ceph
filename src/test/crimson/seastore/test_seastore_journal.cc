@@ -3,29 +3,21 @@
 
 #include "test/crimson/gtest_seastar.h"
 
-#include "crimson/os/seastore/cache.h"
 #include "crimson/os/seastore/journal.h"
 #include "crimson/os/seastore/segment_manager.h"
-#include "crimson/os/seastore/lba_manager/btree/btree_lba_manager.h"
 
 using namespace crimson;
 using namespace crimson::os;
 using namespace crimson::os::seastore;
-using namespace crimson::os::seastore::lba_manager;
-using namespace crimson::os::seastore::lba_manager::btree;
 
-struct btree_lba_manager_test_t : public seastar_test_suite_t {
+struct journal_test_t : public seastar_test_suite_t {
   std::unique_ptr<SegmentManager> segment_manager;
   Journal journal;
-  Cache cache;
-  BtreeLBAManager lba_manager;
 
-  btree_lba_manager_test_t()
+  journal_test_t()
     : segment_manager(create_ephemeral(segment_manager::DEFAULT_TEST_EPHEMERAL)),
-      journal(*segment_manager),
-      cache(*segment_manager),
-      lba_manager(*segment_manager, cache) {}
-
+      journal(*segment_manager) {}
+ 
   seastar::future<> set_up_fut() final {
     return seastar::now();
   }
@@ -35,9 +27,8 @@ struct btree_lba_manager_test_t : public seastar_test_suite_t {
   }
 };
 
-TEST_F(btree_lba_manager_test_t, basic)
+TEST_F(journal_test_t, basic)
 {
  run([] { return seastar::now(); });
-
 }
 
