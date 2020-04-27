@@ -26,7 +26,7 @@ constexpr segment_id_t REL_SEG_ID =
 std::ostream &segment_to_stream(std::ostream &, const segment_id_t &t);
 
 // Offset within a segment on disk, see SegmentManager
-using segment_off_t = uint32_t;
+using segment_off_t = int32_t;
 constexpr segment_off_t NULL_SEG_OFF =
   std::numeric_limits<segment_id_t>::max();
 

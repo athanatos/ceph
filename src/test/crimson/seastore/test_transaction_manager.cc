@@ -28,7 +28,7 @@ struct TestBlock : LogicalCachedExtent {
 
   static constexpr extent_types_t TYPE = extent_types_t::TEST_BLOCK;
   extent_types_t get_type() const final {
-    return extent_types_t::ROOT;
+    return TYPE;
   }
 
   ceph::bufferlist get_delta() final {

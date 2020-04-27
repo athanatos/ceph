@@ -111,6 +111,17 @@ protected:
     return version;
   }
 
+  paddr_t maybe_generate_relative(paddr_t addr) {
+    if (!addr.is_relative()) {
+      return addr;
+    } else if (is_mutation_pending()) {
+      return addr;
+    } else {
+      ceph_assert(get_paddr().is_relative());
+      return addr - get_paddr();
+    }
+  }
+
 public:
   virtual CachedExtentRef duplicate_for_write() = 0;
 
@@ -163,6 +174,14 @@ public:
   bool is_pending() const {
     return state == extent_state_t::INITIAL_WRITE_PENDING ||
       state == extent_state_t::MUTATION_PENDING;
+  }
+
+  bool is_mutation_pending() const {
+    return state == extent_state_t::MUTATION_PENDING;
+  }
+
+  bool is_initial_pending() const {
+    return state == extent_state_t::INITIAL_WRITE_PENDING;
   }
 
   bool is_clean() const {

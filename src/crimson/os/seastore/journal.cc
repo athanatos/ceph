@@ -71,10 +71,10 @@ ceph::bufferlist Journal::encode_record(
       ceph::bufferptr(
 	block_size - (metadatabl.length() % block_size)));
   }
-  ceph_assert(metadatabl.length() == mdlength);
-  ceph_assert(databl.length() == dlength);
+  ceph_assert(metadatabl.length() == (size_t)mdlength);
+  ceph_assert(databl.length() == (size_t)dlength);
   metadatabl.claim_append(databl);
-  ceph_assert(metadatabl.length() == (mdlength + dlength));
+  ceph_assert(metadatabl.length() == (size_t)(mdlength + dlength));
   return metadatabl;
 }
 
@@ -86,7 +86,7 @@ Journal::write_record_ertr::future<> Journal::write_record(
   ceph::bufferlist to_write = encode_record(
     mdlength, dlength, std::move(record));
   auto target = written_to;
-  written_to += p2roundup(to_write.length(), block_size);
+  written_to += p2roundup(to_write.length(), (unsigned)block_size);
   logger().debug("write_record, mdlength {}, dlength {}", mdlength, dlength);
   return current_journal_segment->write(target, to_write).handle_error(
     write_record_ertr::pass_further{},
@@ -113,9 +113,9 @@ bool Journal::needs_roll(segment_off_t length) const
     current_journal_segment->get_write_capacity();
 }
 
-paddr_t Journal::next_block_addr() const
+paddr_t Journal::next_record_addr() const
 {
-  return {current_journal_segment->get_segment_id(), written_to + block_size};
+  return {current_journal_segment->get_segment_id(), written_to};
 }
 
 Journal::roll_journal_segment_ertr::future<>

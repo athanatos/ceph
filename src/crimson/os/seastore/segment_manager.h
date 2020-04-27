@@ -128,8 +128,8 @@ namespace segment_manager {
 
 struct ephemeral_config_t {
   size_t size;
-  segment_off_t block_size;
-  segment_off_t segment_size;
+  size_t block_size;
+  size_t segment_size;
 
 };
 constexpr ephemeral_config_t DEFAULT_TEST_EPHEMERAL = {

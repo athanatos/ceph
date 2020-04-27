@@ -129,18 +129,18 @@ void Cache::complete_commit(
 
   paddr_t cur = final_block_start;
   for (auto &i: t.fresh_block_list) {
-    logger().debug("complete_commit: fresh {}", *i);
     i->set_paddr(cur);
     cur.offset += i->get_length();
     i->state = CachedExtent::extent_state_t::CLEAN;
+    logger().debug("complete_commit: fresh {}", *i);
     i->on_initial_write();
     add_extent(i);
   }
 
   // Add new copy of mutated blocks, set_io_wait to block until written
   for (auto &i: t.mutated_block_list) {
-    logger().debug("complete_commit: mutated {}", *i);
     i->state = CachedExtent::extent_state_t::DIRTY;
+    logger().debug("complete_commit: mutated {}", *i);
     i->on_delta_write(final_block_start);
   }
 

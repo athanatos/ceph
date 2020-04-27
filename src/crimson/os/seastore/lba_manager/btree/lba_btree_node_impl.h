@@ -92,12 +92,7 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
       prefer_left);
   }
 
-  void resolve_relative_addrs(paddr_t base) {
-    for (auto i: *this) {
-      if (i->get_val().is_relative())
-	i->set_val(base.add_relative(i->get_val()));
-    }
-  }
+  void resolve_relative_addrs(paddr_t base);
 
   void on_delta_write(paddr_t record_block_offset) final {
     resolve_relative_addrs(record_block_offset);
@@ -112,7 +107,7 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
   }
 
   ceph::bufferlist get_delta() final {
-    ceph_assert(0 == "TODO");
+    // TODO
     return ceph::bufferlist();
   }
 
@@ -162,10 +157,9 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
     return paddr_t{
       *reinterpret_cast<const ceph_le32*>(
 	get_ptr(offset_of_paddr(offset))),
-	static_cast<segment_off_t>(
-	  *reinterpret_cast<const ceph_les32*>(
-	    get_ptr(offset_of_paddr(offset))) + 4)
-	};
+      *reinterpret_cast<const ceph_les32*>(
+	get_ptr(offset_of_paddr(offset)) + 4)
+    };
   }
 
   void set_val(uint16_t offset, paddr_t addr) {
@@ -305,15 +299,7 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
       prefer_left);
   }
 
-  void resolve_relative_addrs(paddr_t base) {
-    for (auto i: *this) {
-      if (i->get_val().paddr.is_relative()) {
-	auto val = i->get_val();
-	val.paddr = base.add_relative(val.paddr);
-	i->set_val(val);
-      }
-    }
-  }
+  void resolve_relative_addrs(paddr_t base);
 
   void on_delta_write(paddr_t record_block_offset) final {
     resolve_relative_addrs(record_block_offset);
@@ -324,7 +310,7 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
   }
 
   ceph::bufferlist get_delta() final {
-    ceph_assert(0 == "TODO");
+    // TODO
     return ceph::bufferlist();
   }
 
@@ -383,9 +369,8 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
       paddr_t{
 	*reinterpret_cast<const ceph_le32*>(
 	  get_ptr(offset_of_map_val(offset)) + 8),
-	static_cast<segment_off_t>(
-	  *reinterpret_cast<const ceph_le32*>(
-	    get_ptr(offset_of_map_val(offset))) + 12)
+	*reinterpret_cast<const ceph_les32*>(
+	  get_ptr(offset_of_map_val(offset)) + 12)
       }
     };
   }

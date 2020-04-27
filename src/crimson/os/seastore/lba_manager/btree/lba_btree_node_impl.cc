@@ -148,6 +148,21 @@ LBAInternalNode::find_hole_ret LBAInternalNode::find_hole(
     });
 }
 
+
+void LBAInternalNode::resolve_relative_addrs(paddr_t base) {
+  for (auto i: *this) {
+    if (i->get_val().is_relative()) {
+      auto updated = base.add_relative(i->get_val());
+      logger().debug(
+	"LBAInternalNode::resolve_relative_addrs {} -> {}",
+	i->get_val(),
+	updated);
+      i->set_val(base.add_relative(updated));
+    }
+  }
+}
+
+
 LBAInternalNode::split_ret
 LBAInternalNode::split_entry(
   Cache &c, Transaction &t, laddr_t addr,
@@ -159,9 +174,9 @@ LBAInternalNode::split_entry(
   journal_split(iter, left->get_paddr(), pivot, right->get_paddr());
 
   copy_from_local(iter + 1, iter, end());
-  iter->set_val(left->get_paddr());
+  iter->set_val(maybe_generate_relative(left->get_paddr()));
   iter++;
-  iter->set_val(right->get_paddr());
+  iter->set_val(maybe_generate_relative(right->get_paddr()));
   set_size(get_size() + 1);
 
   c.retire_extent(t, entry);
@@ -210,7 +225,7 @@ LBAInternalNode::merge_entry(
 	t,
 	r);
       journal_full_merge(liter, replacement->get_paddr());
-      liter->set_val(replacement->get_paddr());
+      liter->set_val(maybe_generate_relative(replacement->get_paddr()));
 
       copy_from_local(riter, riter + 1, end());
       set_size(get_size() - 1);
@@ -282,7 +297,18 @@ LBALeafNode::insert_ret LBALeafNode::insert(
   }
   set_size(get_size() + 1);
   insert_pt.set_lb(laddr);
+  val.paddr = maybe_generate_relative(val.paddr);
+  logger().debug(
+    "LBALeafNode::insert: inserting {}~{} -> {}",
+    laddr,
+    val.len,
+    val.paddr);
   insert_pt.set_val(val);
+  logger().debug(
+    "LBALeafNode::insert: inserted {}~{} -> {}",
+    insert_pt.get_lb(),
+    insert_pt.get_val().len,
+    insert_pt.get_val().paddr);
   journal_insertion(laddr, val);
   return insert_ret(
     insert_ertr::ready_future_marker{},
@@ -349,6 +375,20 @@ LBALeafNode::find_hole_ret LBALeafNode::find_hole(
     return find_hole_ret(
       find_hole_ertr::ready_future_marker{},
       L_ADDR_MAX);
+  }
+}
+
+void LBALeafNode::resolve_relative_addrs(paddr_t base) {
+  for (auto i: *this) {
+    if (i->get_val().paddr.is_relative()) {
+      auto val = i->get_val();
+      val.paddr = base.add_relative(val.paddr);
+      logger().debug(
+	"LBALeafNode::resolve_relative_addrs {} -> {}",
+	i->get_val().paddr,
+	val.paddr);
+      i->set_val(val);
+    }
   }
 }
 

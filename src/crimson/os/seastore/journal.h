@@ -121,7 +121,7 @@ class Journal {
   
   bool needs_roll(segment_off_t length) const;
 
-  paddr_t next_block_addr() const;
+  paddr_t next_record_addr() const;
 
   using find_replay_segments_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
@@ -178,7 +178,7 @@ public:
     if (total > max_record_length) {
       return crimson::ct_error::erange::make();
     }
-    auto ret = next_block_addr();
+    auto ret = next_record_addr();
     return (needs_roll(total)
       ? roll_journal_segment()
       : roll_journal_segment_ertr::now()).safe_then(
