@@ -26,11 +26,11 @@ std::ostream &operator<<(std::ostream &out, const LBAPin &rhs)
 
 std::ostream &operator<<(std::ostream &out, const lba_pin_list_t &rhs)
 {
-  bool first = false;
+  bool first = true;
   out << '[';
   for (auto &i: rhs) {
     out << (first ? "" : ",") << *i;
-    first = true;
+    first = false;
   }
   return out << ']';
 }

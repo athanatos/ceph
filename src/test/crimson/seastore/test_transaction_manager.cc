@@ -26,10 +26,6 @@ struct TestBlock : LogicalCachedExtent {
     return Ref(new TestBlock(*this));
   };
 
-  void prepare_write() final {}
-
-  void on_written(paddr_t record_block_offset) final {}
-
   static constexpr extent_types_t TYPE = extent_types_t::TEST_BLOCK;
   extent_types_t get_type() const final {
     return extent_types_t::ROOT;
@@ -39,12 +35,8 @@ struct TestBlock : LogicalCachedExtent {
     return ceph::bufferlist();
   }
 
-  void apply_delta(ceph::bufferlist &bl) final {
+  void apply_delta(paddr_t delta_base, ceph::bufferlist &bl) final {
     ceph_assert(0 == "TODO");
-  }
-
-  complete_load_ertr::future<> complete_load() final {
-    return complete_load_ertr::now();
   }
 
   void set_lba_root(btree_lba_root_t lba_root);

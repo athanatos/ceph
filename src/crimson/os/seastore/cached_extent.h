@@ -116,7 +116,8 @@ public:
 
   virtual void prepare_write() {}
 
-  virtual void on_written(paddr_t record_block_offset) = 0;
+  virtual void on_initial_write() {}
+  virtual void on_delta_write(paddr_t record_block_offset) {}
 
   virtual extent_types_t get_type() const = 0;
 
@@ -140,7 +141,7 @@ public:
    * bl is a delta obtained previously from get_delta.  The versions will
    * match.  Implementation should mutate buffer based on bl.
    */
-  virtual void apply_delta(ceph::bufferlist &bl) = 0;
+  virtual void apply_delta(paddr_t base, ceph::bufferlist &bl) = 0;
 
   /**
    * Called on dirty CachedExtent implementation after replay.
@@ -150,7 +151,9 @@ public:
    */
   using complete_load_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
-  virtual complete_load_ertr::future<> complete_load() = 0;
+  virtual complete_load_ertr::future<> complete_load() {
+    return complete_load_ertr::now();
+  }
 
   template <typename T>
   TCachedExtentRef<T> cast() {

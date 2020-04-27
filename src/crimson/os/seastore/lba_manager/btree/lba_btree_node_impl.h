@@ -92,7 +92,19 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
       prefer_left);
   }
 
-  void on_written(paddr_t record_block_offset) final {
+  void resolve_relative_addrs(paddr_t base) {
+    for (auto i: *this) {
+      if (i->get_val().is_relative())
+	i->set_val(base.add_relative(i->get_val()));
+    }
+  }
+
+  void on_delta_write(paddr_t record_block_offset) final {
+    resolve_relative_addrs(record_block_offset);
+  }
+
+  void on_initial_write() final {
+    resolve_relative_addrs(get_paddr());
   }
 
   extent_types_t get_type() const final {
@@ -104,11 +116,12 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
     return ceph::bufferlist();
   }
 
-  void apply_delta(ceph::bufferlist &bl) final {
+  void apply_delta(paddr_t delta_base, ceph::bufferlist &bl) final {
     ceph_assert(0 == "TODO");
   }
 
   complete_load_ertr::future<> complete_load() final {
+    resolve_relative_addrs(get_paddr());
     return complete_load_ertr::now();
   }
 
@@ -292,24 +305,40 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
       prefer_left);
   }
 
-  void on_written(paddr_t record_block_offset) final {
+  void resolve_relative_addrs(paddr_t base) {
+    for (auto i: *this) {
+      if (i->get_val().paddr.is_relative()) {
+	auto val = i->get_val();
+	val.paddr = base.add_relative(val.paddr);
+	i->set_val(val);
+      }
+    }
   }
 
-  extent_types_t get_type() const final {
-    return extent_types_t::LADDR_LEAF;
+  void on_delta_write(paddr_t record_block_offset) final {
+    resolve_relative_addrs(record_block_offset);
+  }
+
+  void on_initial_write() final {
+    resolve_relative_addrs(get_paddr());
   }
 
   ceph::bufferlist get_delta() final {
-    // TODO
+    ceph_assert(0 == "TODO");
     return ceph::bufferlist();
   }
 
-  void apply_delta(ceph::bufferlist &bl) final {
+  void apply_delta(paddr_t delta_base, ceph::bufferlist &bl) final {
     ceph_assert(0 == "TODO");
   }
 
   complete_load_ertr::future<> complete_load() final {
+    resolve_relative_addrs(get_paddr());
     return complete_load_ertr::now();
+  }
+
+  extent_types_t get_type() const final {
+    return extent_types_t::LADDR_LEAF;
   }
 
   // TODO

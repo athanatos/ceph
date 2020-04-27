@@ -53,9 +53,6 @@ struct RootBlock : CachedExtent {
 
   void prepare_write() final;
 
-  void on_written(paddr_t record_block_offset) final {
-  }
-
   static constexpr extent_types_t TYPE = extent_types_t::ROOT;
   extent_types_t get_type() const final {
     return extent_types_t::ROOT;
@@ -66,7 +63,7 @@ struct RootBlock : CachedExtent {
     return ceph::bufferlist();
   }
 
-  void apply_delta(ceph::bufferlist &bl) final {
+  void apply_delta(paddr_t base, ceph::bufferlist &bl) final {
     ceph_assert(0 == "TODO");
   }
 

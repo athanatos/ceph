@@ -25,7 +25,6 @@
 #include "crimson/os/seastore/lba_manager.h"
 #include "crimson/os/seastore/journal.h"
 
-
 namespace crimson::os::seastore {
 class Journal;
 
@@ -165,16 +164,26 @@ public:
     return lba_manager.get_mapping(
       t, offset, length
     ).safe_then([this, &t, &pin_list_ref, &ret_ref](auto pins) {
+      crimson::get_logger(ceph_subsys_filestore).debug(
+	"read_extents: mappings {}",
+	pins);
       pins.swap(pin_list_ref);
       return crimson::do_for_each(
 	pin_list_ref.begin(),
 	pin_list_ref.end(),
 	[this, &t, &ret_ref](auto &pin) {
+	  crimson::get_logger(ceph_subsys_filestore).debug(
+	    "read_extents: get_extent {}~{}",
+	    pin->get_paddr(),
+	    pin->get_length());
 	  return cache.get_extent<T>(
 	    t,
 	    pin->get_paddr(),
 	    pin->get_length()
 	  ).safe_then([this, &pin, &ret_ref](auto ref) mutable {
+	    crimson::get_logger(ceph_subsys_filestore).debug(
+	      "read_extents: got extent",
+	      pin->get_paddr());
 	    ref->set_pin(std::move(pin));
 	    ret_ref.push_back(std::make_pair(ref->get_laddr(), ref));
 	    return read_extent_ertr::now();

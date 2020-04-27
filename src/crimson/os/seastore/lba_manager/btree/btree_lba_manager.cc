@@ -130,10 +130,15 @@ BtreeLBAManager::alloc_extent(
 	extent,
 	ret,
 	{ len, addr }
-      ).safe_then([extent](auto ret) {
+      ).safe_then([ret, extent, addr, len](auto pin) {
+	logger().debug(
+	  "alloc_extent: alloc {}~{} for {}",
+	  ret,
+	  len,
+	  addr);
 	return alloc_extent_ret(
 	  alloc_extent_ertr::ready_future_marker{},
-	  LBAPinRef(ret.release()));
+	  LBAPinRef(pin.release()));
       });
     });
 }

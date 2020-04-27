@@ -133,7 +133,7 @@ void Cache::complete_commit(
     i->set_paddr(cur);
     cur.offset += i->get_length();
     i->state = CachedExtent::extent_state_t::CLEAN;
-    i->on_written(final_block_start);
+    i->on_initial_write();
     add_extent(i);
   }
 
@@ -141,7 +141,7 @@ void Cache::complete_commit(
   for (auto &i: t.mutated_block_list) {
     logger().debug("complete_commit: mutated {}", *i);
     i->state = CachedExtent::extent_state_t::DIRTY;
-    i->on_written(final_block_start);
+    i->on_delta_write(final_block_start);
   }
 
   for (auto &i: t.mutated_block_list) {
