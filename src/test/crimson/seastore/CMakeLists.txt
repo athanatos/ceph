@@ -7,11 +7,11 @@ target_link_libraries(
   ${CMAKE_DL_LIBS} 
   crimson-seastore)
 
-add_executable(unittest_btree_lba_manager
-  test_btree_lba_manager.cc
+add_executable(unittest_seastore_journal
+  test_seastore_journal.cc
   ../gtest_seastar.cc)
-add_ceph_unittest(unittest_btree_lba_manager)
+add_ceph_unittest(unittest_seastore_journal)
 target_link_libraries(
-  unittest_btree_lba_manager
+  unittest_seastore_journal
   ${CMAKE_DL_LIBS} 
   crimson-seastore)
