@@ -104,6 +104,8 @@ struct journal_test_t : seastar_test_suite_t, JournalSegmentProvider {
 	  return Journal::replay_ertr::now();
 	}).unsafe_get0();
     }
+    for (auto &i : records)
+      i.validate(*segment_manager);
   }
 
   template <typename... T>
@@ -115,6 +117,10 @@ struct journal_test_t : seastar_test_suite_t, JournalSegmentProvider {
     return seastar::now();
   }
 };
+
+record_t generate_record(unsigned deltas, unsigned blocks) {
+  return record_t{};
+}
 
 TEST_F(journal_test_t, basic)
 {
