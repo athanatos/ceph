@@ -161,6 +161,16 @@ struct delta_info_t {
     denc(v.bl, p);
     DENC_FINISH(p);
   }
+
+  bool operator==(const delta_info_t &rhs) const {
+    return (
+      type == rhs.type &&
+      paddr == rhs.paddr &&
+      length == rhs.length &&
+      pversion == rhs.pversion &&
+      bl == rhs.bl
+    );
+  }
 };
 
 struct record_t {
