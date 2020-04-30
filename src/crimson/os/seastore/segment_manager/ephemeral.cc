@@ -107,6 +107,13 @@ EphemeralSegmentManager::init_ertr::future<> EphemeralSegmentManager::init()
   return init_ertr::now();
 }
 
+EphemeralSegmentManager::~EphemeralSegmentManager()
+{
+  if (buffer) {
+    ::munmap(buffer, config.size);
+  }
+}
+
 SegmentManager::open_ertr::future<SegmentRef> EphemeralSegmentManager::open(
   segment_id_t id)
 {

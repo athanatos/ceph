@@ -115,7 +115,9 @@ bool Journal::needs_roll(segment_off_t length) const
 
 paddr_t Journal::next_record_addr() const
 {
-  return {current_journal_segment->get_segment_id(), written_to};
+  paddr_t ret{current_journal_segment->get_segment_id(), written_to};
+  logger().debug("next_record_addr: {}", ret);
+  return ret;
 }
 
 Journal::roll_journal_segment_ertr::future<>

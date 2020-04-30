@@ -178,13 +178,17 @@ public:
     if (total > max_record_length) {
       return crimson::ct_error::erange::make();
     }
-    auto ret = next_record_addr();
-    return (needs_roll(total)
+    auto roll = needs_roll(total)
       ? roll_journal_segment()
-      : roll_journal_segment_ertr::now()).safe_then(
-	[this, mdlength, dlength, record=std::move(record)]() mutable {
-	  return write_record(mdlength, dlength, std::move(record));
-	}).safe_then([ret] { return ret; });
+      : roll_journal_segment_ertr::now();
+    return roll.safe_then(
+      [this, mdlength, dlength, record=std::move(record)]() mutable {
+	auto ret = next_record_addr();
+	return write_record(mdlength, dlength, std::move(record)
+	).safe_then([ret] {
+	  return ret;
+	});
+      });
   }
 
   using replay_ertr = SegmentManager::read_ertr;

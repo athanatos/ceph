@@ -3,12 +3,21 @@
 
 #include "test/crimson/gtest_seastar.h"
 
+#include <random>
+
+#include "crimson/common/log.h"
 #include "crimson/os/seastore/journal.h"
 #include "crimson/os/seastore/segment_manager.h"
 
 using namespace crimson;
 using namespace crimson::os;
 using namespace crimson::os::seastore;
+
+namespace {
+  seastar::logger& logger() {
+    return crimson::get_logger(ceph_subsys_test);
+  }
+}
 
 struct record_validator_t {
   record_t record;
@@ -30,6 +39,23 @@ struct record_validator_t {
       ASSERT_EQ(bl, block.bl);
     }
   }
+
+  auto get_replay_handler() {
+    auto checker = [this, iter=record.deltas.begin()] (
+      paddr_t base,
+      const delta_info_t &di) mutable {
+      EXPECT_EQ(base, record_final_offset);
+      ceph_assert(iter != record.deltas.end());
+      EXPECT_EQ(di, *iter++);
+      EXPECT_EQ(base, record_final_offset);
+      return iter != record.deltas.end();
+    };
+    if (record.deltas.size()) {
+      return std::make_optional(std::move(checker));
+    } else {
+      return std::optional<decltype(checker)>();
+    }
+  }
 };
 
 struct journal_test_t : seastar_test_suite_t, JournalSegmentProvider {
@@ -38,8 +64,13 @@ struct journal_test_t : seastar_test_suite_t, JournalSegmentProvider {
 
   std::vector<record_validator_t> records;
 
+  std::default_random_engine generator;
+
+  const segment_off_t block_size;
+
   journal_test_t()
-    : segment_manager(create_ephemeral(segment_manager::DEFAULT_TEST_EPHEMERAL))
+    : segment_manager(create_ephemeral(segment_manager::DEFAULT_TEST_EPHEMERAL)),
+      block_size(segment_manager->get_block_size())
   {
   }
 
@@ -80,51 +111,104 @@ struct journal_test_t : seastar_test_suite_t, JournalSegmentProvider {
 
   auto replay_and_check() {
     auto record_iter = records.begin();
-    if (record_iter == records.end()) {
-      replay([](...) {
-	EXPECT_FALSE("No Deltas");
+    decltype(record_iter->get_replay_handler()) delta_checker = std::nullopt;
+    auto advance = [this, &record_iter, &delta_checker] {
+      ceph_assert(!delta_checker);
+      while (record_iter != records.end()) {
+	auto checker = record_iter->get_replay_handler();
+	record_iter++;
+	if (checker) {
+	  delta_checker.emplace(std::move(*checker));
+	  break;
+	}
+      }
+    };
+    advance();
+    replay(
+      [this,
+       &advance,
+       &record_iter,
+       &delta_checker]
+      (auto base, const auto &di) mutable {
+	if (!delta_checker) {
+	  EXPECT_FALSE("No Deltas Left");
+	}
+	if (!(*delta_checker)(base, di)) {
+	  delta_checker = std::nullopt;
+	  advance();
+	}
 	return Journal::replay_ertr::now();
       }).unsafe_get0();
-    } else {
-      std::vector<delta_info_t>::iterator delta_iter = record_iter->record.deltas.begin();
-      replay(
-	[this, record_iter, delta_iter](auto base, const auto &di) mutable {
-	  if (record_iter == records.end()) {
-	    EXPECT_FALSE("No Deltas Left");
-	  }
-	  while (delta_iter == record_iter->record.deltas.end()) {
-	    ++record_iter;
-	    if (record_iter == records.end()) {
-	      EXPECT_FALSE("No Deltas Left");
-	    }
-	    delta_iter = record_iter->record.deltas.begin();
-	  }
-	  EXPECT_EQ(di, *delta_iter++);
-	  EXPECT_EQ(base, record_iter->record_final_offset);
-	  return Journal::replay_ertr::now();
-	}).unsafe_get0();
-    }
-    for (auto &i : records)
+    ASSERT_EQ(record_iter, records.end());
+    for (auto &i : records) {
       i.validate(*segment_manager);
+    }
   }
 
   template <typename... T>
-  auto submit_record(T&&... record) {
-    records.push_back(std::forward<T>(record)...);
+  auto submit_record(T&&... _record) {
+    auto record{std::forward<T>(_record)...};
+    records.push_back(record);
+    auto addr = journal->submit_record(std::move(record)).unsafe_get0();
+    records.back().record_final_offset = addr;
   }
 
   seastar::future<> tear_down_fut() final {
     return seastar::now();
   }
+
+  extent_t generate_extent(size_t blocks) {
+    std::uniform_int_distribution<char> distribution(
+      std::numeric_limits<char>::min(),
+      std::numeric_limits<char>::max()
+    ); 
+    char contents = distribution(generator); 
+    bufferlist bl;
+    bl.append(buffer::ptr(buffer::create(blocks * block_size, contents)));
+    return extent_t{bl};
+  }
+
+  delta_info_t generate_delta(size_t bytes) {
+    std::uniform_int_distribution<char> distribution(
+      std::numeric_limits<char>::min(),
+      std::numeric_limits<char>::max()
+    );
+    char contents = distribution(generator); 
+    bufferlist bl;
+    bl.append(buffer::ptr(buffer::create(bytes, contents)));
+    return delta_info_t{
+      extent_types_t::TEST_BLOCK,
+      paddr_t{},
+      block_size,
+      1,
+      bl
+    };
+  }
 };
 
-record_t generate_record(unsigned deltas, unsigned blocks) {
-  return record_t{};
-}
-
-TEST_F(journal_test_t, basic)
+TEST_F(journal_test_t, replay_one_journal_segment)
 {
  run_async([this] {
+   submit_record(record_t{
+     { generate_extent(1), generate_extent(2) },
+     { generate_delta(23), generate_delta(30) }
+     });
+   replay_and_check();
+ });
+}
+
+TEST_F(journal_test_t, replay_two_records)
+{
+ run_async([this] {
+   submit_record(record_t{
+     { generate_extent(1), generate_extent(2) },
+     { generate_delta(23), generate_delta(30) }
+     });
+   submit_record(record_t{
+     { generate_extent(4), generate_extent(1) },
+     { generate_delta(23), generate_delta(400) }
+     });
+   replay_and_check();
  });
 }
 

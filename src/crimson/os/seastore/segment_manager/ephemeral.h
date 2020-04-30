@@ -53,6 +53,8 @@ class EphemeralSegmentManager final : public SegmentManager {
     paddr_t addr,
     ceph::bufferlist bl);
   Segment::close_ertr::future<> segment_close(segment_id_t id);
+
+  ~EphemeralSegmentManager();
 public:
   EphemeralSegmentManager(ephemeral_config_t config);
 
