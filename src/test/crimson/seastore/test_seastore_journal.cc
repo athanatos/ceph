@@ -36,7 +36,12 @@ struct record_validator_t {
       addr.offset += block.bl.length();
       bufferlist bl;
       bl.push_back(test);
-      ASSERT_EQ(bl, block.bl);
+      ASSERT_EQ(
+	bl.length(),
+	block.bl.length());
+      ASSERT_EQ(
+	bl.begin().crc32c(bl.length(), 1),
+	block.bl.begin().crc32c(block.bl.length(), 1));
     }
   }
 
@@ -151,6 +156,7 @@ struct journal_test_t : seastar_test_suite_t, JournalSegmentProvider {
     records.push_back(record);
     auto addr = journal->submit_record(std::move(record)).unsafe_get0();
     records.back().record_final_offset = addr;
+    return addr;
   }
 
   seastar::future<> tear_down_fut() final {
@@ -211,4 +217,50 @@ TEST_F(journal_test_t, replay_two_records)
    replay_and_check();
  });
 }
+
+TEST_F(journal_test_t, replay_twice)
+{
+ run_async([this] {
+   submit_record(record_t{
+     { generate_extent(1), generate_extent(2) },
+     { generate_delta(23), generate_delta(30) }
+     });
+   submit_record(record_t{
+     { generate_extent(4), generate_extent(1) },
+     { generate_delta(23), generate_delta(400) }
+     });
+   replay_and_check();
+   submit_record(record_t{
+     { generate_extent(2), generate_extent(5) },
+     { generate_delta(230), generate_delta(40) }
+     });
+   replay_and_check();
+ });
+}
+
+TEST_F(journal_test_t, roll_journal_and_replay)
+{
+ run_async([this] {
+   paddr_t current = submit_record(
+     record_t{
+       { generate_extent(1), generate_extent(2) },
+       { generate_delta(23), generate_delta(30) }
+     });
+   auto starting_segment = current.segment;
+   unsigned so_far = 0;
+   while (current.segment == starting_segment) {
+     current = submit_record(record_t{
+	 { generate_extent(512), generate_extent(512) },
+	 { generate_delta(23), generate_delta(400) }
+       });
+     ++so_far;
+     ASSERT_FALSE(so_far > 10);
+   }
+   replay_and_check();
+ });
+}
+
+
+
+
 
