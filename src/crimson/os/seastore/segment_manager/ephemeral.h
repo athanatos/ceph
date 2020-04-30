@@ -49,14 +49,11 @@ class EphemeralSegmentManager final : public SegmentManager {
 
   char *buffer = nullptr;
   
-  Segment::write_ertr::future<> segment_write(
-    paddr_t addr,
-    ceph::bufferlist bl);
   Segment::close_ertr::future<> segment_close(segment_id_t id);
 
-  ~EphemeralSegmentManager();
 public:
   EphemeralSegmentManager(ephemeral_config_t config);
+  ~EphemeralSegmentManager();
 
   init_ertr::future<> init() final;
 
@@ -78,6 +75,11 @@ public:
   segment_off_t get_segment_size() const {
     return config.segment_size;
   }
+
+  // public so tests can bypass segment interface when simpler
+  Segment::write_ertr::future<> segment_write(
+    paddr_t addr,
+    ceph::bufferlist bl);
 };
     
 }
