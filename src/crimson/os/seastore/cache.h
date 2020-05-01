@@ -197,9 +197,7 @@ public:
 	  [this, ref=std::move(ref)]() mutable {
 	    ref->complete_io();
 	    return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
-	      TCachedExtentRef<T>(
-		static_cast<T*>(ref.detach())));
-	    /* TODO: check I didn't break the refcounting */
+	      std::move(ref));
 	  },
 	  get_extent_ertr::pass_further{},
 	  crimson::ct_error::discard_all{});

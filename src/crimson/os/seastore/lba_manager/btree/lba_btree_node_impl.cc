@@ -413,7 +413,7 @@ Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
       t,
       offset,
       LBA_BLOCK_SIZE).safe_then([](auto ret) {
-	return LBANodeRef(ret.detach());
+	return LBANodeRef(ret.detach(), /* add_ref = */ false);
       });
     
   } else {
@@ -427,7 +427,7 @@ Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
 	logger().debug(
 	  "get_lba_btree_extent: read leaf at offset {}",
 	  offset);
-	return LBANodeRef(ret.detach());
+	return LBANodeRef(ret.detach(), /* add_ref = */ false);
       });
   }
 }
