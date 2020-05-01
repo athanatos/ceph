@@ -22,10 +22,6 @@ struct TestBlock : LogicalCachedExtent {
     return CachedExtentRef(new TestBlock(*this));
   };
 
-  Ref duplicate_for_write_concrete() {
-    return Ref(new TestBlock(*this));
-  };
-
   static constexpr extent_types_t TYPE = extent_types_t::TEST_BLOCK;
   extent_types_t get_type() const final {
     return TYPE;

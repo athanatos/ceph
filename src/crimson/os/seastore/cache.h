@@ -21,7 +21,7 @@ class Transaction {
 
   RootBlockRef root; /* null until mutated */
 
-  segment_off_t offset = 4096; // TODO -- needs to match journal block offset
+  segment_off_t offset = 0;
 
   pextent_set_t read_set;
   ExtentIndex write_set;
@@ -32,7 +32,6 @@ class Transaction {
   pextent_set_t retired_set;
 
   CachedExtentRef get_extent(paddr_t addr) {
-    ceph_assert(retired_set.count(addr) == 0);
     if (auto iter = write_set.find_offset(addr);
        iter != write_set.end()) {
       return CachedExtentRef(&*iter);
@@ -150,6 +149,7 @@ class Cache {
   void retire_extent(CachedExtentRef ref);
 public:
   Cache(SegmentManager &segment_manager) : segment_manager(segment_manager) {}
+  ~Cache();
 
   TransactionRef get_transaction() {
     return std::make_unique<Transaction>();
@@ -255,6 +255,7 @@ public:
     auto ret = CachedExtent::make_cached_extent_ref<T>(
       alloc_cache_buf(length));
     t.add_fresh_extent(ret);
+    ret->state = CachedExtent::extent_state_t::INITIAL_WRITE_PENDING;
     return ret;
   }
 

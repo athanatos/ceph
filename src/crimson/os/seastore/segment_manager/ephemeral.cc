@@ -57,7 +57,8 @@ Segment::close_ertr::future<> EphemeralSegmentManager::segment_close(segment_id_
 
 Segment::write_ertr::future<> EphemeralSegmentManager::segment_write(
   paddr_t addr,
-  ceph::bufferlist bl)
+  ceph::bufferlist bl,
+  bool ignore_check)
 {
   logger().debug(
     "segment_write to segment {} at offset {}, physical offset {}, len {}, crc {}",
@@ -66,7 +67,7 @@ Segment::write_ertr::future<> EphemeralSegmentManager::segment_write(
     get_offset(addr),
     bl.length(),
     bl.crc32c(0));
-  if (segment_state[addr.segment] != segment_state_t::OPEN)
+  if (!ignore_check && segment_state[addr.segment] != segment_state_t::OPEN)
     return crimson::ct_error::invarg::make();
 
   bl.begin().copy(bl.length(), buffer + get_offset(addr));

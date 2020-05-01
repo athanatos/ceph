@@ -12,6 +12,21 @@ namespace {
 
 namespace crimson::os::seastore {
 
+Cache::~Cache()
+{
+  retire_extent(root);
+  root.reset();
+  for (auto i = dirty.begin(); i != dirty.end(); ) {
+    auto ptr = &*i;
+    dirty.erase(i++);
+    intrusive_ptr_release(ptr);
+  }
+  for (auto &i: extents) {
+    logger().error("~Cache: extent {} still alive", i);
+  }
+  ceph_assert(extents.empty());
+}
+
 void Cache::add_extent(CachedExtentRef ref)
 {
   assert(ref->is_valid());
@@ -22,10 +37,12 @@ void Cache::add_extent(CachedExtentRef ref)
     intrusive_ptr_add_ref(&*ref);
     dirty.push_back(*ref);
   }
+  logger().debug("add_extent: {}", *ref);
 }
 
 void Cache::retire_extent(CachedExtentRef ref)
 {
+  logger().debug("retire_extent: {}", *ref);
   assert(ref->is_valid());
   extents.erase(*ref);
 
@@ -91,7 +108,7 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
       delta_info_t{
 	i->get_type(),
 	i->get_paddr(),
-	i->get_length(),
+	(segment_off_t)i->get_length(),
 	i->get_version(),
 	i->get_delta()
       });

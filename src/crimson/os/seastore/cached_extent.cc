@@ -3,7 +3,33 @@
 
 #include "crimson/os/seastore/cached_extent.h"
 
+#include "crimson/common/log.h"
+
+namespace {
+  seastar::logger& logger() {
+    return crimson::get_logger(ceph_subsys_filestore);
+  }
+}
+
 namespace crimson::os::seastore {
+
+void intrusive_ptr_add_ref(CachedExtent *ptr)
+{
+  intrusive_ptr_add_ref(
+    static_cast<boost::intrusive_ref_counter<
+    CachedExtent,
+    boost::thread_unsafe_counter>*>(ptr));
+  logger().debug("intrusive_ptr_add_ref: {}", *ptr);
+}
+
+void intrusive_ptr_release(CachedExtent *ptr)
+{
+  logger().debug("intrusive_ptr_release: {}", *ptr);
+  intrusive_ptr_release(
+    static_cast<boost::intrusive_ref_counter<
+    CachedExtent,
+    boost::thread_unsafe_counter>*>(ptr));
+}
 
 std::ostream &operator<<(std::ostream &out, CachedExtent::extent_state_t state)
 {

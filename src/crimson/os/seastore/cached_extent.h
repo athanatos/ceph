@@ -20,6 +20,9 @@ namespace crimson::os::seastore {
 class CachedExtent;
 using CachedExtentRef = boost::intrusive_ptr<CachedExtent>;
 
+void intrusive_ptr_add_ref(CachedExtent *);
+void intrusive_ptr_release(CachedExtent *);
+
 template <typename T>
 using TCachedExtentRef = boost::intrusive_ptr<T>;
 
@@ -107,10 +110,6 @@ protected:
 
   void set_paddr(paddr_t offset) { poffset = offset; }
 
-  extent_version_t get_version() const {
-    return version;
-  }
-
   paddr_t maybe_generate_relative(paddr_t addr) {
     if (!addr.is_relative()) {
       return addr;
@@ -139,6 +138,7 @@ public:
 	       << ", version=" << version
 	       << ", paddr=" << get_paddr()
 	       << ", state=" << state
+	       << ", refcount=" << use_count()
 	       << ")";
   }
 
@@ -201,6 +201,9 @@ public:
 
   paddr_t get_paddr() const { return poffset; }
   loff_t get_length() const { return static_cast<loff_t>(ptr.length()); }
+  extent_version_t get_version() const {
+    return version;
+  }
 
   bufferptr &get_bptr() { return ptr; }
   const bufferptr &get_bptr() const { return ptr; }
@@ -307,8 +310,16 @@ public:
     extent.parent_index = nullptr;
   }
 
+  bool empty() const {
+    return extent_index.empty();
+  }
+
   auto find_offset(paddr_t offset) {
     return extent_index.find(offset, paddr_cmp());
+  }
+
+  auto begin() {
+    return extent_index.begin();
   }
 
   auto end() {

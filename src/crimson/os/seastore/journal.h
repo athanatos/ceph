@@ -185,8 +185,8 @@ public:
       [this, mdlength, dlength, record=std::move(record)]() mutable {
 	auto ret = next_record_addr();
 	return write_record(mdlength, dlength, std::move(record)
-	).safe_then([ret] {
-	  return ret;
+	).safe_then([this, ret] {
+	  return ret.add_relative(make_relative_paddr(block_size));
 	});
       });
   }

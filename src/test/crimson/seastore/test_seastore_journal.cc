@@ -14,7 +14,7 @@ using namespace crimson::os;
 using namespace crimson::os::seastore;
 
 namespace {
-  seastar::logger& logger() {
+  [[maybe_unused]] seastar::logger& logger() {
     return crimson::get_logger(ceph_subsys_test);
   }
 }
@@ -27,8 +27,7 @@ struct record_validator_t {
   record_validator_t(T&&... record) : record(std::forward<T>(record)...) {}
 
   void validate(SegmentManager &manager) {
-    // TODO: hardcoded to initial record metadata block
-    paddr_t addr = make_relative_paddr(4096); 
+    paddr_t addr = make_relative_paddr(0); 
     for (auto &&block : record.extents) {
       auto test = manager.read(
 	record_final_offset.add_relative(addr),

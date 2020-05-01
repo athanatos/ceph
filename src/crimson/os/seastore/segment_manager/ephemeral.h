@@ -79,7 +79,8 @@ public:
   // public so tests can bypass segment interface when simpler
   Segment::write_ertr::future<> segment_write(
     paddr_t addr,
-    ceph::bufferlist bl);
+    ceph::bufferlist bl,
+    bool ignore_check=false);
 };
     
 }

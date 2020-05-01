@@ -330,7 +330,10 @@ Journal::replay_segment(
 		  return crimson::do_for_each(
 		    deltas,
 		    [this, &delta_handler, record_start](auto &info) {
-		      return delta_handler(record_start, info);
+		      return delta_handler(
+			record_start.add_relative(
+			  make_relative_paddr(block_size)),
+			info);
 		    });
 		}).safe_then([] {
 		  return replay_ertr::make_ready_future<bool>(false);
