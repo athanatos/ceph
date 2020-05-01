@@ -85,32 +85,38 @@ public:
   virtual ~JournalSegmentProvider() {}
 };
 
+/**
+ * Manages stream of atomically written records to a SegmentManager.
+ */
 class Journal {
 public:
   Journal(SegmentManager &segment_manager);
 
+  /**
+   * Sets the JournalSegmentProvider.
+   *
+   * Not provided in constructor to allow the provider to not own
+   * or construct the Journal (TransactionManager).
+   *
+   * Note, Journal does not own this ptr, user must ensure that
+   * *provider outlives Journal.
+   */
   void set_segment_provider(JournalSegmentProvider *provider) {
     segment_provider = provider;
   }
 
   /**
-   * Return <mdlength, dlength> pair denoting length of
-   * metadata and blocks respectively.
+   * initializes journal for new writes -- must run prior to calls
+   * to submit_record.  Should be called after replay if not a new
+   * Journal.
    */
-  std::pair<segment_off_t, segment_off_t> get_encoded_record_length(
-    const record_t &record) const;
-
-  using roll_journal_segment_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error>;
-  roll_journal_segment_ertr::future<> roll_journal_segment();
-
   using init_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
   init_ertr::future<> open_for_write();
 
   /**
-   * close
+   * close journal
    *
    * TODO: should probably flush and disallow further writes
    */
@@ -175,6 +181,13 @@ private:
   initialize_segment_ertr::future<> initialize_segment(
     Segment &segment);
 
+  /**
+   * Return <mdlength, dlength> pair denoting length of
+   * metadata and blocks respectively.
+   */
+  std::pair<segment_off_t, segment_off_t> get_encoded_record_length(
+    const record_t &record) const;
+
   /// create encoded record bl
   ceph::bufferlist encode_record(
     segment_off_t mdlength,
@@ -188,6 +201,11 @@ private:
     segment_off_t mdlength,
     segment_off_t dlength,
     record_t &&record);
+
+  /// close current segment and initialize next one
+  using roll_journal_segment_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  roll_journal_segment_ertr::future<> roll_journal_segment();
   
   /// returns true iff current segment has insufficient space
   bool needs_roll(segment_off_t length) const;
