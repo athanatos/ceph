@@ -86,50 +86,6 @@ public:
 };
 
 class Journal {
-  const segment_off_t block_size;
-  const segment_off_t max_record_length;
-
-  JournalSegmentProvider *segment_provider = nullptr;
-  SegmentManager &segment_manager;
-
-  paddr_t current_replay_point;
-
-  segment_seq_t current_journal_segment_seq = 0;
-  
-  SegmentRef current_journal_segment;
-  segment_off_t written_to = 0;
-
-  segment_id_t next_journal_segment_seq = NULL_SEG_ID;
-  journal_seq_t current_journal_seq = 0;
-
-  using initialize_segment_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error>;
-  initialize_segment_ertr::future<> initialize_segment(
-    Segment &segment);
-
-  ceph::bufferlist encode_record(
-    segment_off_t mdlength,
-    segment_off_t dlength,
-    record_t &&record);
-
-  using write_record_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error>;
-  write_record_ertr::future<> write_record(
-    segment_off_t mdlength,
-    segment_off_t dlength,
-    record_t &&record);
-  
-  bool needs_roll(segment_off_t length) const;
-
-  paddr_t next_record_addr() const;
-
-  using find_replay_segments_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error
-    >;
-  using find_replay_segments_fut = 
-    find_replay_segments_ertr::future<std::vector<paddr_t>>;
-  find_replay_segments_fut find_replay_segments();
-
 public:
   Journal(SegmentManager &segment_manager);
 
@@ -197,6 +153,57 @@ public:
   replay_ret replay(delta_handler_t &&);
 
 private:
+  const segment_off_t block_size;
+  const segment_off_t max_record_length;
+
+  JournalSegmentProvider *segment_provider = nullptr;
+  SegmentManager &segment_manager;
+
+  paddr_t current_replay_point;
+
+  segment_seq_t current_journal_segment_seq = 0;
+  
+  SegmentRef current_journal_segment;
+  segment_off_t written_to = 0;
+
+  segment_id_t next_journal_segment_seq = NULL_SEG_ID;
+  journal_seq_t current_journal_seq = 0;
+
+  /// prepare segment for writes, writes out segment header
+  using initialize_segment_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  initialize_segment_ertr::future<> initialize_segment(
+    Segment &segment);
+
+  /// create encoded record bl
+  ceph::bufferlist encode_record(
+    segment_off_t mdlength,
+    segment_off_t dlength,
+    record_t &&record);
+
+  /// do record write
+  using write_record_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  write_record_ertr::future<> write_record(
+    segment_off_t mdlength,
+    segment_off_t dlength,
+    record_t &&record);
+  
+  /// returns true iff current segment has insufficient space
+  bool needs_roll(segment_off_t length) const;
+
+  /// returns next record addr
+  paddr_t next_record_addr() const;
+
+  /// return ordered vector of segments to replay
+  using find_replay_segments_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error
+    >;
+  using find_replay_segments_fut = 
+    find_replay_segments_ertr::future<std::vector<paddr_t>>;
+  find_replay_segments_fut find_replay_segments();
+
+  /// read record metadata for record starting at start
   using read_record_metadata_ertr = replay_ertr;
   using read_record_metadata_ret = read_record_metadata_ertr::future<
     std::optional<std::pair<record_header_t, bufferlist>>
@@ -204,14 +211,17 @@ private:
   read_record_metadata_ret read_record_metadata(
     paddr_t start);
 
+  /// attempts to decode deltas from bl, return nullopt if unsuccessful
   std::optional<std::vector<delta_info_t>> try_decode_deltas(
     record_header_t header,
     bufferlist &bl);
 
+  /// replays records starting at start through end of segment
   replay_ertr::future<>
   replay_segment(
-    paddr_t start,
-    delta_handler_t &delta_handler);
+    paddr_t start,                 ///< [in] starting addr
+    delta_handler_t &delta_handler ///< [in] processes deltas in order
+  );
 };
 
 }
