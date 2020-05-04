@@ -52,6 +52,10 @@ struct paddr_t {
     return segment == REL_SEG_ID;
   }
 
+  paddr_t add_offset(loff_t o) const {
+    return paddr_t{segment, offset + (segment_off_t)o};
+  }
+
   paddr_t add_relative(paddr_t o) const {
     ceph_assert(o.is_relative());
     ceph_assert(!is_relative());
