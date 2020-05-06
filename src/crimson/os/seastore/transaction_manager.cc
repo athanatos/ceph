@@ -73,8 +73,10 @@ TransactionManager::mount_ertr::future<> TransactionManager::mount()
 }
 
 TransactionManager::close_ertr::future<> TransactionManager::close() {
-  return cache.close();
-  journal.close();
+  return cache.close(
+  ).safe_then([this] {
+    return journal.close();
+  });
 }
 
 TransactionManager::inc_ref_ertr::future<> TransactionManager::inc_ref(

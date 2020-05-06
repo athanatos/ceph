@@ -101,5 +101,6 @@ private:
     laddr_t laddr,
     lba_map_val_t val);
 };
+using BtreeLBAManagerRef = std::unique_ptr<BtreeLBAManager>;
 
 }
