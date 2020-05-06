@@ -29,11 +29,14 @@ struct btree_lba_manager_test :
   Cache cache;
   BtreeLBAManagerRef lba_manager;
 
+  const size_t block_size;
+
   btree_lba_manager_test()
     : segment_manager(create_ephemeral(segment_manager::DEFAULT_TEST_EPHEMERAL)),
       journal(*segment_manager),
       cache(*segment_manager),
-      lba_manager(new BtreeLBAManager(*segment_manager, cache))
+      lba_manager(new BtreeLBAManager(*segment_manager, cache)),
+      block_size(segment_manager->get_block_size())
   {
     journal.set_segment_provider(this);
   }
@@ -97,10 +100,73 @@ struct btree_lba_manager_test :
       })
     );
   }
-};
 
+  
+  struct test_extent_t {
+    paddr_t addr;
+    size_t len = 0;
+  };
+  std::map<laddr_t, test_extent_t> test_lba_mappings;
+  auto get_overlap(laddr_t addr, size_t len) {
+    auto bottom = test_lba_mappings.upper_bound(addr);
+    if (bottom != test_lba_mappings.begin())
+      --bottom;
+    if (bottom != test_lba_mappings.end() &&
+	bottom->first + bottom->second.len <= addr)
+      ++bottom;
+    
+    auto top = test_lba_mappings.upper_bound(addr + len);
+    return std::make_pair(
+      bottom,
+      top
+    );
+  }
+
+  auto alloc_mapping(Transaction &t, laddr_t hint, size_t len, paddr_t paddr) {
+    auto ret = lba_manager->alloc_extent(t, hint, len, paddr).unsafe_get0();
+    EXPECT_EQ(len, ret->get_length());
+    auto [b, e] = get_overlap(ret->get_laddr(), len);
+    EXPECT_EQ(b, e);
+    test_lba_mappings.emplace(
+      std::make_pair(
+	ret->get_laddr(),
+	test_extent_t{
+	  ret->get_paddr(),
+	  ret->get_length()
+        }
+      ));
+    return ret;
+  }
+
+  auto set_mapping(Transaction &t, laddr_t addr, size_t len, paddr_t paddr) {
+    auto [b, e] = get_overlap(addr, len);
+    EXPECT_EQ(b, e);
+
+    auto ret = lba_manager->set_extent(t, addr, len, paddr).unsafe_get0();
+    EXPECT_EQ(addr, ret->get_laddr());
+    EXPECT_EQ(len, ret->get_length());
+    EXPECT_EQ(paddr, ret->get_paddr());
+    test_lba_mappings.emplace(
+      std::make_pair(
+	ret->get_laddr(),
+	test_extent_t{
+	  ret->get_paddr(),
+	  ret->get_length()
+        }
+      ));
+    return ret;
+  }
+
+  auto remove_mapping(Transaction &t, laddr_t addr, size_t len) {
+  }
+};
 
 TEST_F(btree_lba_manager_test, basic)
 {
+  run_async([this] {
+    auto t = lba_manager->create_transaction();
+    auto ret = alloc_mapping(*t, 0, block_size, P_ADDR_MIN);
+    submit_transaction(std::move(t)).get0();
+  });
 }
 
