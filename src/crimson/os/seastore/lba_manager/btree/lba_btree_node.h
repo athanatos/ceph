@@ -14,7 +14,7 @@
 namespace crimson::os::seastore::lba_manager::btree {
 
 struct lba_map_val_t {
-  loff_t len = 0;
+  extent_len_t len = 0;
   paddr_t paddr;
   // other stuff: checksum, refcount
 };
@@ -37,7 +37,7 @@ struct LBANode : CachedExtent {
     Cache &cache,
     Transaction &transaction,
     laddr_t addr,
-    loff_t len) = 0;
+    extent_len_t len) = 0;
 
   /**
    * Precondition: !at_max_capacity()
@@ -65,7 +65,7 @@ struct LBANode : CachedExtent {
     Transaction &t,
     laddr_t min,
     laddr_t max,
-    loff_t len) = 0;
+    extent_len_t len) = 0;
 
   /**
    * Precondition: !at_min_capacity()

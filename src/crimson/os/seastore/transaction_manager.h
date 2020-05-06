@@ -40,7 +40,7 @@ public:
   laddr_t get_laddr() const { return laddr_t{0}; }
 
 #if 0
-  void copy_in(ceph::bufferlist &bl, laddr_t off, loff_t len) {
+  void copy_in(ceph::bufferlist &bl, laddr_t off, extent_len_t len) {
     ceph_assert(off >= get_laddr());
     ceph_assert((off + len) <= (get_laddr() + get_bptr().length()));
     bl.begin().copy(len, get_bptr().c_str() + (off - get_laddr()));
@@ -95,7 +95,7 @@ class TransactionManager : public JournalSegmentProvider {
   get_mutable_extent_ertr::future<LogicalCachedExtentRef> get_mutable_extent(
     Transaction &t,
     laddr_t offset,
-    loff_t len);
+    extent_len_t len);
 
 public:
   TransactionManager(
@@ -153,7 +153,7 @@ public:
   read_extent_ret<T> read_extents(
     Transaction &t,
     laddr_t offset,
-    loff_t length)
+    extent_len_t length)
   {
     std::unique_ptr<lextent_list_t<T>> ret =
       std::make_unique<lextent_list_t<T>>();
@@ -219,7 +219,7 @@ public:
   replace_ertr::future<mutate_result_t> replace(
     Transaction &t,
     laddr_t offset,
-    loff_t len,
+    extent_len_t len,
     bufferlist bl) {
     // pull relevant portions of lba tree
     return replace_ertr::make_ready_future<mutate_result_t>(
@@ -236,7 +236,7 @@ public:
   inc_ref_ertr::future<> inc_ref(
     Transaction &t,
     laddr_t offset,
-    loff_t len);
+    extent_len_t len);
 
   /**
    * Remove refcount for range
@@ -248,7 +248,7 @@ public:
   dec_ref_ertr::future<> dec_ref(
     Transaction &t,
     laddr_t offset,
-    loff_t len);
+    extent_len_t len);
 
   /**
    * Allocate a new block of type T with an lba hint
@@ -260,7 +260,7 @@ public:
   alloc_extent_ret<T> alloc_extent(
     Transaction &t,
     laddr_t hint,
-    loff_t len) {
+    extent_len_t len) {
     auto ext = cache.alloc_new_extent<T>(
       t,
       len);

@@ -25,9 +25,7 @@ namespace crimson::os::seastore {
 
 class LBAPin {
 public:
-  virtual void set_paddr(paddr_t) = 0;
-
-  virtual loff_t get_length() const = 0;
+  virtual extent_len_t get_length() const = 0;
   virtual paddr_t get_paddr() const = 0;
   virtual laddr_t get_laddr() const = 0;
 
@@ -62,7 +60,7 @@ public:
   using get_mapping_ret = get_mapping_ertr::future<lba_pin_list_t>;
   virtual get_mapping_ret get_mapping(
     Transaction &t,
-    laddr_t offset, loff_t length) = 0;
+    laddr_t offset, extent_len_t length) = 0;
 
   /**
    * Fetches mappings for laddr_t in range [offset, offset + len)
@@ -89,7 +87,7 @@ public:
   virtual alloc_extent_ret alloc_extent(
     Transaction &t,
     laddr_t hint,
-    loff_t len,
+    extent_len_t len,
     paddr_t addr) = 0;
 
   /**
@@ -103,7 +101,7 @@ public:
   using set_extent_ret = set_extent_ertr::future<LBAPinRef>;
   virtual set_extent_ret set_extent(
     Transaction &t,
-    laddr_t off, loff_t len, paddr_t addr) = 0;
+    laddr_t off, extent_len_t len, paddr_t addr) = 0;
 
   using ref_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;

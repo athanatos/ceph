@@ -45,7 +45,7 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
     Cache &cache,
     Transaction &transaction,
     laddr_t addr,
-    loff_t len) final;
+    extent_len_t len) final;
 
   insert_ret insert(
     Cache &cache,
@@ -63,7 +63,7 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
     Transaction &t,
     laddr_t min,
     laddr_t max,
-    loff_t len) final;
+    extent_len_t len) final;
 
   std::tuple<LBANodeRef, LBANodeRef, laddr_t>
   make_split_children(Cache &cache, Transaction &t) final {
@@ -146,6 +146,10 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
   laddr_t get_lb(uint16_t offset) const {
     return *reinterpret_cast<const ceph_le64*>(
       get_ptr(offset_of_lb(offset)));
+  }
+
+  extent_len_t get_length(uint16_t offset) const {
+    return 0;
   }
 
   void set_lb(uint16_t offset, laddr_t lb) {
@@ -252,7 +256,7 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
     Cache &cache,
     Transaction &transaction,
     laddr_t addr,
-    loff_t len) final;
+    extent_len_t len) final;
 
   insert_ret insert(
     Cache &cache,
@@ -270,7 +274,7 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
     Transaction &t,
     laddr_t min,
     laddr_t max,
-    loff_t len) final;
+    extent_len_t len) final;
 
   std::tuple<LBANodeRef, LBANodeRef, laddr_t>
   make_split_children(Cache &cache, Transaction &t) final {
@@ -362,10 +366,14 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
       get_ptr(offset_of_lb(offset))) = lb;
   }
 
+  extent_len_t get_length(uint16_t offset) const {
+    return *reinterpret_cast<const ceph_le32*>(
+      get_ptr(offset_of_map_val(offset)));
+  }
+
   lba_map_val_t get_val(uint16_t offset) const {
     return lba_map_val_t{
-      *reinterpret_cast<const ceph_le32*>(
-	get_ptr(offset_of_map_val(offset))),
+      get_length(offset),
       paddr_t{
 	*reinterpret_cast<const ceph_le32*>(
 	  get_ptr(offset_of_map_val(offset)) + 8),
@@ -409,7 +417,7 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
   }
 
   std::pair<internal_iterator_t, internal_iterator_t>
-  get_leaf_entries(laddr_t addr, loff_t len);
+  get_leaf_entries(laddr_t addr, extent_len_t len);
 
   // delta operation
   void journal_insertion(
@@ -430,24 +438,22 @@ struct BtreeLBAPin : LBAPin {
   LBALeafNodeRef leaf;
   paddr_t paddr;
   laddr_t laddr;
-  loff_t length;
+  extent_len_t length;
 public:
   BtreeLBAPin(
     LBALeafNodeRef leaf,
     paddr_t paddr,
     laddr_t laddr,
-    loff_t length)
+    extent_len_t length)
     : leaf(leaf), paddr(paddr), laddr(laddr), length(length) {}
 
-  void set_paddr(paddr_t) final {}
-
-  loff_t get_length() const final {
+  extent_len_t get_length() const final {
     return length;
   }
-  paddr_t get_paddr() const {
+  paddr_t get_paddr() const final {
     return paddr;
   }
-  laddr_t get_laddr() const {
+  laddr_t get_laddr() const final {
     return laddr;
   }
 };

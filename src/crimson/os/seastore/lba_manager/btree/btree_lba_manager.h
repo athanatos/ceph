@@ -61,7 +61,7 @@ public:
 
   get_mapping_ret get_mapping(
     Transaction &t,
-    laddr_t offset, loff_t length) final;
+    laddr_t offset, extent_len_t length) final;
 
   get_mappings_ret get_mappings(
     Transaction &t,
@@ -70,12 +70,12 @@ public:
   alloc_extent_ret alloc_extent(
     Transaction &t,
     laddr_t hint,
-    loff_t len,
+    extent_len_t len,
     paddr_t addr) final;
 
   set_extent_ret set_extent(
     Transaction &t,
-    laddr_t off, loff_t len, paddr_t addr) final;
+    laddr_t off, extent_len_t len, paddr_t addr) final;
 
   decref_extent_ret decref_extent(
     Transaction &t,
@@ -101,5 +101,6 @@ private:
     laddr_t laddr,
     lba_map_val_t val);
 };
+using BtreeLBAManagerRef = std::unique_ptr<BtreeLBAManager>;
 
 }

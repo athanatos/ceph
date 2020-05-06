@@ -59,7 +59,6 @@ struct RootBlock : CachedExtent {
   }
 
   ceph::bufferlist get_delta() final {
-    ceph_assert(0 == "TODO");
     return ceph::bufferlist();
   }
 
@@ -69,10 +68,10 @@ struct RootBlock : CachedExtent {
 
   complete_load_ertr::future<> complete_load() final;
 
-  void set_lba_root(btree_lba_root_t lba_root);
-  btree_lba_root_t &get_lba_root() {
-    return root.lba_root;
-  }
+  void on_delta_write(paddr_t record_block_offset) final;
+  void on_initial_write() final;
+
+  btree_lba_root_t &get_lba_root();
 
 };
 using RootBlockRef = RootBlock::Ref;

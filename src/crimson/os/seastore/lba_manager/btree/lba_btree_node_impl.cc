@@ -24,9 +24,9 @@ LBAInternalNode::lookup_range_ret LBAInternalNode::lookup_range(
   Cache &cache,
   Transaction &t,
   laddr_t addr,
-  loff_t len)
+  extent_len_t len)
 {
-  auto [begin, end] = bound(addr, addr+len);
+  auto [begin, end] = bound(addr, addr + len);
   auto result_up = std::make_unique<lba_pin_list_t>();
   auto &result = *result_up;
   return crimson::do_for_each(
@@ -107,7 +107,7 @@ LBAInternalNode::find_hole_ret LBAInternalNode::find_hole(
   Transaction &t,
   laddr_t min,
   laddr_t max,
-  loff_t len)
+  extent_len_t len)
 {
   return seastar::do_with(
     bound(min, max),
@@ -157,7 +157,7 @@ void LBAInternalNode::resolve_relative_addrs(paddr_t base) {
 	"LBAInternalNode::resolve_relative_addrs {} -> {}",
 	i->get_val(),
 	updated);
-      i->set_val(base.add_relative(updated));
+      i->set_val(updated);
     }
   }
 }
@@ -264,7 +264,7 @@ LBALeafNode::lookup_range_ret LBALeafNode::lookup_range(
   Cache &cache,
   Transaction &t,
   laddr_t addr,
-  loff_t len)
+  extent_len_t len)
 {
   logger().debug(
     "LBALeafNode::lookup_range {}~{}",
@@ -273,12 +273,13 @@ LBALeafNode::lookup_range_ret LBALeafNode::lookup_range(
   auto ret = lba_pin_list_t();
   auto [i, end] = get_leaf_entries(addr, len);
   for (; i != end; ++i) {
+    auto val = (*i).get_val();
     ret.emplace_back(
       std::make_unique<BtreeLBAPin>(
 	LBALeafNodeRef(this),
-	(*i).get_val().paddr,
+	val.paddr,
 	(*i).get_lb(),
-	(*i).get_length()));
+	val.len));
   }
   return lookup_range_ertr::make_ready_future<lba_pin_list_t>(
     std::move(ret));
@@ -355,7 +356,7 @@ LBALeafNode::find_hole_ret LBALeafNode::find_hole(
   Transaction &t,
   laddr_t min,
   laddr_t max,
-  loff_t len)
+  extent_len_t len)
 {
   for (auto i = begin(); i != end(); ++i) {
     auto ub = i->get_lb();
@@ -393,7 +394,7 @@ void LBALeafNode::resolve_relative_addrs(paddr_t base) {
 }
 
 std::pair<LBALeafNode::internal_iterator_t, LBALeafNode::internal_iterator_t>
-LBALeafNode::get_leaf_entries(laddr_t addr, loff_t len)
+LBALeafNode::get_leaf_entries(laddr_t addr, extent_len_t len)
 {
   return bound(addr, addr + len);
 }

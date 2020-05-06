@@ -73,8 +73,10 @@ TransactionManager::mount_ertr::future<> TransactionManager::mount()
 }
 
 TransactionManager::close_ertr::future<> TransactionManager::close() {
-  return cache.close();
-  journal.close();
+  return cache.close(
+  ).safe_then([this] {
+    return journal.close();
+  });
 }
 
 TransactionManager::inc_ref_ertr::future<> TransactionManager::inc_ref(
@@ -93,7 +95,7 @@ TransactionManager::inc_ref_ertr::future<> TransactionManager::inc_ref(
 TransactionManager::inc_ref_ertr::future<> TransactionManager::inc_ref(
   Transaction &t,
   laddr_t offset,
-  loff_t len)
+  extent_len_t len)
 {
   std::unique_ptr<lba_pin_list_t> pins;
   lba_pin_list_t &pins_ref = *pins;
@@ -132,7 +134,7 @@ TransactionManager::dec_ref_ertr::future<> TransactionManager::dec_ref(
 TransactionManager::dec_ref_ertr::future<> TransactionManager::dec_ref(
   Transaction &t,
   laddr_t offset,
-  loff_t len)
+  extent_len_t len)
 {
   std::unique_ptr<lba_pin_list_t> pins;
   lba_pin_list_t &pins_ref = *pins;

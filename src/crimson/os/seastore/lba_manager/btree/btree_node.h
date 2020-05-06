@@ -72,8 +72,8 @@ struct node_iterator_t {
     return node->get_lb(offset);
   }
 
-  loff_t get_length() const {
-    return 0;
+  extent_len_t get_length() const {
+    return node->get_length(offset);
   }
 
   void set_lb(laddr_t lb) {
@@ -136,12 +136,12 @@ struct LBANodeIterHelper {
     laddr_t l, laddr_t r) {
     auto retl = begin();
     for (; retl != end(); ++retl) {
-      if (retl->get_lb() <= l && retl->get_ub() > l)
+      if (retl->get_lb() >= l || (retl->get_lb() + retl->get_length()) > l)
 	break;
     }
     auto retr = retl;
     for (; retr != end(); ++retr) {
-      if (retr->get_lb() > r)
+      if (retr->get_lb() >= r)
 	break;
     }
     return std::make_pair(retl, retr);

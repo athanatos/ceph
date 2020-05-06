@@ -34,12 +34,12 @@ BtreeLBAManager::mkfs_ret BtreeLBAManager::mkfs(
       t,
       LBA_BLOCK_SIZE);
     root_leaf->set_size(0);
-    root->set_lba_root(
+    root->get_lba_root() =
       btree_lba_root_t{
-	0,
-	0,
-	root_leaf->get_paddr() - root->get_paddr(),
-	paddr_t{}});
+        0,
+        0,
+        root_leaf->get_paddr() - root->get_paddr(),
+        paddr_t{}};
     return mkfs_ertr::now();
   });
 }
@@ -64,7 +64,7 @@ BtreeLBAManager::get_root(Transaction &t)
 BtreeLBAManager::get_mapping_ret
 BtreeLBAManager::get_mapping(
   Transaction &t,
-  laddr_t offset, loff_t length)
+  laddr_t offset, extent_len_t length)
 {
   logger().debug("get_mapping: {}, {}", offset, length);
   return get_root(
@@ -106,7 +106,7 @@ BtreeLBAManager::alloc_extent_ret
 BtreeLBAManager::alloc_extent(
   Transaction &t,
   laddr_t hint,
-  loff_t len,
+  extent_len_t len,
   paddr_t addr)
 {
   return get_root(
@@ -119,8 +119,8 @@ BtreeLBAManager::alloc_extent(
 	t,
 	hint,
 	L_ADDR_MAX,
-	len).safe_then([extent = std::move(extent)](auto ret) {
-	  return std::make_pair(ret, std::move(extent));
+	len).safe_then([extent](auto ret) {
+	  return std::make_pair(ret, extent);
 	});
     }).safe_then([this, &t, hint, len, addr](auto p) {
       auto &[ret, extent] = p;
@@ -146,7 +146,7 @@ BtreeLBAManager::alloc_extent(
 BtreeLBAManager::set_extent_ret
 BtreeLBAManager::set_extent(
   Transaction &t,
-  laddr_t off, loff_t len, paddr_t addr)
+  laddr_t off, extent_len_t len, paddr_t addr)
 {
   return get_root(
     t).safe_then([this, &t, off, len, addr](auto root) {
@@ -197,6 +197,7 @@ BtreeLBAManager::insert_mapping_ret BtreeLBAManager::insert_mapping(
   if (root->at_max_capacity()) {
     split = cache.get_root(t).safe_then(
       [this, root, laddr, &t](RootBlockRef croot) {
+	logger().debug("splitting root");
 	{
 	  auto mut_croot = cache.duplicate_for_write(t, croot);
 	  croot = mut_croot->cast<RootBlock>();
@@ -205,6 +206,7 @@ BtreeLBAManager::insert_mapping_ret BtreeLBAManager::insert_mapping(
 	nroot->set_depth(root->depth + 1);
 	nroot->begin()->set_lb(L_ADDR_MIN);
 	nroot->set_size(1);
+	croot->get_lba_root().lba_root_addr = nroot->get_paddr();
 	return nroot->split_entry(cache, t, laddr, nroot->begin(), root);
       });
   }
