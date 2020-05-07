@@ -76,14 +76,14 @@ seastar::future<store_statfs_t> SeaStore::stat() const
   return seastar::make_ready_future<store_statfs_t>(st);
 }
 
-seastar::future<std::vector<ghobject_t>, ghobject_t>
+seastar::future<std::tuple<std::vector<ghobject_t>, ghobject_t>>
 SeaStore::list_objects(CollectionRef ch,
                         const ghobject_t& start,
                         const ghobject_t& end,
                         uint64_t limit) const
 {
-  return seastar::make_ready_future<std::vector<ghobject_t>, ghobject_t>(
-    std::vector<ghobject_t>(), end);
+  return seastar::make_ready_future<std::tuple<std::vector<ghobject_t>, ghobject_t>>(
+    std::make_tuple(std::vector<ghobject_t>(), end));
 }
 
 seastar::future<CollectionRef> SeaStore::create_new_collection(const coll_t& cid)
@@ -152,7 +152,7 @@ SeaStore::omap_get_values(CollectionRef ch,
   return seastar::make_ready_future<omap_values_t>();
 }
 
-seastar::future<bool, SeaStore::omap_values_t>
+seastar::future<std::tuple<bool, SeaStore::omap_values_t>>
 SeaStore::omap_get_values(
     CollectionRef ch,
     const ghobject_t &oid,
@@ -162,8 +162,8 @@ SeaStore::omap_get_values(
   logger().debug(
     "{} {} {}",
     __func__, c->get_cid(), oid);
-  return seastar::make_ready_future<bool, omap_values_t>(
-    false, omap_values_t());
+  return seastar::make_ready_future<std::tuple<bool, omap_values_t>>(
+    std::make_tuple(false, omap_values_t()));
 }
 
 seastar::future<> SeaStore::do_transaction(
@@ -461,9 +461,10 @@ seastar::future<> SeaStore::write_meta(const std::string& key,
   return seastar::make_ready_future<>();
 }
 
-seastar::future<int, std::string> SeaStore::read_meta(const std::string& key)
+seastar::future<std::tuple<int, std::string>> SeaStore::read_meta(const std::string& key)
 {
-  return seastar::make_ready_future<int, std::string>(0, "");
+  return seastar::make_ready_future<std::tuple<int, std::string>>(
+    std::make_tuple(0, ""s));
 }
 
 uuid_d SeaStore::get_fsid() const

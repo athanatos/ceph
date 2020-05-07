@@ -51,7 +51,7 @@ inline auto do_until(AsyncAction action) {
     ::seastar::futurize<std::result_of_t<AsyncAction()>>;
 
   while (true) {
-    auto f = futurator::apply(action);
+    auto f = futurator::invoke(action);
     if (!seastar::need_preempt() && f.available() && std::get<0>(f.get())) {
       return futurator::type::errorator_type::template make_ready_future<>();
     }
