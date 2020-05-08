@@ -38,24 +38,6 @@ public:
   LBAPin &get_pin() { return *((LBAPin*)nullptr); /* TODO */}
 
   laddr_t get_laddr() const { return laddr_t{0}; }
-
-#if 0
-  void copy_in(ceph::bufferlist &bl, laddr_t off, extent_len_t len) {
-    ceph_assert(off >= get_laddr());
-    ceph_assert((off + len) <= (get_laddr() + get_bptr().length()));
-    bl.begin().copy(len, get_bptr().c_str() + (off - get_laddr()));
-  }
-
-  void copy_in(LogicalCachedExtent &extent) {
-    ceph_assert(extent.get_laddr() >= get_laddr());
-    ceph_assert((extent.get_laddr() + extent.get_bptr().length()) <=
-		(get_laddr() + get_bptr().length()));
-    memcpy(
-      get_bptr().c_str() + (extent.get_laddr() - get_laddr()),
-      extent.get_bptr().c_str(),
-      extent.get_length());
-  }
-#endif
 };
 using LogicalCachedExtentRef = TCachedExtentRef<LogicalCachedExtent>;
 struct ref_laddr_cmp {
