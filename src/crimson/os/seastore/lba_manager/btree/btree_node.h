@@ -132,28 +132,6 @@ struct LBANodeIterHelper {
       static_cast<T*>(this),
       off);
   }
-  std::pair<internal_iterator_t, internal_iterator_t> bound(
-    laddr_t l, laddr_t r) {
-    auto retl = begin();
-    for (; retl != end(); ++retl) {
-      if (retl->get_lb() >= l || (retl->get_lb() + retl->get_length()) > l)
-	break;
-    }
-    auto retr = retl;
-    for (; retr != end(); ++retr) {
-      if (retr->get_lb() >= r)
-	break;
-    }
-    return std::make_pair(retl, retr);
-  }
-  internal_iterator_t upper_bound(laddr_t l) {
-    auto ret = begin();
-    for (; ret != end(); ++ret) {
-      if (ret->get_lb() > l)
-	break;
-    }
-    return ret;
-  }
   internal_iterator_t find(laddr_t l) {
     auto ret = begin();
     for (; ret != end(); ++ret) {

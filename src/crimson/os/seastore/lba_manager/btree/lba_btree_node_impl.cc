@@ -20,6 +20,12 @@ namespace {
 
 namespace crimson::os::seastore::lba_manager::btree {
 
+std::ostream &LBAInternalNode::print_detail(std::ostream &out) const
+{
+  return out << ", size=" << get_size()
+	     << ", depth=" << depth;
+}
+
 LBAInternalNode::lookup_range_ret LBAInternalNode::lookup_range(
   Cache &cache,
   Transaction &t,
@@ -109,6 +115,9 @@ LBAInternalNode::find_hole_ret LBAInternalNode::find_hole(
   laddr_t max,
   extent_len_t len)
 {
+  logger().debug(
+    "LBAInternalNode::find_hole min={} max={}, len={}, *this={}",
+    min, max, len, *this);
   return seastar::do_with(
     bound(min, max),
     L_ADDR_NULL,
@@ -127,6 +136,11 @@ LBAInternalNode::find_hole_ret LBAInternalNode::find_hole(
 	    i->get_val(),
 	    get_paddr()
 	  ).safe_then([this, &cache, &t, &i, len](auto extent) mutable {
+	    logger().debug(
+	      "LBAInternalNode::find_hole extent {} lb {} ub {}",
+	      *extent,
+	      i->get_lb(),
+	      i->get_ub());
 	    return extent->find_hole(
 	      cache,
 	      t,
@@ -176,10 +190,17 @@ LBAInternalNode::split_entry(
   copy_from_local(iter + 1, iter, end());
   iter->set_val(maybe_generate_relative(left->get_paddr()));
   iter++;
+  iter->set_lb(pivot);
   iter->set_val(maybe_generate_relative(right->get_paddr()));
   set_size(get_size() + 1);
 
   c.retire_extent(t, entry);
+
+  logger().debug(
+    "LBAInternalNode::split_entry *this {} left {} right {}",
+    *this,
+    *left,
+    *right);
 
   return split_ertr::make_ready_future<LBANodeRef>(
     pivot > addr ? left : right
@@ -210,7 +231,7 @@ LBAInternalNode::merge_entry(
   return get_lba_btree_extent(
     c,
     t,
-    depth,
+    depth-1,
     donor_iter->get_val(),
     get_paddr()
   ).safe_then([this, &c, &t, addr, iter, entry, donor_iter, is_left](
@@ -258,6 +279,12 @@ LBAInternalNode::get_containing_child(laddr_t laddr)
   }
   ceph_assert(0 == "invalid");
   return end();
+}
+
+std::ostream &LBALeafNode::print_detail(std::ostream &out) const
+{
+  return out << ", size=" << get_size()
+	     << ", depth=" << depth;
 }
 
 LBALeafNode::lookup_range_ret LBALeafNode::lookup_range(
@@ -358,6 +385,9 @@ LBALeafNode::find_hole_ret LBALeafNode::find_hole(
   laddr_t max,
   extent_len_t len)
 {
+  logger().debug(
+    "LBALeafNode::find_hole min={} max={}, len={}, *this={}",
+    min, max, len, *this);
   for (auto i = begin(); i != end(); ++i) {
     auto ub = i->get_lb();
     if (min + len <= ub) {
@@ -408,26 +438,30 @@ Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
   offset = offset.maybe_relative_to(base);
   if (depth > 0) {
     logger().debug(
-      "get_lba_btree_extent: reading internal at offset {}",
-      offset);
+      "get_lba_btree_extent: reading internal at offset {}, depth {}",
+      offset,
+      depth);
     return cache.get_extent<LBAInternalNode>(
       t,
       offset,
-      LBA_BLOCK_SIZE).safe_then([](auto ret) {
+      LBA_BLOCK_SIZE).safe_then([depth](auto ret) {
+	ret->set_depth(depth);
 	return LBANodeRef(ret.detach(), /* add_ref = */ false);
       });
 
   } else {
     logger().debug(
-      "get_lba_btree_extent: reading leaf at offset {}",
-      offset);
+      "get_lba_btree_extent: reading leaf at offset {}, depth {}",
+      offset,
+      depth);
     return cache.get_extent<LBALeafNode>(
       t,
       offset,
-      LBA_BLOCK_SIZE).safe_then([offset](auto ret) {
+      LBA_BLOCK_SIZE).safe_then([offset, depth](auto ret) {
 	logger().debug(
 	  "get_lba_btree_extent: read leaf at offset {}",
 	  offset);
+	ret->set_depth(depth);
 	return LBANodeRef(ret.detach(), /* add_ref = */ false);
       });
   }

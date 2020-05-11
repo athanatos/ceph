@@ -30,7 +30,9 @@ struct LBANode : CachedExtent {
   template <typename... T>
   LBANode(T&&... t) : CachedExtent(std::forward<T>(t)...) {}
 
-  depth_t depth;
+  LBANode(const LBANode &rhs) = default;
+
+  depth_t depth = 0;
   void set_depth(depth_t _depth) { depth = _depth; }
 
   virtual lookup_range_ret lookup_range(
@@ -98,7 +100,6 @@ struct LBANode : CachedExtent {
 
   virtual bool at_max_capacity() const = 0;
   virtual bool at_min_capacity() const = 0;
-
 
   virtual ~LBANode() = default;
 };

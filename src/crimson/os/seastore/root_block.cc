@@ -18,7 +18,7 @@ RootBlock::complete_load_ertr::future<> RootBlock::complete_load()
   auto biter = get_bptr().cbegin();
   root.decode(biter);
   if (root.lba_root.lba_root_addr.is_relative()) {
-    root.lba_root.lba_root_addr = get_paddr().add_relative(
+    root.lba_root.lba_root_addr = get_paddr().add_block_relative(
       root.lba_root.lba_root_addr);
   }
   return complete_load_ertr::now();
@@ -27,7 +27,7 @@ RootBlock::complete_load_ertr::future<> RootBlock::complete_load()
 void RootBlock::on_delta_write(paddr_t record_block_offset)
 {
   if (root.lba_root.lba_root_addr.is_relative()) {
-    root.lba_root.lba_root_addr = record_block_offset.add_relative(
+    root.lba_root.lba_root_addr = record_block_offset.add_record_relative(
       root.lba_root.lba_root_addr);
   }
 }
@@ -35,7 +35,7 @@ void RootBlock::on_delta_write(paddr_t record_block_offset)
 void RootBlock::on_initial_write()
 {
   if (root.lba_root.lba_root_addr.is_relative()) {
-    root.lba_root.lba_root_addr = get_paddr().add_relative(
+    root.lba_root.lba_root_addr = get_paddr().add_block_relative(
       root.lba_root.lba_root_addr);
   }
 }

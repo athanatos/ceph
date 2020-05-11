@@ -48,10 +48,12 @@ BtreeLBAManager::get_root_ret
 BtreeLBAManager::get_root(Transaction &t)
 {
   return cache.get_root(t).safe_then([this, &t](auto root) {
-
+    paddr_t root_addr = root->get_lba_root().lba_root_addr;
+    root_addr = root_addr.maybe_relative_to(root->get_paddr());
     logger().debug(
-      "get_root: reading root at {}",
-      root->get_lba_root().lba_root_addr);
+      "get_root: reading root at {} depth {}",
+      root->get_lba_root().lba_root_addr,
+      root->get_lba_root().lba_depth);
     return get_lba_btree_extent(
       cache,
       t,
@@ -113,7 +115,7 @@ BtreeLBAManager::alloc_extent(
     t).safe_then([this, &t, hint, len, addr](auto extent) {
       logger().debug(
 	"alloc_extent: beginning search at {}",
-	extent->get_paddr());
+	*extent);
       return extent->find_hole(
 	cache,
 	t,
@@ -205,8 +207,10 @@ BtreeLBAManager::insert_mapping_ret BtreeLBAManager::insert_mapping(
 	auto nroot = cache.alloc_new_extent<LBAInternalNode>(t, LBA_BLOCK_SIZE);
 	nroot->set_depth(root->depth + 1);
 	nroot->begin()->set_lb(L_ADDR_MIN);
+	nroot->begin()->set_val(root->get_paddr());
 	nroot->set_size(1);
 	croot->get_lba_root().lba_root_addr = nroot->get_paddr();
+	croot->get_lba_root().lba_depth = root->depth + 1;
 	return nroot->split_entry(cache, t, laddr, nroot->begin(), root);
       });
   }

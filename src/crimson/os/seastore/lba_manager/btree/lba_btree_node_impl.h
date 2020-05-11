@@ -106,6 +106,8 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
     return extent_types_t::LADDR_INTERNAL;
   }
 
+  std::ostream &print_detail(std::ostream &out) const final;
+
   ceph::bufferlist get_delta() final {
     // TODO
     return ceph::bufferlist();
@@ -146,10 +148,6 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
   laddr_t get_lb(uint16_t offset) const {
     return *reinterpret_cast<const ceph_le64*>(
       get_ptr(offset_of_lb(offset)));
-  }
-
-  extent_len_t get_length(uint16_t offset) const {
-    return 0;
   }
 
   void set_lb(uint16_t offset, laddr_t lb) {
@@ -195,6 +193,21 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
 
   void set_size(uint16_t size) {
     *reinterpret_cast<ceph_le16*>(get_ptr(SIZE_OFFSET)) = size;
+  }
+
+  std::pair<internal_iterator_t, internal_iterator_t> bound(
+    laddr_t l, laddr_t r) {
+    auto retl = begin();
+    for (; retl != end(); ++retl) {
+      if (retl->get_ub() > l)
+	break;
+    }
+    auto retr = retl;
+    for (; retr != end(); ++retr) {
+      if (retr->get_lb() >= r)
+	break;
+    }
+    return std::make_pair(retl, retr);
   }
 
   using split_ertr = crimson::errorator<
@@ -331,6 +344,8 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
     return extent_types_t::LADDR_LEAF;
   }
 
+  std::ostream &print_detail(std::ostream &out) const final;
+
   // TODO
   using internal_iterator_t = node_iterator_t<LBALeafNode>;
   static constexpr uint16_t CAPACITY = 170;
@@ -414,6 +429,29 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
 
   void set_size(uint16_t size) {
     *reinterpret_cast<ceph_le16*>(get_ptr(SIZE_OFFSET)) = size;
+  }
+
+  std::pair<internal_iterator_t, internal_iterator_t> bound(
+    laddr_t l, laddr_t r) {
+    auto retl = begin();
+    for (; retl != end(); ++retl) {
+      if (retl->get_lb() >= l || (retl->get_lb() + retl->get_length()) > l)
+	break;
+    }
+    auto retr = retl;
+    for (; retr != end(); ++retr) {
+      if (retr->get_lb() >= r)
+	break;
+    }
+    return std::make_pair(retl, retr);
+  }
+  internal_iterator_t upper_bound(laddr_t l) {
+    auto ret = begin();
+    for (; ret != end(); ++ret) {
+      if (ret->get_lb() > l)
+	break;
+    }
+    return ret;
   }
 
   std::pair<internal_iterator_t, internal_iterator_t>

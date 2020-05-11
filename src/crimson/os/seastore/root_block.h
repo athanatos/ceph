@@ -13,8 +13,8 @@ using depth_t = uint32_t;
  * permit more than one lba_manager implementation
  */
 struct btree_lba_root_t {
-  depth_t lba_depth;
-  depth_t segment_depth;
+  depth_t lba_depth = 0;
+  depth_t segment_depth = 0;
   paddr_t lba_root_addr;
   paddr_t segment_root;
 
@@ -46,6 +46,8 @@ struct RootBlock : CachedExtent {
 
   template <typename... T>
   RootBlock(T&&... t) : CachedExtent(std::forward<T>(t)...) {}
+
+  RootBlock(const RootBlock &rhs) = default;
 
   CachedExtentRef duplicate_for_write() final {
     return CachedExtentRef(new RootBlock(*this));

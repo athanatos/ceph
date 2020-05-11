@@ -69,21 +69,30 @@ struct paddr_t {
 
   paddr_t add_relative(paddr_t o) const {
     ceph_assert(o.is_relative());
-    ceph_assert(!is_relative());
+    return paddr_t{segment, offset + o.offset};
+  }
+
+  paddr_t add_block_relative(paddr_t o) const {
+    ceph_assert(o.is_block_relative());
+    return paddr_t{segment, offset + o.offset};
+  }
+
+  paddr_t add_record_relative(paddr_t o) const {
+    ceph_assert(o.is_record_relative());
     return paddr_t{segment, offset + o.offset};
   }
 
   paddr_t operator-(paddr_t rhs) const {
-    ceph_assert(rhs.is_block_relative() && is_block_relative());
+    ceph_assert(rhs.is_record_relative() && is_record_relative());
     return paddr_t{
-      BLOCK_REL_SEG_ID,
+      BLOCK_REL_SEG_ID, // subtracting record relative yields block relative
       offset - rhs.offset
     };
   }
 
   paddr_t maybe_relative_to(paddr_t base) const {
-    if (is_relative())
-      return base.add_relative(*this);
+    if (is_block_relative())
+      return base.add_block_relative(*this);
     else
       return *this;
   }
