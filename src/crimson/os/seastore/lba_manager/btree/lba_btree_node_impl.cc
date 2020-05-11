@@ -82,7 +82,11 @@ LBAInternalNode::insert_ret LBAInternalNode::insert(
 	  split_entry(cache, t, laddr, insertion_pt, extent) :
 	  insert_ertr::make_ready_future<LBANodeRef>(std::move(extent));
       }).safe_then([this, &cache, &t, laddr, val=std::move(val)](
-		     auto extent) mutable {
+		     LBANodeRef extent) mutable {
+	if (extent->depth == 0) {
+	  auto mut_extent = cache.duplicate_for_write(t, extent);
+	  extent = mut_extent->cast<LBANode>();
+	}
 	return extent->insert(cache, t, laddr, val);
       });
 }
