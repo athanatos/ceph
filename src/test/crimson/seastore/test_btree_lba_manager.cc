@@ -216,8 +216,6 @@ struct btree_lba_manager_test :
       target->first);
   }
 
-  
-
   void check_mappings() {
     auto t = create_transaction();
     check_mappings(t);

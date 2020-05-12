@@ -307,10 +307,10 @@ LBALeafNode::lookup_range_ret LBALeafNode::lookup_range(
     auto val = (*i).get_val();
     ret.emplace_back(
       std::make_unique<BtreeLBAPin>(
-	LBALeafNodeRef(this),
 	val.paddr,
 	(*i).get_lb(),
-	val.len));
+	val.len,
+	val.refcount));
   }
   return lookup_range_ertr::make_ready_future<lba_pin_list_t>(
     std::move(ret));
@@ -345,10 +345,10 @@ LBALeafNode::insert_ret LBALeafNode::insert(
   return insert_ret(
     insert_ertr::ready_future_marker{},
     std::make_unique<BtreeLBAPin>(
-      LBALeafNodeRef(this),
       val.paddr,
       laddr,
-      val.len));
+      val.len,
+      val.refcount));
 }
 
 LBALeafNode::remove_ret LBALeafNode::remove(

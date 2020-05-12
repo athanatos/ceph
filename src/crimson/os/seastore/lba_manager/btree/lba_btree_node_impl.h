@@ -250,9 +250,9 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
  *
  * Layout (4k):
  *   num_entries: uint16_t           2b
- *   (padding)  :                    14b
- *   keys       : laddr_t[170]       (170*8)b
- *   values     : lba_map_val_t[170] (170*16)b
+ *   (padding)  :                    30b
+ *   keys       : laddr_t[170]       (127*8)b
+ *   values     : lba_map_val_t[170] (127*24)b
  *                                   = 4096
  */
 struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
@@ -348,10 +348,10 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
 
   // TODO
   using internal_iterator_t = node_iterator_t<LBALeafNode>;
-  static constexpr uint16_t CAPACITY = 170;
+  static constexpr uint16_t CAPACITY = 127;
   static constexpr off_t SIZE_OFFSET = 0;
-  static constexpr off_t LADDR_START = 16;
-  static constexpr off_t MAP_VAL_START = 1376;
+  static constexpr off_t LADDR_START = 32;
+  static constexpr off_t MAP_VAL_START = 1048;
   static constexpr off_t offset_of_lb(uint16_t off) {
     return LADDR_START + (off * 8);
   }
@@ -359,7 +359,7 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
     return LADDR_START + ((off + 1) * 8);
   }
   static constexpr off_t offset_of_map_val(uint16_t off) {
-    return MAP_VAL_START + (off * 16);
+    return MAP_VAL_START + (off * 24);
   }
 
   char *get_ptr(off_t offset) {
@@ -386,6 +386,16 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
       get_ptr(offset_of_map_val(offset)));
   }
 
+  uint32_t get_refcount(uint16_t offset) const {
+    return *reinterpret_cast<const ceph_le32*>(
+      get_ptr(offset_of_map_val(offset) + 16));
+  }
+
+  uint32_t get_checksum(uint16_t offset) const {
+    return *reinterpret_cast<const ceph_le32*>(
+      get_ptr(offset_of_map_val(offset) + 20));
+  }
+
   lba_map_val_t get_val(uint16_t offset) const {
     return lba_map_val_t{
       get_length(offset),
@@ -394,7 +404,9 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
 	  get_ptr(offset_of_map_val(offset)) + 8),
 	*reinterpret_cast<const ceph_les32*>(
 	  get_ptr(offset_of_map_val(offset)) + 12)
-      }
+      },
+      get_refcount(offset),
+      get_checksum(offset)
     };
   }
 
@@ -473,17 +485,18 @@ using LBALeafNodeRef = TCachedExtentRef<LBALeafNode>;
  * References leaf node
  */
 struct BtreeLBAPin : LBAPin {
-  LBALeafNodeRef leaf;
   paddr_t paddr;
-  laddr_t laddr;
-  extent_len_t length;
+  laddr_t laddr = L_ADDR_NULL;
+  extent_len_t length = 0;
+  unsigned refcount = 0;
+  
 public:
   BtreeLBAPin(
-    LBALeafNodeRef leaf,
     paddr_t paddr,
     laddr_t laddr,
-    extent_len_t length)
-    : leaf(leaf), paddr(paddr), laddr(laddr), length(length) {}
+    extent_len_t length,
+    unsigned refcount)
+    : paddr(paddr), laddr(laddr), length(length), refcount(refcount) {}
 
   extent_len_t get_length() const final {
     return length;
@@ -493,6 +506,9 @@ public:
   }
   laddr_t get_laddr() const final {
     return laddr;
+  }
+  unsigned get_refcount() const final {
+    return refcount;
   }
 };
 

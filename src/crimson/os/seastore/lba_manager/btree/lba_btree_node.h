@@ -16,7 +16,8 @@ namespace crimson::os::seastore::lba_manager::btree {
 struct lba_map_val_t {
   extent_len_t len = 0;
   paddr_t paddr;
-  // other stuff: checksum, refcount
+  uint32_t refcount;
+  uint32_t checksum;
 };
 
 class BtreeLBAPin;
