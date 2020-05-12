@@ -82,7 +82,7 @@ that permits us to relocate blocks from existing segments inline with
 ongoing client IO.
 
 To that end, at a high level, we’ll maintain 2 basic metadata trees.
-First, we need a tree mapping hobject_t->onode_t (onode_by_hobject).
+First, we need a tree mapping ghobject_t->onode_t (onode_by_hobject).
 Second, we need a way to find live blocks within a segment and a way
 to decouple internal references from physical locations (lba_tree).
 
