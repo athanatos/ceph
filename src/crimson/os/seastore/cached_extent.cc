@@ -65,4 +65,4 @@ CachedExtent::~CachedExtent()
   }
 }
 
-};
+}

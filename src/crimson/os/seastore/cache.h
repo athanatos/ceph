@@ -295,7 +295,7 @@ public:
   /**
    * try_construct_record
    *
-   * First checks for conficts.  If a racing write has mutated/retired
+   * First checks for conflicts.  If a racing write has mutated/retired
    * an extent mutated by this transaction, nullopt will be returned.
    *
    * Otherwise, a record will be returned valid for use with Journal.

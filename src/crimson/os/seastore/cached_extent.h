@@ -242,7 +242,6 @@ private:
   using list = boost::intrusive::list<
     CachedExtent,
     primary_ref_list_member_options>;
-  friend class ExtentLRU;
 
   /// Actual data contents
   ceph::bufferptr ptr;
@@ -286,7 +285,10 @@ protected:
     return new T(std::forward<Args>(args)...);
   }
 
-  void set_paddr(paddr_t offset) { poffset = offset; }
+  void set_paddr(paddr_t offset) {
+    ceph_assert(poffset == paddr_t{});
+    poffset = offset;
+  }
 
   /**
    * maybe_generate_relative
