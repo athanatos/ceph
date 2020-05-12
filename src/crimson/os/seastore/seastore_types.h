@@ -19,8 +19,10 @@ using segment_id_t = uint32_t;
 constexpr segment_id_t NULL_SEG_ID =
   std::numeric_limits<segment_id_t>::max() - 1;
 /* Used to denote relative paddr_t */
-constexpr segment_id_t REL_SEG_ID =
+constexpr segment_id_t RECORD_REL_SEG_ID =
   std::numeric_limits<segment_id_t>::max() - 2;
+constexpr segment_id_t BLOCK_REL_SEG_ID =
+  std::numeric_limits<segment_id_t>::max() - 3;
 
 std::ostream &segment_to_stream(std::ostream &, const segment_id_t &t);
 
@@ -49,7 +51,16 @@ struct paddr_t {
   segment_off_t offset = NULL_SEG_OFF;
 
   bool is_relative() const {
-    return segment == REL_SEG_ID;
+    return segment == RECORD_REL_SEG_ID ||
+      segment == BLOCK_REL_SEG_ID;
+  }
+
+  bool is_record_relative() const {
+    return segment == RECORD_REL_SEG_ID;
+  }
+
+  bool is_block_relative() const {
+    return segment == BLOCK_REL_SEG_ID;
   }
 
   paddr_t add_offset(segment_off_t o) const {
@@ -58,21 +69,30 @@ struct paddr_t {
 
   paddr_t add_relative(paddr_t o) const {
     assert(o.is_relative());
-    assert(!is_relative());
+    return paddr_t{segment, offset + o.offset};
+  }
+
+  paddr_t add_block_relative(paddr_t o) const {
+    assert(o.is_block_relative());
+    return paddr_t{segment, offset + o.offset};
+  }
+
+  paddr_t add_record_relative(paddr_t o) const {
+    assert(o.is_record_relative());
     return paddr_t{segment, offset + o.offset};
   }
 
   paddr_t operator-(paddr_t rhs) const {
-    assert(rhs.is_relative() && is_relative());
+    assert(rhs.is_record_relative() && is_record_relative());
     return paddr_t{
-      REL_SEG_ID,
+      BLOCK_REL_SEG_ID, // subtracting record relative yields block relative
       offset - rhs.offset
     };
   }
 
   paddr_t maybe_relative_to(paddr_t base) const {
-    if (is_relative())
-      return base.add_relative(*this);
+    if (is_block_relative())
+      return base.add_block_relative(*this);
     else
       return *this;
   }
@@ -87,8 +107,12 @@ struct paddr_t {
 WRITE_CMP_OPERATORS_2(paddr_t, segment, offset)
 WRITE_EQ_OPERATORS_2(paddr_t, segment, offset)
 constexpr paddr_t P_ADDR_NULL = paddr_t{};
-constexpr paddr_t make_relative_paddr(segment_off_t off) {
-  return paddr_t{REL_SEG_ID, off};
+constexpr paddr_t P_ADDR_MIN = paddr_t{0, 0};
+constexpr paddr_t make_record_relative_paddr(segment_off_t off) {
+  return paddr_t{RECORD_REL_SEG_ID, off};
+}
+constexpr paddr_t make_block_relative_paddr(segment_off_t off) {
+  return paddr_t{BLOCK_REL_SEG_ID, off};
 }
 
 std::ostream &operator<<(std::ostream &out, const paddr_t &rhs);
