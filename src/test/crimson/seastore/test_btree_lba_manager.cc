@@ -105,6 +105,7 @@ struct btree_lba_manager_test :
   struct test_extent_t {
     paddr_t addr;
     size_t len = 0;
+    unsigned refcount = 0;
   };
   using test_lba_mapping_t = std::map<laddr_t, test_extent_t>;
   test_lba_mapping_t test_lba_mappings;
@@ -155,7 +156,8 @@ struct btree_lba_manager_test :
 	ret->get_laddr(),
 	test_extent_t{
 	  ret->get_paddr(),
-	  ret->get_length()
+	  ret->get_length(),
+	  1
         }
       ));
     return ret;
@@ -178,11 +180,43 @@ struct btree_lba_manager_test :
 	ret->get_laddr(),
 	test_extent_t{
 	  ret->get_paddr(),
-	  ret->get_length()
+	  ret->get_length(),
+	  1
         }
       ));
     return ret;
   }
+
+  auto decref_mapping(
+    test_transaction &t,
+    test_lba_mapping_t::iterator target) {
+    ceph_assert(target->second.refcount > 0);
+    target->second.refcount--;
+    bool should_free = false;
+    auto addr = target->first;
+    if (target->second.refcount == 0) {
+      should_free = true;
+      t.mappings.erase(target);
+    }
+    return lba_manager->decref_extent(
+      *t.t,
+      target->first).safe_then([should_free](bool freed) {
+	EXPECT_EQ(free, should_free);
+      });
+  }
+  
+  auto incref_mapping(
+    test_transaction &t,
+    test_lba_mapping_t::iterator target,
+    unsigned ) {
+    ceph_assert(target->second.refcount > 0);
+    target->second.refcount++;
+    return lba_manager->incref_extent(
+      *t.t,
+      target->first);
+  }
+
+  
 
   void check_mappings() {
     auto t = create_transaction();
@@ -220,7 +254,7 @@ TEST_F(btree_lba_manager_test, basic)
   });
 }
 
-TEST_F(btree_lba_manager_test, force_split)
+TEST_F(btree_lba_manager_test, force_split_merge)
 {
   run_async([this] {
     for (unsigned i = 0; i < 40; ++i) {

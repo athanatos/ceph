@@ -167,7 +167,7 @@ BtreeLBAManager::set_extent(
 BtreeLBAManager::decref_extent_ret
 BtreeLBAManager::decref_extent(
   Transaction &t,
-  LBAPin &ref)
+  laddr_t addr)
 {
   return ref_ertr::make_ready_future<bool>(true);
 }
@@ -175,7 +175,7 @@ BtreeLBAManager::decref_extent(
 BtreeLBAManager::incref_extent_ret
 BtreeLBAManager::incref_extent(
   Transaction &t,
-  LBAPin &ref)
+  laddr_t addr)
 {
   return ref_ertr::now();
 }

@@ -79,10 +79,10 @@ public:
 
   decref_extent_ret decref_extent(
     Transaction &t,
-    LBAPin &ref) final;
+    laddr_t addr) final;
   incref_extent_ret incref_extent(
     Transaction &t,
-    LBAPin &ref) final;
+    laddr_t addr) final;
 
   submit_lba_transaction_ret submit_lba_transaction(
     Transaction &t) final;

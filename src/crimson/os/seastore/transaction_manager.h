@@ -217,20 +217,18 @@ public:
     LogicalCachedExtentRef &ref);
   inc_ref_ertr::future<> inc_ref(
     Transaction &t,
-    laddr_t offset,
-    extent_len_t len);
+    laddr_t offset);
 
   /**
    * Remove refcount for range
    */
   using dec_ref_ertr = SegmentManager::read_ertr;
-  dec_ref_ertr::future<> dec_ref(
+  dec_ref_ertr::future<bool> dec_ref(
     Transaction &t,
     LogicalCachedExtentRef &ref);
-  dec_ref_ertr::future<> dec_ref(
+  dec_ref_ertr::future<bool> dec_ref(
     Transaction &t,
-    laddr_t offset,
-    extent_len_t len);
+    laddr_t offset);
 
   /**
    * Allocate a new block of type T with an lba hint

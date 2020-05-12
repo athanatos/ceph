@@ -114,7 +114,7 @@ public:
   using decref_extent_ret = ref_ertr::future<bool>;
   virtual decref_extent_ret decref_extent(
     Transaction &t,
-    LBAPin &ref) = 0;
+    laddr_t addr) = 0;
 
   /**
    * Increments ref count on extent
@@ -122,35 +122,7 @@ public:
   using incref_extent_ret = ref_ertr::future<>;
   virtual incref_extent_ret incref_extent(
     Transaction &t,
-    LBAPin &ref) = 0;
-
-  /**
-   * Moves mapping denoted by ref.
-   *
-   * ref must have only one refcount
-   */
-  using move_extent_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error>;
-  using move_extent_ret = move_extent_ertr::future<LBAPinRef>;
-  virtual move_extent_ret move_extent(
-    Transaction &t,
-    LBAPin &ref,
-    paddr_t addr) {
-    return decref_extent(t, ref
-    ).safe_then([this](auto freed) {
-      ceph_assert(freed);
-    }).safe_then([this, &t, &ref, addr] {
-      return set_extent(
-	t,
-	ref.get_laddr(),
-	ref.get_length(),
-	addr).handle_error(
-	  move_extent_ertr::pass_further{},
-	  crimson::ct_error::invarg::handle([] {
-	    throw std::runtime_error("Should be impossible");
-	  }));
-    });
-  }
+    laddr_t addr) = 0;
 
   // TODO: probably unused, removed
   using submit_lba_transaction_ertr = crimson::errorator<

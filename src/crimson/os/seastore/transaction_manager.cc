@@ -83,78 +83,38 @@ TransactionManager::inc_ref_ertr::future<> TransactionManager::inc_ref(
   Transaction &t,
   LogicalCachedExtentRef &ref)
 {
-  return lba_manager.incref_extent(
-    t,
-    ref->get_pin()).handle_error(
-      inc_ref_ertr::pass_further{},
-      ct_error::all_same_way([](auto e) {
-	ceph_assert(0 == "unhandled error, TODO");
-      }));
+  return lba_manager.incref_extent(t, ref->get_laddr()
+  ).handle_error(
+    inc_ref_ertr::pass_further{},
+    ct_error::all_same_way([](auto e) {
+      ceph_assert(0 == "unhandled error, TODO");
+    }));
 }
 
 TransactionManager::inc_ref_ertr::future<> TransactionManager::inc_ref(
   Transaction &t,
-  laddr_t offset,
-  extent_len_t len)
+  laddr_t offset)
 {
-  std::unique_ptr<lba_pin_list_t> pins;
-  lba_pin_list_t &pins_ref = *pins;
-  return lba_manager.get_mapping(
-    t,
-    offset,
-    len
-  ).safe_then([this, &t, &pins_ref](auto pins) {
-    pins_ref.swap(pins);
-    return crimson::do_for_each(
-      pins_ref.begin(),
-      pins_ref.end(),
-      [this, &t](auto &pin) {
-	return lba_manager.incref_extent(
-	  t,
-	  *pin);
-      });
-  }).safe_then([this, pins=std::move(pins)] {
-    return inc_ref_ertr::now();
-  });
+  return lba_manager.incref_extent(t, offset);
 }
 
-TransactionManager::dec_ref_ertr::future<> TransactionManager::dec_ref(
+TransactionManager::dec_ref_ertr::future<bool> TransactionManager::dec_ref(
   Transaction &t,
   LogicalCachedExtentRef &ref)
 {
-  return lba_manager.decref_extent(
-    t,
-    ref->get_pin()).handle_error(
-      dec_ref_ertr::pass_further{},
-      ct_error::all_same_way([](auto e) {
-	ceph_assert(0 == "unhandled error, TODO");
-      })).safe_then([](auto) {});
+  return dec_ref(t, ref->get_laddr()
+  ).handle_error(
+    dec_ref_ertr::pass_further{},
+    ct_error::all_same_way([](auto e) {
+      ceph_assert(0 == "unhandled error, TODO");
+    }));
 }
 
-TransactionManager::dec_ref_ertr::future<> TransactionManager::dec_ref(
+TransactionManager::dec_ref_ertr::future<bool> TransactionManager::dec_ref(
   Transaction &t,
-  laddr_t offset,
-  extent_len_t len)
+  laddr_t offset)
 {
-  std::unique_ptr<lba_pin_list_t> pins;
-  lba_pin_list_t &pins_ref = *pins;
-  return lba_manager.get_mapping(
-    t,
-    offset,
-    len
-  ).safe_then([this, &t, &pins_ref](auto pins) {
-    pins_ref.swap(pins);
-    return crimson::do_for_each(
-      pins_ref.begin(),
-      pins_ref.end(),
-      [this, &t](auto &pin) {
-	return lba_manager.decref_extent(
-	  t,
-	  *pin).safe_then([](auto) {});
-      });
-  }).safe_then([this, pins=std::move(pins)] {
-    return dec_ref_ertr::now();
-  });
+  return lba_manager.decref_extent(t, offset);
 }
 
 TransactionManager::submit_transaction_ertr::future<>
