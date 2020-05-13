@@ -50,8 +50,9 @@ class Transaction {
   }
 
   void add_to_retired_set(CachedExtentRef ref) {
-    ceph_assert(retired_set.count(ref->get_paddr()) == 0);
-    retired_set.insert(ref);
+    if (retired_set.count(ref->get_paddr()) == 0) {
+      retired_set.insert(ref);
+    }
   }
 
   void add_to_read_set(CachedExtentRef ref) {

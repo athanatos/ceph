@@ -369,6 +369,7 @@ LBALeafNode::mutate_mapping_ret LBALeafNode::mutate_mapping(
 
   auto mutated = f(mutation_pt.get_val());
   if (mutated) {
+    mutation_pt.set_val(*mutated);
     journal_mutated(laddr, *mutated);
     return mutate_mapping_ret(
       mutate_mapping_ertr::ready_future_marker{},

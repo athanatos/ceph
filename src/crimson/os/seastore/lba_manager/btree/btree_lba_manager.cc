@@ -228,7 +228,7 @@ BtreeLBAManager::insert_mapping_ret BtreeLBAManager::insert_mapping(
   if (root->at_max_capacity()) {
     split = cache.get_root(t).safe_then(
       [this, root, laddr, &t](RootBlockRef croot) {
-	logger().debug("splitting root");
+	logger().debug("splitting root {}", *croot);
 	{
 	  auto mut_croot = cache.duplicate_for_write(t, croot);
 	  croot = mut_croot->cast<RootBlock>();
