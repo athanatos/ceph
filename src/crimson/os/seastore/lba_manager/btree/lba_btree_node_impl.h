@@ -53,10 +53,11 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
     laddr_t laddr,
     lba_map_val_t val) final;
 
-  remove_ret remove(
+  mutate_mapping_ret mutate_mapping(
     Cache &cache,
     Transaction &transaction,
-    laddr_t) final;
+    laddr_t laddr,
+    mutate_func_t &&f) final;
 
   find_hole_ret find_hole(
     Cache &cache,
@@ -277,10 +278,11 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
     laddr_t laddr,
     lba_map_val_t val) final;
 
-  remove_ret remove(
+  mutate_mapping_ret mutate_mapping(
     Cache &cache,
     Transaction &transaction,
-    laddr_t) final;
+    laddr_t laddr,
+    mutate_func_t &&f) final;
 
   find_hole_ret find_hole(
     Cache &cache,
@@ -469,12 +471,13 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
   std::pair<internal_iterator_t, internal_iterator_t>
   get_leaf_entries(laddr_t addr, extent_len_t len);
 
-  // delta operation
+  // delta operations
+  void journal_mutated(
+    laddr_t laddr,
+    lba_map_val_t val);
   void journal_insertion(
     laddr_t laddr,
     lba_map_val_t val);
-
-  // delta operation
   void journal_removal(
     laddr_t laddr);
 };

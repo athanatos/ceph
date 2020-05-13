@@ -56,7 +56,7 @@ struct LBANode : CachedExtent {
     lba_map_val_t val) = 0;
 
   /**
-   * Finds minimum hole greater in [min, max) of size at least len
+   * Finds minimum hole of size len in [min, max)
    *
    * Returns L_ADDR_NULL if unfound
    */
@@ -73,14 +73,18 @@ struct LBANode : CachedExtent {
   /**
    * Precondition: !at_min_capacity()
    */
-  using remove_ertr = crimson::errorator<
+  using mutate_mapping_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
-  using remove_ret = remove_ertr::future<>;
-  virtual remove_ret remove(
+  using mutate_mapping_ret = mutate_mapping_ertr::future<bool>;
+  using mutate_func_t = std::function<
+    std::optional<lba_map_val_t>(const lba_map_val_t &v)
+    >;
+  virtual mutate_mapping_ret mutate_mapping(
     Cache &cache,
     Transaction &transaction,
-    laddr_t) = 0;
+    laddr_t laddr,
+    mutate_func_t &&f) = 0;
 
   virtual std::tuple<
     LBANodeRef,

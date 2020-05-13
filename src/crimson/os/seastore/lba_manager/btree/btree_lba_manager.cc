@@ -169,7 +169,24 @@ BtreeLBAManager::decref_extent(
   Transaction &t,
   laddr_t addr)
 {
-  return ref_ertr::make_ready_future<bool>(true);
+  return get_root(t
+  ).safe_then([this, &t, addr](auto root) {
+    // TODO root merge
+    return root->mutate_mapping(
+      cache,
+      t,
+      addr,
+      [](const lba_map_val_t &in) {
+	ceph_assert(in.refcount > 0);
+	if (in.refcount == 1) {
+	  return std::optional<lba_map_val_t>();
+	} else {
+	  auto ret = in;
+	  ret.refcount--;
+	  return std::optional<lba_map_val_t>(ret);
+	}
+      });
+  });
 }
 
 BtreeLBAManager::incref_extent_ret
@@ -177,7 +194,19 @@ BtreeLBAManager::incref_extent(
   Transaction &t,
   laddr_t addr)
 {
-  return ref_ertr::now();
+  return get_root(t
+  ).safe_then([this, &t, addr](auto root) {
+    return root->mutate_mapping(
+      cache,
+      t,
+      addr,
+      [](const lba_map_val_t &in) {
+	ceph_assert(in.refcount > 0);
+	auto ret = in;
+	ret.refcount++;
+	return ret;
+      });
+  }).safe_then([](...) {});
 }
 
 BtreeLBAManager::submit_lba_transaction_ret

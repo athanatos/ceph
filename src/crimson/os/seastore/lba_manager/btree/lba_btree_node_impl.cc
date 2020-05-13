@@ -91,24 +91,25 @@ LBAInternalNode::insert_ret LBAInternalNode::insert(
       });
 }
 
-LBAInternalNode::remove_ret LBAInternalNode::remove(
+LBAInternalNode::mutate_mapping_ret LBAInternalNode::mutate_mapping(
   Cache &cache,
   Transaction &t,
-  laddr_t laddr)
+  laddr_t laddr,
+  mutate_func_t &&f)
 {
-  auto removal_pt = get_containing_child(laddr);
+  auto pt = get_containing_child(laddr);
   return get_lba_btree_extent(
     cache,
     t,
     depth-1,
-    removal_pt->get_val(),
+    pt->get_val(),
     get_paddr()
-  ).safe_then([this, removal_pt, &cache, &t, laddr](auto extent) {
+  ).safe_then([this, pt, &cache, &t, laddr](auto extent) {
     return extent->at_min_capacity() ?
-      merge_entry(cache, t, laddr, removal_pt, extent) :
-      remove_ertr::make_ready_future<LBANodeRef>(std::move(extent));
-  }).safe_then([&cache, &t, laddr](auto extent) {
-    return extent->remove(cache, t, laddr);
+      merge_entry(cache, t, laddr, pt, extent) :
+      mutate_mapping_ertr::make_ready_future<LBANodeRef>(std::move(extent));
+  }).safe_then([&cache, &t, laddr, f=std::move(f)](auto extent) mutable {
+    return extent->mutate_mapping(cache, t, laddr, std::move(f));
   });
 }
 
@@ -351,22 +352,42 @@ LBALeafNode::insert_ret LBALeafNode::insert(
       val.refcount));
 }
 
-LBALeafNode::remove_ret LBALeafNode::remove(
+LBALeafNode::mutate_mapping_ret LBALeafNode::mutate_mapping(
   Cache &cache,
   Transaction &transaction,
-  laddr_t laddr)
+  laddr_t laddr,
+  mutate_func_t &&f)
 {
   ceph_assert(!at_min_capacity());
-  auto removal_pt = find(laddr);
-  if (removal_pt == end()) {
+  auto mutation_pt = find(laddr);
+  if (mutation_pt == end()) {
     ceph_assert(0 == "should be impossible");
-    return remove_ertr::now();
+    return mutate_mapping_ret(
+      mutate_mapping_ertr::ready_future_marker{},
+      true);
   }
 
-  journal_removal(laddr);
-  copy_from_local(removal_pt, removal_pt, end());
-  set_size(get_size() - 1);
-  return remove_ertr::now();
+  auto mutated = f(mutation_pt.get_val());
+  if (mutated) {
+    journal_mutated(laddr, *mutated);
+    return mutate_mapping_ret(
+      mutate_mapping_ertr::ready_future_marker{},
+      false);
+  } else {
+    journal_removal(laddr);
+    copy_from_local(mutation_pt, mutation_pt + 1, end());
+    set_size(get_size() - 1);
+    return mutate_mapping_ret(
+      mutate_mapping_ertr::ready_future_marker{},
+      true);
+  }
+}
+
+void LBALeafNode::journal_mutated(
+  laddr_t laddr,
+  lba_map_val_t val)
+{
+  // TODO
 }
 
 void LBALeafNode::journal_insertion(
