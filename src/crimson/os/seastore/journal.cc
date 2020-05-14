@@ -180,7 +180,7 @@ Journal::find_replay_segments_fut Journal::find_replay_segments()
 	    auto bp = bl.cbegin();
 	    try {
 	      ::decode(header, bp);
-	    } catch (ceph::buffer::error e) {
+	    } catch (ceph::buffer::error &e) {
 	      logger().debug(
 		"find_replay_segments: segment {} unable to decode "
 		"header, skipping",
@@ -246,7 +246,7 @@ Journal::read_record_metadata_ret Journal::read_record_metadata(
       record_header_t header;
       try {
 	::decode(header, bp);
-      } catch (ceph::buffer::error e) {
+      } catch (ceph::buffer::error &e) {
 	return read_record_metadata_ret(
 	  read_record_metadata_ertr::ready_future_marker{},
 	  std::nullopt);
@@ -281,7 +281,7 @@ std::optional<std::vector<delta_info_t>> Journal::try_decode_deltas(
   for (auto &&i : deltas) {
     try {
       ::decode(i, bliter);
-    } catch (ceph::buffer::error e) {
+    } catch (ceph::buffer::error &e) {
       return std::nullopt;
     }
   }
