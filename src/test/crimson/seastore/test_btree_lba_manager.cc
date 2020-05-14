@@ -189,7 +189,14 @@ struct btree_lba_manager_test :
 
   auto decref_mapping(
     test_transaction_t &t,
+    laddr_t addr) {
+    return decref_mapping(t, t.mappings.find(addr));
+  }
+
+  void decref_mapping(
+    test_transaction_t &t,
     test_lba_mapping_t::iterator target) {
+    ceph_assert(target != t.mappings.end());
     ceph_assert(target->second.refcount > 0);
     target->second.refcount--;
     bool should_free = false;
@@ -201,10 +208,10 @@ struct btree_lba_manager_test :
       *t.t,
       target->first).safe_then([should_free](bool freed) {
 	EXPECT_EQ(freed, should_free);
-      });
+      }).unsafe_get0();
   }
   
-  auto incref_mapping(
+  void incref_mapping(
     test_transaction_t &t,
     test_lba_mapping_t::iterator target,
     unsigned ) {
@@ -212,7 +219,16 @@ struct btree_lba_manager_test :
     target->second.refcount++;
     return lba_manager->incref_extent(
       *t.t,
-      target->first);
+      target->first).unsafe_get0();
+  }
+
+  std::vector<laddr_t> get_mapped_addresses() {
+    std::vector<laddr_t> addresses;
+    addresses.reserve(test_lba_mappings.size());
+    for (auto &i: test_lba_mappings) {
+      addresses.push_back(i.first);
+    }
+    return addresses;
   }
 
   void check_mappings() {
@@ -271,26 +287,41 @@ TEST_F(btree_lba_manager_test, force_split)
   });
 }
 
-#if 0
 TEST_F(btree_lba_manager_test, force_split_merge)
 {
   run_async([this] {
-    for (unsigned i = 0; i < 400; ++i) {
+    for (unsigned i = 0; i < 40; ++i) {
       auto t = create_transaction();
       logger().debug("opened transaction");
       for (unsigned j = 0; j < 5; ++j) {
 	auto ret = alloc_mapping(t, 0, block_size, P_ADDR_MIN);
 	// just to speed things up a bit
-	if ((i % 20 == 0) && (j == 3)) {
+	if ((i % 100 == 0) && (j == 3)) {
 	  check_mappings(t);
 	  check_mappings();
 	}
       }
       logger().debug("submitting transaction");
       submit_test_transaction(std::move(t));
-      check_mappings();
+      if (i % 50 == 0) {
+	check_mappings();
+      }
     }
+    auto addresses = get_mapped_addresses();
+    auto t = create_transaction();
+    for (unsigned i = 0; i != addresses.size(); ++i) {
+      if (i % 2 == 0) {
+	decref_mapping(t, addresses[i]);
+      }
+      logger().debug("submitting transaction");
+      if (i % 10 == 0) {
+	submit_test_transaction(std::move(t));
+	t = create_transaction();
+      }
+      if (i % 50 == 0) {
+	check_mappings();
+      }
+    }
+    submit_test_transaction(std::move(t));
   });
 }
-#endif
-
