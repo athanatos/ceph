@@ -15,7 +15,6 @@ namespace crimson::os::seastore {
 using checksum_t = uint32_t;
 
 // Identifies segment location on disk, see SegmentManager,
-// may be negative for relative offsets
 using segment_id_t = uint32_t;
 constexpr segment_id_t NULL_SEG_ID =
   std::numeric_limits<segment_id_t>::max() - 1;
@@ -28,6 +27,7 @@ constexpr segment_id_t BLOCK_REL_SEG_ID =
 std::ostream &segment_to_stream(std::ostream &, const segment_id_t &t);
 
 // Offset within a segment on disk, see SegmentManager
+// may be negative for relative offsets
 using segment_off_t = int32_t;
 constexpr segment_off_t NULL_SEG_OFF =
   std::numeric_limits<segment_id_t>::max();
