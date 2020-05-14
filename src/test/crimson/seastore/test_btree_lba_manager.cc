@@ -200,13 +200,14 @@ struct btree_lba_manager_test :
     ceph_assert(target->second.refcount > 0);
     target->second.refcount--;
     bool should_free = false;
+    laddr_t addr = target->first;
     if (target->second.refcount == 0) {
       should_free = true;
       t.mappings.erase(target);
     }
     return lba_manager->decref_extent(
       *t.t,
-      target->first).safe_then([should_free](bool freed) {
+      addr).safe_then([should_free](bool freed) {
 	EXPECT_EQ(freed, should_free);
       }).unsafe_get0();
   }
