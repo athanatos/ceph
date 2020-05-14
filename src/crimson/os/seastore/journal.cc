@@ -45,14 +45,13 @@ Journal::initialize_segment_ertr::future<> Journal::initialize_segment(
 }
 
 ceph::bufferlist Journal::encode_record(
-  segment_off_t mdlength,
-  segment_off_t dlength,
+  record_size_t rsize,
   record_t &&record)
 {
   bufferlist metadatabl;
   record_header_t header{
-    mdlength,
-    dlength,
+    rsize.mdlength,
+    rsize.dlength,
     current_journal_seq,
     0 /* checksum, TODO */,
     record.deltas.size(),
@@ -71,40 +70,44 @@ ceph::bufferlist Journal::encode_record(
       ceph::bufferptr(
 	block_size - (metadatabl.length() % block_size)));
   }
-  ceph_assert(metadatabl.length() == (size_t)mdlength);
-  ceph_assert(databl.length() == (size_t)dlength);
+
+  ceph_assert(metadatabl.length() == rsize.mdlength);
+  ceph_assert(databl.length() == rsize.dlength);
   metadatabl.claim_append(databl);
-  ceph_assert(metadatabl.length() == (size_t)(mdlength + dlength));
+  ceph_assert(metadatabl.length() == (rsize.mdlength + rsize.dlength));
   return metadatabl;
 }
 
 Journal::write_record_ertr::future<> Journal::write_record(
-  segment_off_t mdlength,
-  segment_off_t dlength,
+  record_size_t rsize,
   record_t &&record)
 {
   ceph::bufferlist to_write = encode_record(
-    mdlength, dlength, std::move(record));
+    rsize, std::move(record));
   auto target = written_to;
   written_to += p2roundup(to_write.length(), (unsigned)block_size);
-  logger().debug("write_record, mdlength {}, dlength {}", mdlength, dlength);
+  logger().debug(
+    "write_record, mdlength {}, dlength {}",
+    rsize.mdlength,
+    rsize.dlength);
   return current_journal_segment->write(target, to_write).handle_error(
     write_record_ertr::pass_further{},
     crimson::ct_error::all_same_way([] { ceph_assert(0 == "TODO"); }));
 }
 
-std::pair<segment_off_t, segment_off_t> Journal::get_encoded_record_length(
+Journal::record_size_t Journal::get_encoded_record_length(
   const record_t &record) const {
-  auto metadata = ceph::encoded_sizeof_bounded<record_header_t>();
-  auto data = 0;
+  extent_len_t metadata =
+    (extent_len_t)ceph::encoded_sizeof_bounded<record_header_t>();
+  extent_len_t data = 0;
   for (const auto &i: record.deltas) {
     metadata += ceph::encoded_sizeof(i);
   }
   for (const auto &i: record.extents) {
     data += i.bl.length();
   }
-  metadata = p2roundup(metadata, (size_t)block_size);
-  return std::make_pair(metadata, data);
+  metadata = p2roundup(metadata, block_size);
+  return record_size_t{metadata, data};
 }
 
 bool Journal::needs_roll(segment_off_t length) const
@@ -218,12 +221,14 @@ Journal::find_replay_segments_fut Journal::find_replay_segments()
 		return seg.first == replay_from.segment;
 	      });
 	  } else {
-	    replay_from = paddr_t{from->first, block_size};
+	    replay_from = paddr_t{from->first, (segment_off_t)block_size};
 	  }
 	  auto ret = std::vector<paddr_t>(segments.end() - from);
 	  std::transform(
 	    from, segments.end(), ret.begin(),
-	    [this](const auto &p) { return paddr_t{p.first, block_size}; });
+	    [this](const auto &p) {
+	      return paddr_t{p.first, (segment_off_t)block_size};
+	    });
 	  ret[0] = replay_from;
 	  return find_replay_segments_fut(
 	    find_replay_segments_ertr::ready_future_marker{},
@@ -253,7 +258,7 @@ Journal::read_record_metadata_ret Journal::read_record_metadata(
       }
       if (header.mdlength > block_size) {
 	return segment_manager.read(
-	  {start.segment, start.offset + block_size},
+	  {start.segment, start.offset + (segment_off_t)block_size},
 	  header.mdlength - block_size).safe_then(
 	    [this, header=std::move(header), bl=std::move(bl)](
 	      auto &&bptail) mutable {

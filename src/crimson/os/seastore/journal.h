@@ -50,8 +50,8 @@ struct segment_header_t {
 
 struct record_header_t {
   // Fixed portion
-  segment_off_t mdlength;       // block aligned, length of metadata
-  segment_off_t dlength;        // block aligned, length of data
+  extent_len_t  mdlength;       // block aligned, length of metadata
+  extent_len_t  dlength;        // block aligned, length of data
   journal_seq_t seq;            // current journal seqid
   checksum_t    full_checksum;  // checksum for full record (TODO)
   size_t deltas;                // number of deltas
@@ -135,8 +135,8 @@ public:
     >;
   using submit_record_ret = submit_record_ertr::future<paddr_t>;
   submit_record_ret submit_record(record_t &&record) {
-    auto [mdlength, dlength] = get_encoded_record_length(record);
-    auto total = mdlength + dlength;
+    auto rsize = get_encoded_record_length(record);
+    auto total = rsize.mdlength + rsize.dlength;
     if (total > max_record_length) {
       return crimson::ct_error::erange::make();
     }
@@ -144,9 +144,9 @@ public:
       ? roll_journal_segment()
       : roll_journal_segment_ertr::now();
     return roll.safe_then(
-      [this, mdlength, dlength, record=std::move(record)]() mutable {
+      [this, rsize, record=std::move(record)]() mutable {
 	auto ret = next_record_addr();
-	return write_record(mdlength, dlength, std::move(record)
+	return write_record(rsize, std::move(record)
 	).safe_then([this, ret] {
 	  return ret.add_offset(block_size);
 	});
@@ -166,8 +166,8 @@ public:
   replay_ret replay(delta_handler_t &&delta_handler);
 
 private:
-  const segment_off_t block_size;
-  const segment_off_t max_record_length;
+  const extent_len_t block_size;
+  const extent_len_t max_record_length;
 
   JournalSegmentProvider *segment_provider = nullptr;
   SegmentManager &segment_manager;
@@ -188,25 +188,33 @@ private:
   initialize_segment_ertr::future<> initialize_segment(
     Segment &segment);
 
+  struct record_size_t {
+    extent_len_t mdlength = 0;
+    extent_len_t dlength = 0;
+
+    record_size_t(
+      extent_len_t mdlength,
+      extent_len_t dlength)
+      : mdlength(mdlength), dlength(dlength) {}
+  };
+
   /**
    * Return <mdlength, dlength> pair denoting length of
    * metadata and blocks respectively.
    */
-  std::pair<segment_off_t, segment_off_t> get_encoded_record_length(
+  record_size_t get_encoded_record_length(
     const record_t &record) const;
 
   /// create encoded record bl
   ceph::bufferlist encode_record(
-    segment_off_t mdlength,
-    segment_off_t dlength,
+    record_size_t rsize,
     record_t &&record);
 
   /// do record write
   using write_record_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
   write_record_ertr::future<> write_record(
-    segment_off_t mdlength,
-    segment_off_t dlength,
+    record_size_t rsize,
     record_t &&record);
 
   /// close current segment and initialize next one
