@@ -16,8 +16,15 @@ namespace crimson::os::seastore::lba_manager::btree {
 struct lba_map_val_t {
   extent_len_t len = 0;
   paddr_t paddr;
-  uint32_t refcount;
-  uint32_t checksum;
+  uint32_t refcount = 0;
+  uint32_t checksum = 0;
+
+  lba_map_val_t(
+    extent_len_t len,
+    paddr_t paddr,
+    uint32_t refcount,
+    uint32_t checksum)
+    : len(len), paddr(paddr), refcount(refcount), checksum(checksum) {}
 };
 
 class BtreeLBAPin;
@@ -28,12 +35,11 @@ struct LBANode : CachedExtent {
   using lookup_range_ertr = LBAManager::get_mapping_ertr;
   using lookup_range_ret = LBAManager::get_mapping_ret;
 
-  template <typename... T>
-  LBANode(T&&... t) : CachedExtent(std::forward<T>(t)...) {}
+  depth_t depth = 0;
 
+  LBANode(ceph::bufferptr &&ptr) : CachedExtent(std::move(ptr)) {}
   LBANode(const LBANode &rhs) = default;
 
-  depth_t depth = 0;
   void set_depth(depth_t _depth) { depth = _depth; }
 
   virtual lookup_range_ret lookup_range(

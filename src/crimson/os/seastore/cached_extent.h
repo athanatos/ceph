@@ -280,9 +280,9 @@ protected:
       poffset(other.poffset) {}
 
   friend class Cache;
-  template <typename T, typename... Args>
-  static TCachedExtentRef<T> make_cached_extent_ref(Args&&... args) {
-    return new T(std::forward<Args>(args)...);
+  template <typename T>
+  static TCachedExtentRef<T> make_cached_extent_ref(bufferptr &&ptr) {
+    return new T(std::move(ptr));
   }
 
   void set_paddr(paddr_t offset) { poffset = offset; }
@@ -311,7 +311,8 @@ protected:
     } else if (is_mutation_pending()) {
       return addr;
     } else {
-      ceph_assert(get_paddr().is_relative());
+      ceph_assert(is_initial_pending());
+      ceph_assert(get_paddr().is_record_relative());
       return addr - get_paddr();
     }
   }

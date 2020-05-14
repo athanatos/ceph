@@ -131,7 +131,7 @@ BtreeLBAManager::alloc_extent(
 	t,
 	extent,
 	ret,
-	{ len, addr }
+	{ len, addr, 1, 0 }
       ).safe_then([ret, extent, addr, len](auto pin) {
 	logger().debug(
 	  "alloc_extent: alloc {}~{} for {}",
@@ -156,7 +156,7 @@ BtreeLBAManager::set_extent(
 	t,
 	root,
 	off,
-	{ len, addr });
+	{ len, addr, 1, 0 });
     }).safe_then([](auto ret) {
       return set_extent_ret(
 	set_extent_ertr::ready_future_marker{},

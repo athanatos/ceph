@@ -104,7 +104,7 @@ struct LBAInternalNode : LBANode, LBANodeIterHelper<LBAInternalNode> {
   }
 
   extent_types_t get_type() const final {
-    return extent_types_t::LADDR_INTERNAL;
+    return type;
   }
 
   std::ostream &print_detail(std::ostream &out) const final;
@@ -343,7 +343,7 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
   }
 
   extent_types_t get_type() const final {
-    return extent_types_t::LADDR_LEAF;
+    return type;
   }
 
   std::ostream &print_detail(std::ostream &out) const final;
@@ -419,6 +419,10 @@ struct LBALeafNode : LBANode, LBANodeIterHelper<LBALeafNode> {
       get_ptr(offset_of_map_val(offset)) + 8) = addr.paddr.segment;
     *reinterpret_cast<ceph_les32*>(
       get_ptr(offset_of_map_val(offset) + 12)) = addr.paddr.offset;
+    *reinterpret_cast<ceph_le32*>(
+      get_ptr(offset_of_map_val(offset) + 16)) = addr.refcount;
+    *reinterpret_cast<ceph_le32*>(
+      get_ptr(offset_of_map_val(offset) + 20)) = addr.checksum;
   }
 
   char *get_key_ptr(uint16_t offset) {

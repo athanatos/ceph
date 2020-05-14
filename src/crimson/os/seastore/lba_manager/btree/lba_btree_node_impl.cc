@@ -97,19 +97,38 @@ LBAInternalNode::mutate_mapping_ret LBAInternalNode::mutate_mapping(
   laddr_t laddr,
   mutate_func_t &&f)
 {
-  auto pt = get_containing_child(laddr);
   return get_lba_btree_extent(
     cache,
     t,
     depth-1,
-    pt->get_val(),
+    get_containing_child(laddr)->get_val(),
     get_paddr()
-  ).safe_then([this, pt, &cache, &t, laddr](auto extent) {
-    return extent->at_min_capacity() ?
-      merge_entry(cache, t, laddr, pt, extent) :
-      mutate_mapping_ertr::make_ready_future<LBANodeRef>(std::move(extent));
-  }).safe_then([&cache, &t, laddr, f=std::move(f)](auto extent) mutable {
-    return extent->mutate_mapping(cache, t, laddr, std::move(f));
+  ).safe_then([this, &cache, &t, laddr](LBANodeRef extent) {
+    if (extent->at_min_capacity()) {
+      auto mut_this = cache.duplicate_for_write(
+	t, this)->cast<LBAInternalNode>();
+      logger().debug(
+	"LBAInternalNode: about to merge entry: {}, {}",
+	*mut_this,
+	*this);
+      return mut_this->merge_entry(
+	cache,
+	t,
+	laddr,
+	mut_this->get_containing_child(laddr),
+	extent);
+    } else {
+      return mutate_mapping_ertr::make_ready_future<LBANodeRef>(
+	std::move(extent));
+    }
+  }).safe_then([&cache, &t, laddr, f=std::move(f)](LBANodeRef extent) mutable {
+    if (extent->depth == 0) {
+      auto mut_extent = cache.duplicate_for_write(
+	t, extent)->cast<LBANode>();
+      return mut_extent->mutate_mapping(cache, t, laddr, std::move(f));
+    } else {
+      return extent->mutate_mapping(cache, t, laddr, std::move(f));
+    }
   });
 }
 
@@ -231,12 +250,16 @@ LBAInternalNode::merge_entry(
   Cache &c, Transaction &t, laddr_t addr,
   internal_iterator_t iter, LBANodeRef entry)
 {
+  logger().debug(
+    "LBAInternalNode: merge_entry: {}, {}",
+    *this,
+    *entry);
   auto is_left = iter == end();
   auto donor_iter = is_left ? iter - 1 : iter + 1;
   return get_lba_btree_extent(
     c,
     t,
-    depth-1,
+    depth - 1,
     donor_iter->get_val(),
     get_paddr()
   ).safe_then([this, &c, &t, addr, iter, entry, donor_iter, is_left](
@@ -260,6 +283,10 @@ LBAInternalNode::merge_entry(
       c.retire_extent(t, r);
       return split_ertr::make_ready_future<LBANodeRef>(replacement);
     } else {
+      logger().debug(
+	"LBAInternalEntry::merge_entry balanced l {} r {}",
+	*l,
+	*r);
       auto [replacement_l, replacement_r, pivot] =
 	l->make_balanced(
 	  c,
