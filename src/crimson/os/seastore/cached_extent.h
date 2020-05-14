@@ -114,7 +114,7 @@ public:
    * get_delta
    *
    * Must return a valid delta usable in apply_delta() in submit_transaction
-   * if state == PENDING_DELTA.
+   * if state == MUTATION_PENDING.
    */
   virtual ceph::bufferlist get_delta() = 0;
 
