@@ -77,22 +77,25 @@ struct transaction_manager_test_t : public seastar_test_suite_t {
 
 TEST_F(transaction_manager_test_t, basic)
 {
-  constexpr laddr_t ADDR = 0xFF * (TestBlock::SIZE);
   run_async([this] {
+    constexpr laddr_t ADDR = 0xFF * (TestBlock::SIZE);
     {
       auto t = tm.create_transaction();
       auto extent = tm.alloc_extent<TestBlock>(
 	*t,
 	ADDR,
 	TestBlock::SIZE).unsafe_get0();
+      ASSERT_EQ(ADDR, extent->get_laddr());
       tm.submit_transaction(std::move(t)).unsafe_get();
     }
     {
       auto t = tm.create_transaction();
-      auto extent = tm.read_extents<TestBlock>(
+      auto extents = tm.read_extents<TestBlock>(
 	*t,
 	ADDR,
 	TestBlock::SIZE).unsafe_get0();
+      ASSERT_EQ(extents.size(), 1);
+      ASSERT_EQ(ADDR, extents.begin()->second->get_laddr());
     }
   });
 }

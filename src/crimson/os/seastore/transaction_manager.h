@@ -34,10 +34,20 @@ public:
   template <typename... T>
   LogicalCachedExtent(T&&... t) : CachedExtent(std::forward<T>(t)...) {}
 
-  void set_pin(LBAPinRef &&pin) {/* TODO */}
-  LBAPin &get_pin() { return *((LBAPin*)nullptr); /* TODO */}
+  void set_pin(LBAPinRef &&pin) { this->pin = std::move(pin); }
 
-  laddr_t get_laddr() const { return laddr_t{0}; }
+  LBAPin &get_pin() {
+    assert(pin);
+    return *pin;
+  }
+
+  laddr_t get_laddr() const {
+    assert(pin);
+    return pin->get_laddr();
+  }
+
+private:
+  LBAPinRef pin;
 };
 using LogicalCachedExtentRef = TCachedExtentRef<LogicalCachedExtent>;
 struct ref_laddr_cmp {

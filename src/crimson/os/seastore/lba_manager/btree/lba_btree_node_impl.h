@@ -490,6 +490,13 @@ using LBALeafNodeRef = TCachedExtentRef<LBALeafNode>;
 /* BtreeLBAPin
  *
  * References leaf node
+ *
+ * TODO: does not at this time actually keep the relevant
+ * leaf resident in memory.  This is actually a bit tricky
+ * as we can mutate and therefore replace a leaf referenced
+ * by other, uninvolved but cached extents.  Will need to
+ * come up with some kind of pinning mechanism that handles
+ * that well.
  */
 struct BtreeLBAPin : LBAPin {
   paddr_t paddr;
