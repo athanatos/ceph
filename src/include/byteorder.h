@@ -69,6 +69,9 @@ struct ceph_le {
 private:
   T v;
 public:
+  ceph_le() = default;
+  ceph_le(const ceph_le&) = default;
+  explicit ceph_le(T nv) : v(mswab(nv)) {}
   ceph_le<T>& operator=(T nv) {
     v = mswab(nv);
     return *this;
@@ -82,6 +85,10 @@ public:
 using ceph_le64 = ceph_le<__u64>;
 using ceph_le32 = ceph_le<__u32>;
 using ceph_le16 = ceph_le<__u16>;
+
+using ceph_les64 = ceph_le<__s64>;
+using ceph_les32 = ceph_le<__s32>;
+using ceph_les16 = ceph_le<__s16>;
 
 inline ceph_le64 init_le64(__u64 x) {
   ceph_le64 v;
@@ -99,3 +106,18 @@ inline ceph_le16 init_le16(__u16 x) {
   return v;
 }
 
+inline ceph_les64 init_les64(__s64 x) {
+  ceph_les64 v;
+  v = x;
+  return v;
+}
+inline ceph_les32 init_les32(__s32 x) {
+  ceph_les32 v;
+  v = x;
+  return v;
+}
+inline ceph_les16 init_les16(__s16 x) {
+  ceph_les16 v;
+  v = x;
+  return v;
+}
