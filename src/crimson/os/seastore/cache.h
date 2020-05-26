@@ -193,6 +193,7 @@ public:
 	length,
 	ref->get_bptr()).safe_then(
 	  [ref=std::move(ref)]() mutable {
+	    ref->complete_load();
 	    ref->complete_io();
 	    return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
 	      std::move(ref));
@@ -221,7 +222,7 @@ public:
 	TCachedExtentRef<T>(static_cast<T*>(&*i)));
     } else {
       return get_extent<T>(offset, length).safe_then(
-	[this, &t](auto ref) mutable {
+	[&t](auto ref) mutable {
 	  t.add_to_read_set(ref);
 	  return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(std::move(ref));
 	});
