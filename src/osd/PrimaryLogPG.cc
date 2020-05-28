@@ -3493,7 +3493,7 @@ void PrimaryLogPG::dec_all_refcount_head_manifest(object_info_t& oi, OpContext* 
       return;
     }
     object_info_t& coi = cobc->obs.oi;
-    oi.manifest.build_intersection_set(coi.manifest.chunk_map, refs);
+    //oi.manifest.build_intersection_set(coi.manifest.chunk_map, refs);
 
     ctx->register_on_commit(
       [oi, ctx, this, refs](){
@@ -4540,13 +4540,13 @@ int PrimaryLogPG::trim_object(
 	// check if the references is still used
 	oi = cobc->obs.oi;
 	if (oi.has_manifest()) {
-	  coi.manifest.build_intersection_set(oi.manifest.chunk_map, refs);
+	  //coi.manifest.build_intersection_set(oi.manifest.chunk_map, refs);
 	}
       }
       // head
       oi = head_obc->obs.oi;
       if (oi.has_manifest()) {
-	coi.manifest.build_intersection_set(oi.manifest.chunk_map, refs);
+	//coi.manifest.build_intersection_set(oi.manifest.chunk_map, refs);
       }
 
       dec_refcount_non_intersection(head_obc, coi, refs);
