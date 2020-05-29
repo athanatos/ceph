@@ -68,12 +68,17 @@ public:
     Transaction &t,
     laddr_t off, extent_len_t len, paddr_t addr) final;
 
-  decref_extent_ret decref_extent(
+  ref_ret decref_extent(
     Transaction &t,
-    laddr_t addr) final;
-  incref_extent_ret incref_extent(
+    laddr_t addr) final {
+    return update_refcount(t, addr, -1);
+  }
+
+  ref_ret incref_extent(
     Transaction &t,
-    laddr_t addr) final;
+    laddr_t addr) final {
+    return update_refcount(t, addr, 1);
+  }
 
   submit_lba_transaction_ret submit_lba_transaction(
     Transaction &t) final;
@@ -82,6 +87,7 @@ public:
     auto t = new Transaction;
     return TransactionRef(t);
   }
+
 private:
   SegmentManager &segment_manager;
   Cache &cache;
@@ -109,6 +115,30 @@ private:
     laddr_t laddr,    ///< [in] logical addr to insert
     lba_map_val_t val ///< [in] mapping to insert
   );
+
+  /**
+   * update_refcount
+   *
+   * Updates refcount, returns resulting refcount
+   */
+  using update_refcount_ret = ref_ret;
+  update_refcount_ret update_refcount(
+    Transaction &t,
+    laddr_t addr,
+    int delta);
+
+  /**
+   * update_mapping
+   *
+   * Updates mapping, removes if f returns nullopt
+   */
+  using update_mapping_ertr = ref_ertr;
+  using update_mapping_ret = ref_ertr::future<std::optional<lba_map_val_t>>;
+  using update_func_t = LBANode::mutate_func_t;
+  update_mapping_ret update_mapping(
+    Transaction &t,
+    laddr_t addr,
+    update_func_t &&f);
 };
 using BtreeLBAManagerRef = std::unique_ptr<BtreeLBAManager>;
 

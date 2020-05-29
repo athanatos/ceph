@@ -108,22 +108,23 @@ public:
   using ref_ertr = crimson::errorator<
     crimson::ct_error::enoent,
     crimson::ct_error::input_output_error>;
+  using ref_ret = ref_ertr::future<unsigned>;
 
   /**
    * Decrements ref count on extent
    *
-   * @return true if freed
+   * @return returns resulting refcount
    */
-  using decref_extent_ret = ref_ertr::future<bool>;
-  virtual decref_extent_ret decref_extent(
+  virtual ref_ret decref_extent(
     Transaction &t,
     laddr_t addr) = 0;
 
   /**
    * Increments ref count on extent
+   *
+   * @return returns resulting refcount
    */
-  using incref_extent_ret = ref_ertr::future<>;
-  virtual incref_extent_ret incref_extent(
+  virtual ref_ret incref_extent(
     Transaction &t,
     laddr_t addr) = 0;
 

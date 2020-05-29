@@ -159,51 +159,6 @@ BtreeLBAManager::set_extent(
     });
 }
 
-BtreeLBAManager::decref_extent_ret
-BtreeLBAManager::decref_extent(
-  Transaction &t,
-  laddr_t addr)
-{
-  return get_root(t
-  ).safe_then([this, &t, addr](auto root) {
-    // TODO root merge
-    return root->mutate_mapping(
-      cache,
-      t,
-      addr,
-      [](const lba_map_val_t &in) {
-	ceph_assert(in.refcount > 0);
-	if (in.refcount == 1) {
-	  return std::optional<lba_map_val_t>();
-	} else {
-	  auto ret = in;
-	  ret.refcount--;
-	  return std::optional<lba_map_val_t>(ret);
-	}
-      });
-  });
-}
-
-BtreeLBAManager::incref_extent_ret
-BtreeLBAManager::incref_extent(
-  Transaction &t,
-  laddr_t addr)
-{
-  return get_root(t
-  ).safe_then([this, &t, addr](auto root) {
-    return root->mutate_mapping(
-      cache,
-      t,
-      addr,
-      [](const lba_map_val_t &in) {
-	ceph_assert(in.refcount > 0);
-	auto ret = in;
-	ret.refcount++;
-	return ret;
-      });
-  }).safe_then([](...) {});
-}
-
 BtreeLBAManager::submit_lba_transaction_ret
 BtreeLBAManager::submit_lba_transaction(
   Transaction &t)
@@ -250,6 +205,49 @@ BtreeLBAManager::insert_mapping_ret BtreeLBAManager::insert_mapping(
   return split.safe_then([this, &t, laddr, val](LBANodeRef node) {
     node = cache.duplicate_for_write(t, node)->cast<LBANode>();
     return node->insert(cache, t, laddr, val);
+  });
+}
+
+BtreeLBAManager::update_refcount_ret BtreeLBAManager::update_refcount(
+  Transaction &t,
+  laddr_t addr,
+  int delta)
+{
+  return update_mapping(
+    t,
+    addr,
+    [delta](const lba_map_val_t &in) {
+      lba_map_val_t out = in;
+      ceph_assert((int)out.refcount + delta >= 0);
+      out.refcount += delta;
+      if (out.refcount == 0) {
+	return std::optional<lba_map_val_t>();
+      } else {
+	return std::optional<lba_map_val_t>(out);
+      }
+    }).safe_then([](auto result) {
+      if (!result)
+	return 0u;
+      else
+	return result->refcount;
+    });
+}
+
+BtreeLBAManager::update_mapping_ret BtreeLBAManager::update_mapping(
+  Transaction &t,
+  laddr_t addr,
+  update_func_t &&f)
+{
+  return get_root(t
+  ).safe_then([this, f=std::move(f), &t, addr](LBANodeRef root) mutable {
+    if (root->depth == 0) {
+      root = cache.duplicate_for_write(t, root)->cast<LBANode>();
+    }
+    return root->mutate_mapping(
+      cache,
+      t,
+      addr,
+      std::move(f));
   });
 }
 

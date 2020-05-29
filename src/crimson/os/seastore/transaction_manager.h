@@ -196,25 +196,26 @@ public:
     return ret;
   }
 
+  using ref_ertr = LBAManager::ref_ertr;
+  using ref_ret = LBAManager::ref_ret;
+
   /// Add refcount for ref
-  using inc_ref_ertr = SegmentManager::read_ertr;
-  inc_ref_ertr::future<> inc_ref(
+  ref_ret inc_ref(
     Transaction &t,
     LogicalCachedExtentRef &ref);
 
   /// Add refcount for offset
-  inc_ref_ertr::future<> inc_ref(
+  ref_ret inc_ref(
     Transaction &t,
     laddr_t offset);
 
   /// Remove refcount for ref
-  using dec_ref_ertr = SegmentManager::read_ertr;
-  dec_ref_ertr::future<bool> dec_ref(
+  ref_ret dec_ref(
     Transaction &t,
     LogicalCachedExtentRef &ref);
 
   /// Remove refcount for offset
-  dec_ref_ertr::future<bool> dec_ref(
+  ref_ret dec_ref(
     Transaction &t,
     laddr_t offset);
 

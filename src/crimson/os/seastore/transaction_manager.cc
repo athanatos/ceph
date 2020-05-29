@@ -79,41 +79,42 @@ TransactionManager::close_ertr::future<> TransactionManager::close() {
   });
 }
 
-TransactionManager::inc_ref_ertr::future<> TransactionManager::inc_ref(
+TransactionManager::ref_ret TransactionManager::inc_ref(
   Transaction &t,
   LogicalCachedExtentRef &ref)
 {
   return lba_manager.incref_extent(t, ref->get_laddr()
   ).handle_error(
-    inc_ref_ertr::pass_further{},
+    ref_ertr::pass_further{},
     ct_error::all_same_way([](auto e) {
       ceph_assert(0 == "unhandled error, TODO");
     }));
 }
 
-TransactionManager::inc_ref_ertr::future<> TransactionManager::inc_ref(
+TransactionManager::ref_ret TransactionManager::inc_ref(
   Transaction &t,
   laddr_t offset)
 {
   return lba_manager.incref_extent(t, offset);
 }
 
-TransactionManager::dec_ref_ertr::future<bool> TransactionManager::dec_ref(
+TransactionManager::ref_ret TransactionManager::dec_ref(
   Transaction &t,
   LogicalCachedExtentRef &ref)
 {
   return dec_ref(t, ref->get_laddr()
   ).handle_error(
-    dec_ref_ertr::pass_further{},
+    ref_ertr::pass_further{},
     ct_error::all_same_way([](auto e) {
       ceph_assert(0 == "unhandled error, TODO");
     }));
 }
 
-TransactionManager::dec_ref_ertr::future<bool> TransactionManager::dec_ref(
+TransactionManager::ref_ret TransactionManager::dec_ref(
   Transaction &t,
   laddr_t offset)
 {
+  // TODO: need to retire the extent (only) if it's live, will need cache call
   return lba_manager.decref_extent(t, offset);
 }
 

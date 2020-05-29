@@ -111,7 +111,8 @@ struct LBANode : CachedExtent {
     crimson::ct_error::enoent,            ///< mapping does not exist
     crimson::ct_error::input_output_error
     >;
-  using mutate_mapping_ret = mutate_mapping_ertr::future<bool>;
+  using mutate_mapping_ret = mutate_mapping_ertr::future<
+    std::optional<lba_map_val_t>>;
   using mutate_func_t = std::function<
     std::optional<lba_map_val_t>(const lba_map_val_t &v)
     >;
