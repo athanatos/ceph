@@ -352,8 +352,7 @@ LBALeafNode::lookup_range_ret LBALeafNode::lookup_range(
       std::make_unique<BtreeLBAPin>(
 	val.paddr,
 	(*i).get_key(),
-	val.len,
-	val.refcount));
+	val.len));
   }
   return lookup_range_ertr::make_ready_future<lba_pin_list_t>(
     std::move(ret));
@@ -390,8 +389,7 @@ LBALeafNode::insert_ret LBALeafNode::insert(
     std::make_unique<BtreeLBAPin>(
       val.paddr,
       laddr,
-      val.len,
-      val.refcount));
+      val.len));
 }
 
 LBALeafNode::mutate_mapping_ret LBALeafNode::mutate_mapping(
@@ -406,7 +404,7 @@ LBALeafNode::mutate_mapping_ret LBALeafNode::mutate_mapping(
     ceph_assert(0 == "should be impossible");
     return mutate_mapping_ret(
       mutate_mapping_ertr::ready_future_marker{},
-      true);
+      std::nullopt);
   }
 
   auto mutated = f(mutation_pt.get_val());
@@ -415,14 +413,14 @@ LBALeafNode::mutate_mapping_ret LBALeafNode::mutate_mapping(
     journal_mutated(laddr, *mutated);
     return mutate_mapping_ret(
       mutate_mapping_ertr::ready_future_marker{},
-      false);
+      mutated);
   } else {
     journal_removal(laddr);
     copy_from_local(mutation_pt, mutation_pt + 1, end());
     set_size(get_size() - 1);
     return mutate_mapping_ret(
       mutate_mapping_ertr::ready_future_marker{},
-      true);
+      mutated);
   }
 }
 

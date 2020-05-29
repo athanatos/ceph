@@ -447,9 +447,8 @@ public:
   BtreeLBAPin(
     paddr_t paddr,
     laddr_t laddr,
-    extent_len_t length,
-    unsigned refcount)
-    : paddr(paddr), laddr(laddr), length(length), refcount(refcount) {}
+    extent_len_t length)
+    : paddr(paddr), laddr(laddr), length(length) {}
 
   extent_len_t get_length() const final {
     return length;
