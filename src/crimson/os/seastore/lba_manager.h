@@ -23,16 +23,18 @@
 
 namespace crimson::os::seastore {
 
+class LBAPin;
+using LBAPinRef = std::unique_ptr<LBAPin>;
 class LBAPin {
 public:
   virtual extent_len_t get_length() const = 0;
   virtual paddr_t get_paddr() const = 0;
   virtual laddr_t get_laddr() const = 0;
+  virtual LBAPinRef duplicate() const = 0;
   virtual unsigned get_refcount() const = 0;
 
   virtual ~LBAPin() {}
 };
-using LBAPinRef = std::unique_ptr<LBAPin>;
 std::ostream &operator<<(std::ostream &out, const LBAPin &rhs);
 
 using lba_pin_list_t = std::list<LBAPinRef>;

@@ -460,8 +460,8 @@ public:
   laddr_t get_laddr() const final {
     return laddr;
   }
-  unsigned get_refcount() const final {
-    return refcount;
+  LBAPinRef duplicate() const final {
+    return LBAPinRef(new BtreeLBAPin(*this));
   }
 };
 

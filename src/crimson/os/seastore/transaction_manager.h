@@ -188,10 +188,12 @@ public:
   }
 
   /// Obtain mutable copy of extent
-  CachedExtentRef get_mutable_extent(Transaction &t, CachedExtentRef ref) {
-    return cache.duplicate_for_write(
+  LogicalCachedExtentRef get_mutable_extent(Transaction &t, LogicalCachedExtentRef ref) {
+    auto ret = cache.duplicate_for_write(
       t,
-      ref);
+      ref)->cast<LogicalCachedExtent>();
+    ret->set_pin(ref->get_pin().duplicate());
+    return ret;
   }
 
   /// Add refcount for ref
