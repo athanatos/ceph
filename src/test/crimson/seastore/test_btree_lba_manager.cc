@@ -199,28 +199,25 @@ struct btree_lba_manager_test :
     ceph_assert(target != t.mappings.end());
     ceph_assert(target->second.refcount > 0);
     target->second.refcount--;
-    bool should_free = false;
-    laddr_t addr = target->first;
+
+    auto refcnt = lba_manager->decref_extent(
+      *t.t,
+      target->first).unsafe_get0();
+    EXPECT_EQ(refcnt, target->second.refcount);
     if (target->second.refcount == 0) {
-      should_free = true;
       t.mappings.erase(target);
     }
-    return lba_manager->decref_extent(
-      *t.t,
-      addr).safe_then([should_free](bool freed) {
-	EXPECT_EQ(freed, should_free);
-      }).unsafe_get0();
   }
 
   void incref_mapping(
     test_transaction_t &t,
-    test_lba_mapping_t::iterator target,
-    unsigned ) {
+    test_lba_mapping_t::iterator target) {
     ceph_assert(target->second.refcount > 0);
     target->second.refcount++;
-    return lba_manager->incref_extent(
+    auto refcnt = lba_manager->incref_extent(
       *t.t,
       target->first).unsafe_get0();
+    EXPECT_EQ(refcnt, target->second.refcount);
   }
 
   std::vector<laddr_t> get_mapped_addresses() {

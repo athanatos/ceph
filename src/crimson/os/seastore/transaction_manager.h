@@ -172,11 +172,11 @@ public:
 	    pin->get_paddr(),
 	    pin->get_length()
 	  ).safe_then([&pin, &ret_ref](auto ref) mutable {
-	    crimson::get_logger(ceph_subsys_filestore).debug(
-	      "read_extents: got extent",
-	      pin->get_paddr());
 	    ref->set_pin(std::move(pin));
 	    ret_ref.push_back(std::make_pair(ref->get_laddr(), ref));
+	    crimson::get_logger(ceph_subsys_filestore).debug(
+	      "read_extents: got extent {}",
+	      *ref);
 	    return read_extent_ertr::now();
 	  });
 	});
