@@ -67,7 +67,7 @@ public:
     }
 
     uint16_t operator-(const fixed_node_iter_t &rhs) const {
-      ceph_assert(rhs.node == node);
+      assert(rhs.node == node);
       return offset - rhs.offset;
     }
 
