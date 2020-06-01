@@ -34,7 +34,7 @@ class FixedKVNodeLayout {
   char *buf = nullptr;
 
   using L = absl::container_internal::Layout<ceph_le32, KINT, VINT>;
-  L layout;
+  static constexpr L layout{1, CAPACITY, CAPACITY};
 
 public:
   struct fixed_node_iter_t {
@@ -137,7 +137,7 @@ public:
 
 public:
   FixedKVNodeLayout(char *buf) :
-    buf(buf), layout(1, CAPACITY, CAPACITY) {}
+    buf(buf) {}
 
   fixed_node_iter_t begin() {
     return fixed_node_iter_t(
@@ -193,7 +193,7 @@ public:
   }
 
   /**
-   * copy_from_forign
+   * copy_from_foreign
    *
    * Copies entries from [from_src, to_src) to tgt.
    *
@@ -215,7 +215,7 @@ public:
   }
 
   /**
-   * copy_from_forign
+   * copy_from_loical
    *
    * Copies entries from [from_src, to_src) to tgt.
    *
