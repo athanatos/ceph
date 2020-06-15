@@ -146,6 +146,11 @@ struct transaction_manager_test_t : public seastar_test_suite_t {
     return extent;
   }
 
+  void replay() {
+    tm.close().unsafe_get();
+    tm.mount().unsafe_get();
+  }
+
   void check_mappings() {
     auto t = create_transaction();
     check_mappings(t);
@@ -314,3 +319,38 @@ TEST_F(transaction_manager_test_t, inc_dec_ref)
     }
   });
 }
+
+TEST_F(transaction_manager_test_t, mutate_replay)
+{
+  constexpr laddr_t SIZE = 4096;
+  run_async([this] {
+    constexpr laddr_t ADDR = 0xFF * SIZE;
+    {
+      auto t = create_transaction();
+      auto extent = alloc_extent(
+	t,
+	ADDR,
+	SIZE,
+	'a');
+      ASSERT_EQ(ADDR, extent->get_laddr());
+      check_mappings(t);
+      check_mappings();
+      submit_transaction(std::move(t));
+      check_mappings();
+    }
+    replay();
+    {
+      auto t = create_transaction();
+      auto ext = get_extent(
+	t,
+	ADDR,
+	SIZE);
+      auto mut = mutate_extent(t, ext, 'c');
+      check_mappings(t);
+      check_mappings();
+      submit_transaction(std::move(t));
+      check_mappings();
+    }
+  });
+}
+
