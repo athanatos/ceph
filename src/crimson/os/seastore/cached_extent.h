@@ -48,6 +48,7 @@ class CachedExtent : public boost::intrusive_ref_counter<
   } state = extent_state_t::INVALID;
   friend std::ostream &operator<<(std::ostream &, extent_state_t);
 
+  uint32_t last_committed_crc = 0;
 public:
   /**
    *  duplicate_for_write
@@ -209,7 +210,7 @@ public:
   }
 
   /// Returns crc32c of buffer
-  uint32_t get_crc32c(uint32_t crc) {
+  uint32_t get_crc32c(uint32_t crc=1) {
     return ceph_crc32c(
       crc,
       reinterpret_cast<const unsigned char *>(get_bptr().c_str()),
