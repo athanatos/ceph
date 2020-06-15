@@ -165,12 +165,23 @@ struct LBAInternalNode
   std::ostream &print_detail(std::ostream &out) const final;
 
   ceph::bufferlist get_delta() final {
-    // TODO
-    return ceph::bufferlist();
+    assert(!delta_buffer.empty());
+    ceph::buffer::ptr bptr(delta_buffer.get_bytes());
+    delta_buffer.copy_out(bptr.c_str(), bptr.length());
+    ceph::bufferlist bl;
+    bl.push_back(bptr);
+    return bl;
   }
 
-  void apply_delta(paddr_t delta_base, const ceph::bufferlist &bl) final {
-    ceph_assert(0 == "TODO");
+  void apply_delta(paddr_t delta_base, const ceph::bufferlist &_bl) final {
+    assert(_bl.length());
+    ceph::bufferlist bl = _bl;
+    bl.rebuild();
+    delta_buffer_t buffer;
+    buffer.copy_in(bl.front().c_str(), bl.front().length());
+    buffer.replay(*this);
+    last_committed_crc = get_crc32c();
+    resolve_relative_addrs(delta_base);
   }
 
   bool at_max_capacity() const final {
@@ -367,12 +378,23 @@ struct LBALeafNode
   }
 
   ceph::bufferlist get_delta() final {
-    // TODO
-    return ceph::bufferlist();
+    assert(!delta_buffer.empty());
+    ceph::buffer::ptr bptr(delta_buffer.get_bytes());
+    delta_buffer.copy_out(bptr.c_str(), bptr.length());
+    ceph::bufferlist bl;
+    bl.push_back(bptr);
+    return bl;
   }
 
-  void apply_delta(paddr_t delta_base, const ceph::bufferlist &bl) final {
-    ceph_assert(0 == "TODO");
+  void apply_delta(paddr_t delta_base, const ceph::bufferlist &_bl) final {
+    assert(_bl.length());
+    ceph::bufferlist bl = _bl;
+    bl.rebuild();
+    delta_buffer_t buffer;
+    buffer.copy_in(bl.front().c_str(), bl.front().length());
+    buffer.replay(*this);
+    last_committed_crc = get_crc32c();
+    resolve_relative_addrs(delta_base);
   }
 
   extent_types_t get_type() const final {
