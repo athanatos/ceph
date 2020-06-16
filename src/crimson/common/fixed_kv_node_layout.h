@@ -113,6 +113,13 @@ public:
       return !(*this == rhs);
     }
 
+    void set_key(K _lb) const {
+      static_assert(!is_const);
+      KINT lb;
+      lb = _lb;
+      node->get_key_ptr()[offset] = lb;
+    }
+
     K get_key() const {
       return K(node->get_key_ptr()[offset]);
     }
@@ -123,6 +130,11 @@ public:
 	return std::numeric_limits<K>::max();
       else
 	return next->get_key();
+    }
+
+    void set_val(V val) const {
+      static_assert(!is_const);
+      node->get_val_ptr()[offset] = VINT(val);
     }
 
     V get_val() const {
@@ -138,18 +150,6 @@ public:
     }
 
   private:
-    void set_key(K _lb) const {
-      static_assert(!is_const);
-      KINT lb;
-      lb = _lb;
-      node->get_key_ptr()[offset] = lb;
-    }
-
-    void set_val(V val) const {
-      static_assert(!is_const);
-      node->get_val_ptr()[offset] = VINT(val);
-    }
-
     typename maybe_const_t<char, is_const>::type get_key_ptr() const {
       return reinterpret_cast<
 	typename maybe_const_t<char, is_const>::type>(
@@ -532,6 +532,15 @@ public:
     return replacement_pivot;
   }
 
+  /**
+   * set_size
+   *
+   * Set size representation to match size
+   */
+  void set_size(uint16_t size) {
+    *layout.template Pointer<0>(buf) = size;
+  }
+
 private:
   void insert(
     iterator iter,
@@ -605,16 +614,6 @@ private:
   const VINT *get_val_ptr() const {
     return layout.template Pointer<2>(buf);
   }
-
-  /**
-   * set_size
-   *
-   * Set size representation to match size
-   */
-  void set_size(uint16_t size) {
-    *layout.template Pointer<0>(buf) = size;
-  }
-
 
   /**
    * copy_from_foreign

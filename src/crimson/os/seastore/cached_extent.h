@@ -48,7 +48,6 @@ class CachedExtent : public boost::intrusive_ref_counter<
   } state = extent_state_t::INVALID;
   friend std::ostream &operator<<(std::ostream &, extent_state_t);
 
-  uint32_t last_committed_crc = 0;
 public:
   /**
    *  duplicate_for_write
@@ -345,6 +344,7 @@ protected:
     }
   }
 
+  uint32_t last_committed_crc = 0;
 };
 
 std::ostream &operator<<(std::ostream &, CachedExtent::extent_state_t);
