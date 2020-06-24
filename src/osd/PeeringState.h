@@ -1543,6 +1543,7 @@ public:
     std::set<pg_shard_t> *backfill,
     std::set<pg_shard_t> *acting_backfill,
     const OSDMapRef osdmap,
+    const PGPool& pool,
     std::ostream &ss);
   void choose_async_recovery_ec(
     const std::map<pg_shard_t, pg_info_t> &all_info,
