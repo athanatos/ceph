@@ -33,6 +33,8 @@ using TCachedExtentRef = boost::intrusive_ptr<T>;
 
 /**
  * CachedExtent
+ *
+ * For information on lifecycle and dependencies, see doc/dev/crimson/seastore/cached_extent.rst
  */
 class ExtentIndex;
 class CachedExtent : public boost::intrusive_ref_counter<
