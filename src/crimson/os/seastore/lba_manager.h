@@ -23,6 +23,81 @@
 
 namespace crimson::os::seastore {
 
+class LBAPinRef;
+class LBAPin {
+  friend class LBAPinRef;
+
+  /// Releases pin
+  virtual void release() = 0;
+
+  /// Redirects 
+  virtual void redirect(LBAPinRef *from, LBAPinRef *to) = 0;
+
+  /// Returns length of mapping
+  virtual extent_len_t get_length() const = 0;
+
+  /// Returns addr of mapping
+  virtual paddr_t get_paddr() const = 0;
+
+  /// Returns laddr of mapping
+  virtual laddr_t get_laddr() const = 0;
+
+  // ~LBAPin not virtual, should *never* be released via this abstraction
+};
+
+class LBAPinRef {
+  LBAPin *parent; // nullptr if disconnected
+  LBAPinRef(LBAPin *parent) : parent(parent) {}
+
+  friend class LBAPin;
+
+  /// Redirects 
+  void redirect(LBAPin *from, LBAPin *to) {
+    assert(parent == from);
+    parent = to;
+  }
+
+public:
+  LBAPinRef() : parent(nullptr) {}
+
+  LBAPinRef(LBAPinRef &&other) : parent(other.parent) {
+    parent->redirect(&other, this);
+  }
+  LBAPinRef &operator=(LBAPinRef &&other) {
+    assert(!parent);
+    parent = other.parent;
+    parent->redirect(&other, this);
+    other.parent = nullptr;
+  }
+
+  LBAPinRef(const LBAPinRef &) = delete;
+  LBAPinRef &operator=(const LBAPinRef &) = delete;
+  
+  /// See above
+  extent_len_t get_length() const {
+    assert(parent);
+    return parent->get_length();
+  }
+
+  /// See above
+  paddr_t get_paddr() const {
+    assert(parent);
+    return parent->get_paddr();
+  }
+
+  /// See above
+  laddr_t get_laddr() const {
+    assert(parent);
+    return parent->get_laddr();
+  }
+
+  ~LBAPinRef() {
+    parent->release();
+    parent = nullptr;
+  }
+};
+
+#if 0
 class LBAPin;
 using LBAPinRef = std::unique_ptr<LBAPin>;
 class LBAPin {
@@ -35,6 +110,7 @@ public:
   virtual ~LBAPin() {}
 };
 std::ostream &operator<<(std::ostream &out, const LBAPin &rhs);
+#endif
 
 using lba_pin_list_t = std::list<LBAPinRef>;
 
