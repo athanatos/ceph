@@ -61,12 +61,17 @@ public:
   LBAPinRef() : parent(nullptr) {}
 
   LBAPinRef(LBAPinRef &&other) : parent(other.parent) {
-    parent->redirect(&other, this);
+    if (parent) {
+      parent->redirect(&other, this);
+    }
+    other.parent = nullptr;
   }
   LBAPinRef &operator=(LBAPinRef &&other) {
     assert(!parent);
     parent = other.parent;
-    parent->redirect(&other, this);
+    if (parent) {
+      parent->redirect(&other, this);
+    }
     other.parent = nullptr;
   }
 
@@ -92,8 +97,10 @@ public:
   }
 
   ~LBAPinRef() {
-    parent->release();
-    parent = nullptr;
+    if (parent) {
+      parent->release();
+      parent = nullptr;
+    }
   }
 };
 

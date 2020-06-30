@@ -450,7 +450,6 @@ struct BtreeLBAPin : LBAPin {
   paddr_t paddr;
   laddr_t laddr = L_ADDR_NULL;
   extent_len_t length = 0;
-  unsigned refcount = 0;
 
 public:
   BtreeLBAPin(
@@ -467,9 +466,6 @@ public:
   }
   laddr_t get_laddr() const final {
     return laddr;
-  }
-  LBAPinRef duplicate() const final {
-    return LBAPinRef(new BtreeLBAPin(*this));
   }
 };
 
