@@ -1729,6 +1729,7 @@ void PeeringState::calc_replicated_acting(
   // the following variables measure shards by CRUSH bucket (stretch clusters)
   const pg_pool_t& pg_pool = pool.info;
   const uint32_t barrier_id = pg_pool.peering_crush_bucket_barrier;
+  const uint32_t target_bucket_count = pg_pool.peering_crush_bucket_target;
   const uint32_t bucket_count = pg_pool.peering_crush_bucket_count;
   uint32_t bucket_min = 0, bucket_max = 0;
   map<int,uint32_t> ancestors; // ancestor->descendant count
@@ -1743,8 +1744,8 @@ void PeeringState::calc_replicated_acting(
     }
   } else {
     // Figure out the number of shards per bucket, and if they're correct
-    bucket_min = bucket_max = size / bucket_count;
-    if ((bucket_min * bucket_count) != size) {
+    bucket_min = bucket_max = size / target_bucket_count;
+    if ((bucket_min * target_bucket_count) != size) {
       ++bucket_max;
     }
     for (int osdid : *want) {
