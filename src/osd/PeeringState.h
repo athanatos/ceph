@@ -1557,6 +1557,21 @@ public:
     const OSDMapRef osdmap,
     const PGPool& pool,
     std::ostream &ss);
+  static void calc_replicated_acting_stretch(
+    map<pg_shard_t, pg_info_t>::const_iterator primary_shard,
+    eversion_t oldest_auth_log_entry,
+    unsigned size,
+    const std::vector<int> &acting,
+    const std::vector<int> &up,
+    pg_shard_t up_primary,
+    const std::map<pg_shard_t, pg_info_t> &all_info,
+    bool restrict_to_up_acting,
+    std::vector<int> *want,
+    std::set<pg_shard_t> *backfill,
+    std::set<pg_shard_t> *acting_backfill,
+    const OSDMapRef osdmap,
+    const PGPool& pool,
+    std::ostream &ss);
 
   void choose_async_recovery_ec(
     const std::map<pg_shard_t, pg_info_t> &all_info,
