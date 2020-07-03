@@ -1626,34 +1626,20 @@ void PeeringState::calc_ec_acting(
   _want->swap(want);
 }
 
-/**
- * calculate the desired acting set.
- *
- * Choose an appropriate acting set.  Prefer up[0], unless it is
- * incomplete, or another osd has a longer tail that allows us to
- * bring other up nodes up to date.
- */
-void PeeringState::calc_replicated_acting(
+std::pair<map<pg_shard_t, pg_info_t>::const_iterator, eversion_t>
+PeeringState::select_replicated_primary(
   map<pg_shard_t, pg_info_t>::const_iterator auth_log_shard,
   uint64_t force_auth_primary_missing_objects,
-  unsigned size,
-  const vector<int> &acting,
-  const vector<int> &up,
+  const std::vector<int> &up,
   pg_shard_t up_primary,
   const map<pg_shard_t, pg_info_t> &all_info,
-  bool restrict_to_up_acting,
-  vector<int> *want,
-  set<pg_shard_t> *backfill,
-  set<pg_shard_t> *acting_backfill,
   const OSDMapRef osdmap,
-  const PGPool& pool,
   ostream &ss)
 {
   pg_shard_t auth_log_shard_id = auth_log_shard->first;
 
   ss << __func__ << " newest update on osd." << auth_log_shard_id
-     << " with " << auth_log_shard->second
-     << (restrict_to_up_acting ? " restrict_to_up_acting" : "") << std::endl;
+     << " with " << auth_log_shard->second << std::endl;
 
   // select primary
   auto primary = all_info.find(up_primary);
@@ -1696,8 +1682,6 @@ void PeeringState::calc_replicated_acting(
 
   ss << __func__ << " primary is osd." << primary->first
      << " with " << primary->second << std::endl;
-  want->push_back(primary->first.osd);
-  acting_backfill->insert(primary->first);
 
   /* We include auth_log_shard->second.log_tail because in GetLog,
    * we will request logs back to the min last_update over our
@@ -1706,6 +1690,39 @@ void PeeringState::calc_replicated_acting(
    * be log recovered by auth_log_shard's log */
   eversion_t oldest_auth_log_entry =
     std::min(primary->second.log_tail, auth_log_shard->second.log_tail);
+
+  return std::make_pair(primary, oldest_auth_log_entry);
+}
+
+
+/**
+ * calculate the desired acting set.
+ *
+ * Choose an appropriate acting set.  Prefer up[0], unless it is
+ * incomplete, or another osd has a longer tail that allows us to
+ * bring other up nodes up to date.
+ */
+void PeeringState::calc_replicated_acting(
+  map<pg_shard_t, pg_info_t>::const_iterator primary,
+  eversion_t oldest_auth_log_entry,
+  unsigned size,
+  const vector<int> &acting,
+  const vector<int> &up,
+  pg_shard_t up_primary,
+  const map<pg_shard_t, pg_info_t> &all_info,
+  bool restrict_to_up_acting,
+  vector<int> *want,
+  set<pg_shard_t> *backfill,
+  set<pg_shard_t> *acting_backfill,
+  const OSDMapRef osdmap,
+  const PGPool& pool,
+  ostream &ss)
+{
+  ss << __func__ << (restrict_to_up_acting ? " restrict_to_up_acting" : "")
+     << std::endl;
+
+  want->push_back(primary->first.osd);
+  acting_backfill->insert(primary->first);
 
   // select replicas that have log contiguity with primary.
   // prefer up, then acting, then any peer_info osds
@@ -2116,8 +2133,6 @@ void PeeringState::choose_async_recovery_replicated(
 	     << " async_recovery=" << *async_recovery << dendl;
 }
 
-
-
 /**
  * choose acting
  *
@@ -2171,24 +2186,32 @@ bool PeeringState::choose_acting(pg_shard_t &auth_log_shard_id,
   set<pg_shard_t> want_backfill, want_acting_backfill;
   vector<int> want;
   stringstream ss;
-  if (pool.info.is_replicated())
-    calc_replicated_acting(
+  if (pool.info.is_replicated()) {
+    auto [primary_shard, oldest_log] = select_replicated_primary(
       auth_log_shard,
       cct->_conf.get_val<uint64_t>(
-        "osd_force_auth_primary_missing_objects"),
-      get_osdmap()->get_pg_size(info.pgid.pgid),
-      acting,
+	"osd_force_auth_primary_missing_objects"),
       up,
       up_primary,
       all_info,
-      restrict_to_up_acting,
-      &want,
-      &want_backfill,
-      &want_acting_backfill,
       get_osdmap(),
-      pool,
       ss);
-  else
+      calc_replicated_acting(
+	primary_shard,
+	oldest_log,
+	get_osdmap()->get_pg_size(info.pgid.pgid),
+	acting,
+	up,
+	up_primary,
+	all_info,
+	restrict_to_up_acting,
+	&want,
+	&want_backfill,
+	&want_acting_backfill,
+	get_osdmap(),
+	pool,
+	ss);
+  } else {
     calc_ec_acting(
       auth_log_shard,
       get_osdmap()->get_pg_size(info.pgid.pgid),
@@ -2200,6 +2223,7 @@ bool PeeringState::choose_acting(pg_shard_t &auth_log_shard_id,
       &want_backfill,
       &want_acting_backfill,
       ss);
+  }
   psdout(10) << ss.str() << dendl;
 
   if (!recoverable(want)) {
