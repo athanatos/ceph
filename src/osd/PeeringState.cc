@@ -1738,7 +1738,7 @@ void PeeringState::calc_replicated_acting(
   bool needs_more_buckets = false;
   bool needs_mandatory_bucket = false;
 
-  if (!bucket_count) {
+  if (!pg_pool.is_stretch_pool()) {
     if (want->size() >= size) {
       return;
     }
@@ -1809,7 +1809,7 @@ void PeeringState::calc_replicated_acting(
   for (auto &p: candidate_by_last_update) {
     ceph_assert((want->size() < size) || bucket_count);
     bool crush_okay = true;
-    if (bucket_count) {
+    if (pg_pool.is_stretch_pool()) {
       // We have to validate the stretch layout in terms of having enough
       // CRUSH buckets with enough shards in each. As a basic strategy,
       // if we fall short, we just add any shards which don't "overfill"
@@ -2247,7 +2247,7 @@ bool PeeringState::choose_acting(pg_shard_t &auth_log_shard_id,
   // make sure we respect the stretch cluster rules -- and
   // didn't break them with earlier choices!
   const pg_pool_t& pg_pool = pool.info;
-  if (pg_pool.peering_crush_bucket_count) {
+  if (pg_pool.is_stretch_pool()) {
     const uint32_t barrier_id = pg_pool.peering_crush_bucket_barrier;
     const uint32_t barrier_count = pg_pool.peering_crush_bucket_count;
     set<int> ancestors;
