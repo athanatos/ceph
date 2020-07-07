@@ -48,12 +48,12 @@ struct LBANode : CachedExtent {
   using lookup_range_ertr = LBAManager::get_mapping_ertr;
   using lookup_range_ret = LBAManager::get_mapping_ret;
 
-  depth_t depth = 0;
 
-  LBANode(ceph::bufferptr &&ptr) : CachedExtent(std::move(ptr)) {}
-  LBANode(const LBANode &rhs) = default;
+  LBANode(ceph::bufferptr &&ptr) : CachedExtent(std::move(ptr)), pin(this) {}
+  LBANode(const LBANode &rhs)
+    : CachedExtent(rhs), pin(rhs.pin, this) {}
 
-  void set_depth(depth_t _depth) { depth = _depth; }
+  virtual lba_node_meta_t get_node_meta() const = 0;
 
   /**
    * lookup_range
