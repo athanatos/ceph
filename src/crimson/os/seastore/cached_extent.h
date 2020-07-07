@@ -495,10 +495,12 @@ public:
   }
 };
 
+class LogicalCachedExtent;
 class LBAPin;
 using LBAPinRef = std::unique_ptr<LBAPin>;
 class LBAPin {
 public:
+  virtual void link_extent(LogicalCachedExtent *ref) = 0;
   virtual extent_len_t get_length() const = 0;
   virtual paddr_t get_paddr() const = 0;
   virtual laddr_t get_laddr() const = 0;
@@ -526,7 +528,10 @@ public:
   template <typename... T>
   LogicalCachedExtent(T&&... t) : CachedExtent(std::forward<T>(t)...) {}
 
-  void set_pin(LBAPinRef &&pin) { this->pin = std::move(pin); }
+  void set_pin(LBAPinRef &&npin) {
+    pin = std::move(npin);
+    pin->link_extent(this);
+  }
 
   LBAPin &get_pin() {
     assert(pin);
