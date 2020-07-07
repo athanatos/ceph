@@ -1838,13 +1838,85 @@ void PeeringState::calc_replicated_acting(
   }
 }
 
+// Defines osd preference order: acting set, then larger last_update
+using osd_ord_t = std::tuple<bool, eversion_t>; // <acting, last_update>
+using osd_id_t = int;
+
+class bucket_candidates_t {
+  std::deque<std::pair<osd_ord_t, osd_id_t>> osds;
+  int selected = 0;
+
+public:
+  void add_osd(osd_ord_t ord, osd_id_t osd) {
+    // osds will be added in smallest to largest order
+    assert(osds.empty() || osds.back().first <= ord);
+    osds.push_back(std::make_pair(ord, osd));
+  }
+  osd_id_t pop_osd() {
+    ceph_assert(!is_empty());
+    auto ret = osds.back();
+    osds.pop_back();
+    return ret.second;
+  }
+
+  void inc_selected() { selected++; }
+  unsigned get_num_selected() const { return selected; }
+
+  osd_ord_t get_ord() const {
+    return osds.empty() ? std::make_tuple(false, eversion_t())
+      : osds.back().first;
+  }
+
+  bool is_empty() const { return osds.empty(); }
+
+  bool operator<(const bucket_candidates_t &rhs) const {
+    return std::make_tuple(-selected, get_ord()) <
+      std::make_tuple(-rhs.selected, rhs.get_ord());
+  }
+
+  friend std::ostream &operator<<(std::ostream &, const bucket_candidates_t &);
+};
+
+std::ostream &operator<<(std::ostream &lhs, const bucket_candidates_t &cand)
+{
+  return lhs << "candidates[" << cand.osds << "]";
+}
+
+class bucket_heap_t {
+  using elem_t = std::reference_wrapper<bucket_candidates_t>;
+  std::vector<elem_t> heap;
+
+  // Max heap -- should emit buckets in order of preference
+  struct comp {
+    bool operator()(const elem_t &lhs, const elem_t &rhs) {
+      return lhs.get() < rhs.get();
+    }
+  };
+public:
+  void push_if_nonempty(elem_t e) {
+    if (!e.get().is_empty()) {
+      heap.push_back(e);
+      std::push_heap(heap.begin(), heap.end(), comp());
+    }
+  }
+  elem_t pop() {
+    std::pop_heap(heap.begin(), heap.end(), comp());
+    auto ret = heap.back();
+    heap.pop_back();
+    return ret;
+  }
+
+  bool is_empty() const { return heap.empty(); }
+};
 
 /**
- * calculate the desired acting set.
+ * calc_replicated_acting_stretch
  *
- * Choose an appropriate acting set.  Prefer up[0], unless it is
- * incomplete, or another osd has a longer tail that allows us to
- * bring other up nodes up to date.
+ * Choose an acting set using as much as up as possible filling in the
+ * remaining slots so as to maximize the number of crush buckets at
+ * level pool.info.peering_crush_bucket_barrier represented.
+
+ * There are two distinct phases:
  */
 void PeeringState::calc_replicated_acting_stretch(
   map<pg_shard_t, pg_info_t>::const_iterator primary,
@@ -1862,238 +1934,164 @@ void PeeringState::calc_replicated_acting_stretch(
   const PGPool& pool,
   ostream &ss)
 {
+  ceph_assert(want);
+  ceph_assert(acting_backfill);
+  ceph_assert(backfill);
   ss << __func__ << (restrict_to_up_acting ? " restrict_to_up_acting" : "")
      << std::endl;
 
-  want->push_back(primary->first.osd);
-  acting_backfill->insert(primary->first);
-
-  // select replicas that have log contiguity with primary.
-  // prefer up, then acting, then any peer_info osds
-  for (auto i : up) {
-    pg_shard_t up_cand = pg_shard_t(i, shard_id_t::NO_SHARD);
-    if (up_cand == primary->first)
-      continue;
-    const pg_info_t &cur_info = all_info.find(up_cand)->second;
-    if (cur_info.is_incomplete() ||
-        cur_info.last_update < oldest_auth_log_entry) {
-      ss << " shard " << up_cand << " (up) backfill " << cur_info << std::endl;
-      backfill->insert(up_cand);
-      acting_backfill->insert(up_cand);
-    } else {
-      want->push_back(i);
-      acting_backfill->insert(up_cand);
-      ss << " osd." << i << " (up) accepted " << cur_info << std::endl;
-    }
-  }
-
-  // the following variables measure shards by CRUSH bucket (stretch clusters)
-  const pg_pool_t& pg_pool = pool.info;
-  const uint32_t barrier_id = pg_pool.peering_crush_bucket_barrier;
-  const uint32_t target_bucket_count = pg_pool.peering_crush_bucket_target;
-  const uint32_t bucket_count = pg_pool.peering_crush_bucket_count;
-  uint32_t bucket_min = 0, bucket_max = 0;
-  map<int,uint32_t> ancestors; // ancestor->descendant count
-  const shared_ptr<CrushWrapper>& crush = osdmap->crush;
-  bool needs_replicas = false;
-  bool needs_more_buckets = false;
-  bool needs_mandatory_bucket = false;
-
-  // Figure out the number of shards per bucket, and if they're correct
-  bucket_min = bucket_max = size / target_bucket_count;
-  if ((bucket_min * target_bucket_count) != size) {
-    ++bucket_max;
-  }
-  for (int osdid : *want) {
-    int ancestor = crush->get_parent_of_type(osdid, barrier_id,
-					     pg_pool.crush_rule);
-    auto i = ancestors.find(ancestor);
-    int count = (i == ancestors.end() ? 0 : i->second);
-    ancestors[ancestor] = ++count;
-  }
-  int small_buckets = 0;
-  for (auto i : ancestors) {
-    if (bucket_min > i.second) { // darn, this bucket is too small
-      ++small_buckets;
-    }
-  }
-  if (want->size() < size) {
-    needs_replicas = true;
-  }
-  if (ancestors.size() - small_buckets < bucket_count) {
-    needs_more_buckets = true;
-  }
-  if (pg_pool.peering_crush_mandatory_member &&
-      !ancestors.count(pg_pool.peering_crush_mandatory_member)) {
-    needs_mandatory_bucket = true;
-  }
-  if (!needs_replicas && !needs_more_buckets && !needs_mandatory_bucket) {
-    return;
-  }
-
-  std::vector<std::pair<eversion_t, int>> candidate_by_last_update;
-  candidate_by_last_update.reserve(acting.size());
-  // This no longer has backfill OSDs, but they are covered above.
-  for (auto i : acting) {
-    pg_shard_t acting_cand(i, shard_id_t::NO_SHARD);
-    // skip up osds we already considered above
-    if (acting_cand == primary->first)
-      continue;
-    auto up_it = find(up.begin(), up.end(), i);
-    if (up_it != up.end())
-      continue;
-
-    const pg_info_t &cur_info = all_info.find(acting_cand)->second;
-    if (cur_info.is_incomplete() ||
-	cur_info.last_update < oldest_auth_log_entry) {
-      ss << " shard " << acting_cand << " (acting) REJECTED "
-	 << cur_info << std::endl;
-    } else {
-      candidate_by_last_update.emplace_back(cur_info.last_update, i);
-    }
-  }
-
-  auto sort_by_eversion =[](const std::pair<eversion_t, int> &lhs,
-                            const std::pair<eversion_t, int> &rhs) {
-    return lhs.first > rhs.first;
+  auto used = [want](int osd) {
+    return std::find(want->begin(), want->end(), osd) == want->end();
   };
-  // sort by last_update, in descending order.
-  std::sort(candidate_by_last_update.begin(),
-            candidate_by_last_update.end(), sort_by_eversion);
-  
-  for (auto &p: candidate_by_last_update) {
-    ceph_assert((want->size() < size) || bucket_count);
 
-    // We have to validate the stretch layout in terms of having enough
-    // CRUSH buckets with enough shards in each. As a basic strategy,
-    // if we fall short, we just add any shards which don't "overfill"
-    // a bucket until we meet our requirements. "Overfilling" is defined
-    // as exceeding the bucket_max we calculated above.
-    // This is not an optimal solution in the sense of generating a
-    // minimum set, but 1) that's hard, and 2) I expect bucket_min == bucket_max
-    // in almost all cases. The separation is really just in case of future needs
-    // and trying to anticipate 3-zone "multi-site" clusters with EC, instead of
-    // the currently-targeted 2-site replication-only one.
-    // We make one special exemption; if we're looking for a mandatory member
-    // and meet other requirements we skip over anything else
-    bool crush_okay = false;
-    int ancestor = crush->get_parent_of_type(p.second, barrier_id,
-					     pg_pool.crush_rule);
-    auto ai = ancestors.find(ancestor);
-    
-    if (needs_mandatory_bucket && !needs_more_buckets && !needs_replicas) {
-      if (ancestor != pg_pool.peering_crush_mandatory_member) {
-	ss << " osd " << p.second
-	   << " (acting) REJECTED as it's not in the mandatory bucket we need"
-	   << std::endl;
-	continue;
+  auto usable_info = [&](const auto &cur_info) mutable {
+    return !(cur_info.is_incomplete() ||
+	     cur_info.last_update < oldest_auth_log_entry);
+  };
+
+  auto osd_info = [&](int osd) mutable -> const pg_info_t & {
+    pg_shard_t cand = pg_shard_t(osd, shard_id_t::NO_SHARD);
+    const pg_info_t &cur_info = all_info.find(cand)->second;
+    return cur_info;
+  };
+
+  auto usable_osd = [&](int osd) mutable {
+    return usable_info(osd_info(osd));
+  };
+
+  std::map<int, bucket_candidates_t> ancestors;
+  auto get_ancestor = [&](int osd) mutable {
+    int ancestor = osdmap->crush->get_parent_of_type(
+      osd,
+      pool.info.peering_crush_bucket_barrier,
+      pool.info.crush_rule);
+    return ancestors[ancestor];
+  };
+
+  /* 1) Select all usable osds from the up set as well as the primary
+   *
+   * We also stash any unusable osds from up into backfill.
+   */
+  auto add_required = [&](int osd) {
+    if (!used(osd)) {
+      want->push_back(osd);
+      acting_backfill->insert(
+	pg_shard_t(osd, shard_id_t::NO_SHARD));
+      get_ancestor(osd).inc_selected();
+    }
+  };
+  add_required(primary->first.osd);
+  ss << " osd " << primary->first.osd << " primary accepted "
+     << osd_info(primary->first.osd) << std::endl;
+  for (auto upcand: up) {
+    auto upshard = pg_shard_t(upcand, shard_id_t::NO_SHARD);
+    auto &curinfo = osd_info(upcand);
+    if (usable_osd(upcand)) {
+      ss << " osd " << upcand << " (up) accepted " << curinfo << std::endl;
+      add_required(upcand);
+    } else {
+      ss << " osd " << upcand << " (up) backfill " << curinfo << std::endl;
+      backfill->insert(upshard);
+      acting_backfill->insert(upshard);
+    }
+  }
+
+  if (want->size() >= pool.info.size) {
+    ss << " up set sufficient" << std::endl;
+    return;
+  }
+  ss << " up set insufficient, considering remaining osds" << std::endl;
+
+  /* 2) Fill out remaining slots from usable osds in all_info
+   *    while maximizing the number of ancestor nodes at the
+   *    barrier_id crush level.
+   */
+  {
+    std::vector<std::pair<osd_ord_t, osd_id_t>> candidates;
+    /* To do this, we first filter the set of usable osd into an ordered
+     * list of usable osds
+     */
+    auto get_osd_ord = [&](bool is_acting, const pg_info_t &info) -> osd_ord_t {
+      return std::make_tuple(
+	!is_acting /* acting should sort first */,
+	info.last_update);
+    };
+    for (auto &cand : acting) {
+      auto &cand_info = osd_info(cand);
+      if (!used(cand) && usable_info(cand_info)) {
+	ss << " acting candidate " << cand << " " << cand_info << std::endl;
+	candidates.push_back(std::make_pair(get_osd_ord(true, cand_info), cand));
       }
     }
-    if (want->size() >= size) {
-      // we need to add a bucket or fill one up; check distribution
-      if (ai != ancestors.end()) {
-	// this shard is only useful if it adds to a not-full bucket
-	if (ai->second >= bucket_max) {
-	  ss << " osd " << p.second
-	     << " (acting) REJECTED as it overfills a CRUSH bucket"
-	     << std::endl;
-	  continue;
+    if (!restrict_to_up_acting) {
+      for (auto &[cand, info] : all_info) {
+	if (!used(cand.osd) && usable_info(info)) {
+	  ss << " other candidate " << cand << " " << info << std::endl;
+	  candidates.push_back(
+	    std::make_pair(get_osd_ord(false, info), cand.osd));
 	}
-	// else we accept it -- this may not be optimal in the sense of
-	// creating a minimal set, but it will lead us to a valid set
-	// Note in particular that right now, the concept of a separate
-	// bucket min and bucket max is novel; I expect them to be the same
-	++ai->second;
-      } else { // this is a new bucket; we accept it even if it's non-optimal
-	ancestors[ancestor] = 1;
-      }
-    } else {
-      // we need more replicas, and maybe more buckets
-      if (ai != ancestors.end()) {
-	if (ai->second >= bucket_max) {
-	  ss << " osd " << p.second
-	     << " (acting) REJECTED as it overfills a CRUSH bucket"
-	     << std::endl;
-	  continue;
-	} // else we accept, even if non-optimal
-	++ai->second;
-      } else { // it's a new bucket; accept even if non-optimal
-	ancestors[ancestor] = 1;
       }
     }
-    
-    // test distribution to see if it's okay
-    if (ancestors.size() >= bucket_count) {
-      uint32_t okay_buckets = 0;
-      for (auto i : ancestors) {
-	if (i.second >= bucket_min)
-	  ++okay_buckets;
-      }
-      if (okay_buckets >= bucket_count &&
-	  (!pg_pool.peering_crush_mandatory_member ||
-	   ancestors.count(pg_pool.peering_crush_mandatory_member))) {
-	crush_okay = true;
-      }
-    }
-    want->push_back(p.second);
-    pg_shard_t s = pg_shard_t(p.second, shard_id_t::NO_SHARD);
-    acting_backfill->insert(s);
-    ss << " shard " << s << " (acting) accepted "
-       << all_info.find(s)->second << std::endl;
-    if (want->size() >= size && crush_okay) {
-      return;
-    }
-  }
-  
-  if (restrict_to_up_acting) {
-    return;
-  }
-  candidate_by_last_update.clear();
-  candidate_by_last_update.reserve(all_info.size()); // overestimate but fine
-  // continue to search stray to find more suitable peers
-  for (auto &i : all_info) {
-    // skip up osds we already considered above
-    if (i.first == primary->first)
-      continue;
-    auto up_it = find(up.begin(), up.end(), i.first.osd);
-    if (up_it != up.end())
-      continue;
-    auto acting_it = find(
-      acting.begin(), acting.end(), i.first.osd);
-    if (acting_it != acting.end())
-      continue;
+    std::sort(candidates.begin(), candidates.end());
 
-    if (i.second.is_incomplete() ||
-	i.second.last_update < oldest_auth_log_entry) {
-      ss << " shard " << i.first << " (stray) REJECTED " << i.second
-         << std::endl;
-    } else {
-      candidate_by_last_update.emplace_back(
-        i.second.last_update, i.first.osd);
+    // We then filter these candidates by ancestor
+    std::for_each(candidates.begin(), candidates.end(), [&](auto cand) {
+      get_ancestor(cand.second).add_osd(cand.first, cand.second);
+    });
+  }
+
+  auto pop_ancestor = [&](auto &ancestor) {
+    ceph_assert(!ancestor.is_empty());
+    auto osd = ancestor.pop_osd();
+
+    ss << " accepting candidate " << osd << std::endl;
+
+    ceph_assert(!used(osd));
+    ceph_assert(usable_osd(osd));
+
+    want->push_back(osd);
+    acting_backfill->insert(
+      pg_shard_t(osd, shard_id_t::NO_SHARD));
+    ancestor.inc_selected();
+  };
+
+  /* Next, we use the ancestors map to grab a descendant of the
+   * peering_crush_mandatory_member if not already represented.
+   *
+   * TODO: using 0 here to match other users.  Prior to merge, I
+   * expect that this and other users should instead check against
+   * CRUSH_ITEM_NONE.
+   */
+  if (pool.info.peering_crush_mandatory_member != 0) {
+    auto aiter = ancestors.find(pool.info.peering_crush_mandatory_member);
+    if (aiter != ancestors.end() &&
+	aiter->second.get_num_selected()) {
+      ss << " adding required ancestor " << aiter->first << std::endl;
+      ceph_assert(!aiter->second.is_empty()); // wouldn't exist otherwise
+      pop_ancestor(aiter->second);
     }
   }
 
-  if (candidate_by_last_update.empty()) {
-    // save us some effort
-    return;
+  /* We then place the ancestors in a heap ordered by fewest selected
+   * and then by the ordering token of the next osd */
+  bucket_heap_t aheap;
+  std::for_each(ancestors.begin(), ancestors.end(), [&](auto &anc) {
+    aheap.push_if_nonempty(anc.second);
+  });
+
+  /* and pull from this heap until it's empty or we have enough. */
+  while (!aheap.is_empty() && want->size() < pool.info.size) {
+    auto next = aheap.pop();
+    pop_ancestor(next.get());
+    aheap.push_if_nonempty(next);
   }
 
-  // sort by last_update, in descending order.
-  std::sort(candidate_by_last_update.begin(),
-            candidate_by_last_update.end(), sort_by_eversion);
-
-  for (auto &p: candidate_by_last_update) {
-    ceph_assert(want->size() < size);
-    want->push_back(p.second);
-    pg_shard_t s = pg_shard_t(p.second, shard_id_t::NO_SHARD);
-    acting_backfill->insert(s);
-    ss << " shard " << s << " (stray) accepted "
-       << all_info.find(s)->second << std::endl;
-    if (want->size() >= size) {
-      return;
-    }
-  }
+  /* The end result is that we should have as many buckets covered as
+   * possible while respecting up, the primary selection, the pool size,
+   * and the mandatory member.
+   */
 }
+
 
 bool PeeringState::recoverable(const vector<int> &want) const
 {
