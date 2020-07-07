@@ -28,7 +28,9 @@ BtreeLBAManager::mkfs_ret BtreeLBAManager::mkfs(
       t,
       LBA_BLOCK_SIZE);
     root_leaf->set_size(0);
-    root_leaf->set_meta({0, L_ADDR_MAX, 1});
+    lba_node_meta_t meta{0, L_ADDR_MAX, 1};
+    root_leaf->set_meta(meta);
+    root_leaf->pin.set_range(meta);
     croot->get_lba_root() =
       root_t{
         1,
