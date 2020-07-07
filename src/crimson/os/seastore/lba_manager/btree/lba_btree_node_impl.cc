@@ -486,10 +486,15 @@ Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
       t,
       offset,
       LBA_BLOCK_SIZE).safe_then([depth](auto ret) {
+	auto meta = ret->get_meta();
+	ceph_assert(depth == meta.depth);
+	if (ret->get_size()) {
+	  ceph_assert(meta.begin <= ret->begin()->get_key());
+	  ceph_assert(meta.end > (ret->end() - 1)->get_key());
+	}
 	ret->set_depth(depth);
 	return LBANodeRef(ret.detach(), /* add_ref = */ false);
       });
-
   } else {
     logger().debug(
       "get_lba_btree_extent: reading leaf at offset {}, depth {}",
@@ -502,6 +507,12 @@ Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
 	logger().debug(
 	  "get_lba_btree_extent: read leaf at offset {}",
 	  offset);
+	auto meta = ret->get_meta();
+	ceph_assert(depth == meta.depth);
+	if (ret->get_size()) {
+	  ceph_assert(meta.begin <= ret->begin()->get_key());
+	  ceph_assert(meta.end > (ret->end() - 1)->get_key());
+	}
 	ret->set_depth(depth);
 	return LBANodeRef(ret.detach(), /* add_ref = */ false);
       });
