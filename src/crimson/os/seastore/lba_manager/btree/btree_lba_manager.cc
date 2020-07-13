@@ -159,11 +159,92 @@ BtreeLBAManager::set_extent(
     });
 }
 
+static bool is_lba_node(const CachedExtent &e)
+{
+  return e.get_type() == extent_types_t::LADDR_INTERNAL ||
+    e.get_type() == extent_types_t::LADDR_LEAF;
+}
+
+static depth_t get_depth(const CachedExtent &e)
+{
+  if (is_lba_node(e)) {
+    return e.cast<LBANode>()->get_node_meta().depth;
+  } else if (e.is_logical()) {
+    return 0;
+  } else {
+    ceph_assert(0 == "currently impossible");
+    return 0;
+  }
+}
+
 BtreeLBAManager::complete_transaction_ret
 BtreeLBAManager::complete_transaction(
   Transaction &t)
 {
-  // This is a noop for now and may end up not being necessary
+  std::vector<CachedExtentRef> to_clear;
+  for (auto &e: t.get_retired_set()) {
+    if (e->is_logical() || is_lba_node(*e))
+      to_clear.push_back(e);
+  }
+  std::sort(
+    to_clear.begin(), to_clear.end(),
+    [](auto &l, auto &r) { return get_depth(*l) < get_depth(*r); });
+
+  for (auto &e: to_clear) {
+    if (is_lba_node(*e)) {
+      auto &pin = e->cast<LBANode>()->pin;
+      logger().debug("{}: retiring {}, {}", __func__, *e, pin);
+      pin_set.retire(e->cast<LBANode>()->pin);
+    } else if (e->is_logical()) {
+      auto &pin = static_cast<BtreeLBAPin &>(
+	e->cast<LogicalCachedExtent>()->get_pin());
+      logger().debug("{}: retiring {}, {}", __func__, *e, pin);
+      pin_set.retire(pin.pin);
+    }
+  }
+
+  std::vector<CachedExtentRef> to_link;
+  to_link.reserve(
+    t.get_fresh_block_list().size() +
+    t.get_mutated_block_list().size());
+  for (auto &e: t.get_fresh_block_list()) {
+    if (e->is_valid() && (is_lba_node(*e) || e->is_logical()))
+      to_link.push_back(e);
+  }
+  for (auto &e: t.get_mutated_block_list()){
+    if (e->is_valid() && (is_lba_node(*e) || e->is_logical()))
+      to_link.push_back(e);
+  }
+  std::sort(
+    to_link.begin(), to_link.end(),
+    [](auto &l, auto &r) -> bool { return get_depth(*l) > get_depth(*r); });
+
+  for (auto &e : to_link) {
+    logger().debug("{}: to_link {}", __func__, *e);
+    if (is_lba_node(*e)) {
+      auto &pin = e->cast<LBANode>()->pin;
+      logger().debug("{}: linking {}, {}", __func__, *e, pin);
+      pin_set.add_pin(pin);
+    } else if (e->is_logical()) {
+      auto &pin = static_cast<BtreeLBAPin &>(
+	e->cast<LogicalCachedExtent>()->get_pin());
+      logger().debug("{}: linking {}, {}", __func__, *e, pin);
+      pin_set.add_pin(pin.pin);
+    }
+  }
+
+  for (auto &e: to_clear) {
+    if (is_lba_node(*e)) {
+      auto &pin = e->cast<LBANode>()->pin;
+      logger().debug("{}: retiring {}, {}", __func__, *e, pin);
+      pin_set.check_parent(e->cast<LBANode>()->pin);
+    } else if (e->is_logical()) {
+      auto &pin = static_cast<BtreeLBAPin &>(
+	e->cast<LogicalCachedExtent>()->get_pin());
+      logger().debug("{}: retiring {}, {}", __func__, *e, pin);
+      pin_set.check_parent(pin.pin);
+    }
+  }
   return complete_transaction_ertr::now();
 }
 
@@ -193,7 +274,9 @@ BtreeLBAManager::insert_mapping_ret BtreeLBAManager::insert_mapping(
 	  croot = mut_croot->cast<RootBlock>();
 	}
 	auto nroot = cache.alloc_new_extent<LBAInternalNode>(t, LBA_BLOCK_SIZE);
-	nroot->set_meta({0, L_ADDR_MAX, root->depth + 1});
+	lba_node_meta_t meta{0, L_ADDR_MAX, root->get_node_meta().depth + 1};
+	nroot->set_meta(meta);
+	nroot->pin.set_range(meta);
 	nroot->journal_insert(
 	  nroot->begin(),
 	  L_ADDR_MIN,
