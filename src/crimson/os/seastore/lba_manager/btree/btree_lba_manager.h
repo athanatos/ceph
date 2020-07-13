@@ -87,6 +87,8 @@ private:
   SegmentManager &segment_manager;
   Cache &cache;
 
+  btree_pin_set_t pin_set;
+
   /**
    * get_root
    *

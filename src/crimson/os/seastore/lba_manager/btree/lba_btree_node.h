@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "crimson/common/log.h"
+#include "crimson/os/seastore/lba_manager/btree/btree_range_pin.h"
 
 namespace crimson::os::seastore::lba_manager::btree {
 
@@ -43,6 +44,7 @@ struct LBANode : CachedExtent {
   using lookup_range_ertr = LBAManager::get_mapping_ertr;
   using lookup_range_ret = LBAManager::get_mapping_ret;
 
+  btree_range_pin_t pin;
   depth_t depth = 0;
 
   LBANode(ceph::bufferptr &&ptr) : CachedExtent(std::move(ptr)) {}

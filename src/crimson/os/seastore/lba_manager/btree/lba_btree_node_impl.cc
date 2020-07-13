@@ -330,12 +330,12 @@ LBALeafNode::lookup_range_ret LBALeafNode::lookup_range(
   auto ret = lba_pin_list_t();
   auto [i, end] = get_leaf_entries(addr, len);
   for (; i != end; ++i) {
-    auto val = (*i).get_val();
+    auto val = i->get_val();
+    auto begin = i->get_key();
     ret.emplace_back(
       std::make_unique<BtreeLBAPin>(
 	val.paddr,
-	(*i).get_key(),
-	val.len));
+	lba_node_meta_t{ begin, begin + val.len, 0}));
   }
   return lookup_range_ertr::make_ready_future<lba_pin_list_t>(
     std::move(ret));
@@ -372,12 +372,12 @@ LBALeafNode::insert_ret LBALeafNode::insert(
     insert_pt.get_key(),
     insert_pt.get_val().len,
     insert_pt.get_val().paddr);
+  auto begin = insert_pt.get_key();
   return insert_ret(
     insert_ertr::ready_future_marker{},
     std::make_unique<BtreeLBAPin>(
       val.paddr,
-      laddr,
-      val.len));
+      lba_node_meta_t{ begin, begin + val.len, 0}));
 }
 
 LBALeafNode::mutate_mapping_ret LBALeafNode::mutate_mapping(
@@ -493,6 +493,7 @@ Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
 	  ceph_assert(meta.end > (ret->end() - 1)->get_key());
 	}
 	ret->set_depth(depth);
+	ret->pin.set_range(meta);
 	return LBANodeRef(ret.detach(), /* add_ref = */ false);
       });
   } else {
@@ -514,6 +515,7 @@ Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
 	  ceph_assert(meta.end > (ret->end() - 1)->get_key());
 	}
 	ret->set_depth(depth);
+	ret->pin.set_range(meta);
 	return LBANodeRef(ret.detach(), /* add_ref = */ false);
       });
   }
