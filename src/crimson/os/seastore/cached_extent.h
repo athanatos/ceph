@@ -108,6 +108,10 @@ public:
    */
   virtual extent_types_t get_type() const = 0;
 
+  virtual bool is_logical() const {
+    return false;
+  }
+
   friend std::ostream &operator<<(std::ostream &, extent_state_t);
   virtual std::ostream &print_detail(std::ostream &out) const { return out; }
   std::ostream &print(std::ostream &out) const {
@@ -547,6 +551,10 @@ public:
     paddr_t base, const ceph::bufferlist &bl) final {
     apply_delta(bl);
     set_last_committed_crc(get_crc32c());
+  }
+
+  bool is_logical() const final {
+    return true;
   }
 protected:
   virtual void apply_delta(const ceph::bufferlist &bl) = 0;
