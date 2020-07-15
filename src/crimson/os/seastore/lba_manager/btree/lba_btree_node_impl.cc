@@ -25,6 +25,15 @@ std::ostream &LBAInternalNode::print_detail(std::ostream &out) const
   return out << ", size=" << get_size()
 	     << ", meta=" << get_meta();
 }
+
+LBAInternalNode::lookup_ret LBAInternalNode::lookup(
+  op_context_t c,
+  laddr_t addr,
+  depth_t depth)
+{
+  return lookup_ret(
+    lookup_ertr::ready_future_marker{},
+    this);
 }
 
 LBAInternalNode::lookup_range_ret LBAInternalNode::lookup_range(
