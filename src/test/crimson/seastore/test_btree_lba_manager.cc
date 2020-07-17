@@ -261,6 +261,16 @@ struct btree_lba_manager_test :
       EXPECT_EQ(i.first, ret->get_laddr());
       EXPECT_EQ(i.second.len, ret->get_length());
     }
+    lba_manager->scan_mappings(
+      *t.t,
+      0,
+      L_ADDR_MAX,
+      [iter=t.mappings.begin(), &t](auto p, auto l) mutable {
+	EXPECT_NE(iter, t.mappings.end());
+	EXPECT_EQ(p, iter->second.addr);
+	EXPECT_EQ(l, iter->second.len);
+	++iter;
+      }).unsafe_get();
   }
 };
 

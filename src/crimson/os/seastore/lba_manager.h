@@ -135,6 +135,17 @@ public:
     Transaction &t,
     CachedExtentRef e) = 0;
 
+  /**
+   * Calls f for each mapping in [begin, end)
+   */
+  using scan_mappings_ertr = SegmentManager::read_ertr;
+  using scan_mappings_ret = scan_mappings_ertr::future<>;
+  using scan_mappings_func_t = std::function<void(paddr_t, extent_len_t)>;
+  virtual scan_mappings_ret scan_mappings(
+    Transaction &t,
+    laddr_t begin,
+    laddr_t end,
+    scan_mappings_func_t &&f) = 0;
 
   /**
    * rewrite_extent
@@ -148,7 +159,6 @@ public:
     Transaction &t,
     CachedExtentRef extent) = 0;
   
-
   virtual void add_pin(LBAPin &pin) = 0;
 
   virtual ~LBAManager() {}
