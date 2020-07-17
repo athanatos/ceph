@@ -232,6 +232,26 @@ LBAInternalNode::find_hole_ret LBAInternalNode::find_hole(
     });
 }
 
+LBAInternalNode::scan_mappings_ret LBAInternalNode::scan_mappings(
+  op_context_t c,
+  laddr_t begin,
+  laddr_t end,
+  scan_mappings_func_t &f)
+{
+  auto [biter, eiter] = bound(begin, end);
+  return crimson::do_for_each(
+    std::move(biter),
+    std::move(eiter),
+    [=, &f](auto &viter) {
+      return get_lba_btree_extent(
+	c,
+	get_meta().depth - 1,
+	viter->get_val(),
+	get_paddr()).safe_then([=, &f](auto child) {
+	  return child->scan_mappings(c, begin, end, f);
+	});
+    });
+}
 
 void LBAInternalNode::resolve_relative_addrs(paddr_t base) {
   for (auto i: *this) {
@@ -522,6 +542,20 @@ LBALeafNode::find_hole_ret LBALeafNode::find_hole(
       find_hole_ertr::ready_future_marker{},
       L_ADDR_MAX);
   }
+}
+
+LBALeafNode::scan_mappings_ret LBALeafNode::scan_mappings(
+  op_context_t c,
+  laddr_t begin,
+  laddr_t end,
+  scan_mappings_func_t &f)
+{
+  auto [biter, eiter] = bound(begin, end);
+  for (auto i = biter; i != eiter; ++i) {
+    auto val = i->get_val();
+    f(val.paddr, val.len);
+  }
+  return scan_mappings_ertr::now();
 }
 
 void LBALeafNode::resolve_relative_addrs(paddr_t base) {

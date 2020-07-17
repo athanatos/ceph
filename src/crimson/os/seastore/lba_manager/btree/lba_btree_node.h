@@ -9,6 +9,7 @@
 
 #include "crimson/common/log.h"
 #include "crimson/os/seastore/lba_manager/btree/btree_range_pin.h"
+#include "crimson/os/seastore/lba_manager.h"
 
 namespace crimson::os::seastore::lba_manager::btree {
 
@@ -114,6 +115,20 @@ struct LBANode : CachedExtent {
     laddr_t min,
     laddr_t max,
     extent_len_t len) = 0;
+
+  /**
+   * scan_mappings
+   *
+   * Call f for all mappings in [begin, end)
+   */
+  using scan_mappings_ertr = LBAManager::scan_mappings_ertr;
+  using scan_mappings_ret = LBAManager::scan_mappings_ret;
+  using scan_mappings_func_t = LBAManager::scan_mappings_func_t;
+  virtual scan_mappings_ret scan_mappings(
+    op_context_t c,
+    laddr_t begin,
+    laddr_t end,
+    scan_mappings_func_t &f) = 0;
 
   /**
    * mutate_mapping
