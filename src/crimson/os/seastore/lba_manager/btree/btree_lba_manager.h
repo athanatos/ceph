@@ -87,6 +87,12 @@ public:
     Transaction &t,
     CachedExtentRef e) final;
 
+  scan_mappings_ret scan_mappings(
+    Transaction &t,
+    laddr_t begin,
+    laddr_t end,
+    scan_mappings_func_t &&f) final;
+
   void add_pin(LBAPin &pin) final {
     pin_set.add_pin(reinterpret_cast<BtreeLBAPin*>(&pin)->pin);
   }
