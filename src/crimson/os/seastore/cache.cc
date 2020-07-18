@@ -215,7 +215,8 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
 
 void Cache::complete_commit(
   Transaction &t,
-  paddr_t final_block_start)
+  paddr_t final_block_start,
+  journal_seq_t seq)
 {
   if (t.root) {
     root = t.root;
@@ -253,6 +254,7 @@ void Cache::complete_commit(
     }
     i->state = CachedExtent::extent_state_t::DIRTY;
     if (i->version == 1) {
+      i->dirty_from = seq;
       add_to_dirty(i);
     }
   }
