@@ -158,7 +158,8 @@ TransactionManager::submit_transaction(
   logger().debug("TransactionManager::submit_transaction");
 
   return journal.submit_record(std::move(*record)).safe_then(
-    [this, t=std::move(t)](paddr_t addr) mutable {
+    [this, t=std::move(t)](auto p) mutable {
+      auto [addr, journal_seq_t] = p;
       cache.complete_commit(*t, addr);
       lba_manager.complete_transaction(*t);
     },
