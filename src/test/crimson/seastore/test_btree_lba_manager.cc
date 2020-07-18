@@ -62,7 +62,8 @@ struct btree_lba_manager_test :
     }
 
     return journal.submit_record(std::move(*record)).safe_then(
-      [this, t=std::move(t)](paddr_t addr) mutable {
+      [this, t=std::move(t)](auto p) mutable {
+	auto [addr, seq] = p;
 	cache.complete_commit(*t, addr);
 	lba_manager->complete_transaction(*t);
       },
