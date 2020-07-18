@@ -51,6 +51,7 @@ class CachedExtent : public boost::intrusive_ref_counter<
   uint32_t last_committed_crc = 0;
 
   CachedExtentRef prior_instance;   // In state MUTATION_PENDING, points at currently
+  journal_seq_t dirty_from;
 
 public:
   /**
@@ -319,6 +320,7 @@ protected:
   CachedExtent(ceph::bufferptr &&ptr) : ptr(std::move(ptr)) {}
   CachedExtent(const CachedExtent &other)
     : state(other.state),
+      dirty_from(other.dirty_from),
       ptr(other.ptr.c_str(), other.ptr.length()),
       version(other.version),
       poffset(other.poffset) {}
@@ -326,6 +328,7 @@ protected:
   struct share_buffer_t {};
   CachedExtent(const CachedExtent &other, share_buffer_t) :
     state(other.state),
+    dirty_from(other.dirty_from),
     ptr(other.ptr),
     version(other.version),
     poffset(other.poffset) {}
