@@ -568,6 +568,11 @@ public:
   }
 protected:
   virtual void apply_delta(const ceph::bufferlist &bl) = 0;
+  virtual void logical_on_delta_write() {}
+
+  void on_delta_write(paddr_t record_block_offset) final {
+    logical_on_delta_write();
+  }
 
 private:
   laddr_t laddr = L_ADDR_NULL;
