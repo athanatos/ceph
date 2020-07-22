@@ -49,6 +49,9 @@ class CachedExtent : public boost::intrusive_ref_counter<
   friend std::ostream &operator<<(std::ostream &, extent_state_t);
 
   uint32_t last_committed_crc = 0;
+
+  CachedExtentRef parent;   // In state MUTATION_PENDING, points at currently
+                            // committed version.  Otherwise null.
 public:
   /**
    *  duplicate_for_write
@@ -462,6 +465,12 @@ public:
   void erase(CachedExtent &extent) {
     extent_index.erase(extent);
     extent.parent_index = nullptr;
+  }
+
+  void replace(CachedExtent &to, CachedExtent &from) {
+    extent_index.replace_node(extent_index.s_iterator_to(from), to);
+    from.parent_index = nullptr;
+    to.parent_index = this;
   }
 
   bool empty() const {

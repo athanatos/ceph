@@ -51,15 +51,15 @@ void Cache::mark_dirty(CachedExtentRef ref)
   assert(ref->is_valid());
   assert(!ref->primary_ref_list_hook.is_linked());
   intrusive_ptr_add_ref(&*ref);
-  dirty.push_back(*ref);
+  dirty.push_front(*ref);
   ref->state = CachedExtent::extent_state_t::DIRTY;
 
   logger().debug("mark_dirty: {}", *ref);
 }
 
-void Cache::retire_extent(CachedExtentRef ref)
+void Cache::remove_extent(CachedExtentRef ref)
 {
-  logger().debug("retire_extent: {}", *ref);
+  logger().debug("remove_extent: {}", *ref);
   assert(ref->is_valid());
   extents.erase(*ref);
 
@@ -69,6 +69,21 @@ void Cache::retire_extent(CachedExtentRef ref)
     intrusive_ptr_release(&*ref);
   } else {
     ceph_assert(!ref->primary_ref_list_hook.is_linked());
+  }
+}
+
+void Cache::replace_extent(CachedExtentRef next, CachedExtentRef prev)
+{
+  assert(next->get_paddr() == prev->get_paddr());
+  assert(next->version == prev->version + 1);
+  extents.replace(*next, *prev);
+
+  if (prev->is_dirty()) {
+    ceph_assert(prev->primary_ref_list_hook.is_linked());
+    dirty.insert(dirty.iterator_to(*prev), *next);
+    dirty.erase(dirty.iterator_to(*prev));
+    intrusive_ptr_release(&*prev);
+    intrusive_ptr_add_ref(&*next);
   }
 }
 
@@ -83,7 +98,7 @@ CachedExtentRef Cache::duplicate_for_write(
     t.root = ret->cast<RootBlock>();
   } else {
     ret->last_committed_crc = i->last_committed_crc;
-    t.add_to_retired_set(i);
+    ret->parent = i;
     t.add_mutated_extent(ret);
   }
 
@@ -108,7 +123,7 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
     logger().debug("try_construct_record: retiring {}", *i);
     ceph_assert(!i->is_pending());
     ceph_assert(i->is_valid());
-    retire_extent(i);
+    remove_extent(i);
     i->state = CachedExtent::extent_state_t::INVALID;
   }
 
@@ -122,9 +137,14 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
       continue;
     }
     logger().debug("try_construct_record: mutating {}", *i);
-    add_extent(i);
+
+    assert(i->parent);
+    replace_extent(i, i->parent);
+    i->parent = CachedExtentRef();
+
     i->prepare_write();
     i->set_io_wait();
+
     assert(i->get_version() > 0);
     auto final_crc = i->get_crc32c();
     record.deltas.push_back(
