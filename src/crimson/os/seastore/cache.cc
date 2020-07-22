@@ -48,13 +48,18 @@ void Cache::mark_dirty(CachedExtentRef ref)
     return;
   }
 
+  add_to_dirty(ref);
+  ref->state = CachedExtent::extent_state_t::DIRTY;
+
+  logger().debug("mark_dirty: {}", *ref);
+}
+
+void Cache::add_to_dirty(CachedExtentRef ref)
+{
   assert(ref->is_valid());
   assert(!ref->primary_ref_list_hook.is_linked());
   intrusive_ptr_add_ref(&*ref);
   dirty.push_front(*ref);
-  ref->state = CachedExtent::extent_state_t::DIRTY;
-
-  logger().debug("mark_dirty: {}", *ref);
 }
 
 void Cache::remove_extent(CachedExtentRef ref)
@@ -117,16 +122,6 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
 
   record_t record;
 
-  // Transaction is now a go, set up in-memory cache state
-  // invalidate now invalid blocks
-  for (auto &i: t.retired_set) {
-    logger().debug("try_construct_record: retiring {}", *i);
-    ceph_assert(!i->is_pending());
-    ceph_assert(i->is_valid());
-    remove_extent(i);
-    i->state = CachedExtent::extent_state_t::INVALID;
-  }
-
   t.write_set.clear();
 
   // Add new copy of mutated blocks, set_io_wait to block until written
@@ -177,6 +172,15 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
       });
   }
 
+  // Transaction is now a go, set up in-memory cache state
+  // invalidate now invalid blocks
+  for (auto &i: t.retired_set) {
+    logger().debug("try_construct_record: retiring {}", *i);
+    ceph_assert(i->is_valid());
+    remove_extent(i);
+    i->state = CachedExtent::extent_state_t::INVALID;
+  }
+
   record.extents.reserve(t.fresh_block_list.size());
   for (auto &i: t.fresh_block_list) {
     logger().debug("try_construct_record: fresh block {}", *i);
@@ -194,7 +198,8 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
 
 void Cache::complete_commit(
   Transaction &t,
-  paddr_t final_block_start)
+  paddr_t final_block_start,
+  journal_seq_t seq)
 {
   if (t.root) {
     root = t.root;
@@ -221,15 +226,14 @@ void Cache::complete_commit(
       continue;
     }
     i->state = CachedExtent::extent_state_t::DIRTY;
+    if (i->version == 1) {
+      add_to_dirty(i);
+    }
     logger().debug("complete_commit: mutated {}", *i);
     i->on_delta_write(final_block_start);
   }
 
   for (auto &i: t.mutated_block_list) {
-    if (!i->is_valid()) {
-      logger().debug("complete_commit: ignoring invalid {}", *i);
-      continue;
-    }
     i->complete_io();
   }
 }

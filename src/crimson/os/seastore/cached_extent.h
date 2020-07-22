@@ -51,7 +51,7 @@ class CachedExtent : public boost::intrusive_ref_counter<
   uint32_t last_committed_crc = 0;
 
   CachedExtentRef parent;   // In state MUTATION_PENDING, points at currently
-                            // committed version.  Otherwise null.
+
 public:
   /**
    *  duplicate_for_write
@@ -337,6 +337,10 @@ protected:
     return new T(std::move(ptr));
   }
 
+  CachedExtentRef get_parent() {
+    return parent;
+  }
+
   /// Sets last_committed_crc
   void set_last_committed_crc(uint32_t crc) {
     last_committed_crc = crc;
@@ -577,6 +581,15 @@ public:
   }
 protected:
   virtual void apply_delta(const ceph::bufferlist &bl) = 0;
+  virtual void logical_on_delta_write() {}
+
+  void on_delta_write(paddr_t record_block_offset) final {
+    assert(!pin);
+    assert(get_parent());
+    set_pin(std::move(get_parent()->cast<LogicalCachedExtent>()->pin));
+    get_parent()->cast<LogicalCachedExtent>()->pin = LBAPinRef();
+    logical_on_delta_write();
+  }
 
 private:
   laddr_t laddr = L_ADDR_NULL;
