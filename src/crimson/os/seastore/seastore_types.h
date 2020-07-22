@@ -13,6 +13,10 @@
 
 namespace crimson::os::seastore {
 
+using journal_seq_t = uint64_t;
+static constexpr journal_seq_t NO_DELTAS =
+  std::numeric_limits<journal_seq_t>::max();
+
 using depth_t = int32_t;
 using depth_le_t = ceph_les32;
 
