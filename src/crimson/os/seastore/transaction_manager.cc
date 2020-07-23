@@ -19,17 +19,17 @@ namespace {
 namespace crimson::os::seastore {
 
 TransactionManager::TransactionManager(
+  SegmentCleaner &segment_cleaner,
   SegmentManager &segment_manager,
   Journal &journal,
   Cache &cache,
   LBAManager &lba_manager)
-  : segment_manager(segment_manager),
+  : segment_cleaner(segment_cleaner),
+    segment_manager(segment_manager),
     cache(cache),
     lba_manager(lba_manager),
     journal(journal)
-{
-  journal.set_segment_provider(this);
-}
+{}
 
 TransactionManager::mkfs_ertr::future<> TransactionManager::mkfs()
 {
@@ -160,7 +160,7 @@ TransactionManager::submit_transaction(
   return journal.submit_record(std::move(*record)).safe_then(
     [this, t=std::move(t)](auto p) mutable {
       auto [addr, journal_seq_t] = p;
-      cache.complete_commit(*t, addr, journal_seq_t);
+      cache.complete_commit(*t, addr, journal_seq_t, &segment_cleaner);
       lba_manager.complete_transaction(*t);
     },
     submit_transaction_ertr::pass_further{},

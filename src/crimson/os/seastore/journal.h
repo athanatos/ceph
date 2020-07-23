@@ -46,7 +46,6 @@ struct record_header_t {
   // Fixed portion
   extent_len_t  mdlength;       // block aligned, length of metadata
   extent_len_t  dlength;        // block aligned, length of data
-  journal_seq_t seq;            // current journal seqid
   checksum_t    full_checksum;  // checksum for full record (TODO)
   size_t deltas;                // number of deltas
   size_t extents;               // number of extents
@@ -55,7 +54,6 @@ struct record_header_t {
     DENC_START(1, 1, p);
     denc(v.mdlength, p);
     denc(v.dlength, p);
-    denc(v.seq, p);
     denc(v.full_checksum, p);
     denc(v.deltas, p);
     denc(v.extents, p);
@@ -75,6 +73,9 @@ public:
 
   /* TODO: we'll want to use this to propogate information about segment contents */
   virtual void put_segment(segment_id_t segment) = 0;
+
+  virtual journal_seq_t get_journal_tail_target() const = 0;
+  virtual void update_journal_tail_committed(journal_seq_t committed) = 0;
 
   virtual ~JournalSegmentProvider() {}
 };
