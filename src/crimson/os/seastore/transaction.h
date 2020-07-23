@@ -54,7 +54,6 @@ public:
     }
     if (ref->is_pending()) {
       write_set.erase(*ref);
-      ref->state = CachedExtent::extent_state_t::INVALID;
     }
   }
 
