@@ -19,6 +19,7 @@
 
 #include "crimson/osd/exceptions.h"
 
+#include "crimson/os/seastore/segment_cleaner.h"
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/cache.h"
 #include "crimson/os/seastore/segment_manager.h"
@@ -34,26 +35,14 @@ class Journal;
  * Abstraction hiding reading and writing to persistence.
  * Exposes transaction based interface with read isolation.
  */
-class TransactionManager : public JournalSegmentProvider {
+class TransactionManager {
 public:
   TransactionManager(
+    SegmentCleaner &segment_cleaner,
     SegmentManager &segment_manager,
     Journal &journal,
     Cache &cache,
     LBAManager &lba_manager);
-
-  segment_id_t next = 0;
-  get_segment_ret get_segment() final {
-    // TODO -- part of gc
-    return get_segment_ret(
-      get_segment_ertr::ready_future_marker{},
-      next++);
-  }
-
-  void put_segment(segment_id_t segment) final {
-    // TODO -- part of gc
-    return;
-  }
 
   /// Writes initial metadata to disk
   using mkfs_ertr = crimson::errorator<
@@ -211,6 +200,7 @@ public:
 private:
   friend class Transaction;
 
+  SegmentCleaner &segment_cleaner;
   SegmentManager &segment_manager;
   Cache &cache;
   LBAManager &lba_manager;
