@@ -91,7 +91,7 @@ public:
   using find_lextent_ertr = TransactionManager::read_extent_ertr;
   using find_lextent_ret = find_lextent_ertr::future<extent_map_list_t>;
   virtual find_lextent_ret
-    find_lextent(Transaction &t, objaddr_t lo, extent_len_t len) = 0;
+    find_lextent(extmap_root_t &extmap_root, Transaction &t, objaddr_t lo, extent_len_t len) = 0;
 
   /* add_lextent
    *
@@ -101,7 +101,7 @@ public:
   using add_lextent_ertr = TransactionManager::read_extent_ertr;
   using add_lextent_ret = add_lextent_ertr::future<extent_mapping_t>;
   virtual add_lextent_ret
-    add_lextent(Transaction &t, objaddr_t lo, lext_map_val_t val) = 0;
+    add_lextent(extmap_root_t &extmap_root, Transaction &t, objaddr_t lo, lext_map_val_t val) = 0;
 
   /* rm_lextent
    *
@@ -110,25 +110,20 @@ public:
    */
   using rm_lextent_ertr = TransactionManager::read_extent_ertr;
   using rm_lextent_ret = rm_lextent_ertr::future<bool>;
-  virtual rm_lextent_ret rm_lextent(Transaction &t, objaddr_t lo, lext_map_val_t val) = 0;
+  virtual rm_lextent_ret rm_lextent(extmap_root_t &extmap_root, Transaction &t, objaddr_t lo, lext_map_val_t val) = 0;
 
   virtual ~ExtentMapManager() {}
 };
 using ExtentMapManagerRef = std::unique_ptr<ExtentMapManager>;
 
 namespace extentmap_manager {
-/* creat ExtentMapManager for a new extentmap
- * after create_extentmap_manager need call initialize_extmap
+/* creat ExtentMapManager for an extentmap
+ * if it is a new extmap after create_extentmap_manager need call initialize_extmap
  * to initialize the extent map before use it
+ * if it is an exsiting extmap, needn't initialize_extmap
  */
 ExtentMapManagerRef create_extentmap_manager(
   TransactionManager &trans_manager);
-
-/* creat ExtentMapManager for a exsiting extentmap (onode will store extent root information)
- * needn't call initialize_extmap before use it since it is already existing.
- */
-ExtentMapManagerRef create_extentmap_manager(
-  TransactionManager &trans_manager, extmap_root_t exroot);
 
 }
 

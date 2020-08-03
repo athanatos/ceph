@@ -28,7 +28,6 @@ namespace crimson::os::seastore::extentmap_manager {
 
 class BtreeExtentMapManager : public ExtentMapManager {
   TransactionManager &tm;
-  extmap_root_t extmap_root = {0, L_ADDR_NULL};
 
   /* get_extmap_root
    *
@@ -36,29 +35,25 @@ class BtreeExtentMapManager : public ExtentMapManager {
    */
   using get_root_ertr = TransactionManager::read_extent_ertr;
   using get_root_ret = get_root_ertr::future<ExtMapNodeRef>;
-  get_root_ret get_extmap_root(Transaction &t);
+  get_root_ret get_extmap_root(extmap_root_t &extmap_root, Transaction &t);
 
   using insert_lextent_ertr = TransactionManager::read_extent_ertr;
   using insert_lextent_ret = insert_lextent_ertr::future<extent_mapping_t >;
-  insert_lextent_ret insert_lextent(Transaction &t,
+  insert_lextent_ret insert_lextent(extmap_root_t &extmap_root, Transaction &t,
                                     ExtMapNodeRef extent, objaddr_t lo,
 				    lext_map_val_t val);
 
 public:
-  explicit BtreeExtentMapManager(
-    TransactionManager &tm, extmap_root_t extmap_root);
-
   explicit BtreeExtentMapManager(TransactionManager &tm);
 
   initialize_extmap_ret initialize_extmap(Transaction &t) final;
 
-  find_lextent_ret find_lextent(Transaction &t, objaddr_t lo, extent_len_t len) final;
+  find_lextent_ret find_lextent(extmap_root_t &extmap_root, Transaction &t, objaddr_t lo, extent_len_t len) final;
 
-  add_lextent_ret add_lextent(Transaction &t, objaddr_t lo, lext_map_val_t val) final;
+  add_lextent_ret add_lextent(extmap_root_t &extmap_root, Transaction &t, objaddr_t lo, lext_map_val_t val) final;
 
-  rm_lextent_ret rm_lextent(Transaction &t, objaddr_t lo, lext_map_val_t val) final;
+  rm_lextent_ret rm_lextent(extmap_root_t &extmap_root, Transaction &t, objaddr_t lo, lext_map_val_t val) final;
 
-  extmap_root_t get_map_root() {return extmap_root;}
 
 };
 using BtreeExtentMapManagerRef = std::unique_ptr<BtreeExtentMapManager>;

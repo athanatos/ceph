@@ -12,10 +12,6 @@ ExtentMapManagerRef create_extentmap_manager(
   TransactionManager &trans_manager) {
   return ExtentMapManagerRef(new BtreeExtentMapManager(trans_manager));
 }
-ExtentMapManagerRef create_extentmap_manager(
-  TransactionManager &trans_manager, extmap_root_t exroot) {
-  return ExtentMapManagerRef(new BtreeExtentMapManager(trans_manager, exroot));
-}
 
 }
 
