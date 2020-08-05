@@ -29,8 +29,9 @@ BtreeExtentMapManager::initialize_extmap(Transaction &t)
   return tm.alloc_extent<ExtMapLeafNode>(t, L_ADDR_MIN, EXTMAP_BLOCK_SIZE)
     .safe_then([this](auto&& root_extent) {
       root_extent->set_size(0);
-      root_extent->set_depth(0);
-      extmap_root_t extmap_root = extmap_root_t(0, root_extent->get_laddr());
+      extmap_node_meta_t meta{1};
+      root_extent->set_meta(meta);
+      extmap_root_t extmap_root = extmap_root_t(1, root_extent->get_laddr());
       return initialize_extmap_ertr::make_ready_future<extmap_root_t>(extmap_root);
   });
 }
@@ -85,11 +86,12 @@ BtreeExtentMapManager::insert_lextent(extmap_root_t &extmap_root, Transaction &t
     logger().debug("BtreeExtentMapManager::splitting root {}", *root);
     split =  root->extmap_alloc_extent<ExtMapInnerNode>(tm, t, EXTMAP_BLOCK_SIZE)
       .safe_then([this, &extmap_root, root, &t, logical_offset](auto&& nroot) {
-        nroot->set_depth(root->depth + 1);
+        extmap_node_meta_t meta{root->get_node_meta().depth + 1};
+	nroot->set_meta(meta);
 	nroot->journal_insert(nroot->begin(), OBJ_ADDR_MIN,
 			      root->get_laddr(), nullptr);
         extmap_root.extmap_root_laddr = nroot->get_laddr();
-        extmap_root.depth = root->depth + 1;
+	extmap_root.depth = root->get_node_meta().depth + 1;
         return nroot->split_entry(tm, t, logical_offset, nroot->begin(), root);
       });
   }

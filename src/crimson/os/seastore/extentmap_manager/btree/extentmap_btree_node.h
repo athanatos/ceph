@@ -13,16 +13,36 @@
 
 namespace crimson::os::seastore::extentmap_manager{
 
+struct extmap_node_meta_t {
+  depth_t depth = 0;
+
+  std::pair<extmap_node_meta_t, extmap_node_meta_t> split_into(objaddr_t pivot) const {
+    return std::make_pair(
+      extmap_node_meta_t{depth},
+      extmap_node_meta_t{depth});
+  }
+
+  static extmap_node_meta_t merge_from(
+    const extmap_node_meta_t &lhs, const extmap_node_meta_t &rhs) {
+    assert(lhs.depth == rhs.depth);
+    return extmap_node_meta_t{lhs.depth};
+  }
+
+  static std::pair<extmap_node_meta_t, extmap_node_meta_t>
+  rebalance(const extmap_node_meta_t &lhs, const extmap_node_meta_t &rhs, laddr_t pivot) {
+    assert(lhs.depth == rhs.depth);
+    return std::make_pair(
+      extmap_node_meta_t{lhs.depth},
+      extmap_node_meta_t{lhs.depth});
+  }
+};
+
 struct ExtMapNode : LogicalCachedExtent {
   using ExtMapNodeRef = TCachedExtentRef<ExtMapNode>;
-  depth_t depth = 0;
 
   ExtMapNode(ceph::bufferptr &&ptr) : LogicalCachedExtent(std::move(ptr)) {}
   ExtMapNode(const ExtMapNode &other)
-  : LogicalCachedExtent(other),
-    depth(other.depth) {}
-
-  void set_depth(depth_t _depth) { depth = _depth; }
+  : LogicalCachedExtent(other) {}
 
   LogicalCachedExtentRef make_duplicate(TransactionManager &tm, Transaction& t,
 	  LogicalCachedExtentRef ref) {
@@ -56,6 +76,8 @@ struct ExtMapNode : LogicalCachedExtent {
 	  <std::tuple<ExtMapNodeRef, ExtMapNodeRef, uint32_t>>;
   virtual make_balanced_ret
     make_balanced(TransactionManager &tm, Transaction &t, ExtMapNodeRef right, bool prefer_left) = 0;
+
+  virtual extmap_node_meta_t get_node_meta() const = 0;
 
   virtual bool at_max_capacity() const = 0;
   virtual bool at_min_capacity() const = 0;

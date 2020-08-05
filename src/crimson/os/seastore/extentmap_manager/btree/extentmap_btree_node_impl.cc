@@ -24,7 +24,7 @@ namespace crimson::os::seastore::extentmap_manager {
 std::ostream &ExtMapInnerNode::print_detail(std::ostream &out) const
 {
   return out << ", size=" << get_size()
-	     << ", depth=" << depth;
+	     << ", depth=" << get_meta().depth;
 }
 
 ExtMapInnerNode::find_lextent_ret
@@ -37,7 +37,7 @@ ExtMapInnerNode::find_lextent(TransactionManager &tm, Transaction &t, objaddr_t 
     std::move(begin),
     std::move(end),
     [this, &tm, &t, &result, lo, len](const auto &val) mutable {
-      return extmap_load_extent(tm, t, val.get_val(), depth - 1).safe_then(
+      return extmap_load_extent(tm, t, val.get_val(), get_meta().depth - 1).safe_then(
 	  [&tm, &t, &result, lo, len](auto extent) mutable {
 	    return extent->find_lextent(tm, t, lo, len).safe_then(
 		[&t, &result, lo, len](auto item_list) mutable {
@@ -57,7 +57,7 @@ ExtMapInnerNode::insert(TransactionManager &tm, Transaction &t, objaddr_t lo, le
 {
   auto insertion_pt = get_containing_child(lo);
   assert(insertion_pt != end());
-  return extmap_load_extent(tm, t, insertion_pt->get_val(), depth-1).safe_then(
+  return extmap_load_extent(tm, t, insertion_pt->get_val(), get_meta().depth-1).safe_then(
     [this, &tm, insertion_pt, &t, lo, val=std::move(val)](auto extent) mutable {
       return extent->at_max_capacity() ?
         split_entry(tm, t, lo, insertion_pt, extent) :
@@ -71,7 +71,7 @@ ExtMapInnerNode::rm_lextent_ret
 ExtMapInnerNode::rm_lextent(TransactionManager &tm, Transaction &t, objaddr_t lo, lext_map_val_t val)
 {
   auto rm_pt = get_containing_child(lo);
-  return extmap_load_extent(tm, t, rm_pt->get_val(), depth-1).safe_then(
+  return extmap_load_extent(tm, t, rm_pt->get_val(), get_meta().depth-1).safe_then(
     [this, &tm, rm_pt, &t, lo, val=std::move(val)](auto extent) mutable {
     if (extent->at_min_capacity()) {
       return merge_entry(tm, t, lo, get_containing_child(lo), extent);
@@ -143,7 +143,7 @@ ExtMapInnerNode::split_entry(TransactionManager &tm, Transaction &t, objaddr_t l
       *this, *entry, *left, *right);
     //retire extent
     return tm.dec_ref(t, entry->get_laddr())
-      .safe_then([this, lo, left, right, pivot] (auto ret) {
+      .safe_then([lo, left, right, pivot] (auto ret) {
       return split_entry_ertr::make_ready_future<ExtMapNodeRef>(
              pivot > lo ? left : right);
     });
@@ -162,7 +162,7 @@ ExtMapInnerNode::merge_entry(TransactionManager &tm, Transaction &t, objaddr_t l
   logger().debug("ExtMapInnerNode: merge_entry: {}, {}", *this, *entry);
   auto is_left = (iter + 1) == end();
   auto donor_iter = is_left ? iter - 1 : iter + 1;
-  return extmap_load_extent(tm, t, donor_iter->get_val(), depth-1)
+  return extmap_load_extent(tm, t, donor_iter->get_val(), get_meta().depth - 1)
     .safe_then([this, &tm, &t, lo, iter, entry, donor_iter, is_left]
       (auto &&donor) mutable {
     auto [l, r] = is_left ?
@@ -224,7 +224,7 @@ ExtMapInnerNode::get_containing_child(objaddr_t lo)
 std::ostream &ExtMapLeafNode::print_detail(std::ostream &out) const
 {
   return out << ", size=" << get_size()
-	     << ", depth=" << depth;
+	     << ", depth=" << get_meta().depth;
 }
 
 ExtMapLeafNode::find_lextent_ret
@@ -345,20 +345,19 @@ ExtMapLeafNode::get_leaf_entries(objaddr_t addr, extent_len_t len)
 TransactionManager::read_extent_ertr::future<ExtMapNodeRef>
 extmap_load_extent(TransactionManager &tm, Transaction &t, laddr_t laddr, depth_t depth)
 {
-  if (depth > 0) {
+  ceph_assert(depth > 0);
+  if (depth > 1) {
     return tm.read_extents<ExtMapInnerNode>(t, laddr, EXTMAP_BLOCK_SIZE).safe_then(
-      [depth](auto&& extents) {
+      [](auto&& extents) {
       assert(extents.size() == 1);
       [[maybe_unused]] auto [laddr, e] = extents.front();
-      e->set_depth(depth);
       return TransactionManager::read_extent_ertr::make_ready_future<ExtMapNodeRef>(std::move(e));
     });
   } else {
     return tm.read_extents<ExtMapLeafNode>(t, laddr, EXTMAP_BLOCK_SIZE).safe_then(
-      [depth](auto&& extents) {
+      [](auto&& extents) {
       assert(extents.size() == 1);
       [[maybe_unused]] auto [laddr, e] = extents.front();
-      e->set_depth(depth);
       return TransactionManager::read_extent_ertr::make_ready_future<ExtMapNodeRef>(std::move(e));
     });
   }

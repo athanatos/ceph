@@ -15,6 +15,19 @@
 
 namespace crimson::os::seastore::extentmap_manager {
 
+struct extmap_node_meta_le_t {
+  depth_le_t depth = init_les32(0);
+
+  extmap_node_meta_le_t() = default;
+  extmap_node_meta_le_t(const extmap_node_meta_le_t &) = default;
+  explicit extmap_node_meta_le_t(const extmap_node_meta_t &val)
+    : depth(init_les32(val.depth)) {}
+
+  operator extmap_node_meta_t() const {
+    return extmap_node_meta_t{ depth };
+  }
+};
+
 /**
  * ExtMapInnerNode
  *
@@ -22,8 +35,9 @@ namespace crimson::os::seastore::extentmap_manager {
  * Extentmap Tree.
  *
  * Layout (4k):
- *   num_entries: uint16_t           2b
- *   (padding)  :                    14b
+ *   num_entries: uint32_t           4b
+ *   (padding)  :                    4b
+ *   meta       : depth              8b
  *   keys       : objaddr_t[340]     (340*4)b
  *   values     : laddr_t[340]       (340*8)b
  *                                    = 4096
@@ -34,6 +48,7 @@ struct ExtMapInnerNode
   : ExtMapNode,
     common::FixedKVNodeLayout<
       INNER_NODE_CAPACITY,
+      extmap_node_meta_t, extmap_node_meta_le_t,
       objaddr_t, ceph_le32,
       laddr_t, laddr_le_t> {
   using internal_iterator_t = const_iterator;
@@ -43,6 +58,8 @@ struct ExtMapInnerNode
     FixedKVNodeLayout(get_bptr().c_str()) {}
 
   static constexpr extent_types_t type = extent_types_t::EXTMAP_INNER;
+
+  extmap_node_meta_t get_node_meta() const final {return get_meta();}
 
   CachedExtentRef duplicate_for_write() final {
     assert(delta_buffer.empty());
@@ -137,8 +154,9 @@ struct ExtMapInnerNode
  * ExtentMap Tree.
  *
  * Layout (4k):
- *   num_entries: uint16_t               2b
- *   (padding)  :                        14b
+ *   num_entries: uint32_t               4b
+ *   (padding)  :                        4b
+ *   meta       : depth                  8b
  *   keys       : objaddr_t[204]         (204*4)b
  *   values     : lext_map_val_t[204]    (204*16)b
  *                                       = 4096
@@ -163,6 +181,7 @@ struct ExtMapLeafNode
   : ExtMapNode,
     common::FixedKVNodeLayout<
       LEAF_NODE_CAPACITY,
+      extmap_node_meta_t, extmap_node_meta_le_t,
       objaddr_t, ceph_le32,
       lext_map_val_t, lext_map_val_le_t> {
  using internal_iterator_t = const_iterator;
@@ -172,6 +191,8 @@ struct ExtMapLeafNode
     FixedKVNodeLayout(get_bptr().c_str()) {}
 
   static constexpr extent_types_t type = extent_types_t::EXTMAP_LEAF;
+
+  extmap_node_meta_t get_node_meta() const final { return get_meta(); }
 
   CachedExtentRef duplicate_for_write() final {
     assert(delta_buffer.empty());
