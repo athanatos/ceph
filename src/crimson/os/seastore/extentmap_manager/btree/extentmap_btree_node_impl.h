@@ -145,13 +145,13 @@ struct ExtMapInnerNode
  */
 constexpr size_t LEAF_NODE_CAPACITY = 204;
 struct lext_map_val_le_t {
-  laddr_le_t laddr = init_laddr_le_t(0);
+  laddr_le_t laddr;
   extent_len_le_t  length = init_extent_len_le_t(0);
 
   lext_map_val_le_t() = default;
   lext_map_val_le_t(const lext_map_val_le_t &) = default;
   explicit lext_map_val_le_t(const lext_map_val_t &val)
-    : laddr(init_laddr_le_t(val.laddr)),
+    : laddr(laddr_le_t(val.laddr)),
       length(init_extent_len_le_t(val.length)) {}
 
   operator lext_map_val_t() const {

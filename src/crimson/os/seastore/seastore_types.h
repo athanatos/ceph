@@ -178,7 +178,8 @@ struct paddr_le_t {
 std::ostream &operator<<(std::ostream &out, const paddr_t &rhs);
 
 using objaddr_t = uint32_t;
-constexpr uint32_t OBJ_ADDR_MIN = std::numeric_limits<uint32_t>::min();
+constexpr objaddr_t OBJ_ADDR_MIN = std::numeric_limits<objaddr_t>::min();
+
 // logical addr, see LBAManager, TransactionManager
 using laddr_t = uint64_t;
 constexpr laddr_t L_ADDR_MIN = std::numeric_limits<laddr_t>::min();
@@ -188,28 +189,23 @@ constexpr laddr_t L_ADDR_ROOT = std::numeric_limits<laddr_t>::max() - 1;
 constexpr laddr_t L_ADDR_LBAT = std::numeric_limits<laddr_t>::max() - 2;
 
 struct laddr_le_t {
-private:
-  laddr_t laddr;
-public:
-  laddr_le_t() = default;
-  laddr_le_t& operator=(laddr_t nv){
-    laddr = mswab(nv);
-    return *this;
-  }
+  ceph_le64 laddr = init_le64(L_ADDR_NULL);
 
-  laddr_le_t(const laddr_t &addr)
-  : laddr(mswab(addr)) {}
+  laddr_le_t() = default;
+  laddr_le_t(const laddr_le_t &) = default;
+  explicit laddr_le_t(const laddr_t &addr)
+    : laddr(init_le64(addr)) {}
 
   operator laddr_t() const {
-    return mswab(laddr);
+    return laddr_t(laddr);
   }
-} __attribute__ ((packed));
-
-inline laddr_le_t init_laddr_le_t(laddr_t addr) {
-  laddr_le_t v;
-  v = addr;
-  return v;
-}
+  laddr_le_t& operator=(laddr_t addr){
+    ceph_le64 val;
+    val = addr;
+    laddr = val;
+    return *this;
+  }
+};
 
 // logical offset, see LBAManager, TransactionManager
 using extent_len_t = uint32_t;
