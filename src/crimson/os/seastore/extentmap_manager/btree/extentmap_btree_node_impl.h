@@ -86,7 +86,7 @@ struct ExtMapInnerNode
   make_balanced_ret
   make_balanced(TransactionManager &tm, Transaction &t, ExtMapNodeRef _right, bool prefer_left) final;
 
-  std::ostream &print_detail(std::ostream &out) const final;
+  std::ostream &print_detail_l(std::ostream &out) const final;
 
   extent_types_t get_type() const final {
     return type;
@@ -239,7 +239,7 @@ struct ExtMapLeafNode
     buffer.replay(*this);
   }
 
-  std::ostream &print_detail(std::ostream &out) const final;
+  std::ostream &print_detail_l(std::ostream &out) const final;
 
   bool at_max_capacity() const final {
     return get_size() == get_capacity();

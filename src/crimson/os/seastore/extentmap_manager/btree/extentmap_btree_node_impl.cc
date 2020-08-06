@@ -21,7 +21,7 @@ namespace {
 
 namespace crimson::os::seastore::extentmap_manager {
 
-std::ostream &ExtMapInnerNode::print_detail(std::ostream &out) const
+std::ostream &ExtMapInnerNode::print_detail_l(std::ostream &out) const
 {
   return out << ", size=" << get_size()
 	     << ", depth=" << get_meta().depth;
@@ -221,7 +221,7 @@ ExtMapInnerNode::get_containing_child(objaddr_t lo)
   return end();
 }
 
-std::ostream &ExtMapLeafNode::print_detail(std::ostream &out) const
+std::ostream &ExtMapLeafNode::print_detail_l(std::ostream &out) const
 {
   return out << ", size=" << get_size()
 	     << ", depth=" << get_meta().depth;
