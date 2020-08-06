@@ -65,6 +65,18 @@ CachedExtent::~CachedExtent()
   }
 }
 
+std::ostream &LogicalCachedExtent::print_detail(std::ostream &out) const
+{
+  out << ", laddr=" << laddr;
+  if (pin) {
+    out << ", pin=" << *pin;
+  } else {
+    out << ", pin=empty";
+  }
+  print_detail_l(out);
+  return out;
+}
+
 std::ostream &operator<<(std::ostream &out, const LBAPin &rhs)
 {
   return out << "LBAPin(" << rhs.get_laddr() << "~" << rhs.get_length()
