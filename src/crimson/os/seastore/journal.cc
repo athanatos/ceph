@@ -35,7 +35,7 @@ Journal::initialize_segment_ertr::future<> Journal::initialize_segment(
   auto header = segment_header_t{
     current_journal_segment_seq++,
     segment.get_segment_id(),
-    current_replay_point};
+    segment_provider->get_journal_tail_target()};
   ::encode(header, bl);
 
   written_to = segment_manager.get_block_size();
@@ -209,7 +209,7 @@ Journal::find_replay_segments_fut Journal::find_replay_segments()
 		rt.second.journal_segment_seq;
 	    });
 
-	  auto replay_from = segments.rbegin()->second.journal_tail;
+	  auto replay_from = segments.rbegin()->second.journal_tail.offset;
 	  auto from = segments.begin();
 	  if (replay_from != P_ADDR_NULL) {
 	    from = std::find_if(
