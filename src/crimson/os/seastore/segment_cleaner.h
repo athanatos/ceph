@@ -57,7 +57,7 @@ public:
       segments[segment].state = Segment::segment_state_t::CLOSED;
     }
     auto &live_bytes = segments[segment].live_bytes;
-    assert(0 && (block_delta > 0 || -block_delta > static_cast<int64_t>(live_bytes)));
+    assert(block_delta > 0 || -block_delta > static_cast<int64_t>(live_bytes));
     live_bytes += block_delta;
   }
 
