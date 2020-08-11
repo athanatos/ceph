@@ -131,6 +131,54 @@ LBAInternalNode::mutate_mapping_ret LBAInternalNode::mutate_mapping(
   });
 }
 
+LBAInternalNode::mutate_internal_address_ret LBAInternalNode::mutate_internal_address(
+  op_context_t c,
+  depth_t depth,
+  laddr_t laddr,
+  paddr_t paddr)
+{
+  if (get_meta().depth == (depth + 1)) {
+    if (!is_pending()) {
+      return c.cache.duplicate_for_write(c.trans, this)->cast<LBAInternalNode>(
+      )->mutate_internal_address(
+	c,
+	depth,
+	laddr,
+	paddr);
+    }
+    auto iter = get_containing_child(laddr);
+    if (iter->get_key() != laddr) {
+      return crimson::ct_error::enoent::make();
+    }
+
+    auto old_paddr = iter->get_val();
+
+    journal_update(
+      iter,
+      maybe_generate_relative(paddr),
+      maybe_get_delta_buffer());
+
+    return mutate_internal_address_ret(
+      mutate_internal_address_ertr::ready_future_marker{},
+      old_paddr
+    );
+  } else {
+    auto iter = get_containing_child(laddr);
+    return get_lba_btree_extent(
+      c,
+      get_meta().depth - 1,
+      iter->get_val(),
+      get_paddr()
+    ).safe_then([=](auto node) {
+      return node->mutate_internal_address(
+	c,
+	depth,
+	laddr,
+	paddr);
+    });
+  }
+}
+
 LBAInternalNode::find_hole_ret LBAInternalNode::find_hole(
   op_context_t c,
   laddr_t min,
@@ -419,6 +467,18 @@ LBALeafNode::mutate_mapping_ret LBALeafNode::mutate_mapping(
       mutate_mapping_ertr::ready_future_marker{},
       mutated);
   }
+}
+
+LBALeafNode::mutate_internal_address_ret LBALeafNode::mutate_internal_address(
+  op_context_t c,
+  depth_t depth,
+  laddr_t laddr,
+  paddr_t paddr)
+{
+  ceph_assert(0 == "Impossible");
+  return mutate_internal_address_ret(
+    mutate_internal_address_ertr::ready_future_marker{},
+    paddr);
 }
 
 LBALeafNode::find_hole_ret LBALeafNode::find_hole(
