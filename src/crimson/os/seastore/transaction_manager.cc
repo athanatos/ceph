@@ -19,17 +19,17 @@ namespace {
 namespace crimson::os::seastore {
 
 TransactionManager::TransactionManager(
+  SegmentCleaner &segment_cleaner,
   SegmentManager &segment_manager,
   Journal &journal,
   Cache &cache,
   LBAManager &lba_manager)
-  : segment_manager(segment_manager),
+  : segment_cleaner(segment_cleaner),
+    segment_manager(segment_manager),
     cache(cache),
     lba_manager(lba_manager),
     journal(journal)
-{
-  journal.set_segment_provider(this);
-}
+{}
 
 TransactionManager::mkfs_ertr::future<> TransactionManager::mkfs()
 {

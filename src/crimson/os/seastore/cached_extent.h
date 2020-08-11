@@ -323,7 +323,8 @@ protected:
       dirty_from(other.dirty_from),
       ptr(other.ptr.c_str(), other.ptr.length()),
       version(other.version),
-      poffset(other.poffset) {}
+      poffset(other.poffset) 
+  {}
 
   struct share_buffer_t {};
   CachedExtent(const CachedExtent &other, share_buffer_t) :
