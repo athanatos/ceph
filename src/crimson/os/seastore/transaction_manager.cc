@@ -20,16 +20,16 @@ namespace crimson::os::seastore {
 
 TransactionManager::TransactionManager(
   SegmentManager &segment_manager,
+  SegmentCleaner &segment_cleaner,
   Journal &journal,
   Cache &cache,
   LBAManager &lba_manager)
   : segment_manager(segment_manager),
+    segment_cleaner(segment_cleaner),
     cache(cache),
     lba_manager(lba_manager),
     journal(journal)
-{
-  journal.set_segment_provider(this);
-}
+{}
 
 TransactionManager::mkfs_ertr::future<> TransactionManager::mkfs()
 {
@@ -159,14 +159,32 @@ TransactionManager::submit_transaction(
 
   return journal.submit_record(std::move(*record)).safe_then(
     [this, t=std::move(t)](auto p) mutable {
-      auto [addr, journal_seq] = p;
-      cache.complete_commit(*t, addr, journal_seq);
       lba_manager.complete_transaction(*t);
     },
     submit_transaction_ertr::pass_further{},
     crimson::ct_error::all_same_way([](auto e) {
       ceph_assert(0 == "Hit error submitting to journal");
     }));
+}
+
+CachedExtentRef TransactionManager::get_next_dirty_extent()
+{
+  return cache.get_next_dirty_extent();
+}
+
+TransactionManager::get_next_live_extents_ret TransactionManager::get_next_live_extents(
+  paddr_t after)
+{
+  return get_next_live_extents_ret(
+    get_next_live_extents_ertr::ready_future_marker{},
+    pextent_list_t{});
+}
+
+TransactionManager::rewrite_extent_ret TransactionManager::rewrite_extent(
+  Transaction &t,
+  CachedExtentRef extent)
+{
+  return lba_manager.rewrite_extent(t, extent);
 }
 
 TransactionManager::~TransactionManager() {}

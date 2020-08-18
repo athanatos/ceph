@@ -14,6 +14,7 @@
 #include "crimson/common/errorator.h"
 #include "crimson/os/seastore/cached_extent.h"
 #include "crimson/os/seastore/root_block.h"
+#include "crimson/os/seastore/segment_cleaner.h"
 
 namespace crimson::os::seastore {
 
@@ -228,6 +229,17 @@ public:
   }
 
   /**
+   * alloc_new_extent
+   *
+   * Allocates a fresh extent.  addr will be relative until commit.
+   */
+  CachedExtentRef alloc_new_extent_by_type(
+    Transaction &t,       ///< [in, out] current transaction
+    extent_types_t type,  ///< [in] type tag
+    segment_off_t length  ///< [in] length
+    );
+
+  /**
    * Allocates mutable buffer from extent_set on offset~len
    *
    * TODO: Note, currently all implementations literally copy the
@@ -343,6 +355,9 @@ public:
     std::ostream &out) const {
     return out;
   }
+
+  /// returns dirty extent with oldest delta (nullptr if none)
+  CachedExtentRef get_next_dirty_extent();
 
 private:
   SegmentManager &segment_manager; ///< ref to segment_manager

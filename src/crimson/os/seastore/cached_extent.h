@@ -219,6 +219,14 @@ public:
   }
 
   /**
+   * get_dirty_from
+   *
+   * Return journal location of oldest relevant delta.
+   */
+  auto get_dirty_from() const { return dirty_from; }
+
+
+  /**
    * get_paddr
    *
    * Returns current address of extent.  If is_initial_pending(), address will

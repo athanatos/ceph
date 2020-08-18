@@ -110,6 +110,36 @@ void Cache::replace_extent(CachedExtentRef next, CachedExtentRef prev)
   }
 }
 
+CachedExtentRef Cache::alloc_new_extent_by_type(
+  Transaction &t,       ///< [in, out] current transaction
+  extent_types_t type,  ///< [in] type tag
+  segment_off_t length  ///< [in] length
+)
+{
+  switch (type) {
+  case extent_types_t::ROOT:
+    assert(0 == "ROOT is never directly alloc'd");
+    return CachedExtentRef();
+  case extent_types_t::LADDR_INTERNAL:
+    return alloc_new_extent<lba_manager::btree::LBAInternalNode>(t, length);
+  case extent_types_t::LADDR_LEAF:
+    return alloc_new_extent<lba_manager::btree::LBALeafNode>(t, length);
+  case extent_types_t::ONODE_BLOCK:
+    return alloc_new_extent<OnodeBlock>(t, length);
+  case extent_types_t::TEST_BLOCK:
+    return alloc_new_extent<TestBlock>(t, length);
+  case extent_types_t::TEST_BLOCK_PHYSICAL:
+    return alloc_new_extent<TestBlockPhysical>(t, length);
+  case extent_types_t::NONE: {
+    ceph_assert(0 == "NONE is an invalid extent type");
+    return CachedExtentRef();
+  }
+  default:
+    ceph_assert(0 == "impossible");
+    return CachedExtentRef();
+  }
+}
+
 CachedExtentRef Cache::duplicate_for_write(
   Transaction &t,
   CachedExtentRef i) {
@@ -314,6 +344,11 @@ Cache::replay_delta(paddr_t record_base, const delta_info_t &delta)
 	mark_dirty(extent);
       });
   }
+}
+
+CachedExtentRef Cache::get_next_dirty_extent()
+{
+  return dirty.empty() ? nullptr : &dirty.back();
 }
 
 Cache::get_root_ret Cache::get_root(Transaction &t)
