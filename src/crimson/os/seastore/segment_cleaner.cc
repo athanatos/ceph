@@ -15,15 +15,24 @@ namespace crimson::os::seastore {
 
 SegmentCleaner::get_segment_ret SegmentCleaner::get_segment()
 {
-  // TODO
+  for (size_t i = 0; i < segments.size(); ++i) {
+    if (segments[i].is_empty()) {
+      segments[i].state = Segment::segment_state_t::OPEN;
+      return get_segment_ret(
+	get_segment_ertr::ready_future_marker{},
+	i);
+    }
+  }
+  assert(0 == "out of space handling todo");
   return get_segment_ret(
     get_segment_ertr::ready_future_marker{},
-    next++);
+    0);
 }
 
 void SegmentCleaner::put_segment(segment_id_t segment)
 {
-  return;
+  assert(segment < segments.size());
+  segments[segment].state = Segment::segment_state_t::CLOSED;
 }
 
 SegmentCleaner::do_immediate_work_ret SegmentCleaner::do_immediate_work(
@@ -49,6 +58,14 @@ SegmentCleaner::do_immediate_work_ret SegmentCleaner::do_immediate_work(
   ).safe_then([this, &t] {
     return do_immediate_work(t);
   });
+}
+
+SegmentCleaner::do_deferred_work_ret SegmentCleaner::do_deferred_work(
+  Transaction &t)
+{
+  return do_deferred_work_ret(
+    do_deferred_work_ertr::ready_future_marker{},
+    ceph::timespan());
 }
 
 }

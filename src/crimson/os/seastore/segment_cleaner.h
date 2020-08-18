@@ -17,6 +17,17 @@
 namespace crimson::os::seastore {
 class Transaction;
 
+struct segment_info_t {
+  Segment::segment_state_t state = Segment::segment_state_t::EMPTY;
+  segment_seq_t journal_segment_seq = NULL_SEG_SEQ;
+  size_t live_bytes;
+  bool init = false;
+
+  bool is_empty() const {
+    return state == Segment::segment_state_t::EMPTY;
+  }
+};
+
 class SegmentCleaner : public JournalSegmentProvider {
 public:
   /// Config
@@ -84,8 +95,10 @@ public:
   };
 
 private:
-  segment_id_t next = 0;
   config_t config;
+
+  std::vector<segment_info_t> segments;
+  bool init = false;
 
   journal_seq_t journal_tail_target;
   journal_seq_t journal_tail_committed;
@@ -95,7 +108,7 @@ private:
 
 public:
   SegmentCleaner(config_t config)
-    : config(config) {}
+    : config(config), segments(config.num_segments) {}
 
   get_segment_ret get_segment() final;
 
@@ -110,6 +123,25 @@ public:
       journal_tail_committed = committed;
     }
   }
+
+  void set_segment_seq(segment_id_t segment, segment_seq_t seq) {
+    assert(segment < segments.size());
+    segments[segment].journal_segment_seq = seq;
+    if (seq > max_journal_segment_seq)
+      max_journal_segment_seq = seq;
+  }
+
+  void update_segment(segment_id_t segment, int64_t block_delta) {
+    assert(segment < segments.size());
+    if (!init) {
+      segments[segment].state = Segment::segment_state_t::CLOSED;
+    }
+    auto &live_bytes = segments[segment].live_bytes;
+    assert(block_delta > 0 || -block_delta > static_cast<int64_t>(live_bytes));
+    live_bytes += block_delta;
+  }
+
+  void complete_init() { init = true; }
 
   void update_journal_tail_target(journal_seq_t target) {
     assert(target >= journal_tail_target);
