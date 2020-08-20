@@ -262,6 +262,7 @@ void Cache::complete_commit(
     }
     i->state = CachedExtent::extent_state_t::DIRTY;
     if (i->version == 1) {
+      i->dirty_from = seq;
       add_to_dirty(i);
     }
   }
@@ -323,6 +324,9 @@ Cache::replay_delta(paddr_t record_base, const delta_info_t &delta)
 	extent->apply_delta_and_adjust_crc(record_base, delta.bl);
 	assert(extent->last_committed_crc == delta.final_crc);
 
+	if (extent->version == 0) {
+	  extent->dirty_from = journal_seq;
+	}
 	extent->version++;
 	mark_dirty(extent);
       });

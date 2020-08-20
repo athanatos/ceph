@@ -52,6 +52,7 @@ class CachedExtent : public boost::intrusive_ref_counter<
 
   // Points at current version while in state MUTATION_PENDING
   CachedExtentRef prior_instance;
+  journal_seq_t dirty_from;
 
 public:
   /**
@@ -122,6 +123,7 @@ public:
     out << "CachedExtent(addr=" << this
 	<< ", type=" << get_type()
 	<< ", version=" << version
+	<< ", dirty_from=" << dirty_from
 	<< ", paddr=" << get_paddr()
 	<< ", state=" << state
 	<< ", last_committed_crc=" << last_committed_crc
@@ -218,6 +220,14 @@ public:
   bool is_valid() const {
     return state != extent_state_t::INVALID;
   }
+
+  /**
+   * get_dirty_from
+   *
+   * Return journal location of oldest relevant delta.
+   */
+  auto get_dirty_from() const { return dirty_from; }
+
 
   /**
    * get_paddr
@@ -321,6 +331,7 @@ protected:
   CachedExtent(ceph::bufferptr &&ptr) : ptr(std::move(ptr)) {}
   CachedExtent(const CachedExtent &other)
     : state(other.state),
+      dirty_from(other.dirty_from),
       ptr(other.ptr.c_str(), other.ptr.length()),
       version(other.version),
       poffset(other.poffset) {}
@@ -328,6 +339,7 @@ protected:
   struct share_buffer_t {};
   CachedExtent(const CachedExtent &other, share_buffer_t) :
     state(other.state),
+    dirty_from(other.dirty_from),
     ptr(other.ptr),
     version(other.version),
     poffset(other.poffset) {}
