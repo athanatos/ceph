@@ -67,6 +67,11 @@ public:
     return make_transaction();
   }
 
+  /// Creates lazy transaction
+  TransactionRef create_lazy_transaction() {
+    return make_lazy_transaction();
+  }
+
   /**
    * Read extents corresponding to specified lba range
    */
