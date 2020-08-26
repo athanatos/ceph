@@ -44,6 +44,7 @@ public:
   }
 
   void add_to_retired_set(CachedExtentRef ref) {
+    ceph_assert(!is_lazy());
     if (!ref->is_initial_pending()) {
       // && retired_set.count(ref->get_paddr()) == 0
       // If it's already in the set, insert here will be a noop,
@@ -58,11 +59,14 @@ public:
   }
 
   void add_to_read_set(CachedExtentRef ref) {
+    if (is_lazy()) return;
+
     ceph_assert(read_set.count(ref) == 0);
     read_set.insert(ref);
   }
 
   void add_fresh_extent(CachedExtentRef ref) {
+    ceph_assert(!is_lazy());
     fresh_block_list.push_back(ref);
     ref->set_paddr(make_record_relative_paddr(offset));
     offset += ref->get_length();
@@ -70,6 +74,7 @@ public:
   }
 
   void add_mutated_extent(CachedExtentRef ref) {
+    ceph_assert(!is_lazy());
     mutated_block_list.push_back(ref);
     write_set.insert(*ref);
   }
@@ -86,8 +91,20 @@ public:
     return retired_set;
   }
 
+  bool is_lazy() const {
+    return lazy;
+  }
+
 private:
   friend class Cache;
+  friend Ref make_transaction();
+  friend Ref make_lazy_transaction();
+
+  /**
+   * If set, *this may not be used to perform writes and will not provide
+   * consistentency allowing operations using to avoid maintaining a read_set.
+   */
+  const bool lazy;          
 
   RootBlockRef root;        ///< ref to root if mutated by transaction
 
@@ -100,11 +117,17 @@ private:
   std::list<CachedExtentRef> mutated_block_list; ///< list of mutated blocks
 
   pextent_set_t retired_set; ///< list of extents mutated by this transaction
+
+  Transaction(bool lazy) : lazy(lazy) {}
 };
 using TransactionRef = Transaction::Ref;
 
 inline TransactionRef make_transaction() {
-  return std::make_unique<Transaction>();
+  return std::unique_ptr<Transaction>(new Transaction(false));
+}
+
+inline TransactionRef make_lazy_transaction() {
+  return std::unique_ptr<Transaction>(new Transaction(true));
 }
 
 }
