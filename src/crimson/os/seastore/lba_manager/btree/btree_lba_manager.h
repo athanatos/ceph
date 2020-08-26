@@ -98,7 +98,9 @@ public:
     CachedExtentRef extent);
 
   void add_pin(LBAPin &pin) final {
-    pin_set.add_pin(reinterpret_cast<BtreeLBAPin*>(&pin)->pin);
+    auto *bpin = reinterpret_cast<BtreeLBAPin*>(&pin);
+    pin_set.add_pin(bpin->pin);
+    bpin->parent = nullptr;
   }
 
 private:
