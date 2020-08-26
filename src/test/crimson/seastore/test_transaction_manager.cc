@@ -166,6 +166,10 @@ struct transaction_manager_test_t : public seastar_test_suite_t {
     return { tm->create_transaction(), test_mappings };
   }
 
+  test_transaction_t create_lazy_transaction() {
+    return { tm->create_lazy_transaction(), test_mappings };
+  }
+
   TestBlockRef alloc_extent(
     test_transaction_t &t,
     laddr_t hint,
@@ -203,7 +207,7 @@ struct transaction_manager_test_t : public seastar_test_suite_t {
   }
 
   void check_mappings() {
-    auto t = create_transaction();
+    auto t = create_lazy_transaction();
     check_mappings(t);
   }
 
