@@ -13,12 +13,44 @@ namespace {
 
 namespace crimson::os::seastore {
 
+bool SpaceTracker::compare(const SpaceTracker &other) const
+{
+  if (other.live_bytes_by_segment.size() != live_bytes_by_segment.size()) {
+    logger().debug("{}: different segment counts, bug in test");
+    assert(0 == "segment counts should match");
+    return false;
+  }
+
+  bool all_match = true;
+  for (segment_id_t i = 0; i < live_bytes_by_segment.size(); ++i) {
+    if (other.live_bytes_by_segment[i] != live_bytes_by_segment[i]) {
+      all_match = false;
+      logger().debug(
+	"{}: segment_id {} live bytes mismatch *this: {}, other: {}",
+	__func__,
+	i,
+	live_bytes_by_segment[i],
+	other.live_bytes_by_segment[i]);
+    }
+  }
+  return all_match;
+}
+
 SegmentCleaner::get_segment_ret SegmentCleaner::get_segment()
 {
-  // TODO
+  for (size_t i = 0; i < segments.size(); ++i) {
+    if (segments[i].is_empty()) {
+      segments[i].state = Segment::segment_state_t::OPEN;
+      logger().debug("{}: returning segment {}", __func__, i);
+      return get_segment_ret(
+	get_segment_ertr::ready_future_marker{},
+	i);
+    }
+  }
+  assert(0 == "out of space handling todo");
   return get_segment_ret(
     get_segment_ertr::ready_future_marker{},
-    next++);
+    0);
 }
 
 void SegmentCleaner::update_journal_tail_target(journal_seq_t target)
@@ -53,9 +85,10 @@ void SegmentCleaner::update_journal_tail_committed(journal_seq_t committed)
   }
 }
 
-void SegmentCleaner::put_segment(segment_id_t segment)
+void SegmentCleaner::close_segment(segment_id_t segment)
 {
-  return;
+  assert(segment < segments.size());
+  segments[segment].state = Segment::segment_state_t::CLOSED;
 }
 
 SegmentCleaner::do_immediate_work_ret SegmentCleaner::do_immediate_work(
@@ -95,6 +128,14 @@ SegmentCleaner::do_immediate_work_ret SegmentCleaner::do_immediate_work(
 	  });
       });
   });
+}
+
+SegmentCleaner::do_deferred_work_ret SegmentCleaner::do_deferred_work(
+  Transaction &t)
+{
+  return do_deferred_work_ret(
+    do_deferred_work_ertr::ready_future_marker{},
+    ceph::timespan());
 }
 
 }

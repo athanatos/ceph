@@ -62,6 +62,7 @@ TransactionManager::mkfs_ertr::future<> TransactionManager::mkfs()
 
 TransactionManager::mount_ertr::future<> TransactionManager::mount()
 {
+  segment_cleaner.reset_usage();
   cache.init();
   return journal.replay([this](auto seq, auto paddr, const auto &e) {
     return cache.replay_delta(seq, paddr, e);
@@ -77,6 +78,18 @@ TransactionManager::mount_ertr::future<> TransactionManager::mount()
 	}).safe_then([this, &t]() mutable {
 	  return submit_transaction(std::move(t));
 	});
+      });
+  }).safe_then([this] {
+    return seastar::do_with(
+      make_lazy_transaction(),
+      [this](auto &t) {
+	return lba_manager.scan_mapped_space(
+	  *t,
+	  [this](paddr_t addr, extent_len_t len) {
+	    segment_cleaner.update_segment(
+	      addr.segment,
+	      len);
+	  });
       });
   }).handle_error(
     mount_ertr::pass_further{},
@@ -170,7 +183,7 @@ TransactionManager::submit_transaction(
       [this, t=std::move(t)](auto p) mutable {
 	auto [addr, journal_seq] = p;
 	segment_cleaner.set_journal_head(journal_seq);
-	cache.complete_commit(*t, addr, journal_seq);
+	cache.complete_commit(*t, addr, journal_seq, &segment_cleaner);
 	lba_manager.complete_transaction(*t);
       },
       submit_transaction_ertr::pass_further{},
