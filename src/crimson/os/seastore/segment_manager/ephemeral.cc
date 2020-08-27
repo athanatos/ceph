@@ -116,14 +116,26 @@ EphemeralSegmentManager::~EphemeralSegmentManager()
   }
 }
 
+void EphemeralSegmentManager::reopen()
+{
+  for (auto &i : segment_state) {
+    if (i == Segment::segment_state_t::OPEN)
+      i = Segment::segment_state_t::CLOSED;
+  }
+}
+
 SegmentManager::open_ertr::future<SegmentRef> EphemeralSegmentManager::open(
   segment_id_t id)
 {
-  if (id >= get_num_segments())
+  if (id >= get_num_segments()) {
+    logger().debug("EphemeralSegmentManager::open: invalid segment {}", id);
     return crimson::ct_error::invarg::make();
+  }
 
-  if (segment_state[id] != segment_state_t::EMPTY)
+  if (segment_state[id] != segment_state_t::EMPTY) {
+    logger().debug("EphemeralSegmentManager::open: segment {} not empty", id);
     return crimson::ct_error::invarg::make();
+  }
 
   segment_state[id] = segment_state_t::OPEN;
   return open_ertr::make_ready_future<SegmentRef>(new EphemeralSegment(*this, id));
