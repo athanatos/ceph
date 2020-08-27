@@ -17,6 +17,39 @@
 namespace crimson::os::seastore {
 class Transaction;
 
+struct segment_info_t {
+  Segment::segment_state_t state = Segment::segment_state_t::EMPTY;
+
+  // Will be non-null for any segments in the current journal
+  segment_seq_t journal_segment_seq = NULL_SEG_SEQ;
+
+  bool is_empty() const {
+    return state == Segment::segment_state_t::EMPTY;
+  }
+};
+
+class SpaceTracker {
+  // Tracks live space for each segment
+  std::vector<int64_t> live_bytes_by_segment;
+
+public:
+  SpaceTracker(size_t num_segments)
+    : live_bytes_by_segment(num_segments, 0) {}
+
+  int64_t update_usage(segment_id_t segment, int64_t delta) {
+    assert(segment < live_bytes_by_segment.size());
+    live_bytes_by_segment[segment] += delta;
+    return live_bytes_by_segment[segment];
+  }
+
+  uint64_t get_usage(segment_id_t segment) const {
+    assert(segment < live_bytes_by_segment.size());
+    return live_bytes_by_segment[segment];
+  }
+
+  bool compare(const SpaceTracker &other) const;
+};
+
 class SegmentCleaner : public JournalSegmentProvider {
 public:
   /// Config
@@ -69,8 +102,11 @@ public:
   };
 
 private:
-  segment_id_t next = 0;
   config_t config;
+
+  SpaceTracker space_tracker;
+  std::vector<segment_info_t> segments;
+  bool init = false;
 
   journal_seq_t journal_tail_target;
   journal_seq_t journal_tail_committed;
@@ -80,20 +116,24 @@ private:
 
 public:
   SegmentCleaner(config_t config)
-    : config(config) {}
+    : config(config),
+      space_tracker(config.num_segments),
+      segments(config.num_segments) {}
 
   get_segment_ret get_segment() final;
 
-  // hack for testing until we get real space handling
-  void set_next(segment_id_t _next) {
-    next = _next;
-  }
-  segment_id_t get_next() const {
-    return next;
-  }
+  void close_segment(segment_id_t segment) final;
 
-
-  void put_segment(segment_id_t segment) final;
+  void set_journal_segment(
+    segment_id_t segment, segment_seq_t seq, bool replay) final {
+    assert(segment < segments.size());
+    segments[segment].journal_segment_seq = seq;
+    if (!replay) {
+      segments[segment].state = Segment::segment_state_t::OPEN;
+    } else {
+      segments[segment].state = Segment::segment_state_t::CLOSED;
+    }
+  }
 
   journal_seq_t get_journal_tail_target() const final {
     return journal_tail_target;
@@ -112,8 +152,22 @@ public:
     journal_head = head;
   }
 
+  void update_segment(segment_id_t segment, int64_t block_delta) {
+    assert(segment < segments.size());
+    if (!init) {
+      segments[segment].state = Segment::segment_state_t::CLOSED;
+    }
+    space_tracker.update_usage(segment, block_delta);
+  }
+
+  void complete_init() { init = true; }
+
   void set_extent_callback(ExtentCallbackInterface *cb) {
     ecb = cb;
+  }
+
+  bool debug_check_space(const SpaceTracker &tracker) {
+    return space_tracker.compare(tracker);
   }
 
   /**

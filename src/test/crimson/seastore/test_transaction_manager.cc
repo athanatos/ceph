@@ -198,12 +198,28 @@ struct transaction_manager_test_t : public seastar_test_suite_t {
       get_random_contents());
   }
 
+  void check_usage() {
+    auto t = create_lazy_transaction();
+    SpaceTracker tracker(segment_manager->get_num_segments());
+    lba_manager->scan_mapped_space(
+      *t.t,
+      [&tracker](auto offset, auto len) {
+	tracker.update_usage(
+	  offset.segment,
+	  len);
+      }).unsafe_get0();
+    EXPECT_TRUE(segment_cleaner->debug_check_space(tracker));
+  }
+
   void replay() {
+    logger().debug("{}: begin", __func__);
+    check_usage();
     tm->close().unsafe_get();
     destroy();
     static_cast<segment_manager::EphemeralSegmentManager*>(&*segment_manager)->reopen();
     init();
     tm->mount().unsafe_get();
+    logger().debug("{}: end", __func__);
   }
 
   void check_mappings() {
