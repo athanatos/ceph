@@ -78,6 +78,20 @@ TransactionManager::mount_ertr::future<> TransactionManager::mount()
 	  return submit_transaction(std::move(t));
 	});
       });
+  }).safe_then([this] {
+    return seastar::do_with(
+      make_lazy_transaction(),
+      [this](auto &t) {
+	return lba_manager.scan_mappings(
+	  *t,
+	  0,
+	  L_ADDR_MAX,
+	  [this](paddr_t addr, extent_len_t len) {
+	    segment_cleaner.update_segment(
+	      addr.segment,
+	      len);
+	  });
+      });
   }).handle_error(
     mount_ertr::pass_further{},
     crimson::ct_error::all_same_way([] {
