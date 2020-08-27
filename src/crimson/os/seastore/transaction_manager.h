@@ -67,9 +67,9 @@ public:
     return make_transaction();
   }
 
-  /// Creates lazy transaction
-  TransactionRef create_lazy_transaction() {
-    return make_lazy_transaction();
+  /// Creates weak transaction
+  TransactionRef create_weak_transaction() {
+    return make_weak_transaction();
   }
 
   /**
