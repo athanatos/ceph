@@ -198,7 +198,7 @@ struct transaction_manager_test_t : public seastar_test_suite_t {
       get_random_contents());
   }
 
-  void check_usage() {
+  bool check_usage() {
     auto t = create_lazy_transaction();
     SpaceTracker tracker(segment_manager->get_num_segments());
     lba_manager->scan_mapped_space(
@@ -208,12 +208,12 @@ struct transaction_manager_test_t : public seastar_test_suite_t {
 	  offset.segment,
 	  len);
       }).unsafe_get0();
-    EXPECT_TRUE(segment_cleaner->debug_check_space(tracker));
+    return segment_cleaner->debug_check_space(tracker);
   }
 
   void replay() {
     logger().debug("{}: begin", __func__);
-    check_usage();
+    EXPECT_TRUE(check_usage());
     tm->close().unsafe_get();
     destroy();
     static_cast<segment_manager::EphemeralSegmentManager*>(&*segment_manager)->reopen();
@@ -302,6 +302,7 @@ struct transaction_manager_test_t : public seastar_test_suite_t {
   }
 };
 
+#if 0
 TEST_F(transaction_manager_test_t, basic)
 {
   constexpr laddr_t SIZE = 4096;
@@ -341,6 +342,7 @@ TEST_F(transaction_manager_test_t, mutate)
       submit_transaction(std::move(t));
       check_mappings();
     }
+    ASSERT_TRUE(check_usage());
     replay();
     {
       auto t = create_transaction();
@@ -354,6 +356,7 @@ TEST_F(transaction_manager_test_t, mutate)
       submit_transaction(std::move(t));
       check_mappings();
     }
+    ASSERT_TRUE(check_usage());
     replay();
     check_mappings();
   });
@@ -389,7 +392,6 @@ TEST_F(transaction_manager_test_t, create_remove_same_transaction)
     check_mappings();
   });
 }
-
 
 TEST_F(transaction_manager_test_t, inc_dec_ref)
 {
@@ -455,6 +457,7 @@ TEST_F(transaction_manager_test_t, cause_lba_split)
     check_mappings();
   });
 }
+#endif
 
 TEST_F(transaction_manager_test_t, random_writes)
 {
@@ -473,8 +476,8 @@ TEST_F(transaction_manager_test_t, random_writes)
       submit_transaction(std::move(t));
     }
 
-    for (unsigned i = 0; i < 5; ++i) {
-      for (unsigned j = 0; j < 50; ++j) {
+    for (unsigned i = 0; i < 4; ++i) {
+      for (unsigned j = 0; j < 65; ++j) {
 	auto t = create_transaction();
 	for (unsigned k = 0; k < 2; ++k) {
 	  auto ext = get_extent(
