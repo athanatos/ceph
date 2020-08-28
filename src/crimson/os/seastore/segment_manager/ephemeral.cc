@@ -72,6 +72,14 @@ Segment::write_ertr::future<> EphemeralSegmentManager::segment_write(
     return crimson::ct_error::invarg::make();
 
   bl.begin().copy(bl.length(), buffer + get_offset(addr));
+
+  // DEBUGGING, remove
+  bufferptr out(bl.length());
+  out.copy_in(0, bl.length(), buffer + get_offset(addr));
+  bufferlist bl2;
+  bl2.append(out);
+  assert(bl2.crc32c(1) == bl.crc32c(1));
+
   return Segment::write_ertr::now();
 }
 
@@ -160,11 +168,20 @@ SegmentManager::read_ertr::future<> EphemeralSegmentManager::read(
   size_t len,
   ceph::bufferptr &out)
 {
-  if (addr.segment >= get_num_segments())
+  if (addr.segment >= get_num_segments()) {
+    logger().debug(
+      "EphemeralSegmentManager::read: invalid segment {}",
+      addr);
     return crimson::ct_error::invarg::make();
+  }
 
-  if (addr.offset + len >= config.segment_size)
+  if (addr.offset + len >= config.segment_size) {
+    logger().debug(
+      "EphemeralSegmentManager::read: invalid offset {}~{}!",
+      addr,
+      len);
     return crimson::ct_error::invarg::make();
+  }
 
   out.copy_in(0, len, buffer + get_offset(addr));
 

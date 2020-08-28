@@ -242,8 +242,12 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
     if (i->get_type() == extent_types_t::ROOT) {
       assert(0 == "ROOT never gets written as a fresh block");
     }
+    assert(bl.length() == i->get_length());
     record.extents.push_back(extent_t{std::move(bl)});
   }
+  auto [len, crc] = record.get_extent_crc();
+  assert(len == (size_t)t.offset);
+  logger().debug("try_construct_record: extent len is {}, crc is {}", len, crc);
 
   return std::make_optional<record_t>(std::move(record));
 }
@@ -314,6 +318,36 @@ void Cache::complete_commit(
   for (auto &i: t.mutated_block_list) {
     i->complete_io();
   }
+}
+
+Cache::validate_fresh_extents_ret Cache::validate_fresh_extents(Transaction &t)
+{
+  return crimson::do_for_each(
+    t.get_fresh_block_list().begin(),
+    t.get_fresh_block_list().end(),
+    [this](auto ext) {
+      return segment_manager.read(
+	ext->get_paddr(),
+	ext->get_length()).safe_then([ext](auto bptr) {
+	  if (ext->is_valid()) {
+	    auto written = ceph_crc32c(
+	      1,
+	      reinterpret_cast<const unsigned char *>(bptr.c_str()),
+	      ext->get_length());
+	    auto cached = ext->last_committed_crc;
+	    if (written != ext->last_committed_crc) {
+	      logger().error(
+		"Cache::validate_fresh_extents: ERROR: addr {} len {} cached {} crc {} does not match disk crc {}",
+		ext->get_paddr(),
+		ext->get_length(),
+		*ext,
+		cached,
+		written);
+	    }
+	  }
+	  return validate_fresh_extents_ertr::now();
+	});
+    });
 }
 
 void Cache::init() {
