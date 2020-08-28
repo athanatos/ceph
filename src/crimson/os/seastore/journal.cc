@@ -385,7 +385,7 @@ Journal::replay_segment(
 			journal_seq_t{
 			  seq.segment_seq,
 			  record_start},
-			record_start.add_offset(block_size),
+			record_start.add_offset(header.mdlength),
 			info);
 		    });
 		}).safe_then([] {
