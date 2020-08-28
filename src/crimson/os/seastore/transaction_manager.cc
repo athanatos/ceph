@@ -185,13 +185,16 @@ TransactionManager::submit_transaction(
     if (!record) {
       return crimson::ct_error::eagain::make();
     }
-
+    
+    auto &tref = *t;
     return journal.submit_record(std::move(*record)
-    ).safe_then([this, t=std::move(t)](auto p) mutable {
+    ).safe_then([this, &tref](auto p) mutable {
       auto [addr, journal_seq] = p;
       segment_cleaner.set_journal_head(journal_seq);
-      cache.complete_commit(*t, addr, journal_seq, &segment_cleaner);
-      lba_manager.complete_transaction(*t);
+      cache.complete_commit(tref, addr, journal_seq, &segment_cleaner);
+      lba_manager.complete_transaction(tref);
+      return cache.validate_fresh_extents(tref);
+    }).safe_then([this, t=std::move(t)] {
       auto to_release = t->get_segment_to_release();
       if (to_release != NULL_SEG_ID) {
 	segment_cleaner.mark_segment_released(to_release);
@@ -204,7 +207,7 @@ TransactionManager::submit_transaction(
       crimson::ct_error::all_same_way([](auto e) {
 	ceph_assert(0 == "Hit error submitting to journal");
       }));
-  });
+    });
 }
 
 TransactionManager::get_next_dirty_extents_ret
