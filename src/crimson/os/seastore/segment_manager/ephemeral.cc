@@ -85,6 +85,14 @@ Segment::write_ertr::future<> EphemeralSegmentManager::segment_write(
     return crimson::ct_error::invarg::make();
 
   bl.begin().copy(bl.length(), buffer + get_offset(addr));
+
+  // DEBUGGING, remove
+  bufferptr out(bl.length());
+  out.copy_in(0, bl.length(), buffer + get_offset(addr));
+  bufferlist bl2;
+  bl2.append(out);
+  assert(bl2.crc32c(1) == bl.crc32c(1));
+
   return Segment::write_ertr::now().safe_then([] {
     return seastar::sleep(std::chrono::milliseconds(1));
   });
