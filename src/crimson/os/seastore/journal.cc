@@ -82,6 +82,11 @@ ceph::bufferlist Journal::encode_record(
 	block_size - (metadatabl.length() % block_size)));
   }
 
+  logger().debug(
+    "Journal::encode_record: databl len, crc: {}, {}",
+    databl.length(),
+    databl.begin().crc32c(databl.length(), 1));
+
   ceph_assert(metadatabl.length() == rsize.mdlength);
   ceph_assert(databl.length() == rsize.dlength);
   metadatabl.claim_append(databl);
