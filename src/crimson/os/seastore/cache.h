@@ -357,6 +357,15 @@ public:
   );
 
   /**
+   * validate_fresh
+   *
+   * Debug, validates that freshly written extents can be read correctly
+   */
+  using validate_fresh_extents_ertr = SegmentManager::read_ertr;
+  using validate_fresh_extents_ret = validate_fresh_extents_ertr::future<>;
+  validate_fresh_extents_ret validate_fresh_extents(Transaction &t);
+
+  /**
    * init
    */
   void init();

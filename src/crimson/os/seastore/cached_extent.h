@@ -125,6 +125,7 @@ public:
 	<< ", version=" << version
 	<< ", dirty_from=" << dirty_from
 	<< ", paddr=" << get_paddr()
+	<< ", len=" << get_length()
 	<< ", state=" << state
 	<< ", last_committed_crc=" << last_committed_crc
 	<< ", refcount=" << use_count();

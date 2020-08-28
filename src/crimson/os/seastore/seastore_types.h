@@ -346,6 +346,16 @@ std::ostream &operator<<(std::ostream &lhs, const delta_info_t &rhs);
 struct record_t {
   std::vector<extent_t> extents;
   std::vector<delta_info_t> deltas;
+
+  std::pair<size_t, uint32_t> get_extent_crc() {
+    size_t length = 0;
+    uint32_t crc = 1;
+    for (auto &i: extents) {
+      crc = i.bl.begin().crc32c(i.bl.length(), crc);
+      length += i.bl.length();
+    }
+    return std::make_pair(length, crc);
+  }
 };
 
 }
