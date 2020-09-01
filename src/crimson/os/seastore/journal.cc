@@ -101,9 +101,10 @@ Journal::write_record_ret Journal::write_record(
   assert((to_write.length() % block_size) == 0);
   written_to += to_write.length();
   logger().debug(
-    "write_record, mdlength {}, dlength {}",
+    "write_record, mdlength {}, dlength {}, target {}",
     rsize.mdlength,
-    rsize.dlength);
+    rsize.dlength,
+    target);
   return current_journal_segment->write(target, to_write).handle_error(
     write_record_ertr::pass_further{},
     crimson::ct_error::assert_all{ "TODO" }).safe_then([this, target] {
