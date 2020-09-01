@@ -86,8 +86,8 @@ TransactionManager::mount_ertr::future<> TransactionManager::mount()
 	return lba_manager.scan_mapped_space(
 	  *t,
 	  [this](paddr_t addr, extent_len_t len) {
-	    segment_cleaner.update_segment(
-	      addr.segment,
+	    segment_cleaner.mark_space_used(
+	      addr,
 	      len);
 	  });
       });

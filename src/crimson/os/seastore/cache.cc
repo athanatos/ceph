@@ -282,8 +282,8 @@ void Cache::complete_commit(
     logger().debug("complete_commit: fresh {}", *i);
     add_extent(i);
     if (cleaner) {
-      cleaner->update_segment(
-	i->get_paddr().segment,
+      cleaner->mark_space_used(
+	i->get_paddr(),
 	i->get_length());
     }
   }
@@ -307,9 +307,9 @@ void Cache::complete_commit(
 
   if (cleaner) {
     for (auto &i: t.retired_set) {
-      cleaner->update_segment(
-	i->get_paddr().segment,
-	-(int64_t)i->get_length());
+      cleaner->mark_space_free(
+	i->get_paddr(),
+	i->get_length());
     }
   }
 

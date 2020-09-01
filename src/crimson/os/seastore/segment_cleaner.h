@@ -28,32 +28,158 @@ struct segment_info_t {
   }
 };
 
-class SpaceTracker {
+class SpaceTrackerI {
+public:
+  virtual int64_t allocate(
+    segment_id_t segment,
+    segment_off_t offset,
+    extent_len_t len) = 0;
+
+  virtual int64_t release(
+    segment_id_t segment,
+    segment_off_t offset,
+    extent_len_t len) = 0;
+
+  virtual int64_t get_usage(
+    segment_id_t segment) const = 0;
+
+  virtual bool compare(const SpaceTrackerI &other) const = 0;
+
+  virtual std::unique_ptr<SpaceTrackerI> make_empty() const = 0;
+
+  virtual void reset() = 0;
+
+  virtual ~SpaceTrackerI() = default;
+};
+using SpaceTrackerIRef = std::unique_ptr<SpaceTrackerI>;
+
+class SpaceTrackerSimple : public SpaceTrackerI {
   // Tracks live space for each segment
   std::vector<int64_t> live_bytes_by_segment;
-
-public:
-  SpaceTracker(size_t num_segments)
-    : live_bytes_by_segment(num_segments, 0) {}
 
   int64_t update_usage(segment_id_t segment, int64_t delta) {
     assert(segment < live_bytes_by_segment.size());
     live_bytes_by_segment[segment] += delta;
     return live_bytes_by_segment[segment];
   }
+public:
+  SpaceTrackerSimple(size_t num_segments)
+    : live_bytes_by_segment(num_segments, 0) {}
 
-  uint64_t get_usage(segment_id_t segment) const {
+  int64_t allocate(
+    segment_id_t segment,
+    segment_off_t offset,
+    extent_len_t len) final {
+    return update_usage(segment, len);
+  }
+
+  int64_t release(
+    segment_id_t segment,
+    segment_off_t offset,
+    extent_len_t len) final {
+    return update_usage(segment, -len);
+  }
+
+  int64_t get_usage(segment_id_t segment) const final {
     assert(segment < live_bytes_by_segment.size());
     return live_bytes_by_segment[segment];
   }
 
-  void reset() {
+  void reset() final {
     for (auto &i: live_bytes_by_segment)
       i = 0;
   }
 
-  bool compare(const SpaceTracker &other) const;
+  SpaceTrackerIRef make_empty() const final {
+    return SpaceTrackerIRef(
+      new SpaceTrackerSimple(live_bytes_by_segment.size()));
+  }
+
+  bool compare(const SpaceTrackerI &other) const;
 };
+
+class SpaceTrackerDetailed : public SpaceTrackerI {
+  class SegmentMap {
+    int64_t used = 0;
+    std::vector<bool> bitmap;
+
+  public:
+    SegmentMap(size_t blocks) : bitmap(blocks, false) {}
+
+    int64_t update_usage(int64_t delta) {
+      used += delta;
+      return used;
+    }
+
+    int64_t allocate(
+      segment_off_t offset,
+      extent_len_t len,
+      const extent_len_t block_size);
+
+    int64_t release(
+      segment_off_t offset,
+      extent_len_t len,
+      const extent_len_t block_size);
+
+    int64_t get_usage() const {
+      return used;
+    }
+
+    void reset() {
+      for (auto &&i: bitmap) {
+	i = false;
+      }
+    }
+  };
+  const size_t block_size;
+  const size_t segment_size;
+
+  // Tracks live space for each segment
+  std::vector<SegmentMap> segment_usage;
+
+public:
+  SpaceTrackerDetailed(size_t num_segments, size_t segment_size, size_t block_size)
+    : block_size(block_size),
+      segment_size(segment_size),
+      segment_usage(num_segments, segment_size / block_size) {}
+
+  int64_t allocate(
+    segment_id_t segment,
+    segment_off_t offset,
+    extent_len_t len) final {
+    assert(segment < segment_usage.size());
+    return segment_usage[segment].allocate(offset, len, block_size);
+  }
+
+  int64_t release(
+    segment_id_t segment,
+    segment_off_t offset,
+    extent_len_t len) final {
+    assert(segment < segment_usage.size());
+    return segment_usage[segment].release(offset, len, block_size);
+  }
+
+  int64_t get_usage(segment_id_t segment) const final {
+    assert(segment < segment_usage.size());
+    return segment_usage[segment].get_usage();
+  }
+
+  void reset() final {
+    for (auto &i: segment_usage)
+      i.reset();
+  }
+
+  SpaceTrackerIRef make_empty() const final {
+    return SpaceTrackerIRef(
+      new SpaceTrackerDetailed(
+	segment_usage.size(),
+	block_size,
+	segment_size));
+  }
+
+  bool compare(const SpaceTrackerI &other) const;
+};
+
 
 class SegmentCleaner : public JournalSegmentProvider {
 public:
@@ -61,6 +187,7 @@ public:
   struct config_t {
     size_t num_segments = 0;
     size_t segment_size = 0;
+    size_t block_size = 0;
     size_t target_journal_segments = 0;
     size_t max_journal_segments = 0;
 
@@ -69,6 +196,7 @@ public:
       return config_t{
 	manager.get_num_segments(),
 	static_cast<size_t>(manager.get_segment_size()),
+	(size_t)manager.get_block_size(),
 	2,
 	4};
     }
@@ -109,7 +237,7 @@ public:
 private:
   config_t config;
 
-  SpaceTracker space_tracker;
+  SpaceTrackerIRef space_tracker;
   std::vector<segment_info_t> segments;
   bool init = false;
 
@@ -120,9 +248,16 @@ private:
   ExtentCallbackInterface *ecb = nullptr;
 
 public:
-  SegmentCleaner(config_t config)
+  SegmentCleaner(config_t config, bool detailed = false)
     : config(config),
-      space_tracker(config.num_segments),
+      space_tracker(
+	detailed ?
+	(SpaceTrackerI*)new SpaceTrackerDetailed(
+	  config.num_segments,
+	  config.segment_size,
+	  config.block_size) :
+	(SpaceTrackerI*)new SpaceTrackerSimple(
+	  config.num_segments)),
       segments(config.num_segments) {}
 
   get_segment_ret get_segment() final;
@@ -157,15 +292,34 @@ public:
     journal_head = head;
   }
 
-  void update_segment(segment_id_t segment, int64_t block_delta) {
-    assert(segment < segments.size());
+  void mark_space_used(
+    paddr_t addr,
+    extent_len_t len) {
+    assert(addr.segment < segments.size());
     if (!init) {
-      segments[segment].state = Segment::segment_state_t::CLOSED;
+      segments[addr.segment].state = Segment::segment_state_t::CLOSED;
     }
-    space_tracker.update_usage(segment, block_delta);
+    space_tracker->allocate(
+      addr.segment,
+      addr.offset,
+      len);
   }
 
-  void reset_usage() { space_tracker.reset(); }
+  void mark_space_free(
+    paddr_t addr,
+    extent_len_t len) {
+    assert(addr.segment < segments.size());
+    space_tracker->release(
+      addr.segment,
+      addr.offset,
+      len);
+  }
+
+  SpaceTrackerIRef get_empty_space_tracker() const {
+    return space_tracker->make_empty();
+  }
+
+  void reset_usage() { space_tracker->reset(); }
 
   void complete_init() { init = true; }
 
@@ -173,8 +327,8 @@ public:
     ecb = cb;
   }
 
-  bool debug_check_space(const SpaceTracker &tracker) {
-    return space_tracker.compare(tracker);
+  bool debug_check_space(const SpaceTrackerI &tracker) {
+    return space_tracker->compare(tracker);
   }
 
   /**

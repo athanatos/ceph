@@ -13,8 +13,10 @@ namespace {
 
 namespace crimson::os::seastore {
 
-bool SpaceTracker::compare(const SpaceTracker &other) const
+bool SpaceTrackerSimple::compare(const SpaceTrackerI &_other) const
 {
+  const auto &other = static_cast<const SpaceTrackerSimple&>(_other);
+
   if (other.live_bytes_by_segment.size() != live_bytes_by_segment.size()) {
     logger().debug("{}: different segment counts, bug in test");
     assert(0 == "segment counts should match");
@@ -34,6 +36,27 @@ bool SpaceTracker::compare(const SpaceTracker &other) const
     }
   }
   return all_match;
+}
+
+int64_t SpaceTrackerDetailed::SegmentMap::allocate(
+  segment_off_t offset,
+  extent_len_t len,
+  const extent_len_t block_size)
+{
+  return update_usage(block_size);
+}
+
+int64_t SpaceTrackerDetailed::SegmentMap::release(
+  segment_off_t offset,
+  extent_len_t len,
+  const extent_len_t block_size)
+{
+  return update_usage(-block_size);
+}
+
+bool SpaceTrackerDetailed::compare(const SpaceTrackerI &_other) const
+{
+  return true;
 }
 
 SegmentCleaner::get_segment_ret SegmentCleaner::get_segment()

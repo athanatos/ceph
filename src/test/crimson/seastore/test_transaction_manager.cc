@@ -200,15 +200,16 @@ struct transaction_manager_test_t : public seastar_test_suite_t {
 
   bool check_usage() {
     auto t = create_lazy_transaction();
-    SpaceTracker tracker(segment_manager->get_num_segments());
+    SpaceTrackerIRef tracker(segment_cleaner->get_empty_space_tracker());
     lba_manager->scan_mapped_space(
       *t.t,
       [&tracker](auto offset, auto len) {
-	tracker.update_usage(
+	tracker->allocate(
 	  offset.segment,
+	  offset.offset,
 	  len);
       }).unsafe_get0();
-    return segment_cleaner->debug_check_space(tracker);
+    return segment_cleaner->debug_check_space(*tracker);
   }
 
   void replay() {
@@ -220,6 +221,11 @@ struct transaction_manager_test_t : public seastar_test_suite_t {
     init();
     tm->mount().unsafe_get();
     logger().debug("{}: end", __func__);
+  }
+
+  void check() {
+    check_mappings();
+    check_usage();
   }
 
   void check_mappings() {
@@ -302,7 +308,6 @@ struct transaction_manager_test_t : public seastar_test_suite_t {
   }
 };
 
-#if 0
 TEST_F(transaction_manager_test_t, basic)
 {
   constexpr laddr_t SIZE = 4096;
@@ -317,9 +322,9 @@ TEST_F(transaction_manager_test_t, basic)
 	'a');
       ASSERT_EQ(ADDR, extent->get_laddr());
       check_mappings(t);
-      check_mappings();
+      check();
       submit_transaction(std::move(t));
-      check_mappings();
+      check();
     }
   });
 }
@@ -338,9 +343,9 @@ TEST_F(transaction_manager_test_t, mutate)
 	'a');
       ASSERT_EQ(ADDR, extent->get_laddr());
       check_mappings(t);
-      check_mappings();
+      check();
       submit_transaction(std::move(t));
-      check_mappings();
+      check();
     }
     ASSERT_TRUE(check_usage());
     replay();
@@ -352,13 +357,13 @@ TEST_F(transaction_manager_test_t, mutate)
 	SIZE);
       auto mut = mutate_extent(t, ext);
       check_mappings(t);
-      check_mappings();
+      check();
       submit_transaction(std::move(t));
-      check_mappings();
+      check();
     }
     ASSERT_TRUE(check_usage());
     replay();
-    check_mappings();
+    check();
   });
 }
 
@@ -386,10 +391,10 @@ TEST_F(transaction_manager_test_t, create_remove_same_transaction)
 	'a');
 
       submit_transaction(std::move(t));
-      check_mappings();
+      check();
     }
     replay();
-    check_mappings();
+    check();
   });
 }
 
@@ -407,35 +412,35 @@ TEST_F(transaction_manager_test_t, inc_dec_ref)
 	'a');
       ASSERT_EQ(ADDR, extent->get_laddr());
       check_mappings(t);
-      check_mappings();
+      check();
       submit_transaction(std::move(t));
-      check_mappings();
+      check();
     }
     replay();
     {
       auto t = create_transaction();
       inc_ref(t, ADDR);
       check_mappings(t);
-      check_mappings();
+      check();
       submit_transaction(std::move(t));
-      check_mappings();
+      check();
     }
     {
       auto t = create_transaction();
       dec_ref(t, ADDR);
       check_mappings(t);
-      check_mappings();
+      check();
       submit_transaction(std::move(t));
-      check_mappings();
+      check();
     }
     replay();
     {
       auto t = create_transaction();
       dec_ref(t, ADDR);
       check_mappings(t);
-      check_mappings();
+      check();
       submit_transaction(std::move(t));
-      check_mappings();
+      check();
     }
   });
 }
@@ -454,10 +459,9 @@ TEST_F(transaction_manager_test_t, cause_lba_split)
       ASSERT_EQ(i * SIZE, extent->get_laddr());
       submit_transaction(std::move(t));
     }
-    check_mappings();
+    check();
   });
 }
-#endif
 
 TEST_F(transaction_manager_test_t, random_writes)
 {
@@ -496,7 +500,7 @@ TEST_F(transaction_manager_test_t, random_writes)
       }
       replay();
       logger().debug("random_writes: checking");
-      check_mappings();
+      check();
       logger().debug("random_writes: done replaying/checking");
     }
   });
