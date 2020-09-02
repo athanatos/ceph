@@ -62,7 +62,6 @@ TransactionManager::mkfs_ertr::future<> TransactionManager::mkfs()
 
 TransactionManager::mount_ertr::future<> TransactionManager::mount()
 {
-  segment_cleaner.reset_usage();
   cache.init();
   return journal.replay([this](auto seq, auto paddr, const auto &e) {
     return cache.replay_delta(seq, paddr, e);
@@ -80,12 +79,18 @@ TransactionManager::mount_ertr::future<> TransactionManager::mount()
 	});
       });
   }).safe_then([this] {
+    segment_cleaner.reset_usage();
     return seastar::do_with(
       make_lazy_transaction(),
       [this](auto &t) {
+	assert(segment_cleaner.debug_check_space(
+		 *segment_cleaner.get_empty_space_tracker()));
 	return lba_manager.scan_mapped_space(
 	  *t,
 	  [this](paddr_t addr, extent_len_t len) {
+	    logger().debug("TransactionManager::mount: marking {}~{} used",
+			 addr,
+			 len);
 	    segment_cleaner.mark_space_used(
 	      addr,
 	      len);
