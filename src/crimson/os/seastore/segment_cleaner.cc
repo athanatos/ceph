@@ -39,24 +39,92 @@ bool SpaceTrackerSimple::compare(const SpaceTrackerI &_other) const
 }
 
 int64_t SpaceTrackerDetailed::SegmentMap::allocate(
+  segment_id_t segment,
   segment_off_t offset,
   extent_len_t len,
   const extent_len_t block_size)
 {
+  assert(offset % block_size == 0);
+  assert(len % block_size == 0);
+
+  const auto b = (offset / block_size);
+  const auto e = (offset + len) / block_size;
+
+  bool error = false;
+  for (auto i = b; i < e; ++i) {
+    if (bitmap[i]) {
+      if (!error) {
+	logger().debug(
+	  "SegmentMap::allocate found allocated in {}, {} ~ {}",
+	  segment,
+	  offset,
+	  len);
+	error = true;
+      }
+      logger().debug(
+	"SegmentMap::allocate block {} allocated",
+	i * block_size);
+    }
+    bitmap[i] = true;
+  }
   return update_usage(block_size);
 }
 
 int64_t SpaceTrackerDetailed::SegmentMap::release(
+  segment_id_t segment,
   segment_off_t offset,
   extent_len_t len,
   const extent_len_t block_size)
 {
-  return update_usage(-block_size);
+  assert(offset % block_size == 0);
+  assert(len % block_size == 0);
+
+  const auto b = (offset / block_size);
+  const auto e = (offset + len) / block_size;
+
+  bool error = false;
+  for (auto i = b; i < e; ++i) {
+    if (!bitmap[i]) {
+      if (!error) {
+	logger().debug(
+	  "SegmentMap::release found unallocated in {}, {} ~ {}",
+	  segment,
+	  offset,
+	  len);
+	error = true;
+      }
+      logger().debug(
+	"SegmentMap::release block {} unallocated",
+	i * block_size);
+    }
+    bitmap[i] = false;
+  }
+  return update_usage(-(int64_t)block_size);
 }
 
 bool SpaceTrackerDetailed::compare(const SpaceTrackerI &_other) const
 {
-  return true;
+  const auto &other = static_cast<const SpaceTrackerDetailed&>(_other);
+
+  if (other.segment_usage.size() != segment_usage.size()) {
+    logger().debug("{}: different segment counts, bug in test");
+    assert(0 == "segment counts should match");
+    return false;
+  }
+
+  bool all_match = true;
+  for (segment_id_t i = 0; i < segment_usage.size(); ++i) {
+    if (other.segment_usage[i].get_usage() != segment_usage[i].get_usage()) {
+      all_match = false;
+      logger().debug(
+	"{}: segment_id {} live bytes mismatch *this: {}, other: {}",
+	__func__,
+	i,
+	segment_usage[i].get_usage(),
+	other.segment_usage[i].get_usage());
+    }
+  }
+  return all_match;
 }
 
 SegmentCleaner::get_segment_ret SegmentCleaner::get_segment()

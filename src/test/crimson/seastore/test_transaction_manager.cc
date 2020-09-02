@@ -68,7 +68,8 @@ struct transaction_manager_test_t : public seastar_test_suite_t {
   void init() {
     segment_cleaner = std::make_unique<SegmentCleaner>(
       SegmentCleaner::config_t::default_from_segment_manager(
-	*segment_manager));
+	*segment_manager),
+      true);
     journal = std::make_unique<Journal>(*segment_manager);
     cache = std::make_unique<Cache>(*segment_manager);
     lba_manager = lba_manager::create_lba_manager(*segment_manager, *cache);

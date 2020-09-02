@@ -112,11 +112,13 @@ class SpaceTrackerDetailed : public SpaceTrackerI {
     }
 
     int64_t allocate(
+      segment_id_t segment,
       segment_off_t offset,
       extent_len_t len,
       const extent_len_t block_size);
 
     int64_t release(
+      segment_id_t segment,
       segment_off_t offset,
       extent_len_t len,
       const extent_len_t block_size);
@@ -126,6 +128,7 @@ class SpaceTrackerDetailed : public SpaceTrackerI {
     }
 
     void reset() {
+      used = 0;
       for (auto &&i: bitmap) {
 	i = false;
       }
@@ -148,7 +151,7 @@ public:
     segment_off_t offset,
     extent_len_t len) final {
     assert(segment < segment_usage.size());
-    return segment_usage[segment].allocate(offset, len, block_size);
+    return segment_usage[segment].allocate(segment, offset, len, block_size);
   }
 
   int64_t release(
@@ -156,7 +159,7 @@ public:
     segment_off_t offset,
     extent_len_t len) final {
     assert(segment < segment_usage.size());
-    return segment_usage[segment].release(offset, len, block_size);
+    return segment_usage[segment].release(segment, offset, len, block_size);
   }
 
   int64_t get_usage(segment_id_t segment) const final {
@@ -173,8 +176,8 @@ public:
     return SpaceTrackerIRef(
       new SpaceTrackerDetailed(
 	segment_usage.size(),
-	block_size,
-	segment_size));
+	segment_size,
+	block_size));
   }
 
   bool compare(const SpaceTrackerI &other) const;
