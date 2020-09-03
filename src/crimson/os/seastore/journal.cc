@@ -241,10 +241,9 @@ Journal::find_replay_segments_fut Journal::find_replay_segments()
 	    segments.begin(),
 	    segments.end(),
 	    [this](auto &seg) {
-	      segment_provider->set_journal_segment(
-		seg.second.journal_segment_seq,
+	      segment_provider->init_mark_segment_closed(
 		seg.first,
-		true);
+		seg.second.journal_segment_seq);
 	    });
 
 	  auto journal_tail = segments.rbegin()->second.journal_tail;

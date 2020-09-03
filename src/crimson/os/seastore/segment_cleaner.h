@@ -242,7 +242,7 @@ private:
 
   SpaceTrackerIRef space_tracker;
   std::vector<segment_info_t> segments;
-  bool init = false;
+  bool init_complete = false;
 
   journal_seq_t journal_tail_target;
   journal_seq_t journal_tail_committed;
@@ -268,14 +268,10 @@ public:
   void close_segment(segment_id_t segment) final;
 
   void set_journal_segment(
-    segment_id_t segment, segment_seq_t seq, bool replay) final {
+    segment_id_t segment, segment_seq_t seq) final {
     assert(segment < segments.size());
     segments[segment].journal_segment_seq = seq;
-    if (!replay) {
-      segments[segment].state = Segment::segment_state_t::OPEN;
-    } else {
-      segments[segment].state = Segment::segment_state_t::CLOSED;
-    }
+    segments[segment].state = Segment::segment_state_t::OPEN;
   }
 
   journal_seq_t get_journal_tail_target() const final {
@@ -295,13 +291,24 @@ public:
     journal_head = head;
   }
 
+  void init_mark_segment_closed(segment_id_t segment, segment_seq_t seq) final {
+    mark_closed(segment);
+    segments[segment].journal_segment_seq = seq;
+  }
+
   void mark_space_used(
     paddr_t addr,
-    extent_len_t len) {
+    extent_len_t len,
+    bool init_scan = false) {
     assert(addr.segment < segments.size());
-    if (!init) {
-      segments[addr.segment].state = Segment::segment_state_t::CLOSED;
+
+    if (!init_scan && !init_complete)
+      return;
+
+    if (!init_scan) {
+      assert(segments[addr.segment].state == Segment::segment_state_t::OPEN);
     }
+
     space_tracker->allocate(
       addr.segment,
       addr.offset,
@@ -311,6 +318,9 @@ public:
   void mark_space_free(
     paddr_t addr,
     extent_len_t len) {
+    if (!init_complete)
+      return;
+
     assert(addr.segment < segments.size());
     space_tracker->release(
       addr.segment,
@@ -324,7 +334,7 @@ public:
 
   void reset_usage() { space_tracker->reset(); }
 
-  void complete_init() { init = true; }
+  void complete_init() { init_complete = true; }
 
   void set_extent_callback(ExtentCallbackInterface *cb) {
     ecb = cb;
@@ -381,6 +391,23 @@ private:
       static_cast<size_t>(ret.segment_seq),
       config.max_journal_segments);
     return ret;
+  }
+
+  void mark_closed(segment_id_t segment) {
+    if (init_complete) {
+      assert(segments[segment].state == Segment::segment_state_t::OPEN);
+    }
+    segments[segment].state = Segment::segment_state_t::CLOSED;
+  }
+
+  void mark_empty(segment_id_t segment) {
+    assert(segments[segment].state == Segment::segment_state_t::CLOSED);
+    segments[segment].state = Segment::segment_state_t::EMPTY;
+  }
+
+  void mark_open(segment_id_t segment) {
+    assert(segments[segment].state == Segment::segment_state_t::EMPTY);
+    segments[segment].state = Segment::segment_state_t::OPEN;
   }
 };
 

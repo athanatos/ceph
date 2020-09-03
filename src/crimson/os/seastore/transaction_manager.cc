@@ -79,7 +79,6 @@ TransactionManager::mount_ertr::future<> TransactionManager::mount()
 	});
       });
   }).safe_then([this] {
-    segment_cleaner.reset_usage();
     return seastar::do_with(
       make_lazy_transaction(),
       [this](auto &t) {
@@ -93,9 +92,12 @@ TransactionManager::mount_ertr::future<> TransactionManager::mount()
 			 len);
 	    segment_cleaner.mark_space_used(
 	      addr,
-	      len);
+	      len ,
+	      /* init_scan = */ true);
 	  });
       });
+  }).safe_then([this] {
+    segment_cleaner.complete_init();
   }).handle_error(
     mount_ertr::pass_further{},
     crimson::ct_error::all_same_way([] {

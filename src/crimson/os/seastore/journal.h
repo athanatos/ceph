@@ -75,11 +75,13 @@ public:
 
   virtual void set_journal_segment(
     segment_id_t segment,
-    segment_seq_t seq,
-    bool replay = false) {}
+    segment_seq_t seq) {}
 
   virtual journal_seq_t get_journal_tail_target() const = 0;
   virtual void update_journal_tail_committed(journal_seq_t tail_committed) = 0;
+
+  virtual void init_mark_segment_closed(
+    segment_id_t segment, segment_seq_t seq) {}
 
   virtual ~JournalSegmentProvider() {}
 };
