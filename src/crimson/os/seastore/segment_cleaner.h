@@ -242,6 +242,7 @@ private:
 
   SpaceTrackerIRef space_tracker;
   std::vector<segment_info_t> segments;
+  size_t empty_segments;
   bool init_complete = false;
 
   journal_seq_t journal_tail_target;
@@ -261,7 +262,8 @@ public:
 	  config.block_size) :
 	(SpaceTrackerI*)new SpaceTrackerSimple(
 	  config.num_segments)),
-      segments(config.num_segments) {}
+      segments(config.num_segments),
+      empty_segments(config.num_segments) {}
 
   get_segment_ret get_segment() final;
 
@@ -393,20 +395,47 @@ private:
     return ret;
   }
 
+  size_t get_bytes_used_current_segment() const {
+    assert(journal_head != journal_seq_t());
+    return journal_head.offset.offset;
+  }
+
+  size_t get_bytes_available_current_segment() const {
+    return config.segment_size - get_bytes_used_current_segment();
+  }
+
+  size_t get_available_bytes() const {
+    return (empty_segments * config.segment_size) +
+      get_bytes_available_current_segment();
+  }
+
+  size_t get_total_size() const {
+    return config.segment_size * config.num_segments;
+  }
+
+  size_t get_unavailable_bytes() const {
+    return get_total_size() - get_available_bytes();
+  }
+
   void mark_closed(segment_id_t segment) {
     if (init_complete) {
       assert(segments[segment].state == Segment::segment_state_t::OPEN);
+      assert(empty_segments > 0);
+      --empty_segments;
     }
     segments[segment].state = Segment::segment_state_t::CLOSED;
   }
 
   void mark_empty(segment_id_t segment) {
     assert(segments[segment].state == Segment::segment_state_t::CLOSED);
+    assert(segments.size() > empty_segments);
+    ++empty_segments;
     segments[segment].state = Segment::segment_state_t::EMPTY;
   }
 
   void mark_open(segment_id_t segment) {
     assert(segments[segment].state == Segment::segment_state_t::EMPTY);
+    assert(empty_segments > 0);
     segments[segment].state = Segment::segment_state_t::OPEN;
   }
 };
