@@ -243,7 +243,13 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
       assert(0 == "ROOT never gets written as a fresh block");
     }
     assert(bl.length() == i->get_length());
-    record.extents.push_back(extent_t{std::move(bl)});
+    record.extents.push_back(extent_t{
+	i->get_type(),
+	i->is_logical()
+	? i->cast<LogicalCachedExtent>()->get_laddr()
+	: L_ADDR_NULL,
+	std::move(bl)
+      });
   }
   auto [len, crc] = record.get_extent_crc();
   assert(len == (size_t)t.offset);
