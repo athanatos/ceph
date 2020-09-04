@@ -292,12 +292,33 @@ private:
     record_header_t header,
     bufferlist &bl);
 
+  /**
+   * scan_segment
+   *
+   * Scans bytes_to_read forward from addr to the first record after
+   * addr+bytes_to_read invoking delta_handler and extent_info_handler
+   * on deltas and extent_infos respectively.  deltas, extent_infos
+   * will only be decoded if the corresponding handler is included.
+   */
+  using scan_segment_ertr = SegmentManager::read_ertr;
+  using scan_segment_ret = scan_ertr::future<paddr_t>;
+  using extent_handler_t = std::function<
+    scan_ertr::future<>(paddr_t addr,
+			const extent_info_t &info)>;
+  scan_segment_ret scan_segment(
+    paddr_t addr,
+    extent_len_t bytes_to_read,
+    delta_handler_t *delta_handler,
+    extent_handler_t *extent_info_handler
+  );
+
   /// replays records starting at start through end of segment
   replay_ertr::future<>
   replay_segment(
     journal_seq_t start,           ///< [in] starting addr, seq
     delta_handler_t &delta_handler ///< [in] processes deltas in order
   );
+
 };
 
 }

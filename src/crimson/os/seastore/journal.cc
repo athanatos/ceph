@@ -440,7 +440,8 @@ Journal::scan_ret Journal::scan(
     scan_ret_bare(),
     addr,
     [this, end=(addr.offset + bytes_to_read)](auto &&ret, auto &current) {
-      return crimson::do_until([this, &ret, &current]() -> scan_ertr::future<bool> {
+      return crimson::do_until(
+	[this, &ret, &current]() -> scan_ertr::future<bool> {
 	  return scan_ertr::future<bool>(
 	    scan_ertr::ready_future_marker{},
 	    true);
@@ -448,6 +449,28 @@ Journal::scan_ret Journal::scan(
 	  return scan_ertr::future<scan_ret_bare>(
 	    scan_ertr::ready_future_marker{},
 	    std::move(ret));
+	});
+    });
+}
+
+Journal::scan_segment_ret Journal::scan_segment(
+  paddr_t addr,
+  extent_len_t bytes_to_read,
+  delta_handler_t *delta_handler,
+  extent_handler_t *extent_info_handler)
+{
+  return seastar::do_with(
+    addr,
+    [=, end=(addr.offset + bytes_to_read)](auto &current) {
+      return crimson::do_until(
+	[this, &current]() -> scan_ertr::future<bool> {
+	  return scan_segment_ertr::future<bool>(
+	    scan_segment_ertr::ready_future_marker{},
+	    true);
+	}).safe_then([&addr] {
+	  return scan_segment_ret(
+	    scan_ertr::ready_future_marker{},
+	    addr);
 	});
     });
 }
