@@ -293,7 +293,7 @@ private:
     bufferlist &bl);
 
   /// attempts to decode extent infos from bl, return nullopt if unsuccessful
-  std::optional<std::vector<extent_info_t>> try_decode_deltas(
+  std::optional<std::vector<extent_info_t>> try_decode_extent_infos(
     record_header_t header,
     bufferlist &bl);
 

@@ -355,14 +355,14 @@ std::optional<std::vector<delta_info_t>> Journal::try_decode_deltas(
   return deltas;
 }
 
-std::optional<std::vector<extent_info_t>> Journal::try_decode_infos(
+std::optional<std::vector<extent_info_t>> Journal::try_decode_extent_infos(
   record_header_t header,
   bufferlist &bl)
 {
   auto bliter = bl.cbegin();
   bliter += ceph::encoded_sizeof_bounded<record_header_t>();
   logger().debug("{}: decoding {} extents", __func__, header.extents);
-e  std::vector<extent_info_t> extent_infos(header.extents);
+  std::vector<extent_info_t> extent_infos(header.extents);
   for (auto &&i : extent_infos) {
     try {
       ::decode(i, bliter);
