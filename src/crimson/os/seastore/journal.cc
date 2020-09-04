@@ -484,32 +484,62 @@ Journal::scan_segment_ret Journal::scan_segment(
 	      auto record_start = current;
 	      current.offset += header.mdlength + header.dlength;
 
-	      if (delta_handler) {
-		auto deltas = try_decode_deltas(
-		  header,
-		  bl);
-		if (!deltas) {
-		  current = P_ADDR_NULL;
-		  return scan_segment_ertr::make_ready_future<bool>(true);
-		}
-
-		return seastar::do_with(
-		  std::move(*deltas),
-		  [=](auto &deltas) {
-		    return crimson::do_for_each(
-		      deltas,
-		      [=](auto &info) {
-			return (*delta_handler)(
-			  journal_seq_t{0, record_start}, /* TODO */
-			  record_start.add_offset(header.mdlength),
-			  info);
+	      return seastar::do_with(
+		header,
+		bl,
+		[=, &current](auto &header, auto &bl) {
+		  return scan_segment_ertr::now(
+		  ).safe_then(
+		    [=, &current, &header, &bl]()
+		    -> scan_segment_ertr::future<> {
+		    if (!delta_handler) {
+		      return scan_segment_ertr::now();
+		    }
+		    
+		    auto deltas = try_decode_deltas(
+		      header,
+		      bl);
+		    if (!deltas) {
+		      logger().error(
+			"Journal::scan_segment unable to decode deltas for record {}",
+			addr);
+		      return crimson::ct_error::input_output_error::make();
+		    }
+		    
+		    return seastar::do_with(
+		      std::move(*deltas),
+		      [=](auto &deltas) {
+			return crimson::do_for_each(
+			  deltas,
+			  [=](auto &info) {
+			    return (*delta_handler)(
+			      journal_seq_t{0, record_start}, /* TODO */
+			      record_start.add_offset(header.mdlength),
+			      info);
+			  });
 		      });
-		  }).safe_then([] {
-		    return scan_segment_ertr::make_ready_future<bool>(false);
+		  }).safe_then(
+		    [=, &header, &bl]() -> scan_segment_ertr::future<> {
+		    if (!extent_info_handler) {
+		      return scan_segment_ertr::now();
+		    }
+
+#if 0
+		    auto infos = try_decode_extent_infos(
+		      header,
+		      bl);
+		    if (!infos) {
+		      logger().error(
+			"Journal::scan_segment unable to decode extent infos for record {}",
+			addr);
+		      return crimson::ct_error::input_output_error::make();
+		    }
+#endif
+		    return scan_segment_ertr::now();
 		  });
-	      } else {
-		return scan_segment_ertr::make_ready_future<bool>(false);
-	      }
+		}).safe_then([this, &current] {
+		  return scan_segment_ertr::make_ready_future<bool>(false);
+		});
 	    });
 	}).safe_then([this, &current] {
 	  return scan_segment_ertr::make_ready_future<paddr_t>(current);
