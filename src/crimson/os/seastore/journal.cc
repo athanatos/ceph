@@ -450,23 +450,22 @@ Journal::scan_ret Journal::scan(
   paddr_t addr,
   extent_len_t bytes_to_read)
 {
-  // Caller doesn't know addr of first record,
-  // addr.offset == 0 is therefore special
+  // Caller doesn't know addr of first record, so addr.offset == 0 is special
   if (addr.offset == 0) addr.offset = block_size;
 
   return seastar::do_with(
     scan_ret_bare(),
-    addr,
-    [this, end=(addr.offset + bytes_to_read)](auto &&ret, auto &current) {
-      return crimson::do_until(
-	[this, &ret, &current]() -> scan_ertr::future<bool> {
-	  return scan_ertr::future<bool>(
-	    scan_ertr::ready_future_marker{},
-	    true);
-	}).safe_then([&ret] {
-	  return scan_ertr::future<scan_ret_bare>(
-	    scan_ertr::ready_future_marker{},
-	    std::move(ret));
+    [=](auto &ret) {
+      return scan_segment(
+	addr,
+	bytes_to_read,
+	std::nullopt,
+	[&ret](auto addr, const auto &info) {
+	  ret.second.push_back(std::make_pair(addr, info));
+	  return scan_ertr::now();
+	}).safe_then([&ret](auto next) mutable {
+	  ret.first = next;
+	  return std::move(ret);
 	});
     });
 }
@@ -474,8 +473,8 @@ Journal::scan_ret Journal::scan(
 Journal::scan_segment_ret Journal::scan_segment(
   paddr_t addr,
   extent_len_t bytes_to_read,
-  delta_handler_t *delta_handler,
-  extent_handler_t *extent_info_handler)
+  std::optional<delta_scan_handler_t> delta_handler,
+  std::optional<extent_handler_t> extent_info_handler)
 {
   logger().debug("Journal::scan_segment: starting at {}", addr);
   return seastar::do_with(
@@ -531,7 +530,7 @@ Journal::scan_segment_ret Journal::scan_segment(
 			  deltas,
 			  [=](auto &info) {
 			    return (*delta_handler)(
-			      journal_seq_t{0, record_start}, /* TODO */
+			      record_start,
 			      record_start.add_offset(header.mdlength),
 			      info);
 			  });
@@ -551,10 +550,30 @@ Journal::scan_segment_ret Journal::scan_segment(
 			addr);
 		      return crimson::ct_error::input_output_error::make();
 		    }
+
+		    return seastar::do_with(
+		      segment_off_t(0),
+		      std::move(*infos),
+		      [=](auto &pos, auto &deltas) {
+			return crimson::do_for_each(
+			  deltas,
+			  [=, &pos](auto &info) {
+			    auto addr = record_start.add_offset(pos);
+			    pos += info.len;
+			    return (*extent_info_handler)(
+			      addr,
+			      info);
+			  });
+		      });
 		    return scan_segment_ertr::now();
 		  });
-		}).safe_then([this, &current] {
-		  return scan_segment_ertr::make_ready_future<bool>(false);
+		}).safe_then([=, &current] {
+		  if ((segment_off_t)(addr.offset + bytes_to_read)
+		      <= current.offset) {
+		    return scan_segment_ertr::make_ready_future<bool>(true);
+		  } else {
+		    return scan_segment_ertr::make_ready_future<bool>(false);
+		  }
 		});
 	    });
 	}).safe_then([this, &current] {

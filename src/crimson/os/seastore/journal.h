@@ -64,14 +64,17 @@ struct record_header_t {
 struct extent_info_t {
   extent_types_t type = extent_types_t::NONE;
   laddr_t addr = L_ADDR_NULL;
+  extent_len_t len = 0;
 
   extent_info_t() = default;
-  extent_info_t(const extent_t &et) : type(et.type), addr(et.addr) {}
+  extent_info_t(const extent_t &et)
+    : type(et.type), addr(et.addr), len(et.bl.length()) {}
 
   DENC(extent_info_t, v, p) {
     DENC_START(1, 1, p);
     denc(v.type, p);
     denc(v.addr, p);
+    denc(v.len, p);
     DENC_FINISH(p);
   }
 };
@@ -307,14 +310,18 @@ private:
    */
   using scan_segment_ertr = SegmentManager::read_ertr;
   using scan_segment_ret = scan_ertr::future<paddr_t>;
+  using delta_scan_handler_t = std::function<
+    replay_ret(paddr_t record_start,
+	       paddr_t record_block_base,
+	       const delta_info_t&)>;
   using extent_handler_t = std::function<
     scan_ertr::future<>(paddr_t addr,
 			const extent_info_t &info)>;
   scan_segment_ret scan_segment(
     paddr_t addr,
     extent_len_t bytes_to_read,
-    delta_handler_t *delta_handler,
-    extent_handler_t *extent_info_handler
+    std::optional<delta_scan_handler_t> delta_handler,
+    std::optional<extent_handler_t> extent_info_handler
   );
 
   /// replays records starting at start through end of segment
