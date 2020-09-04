@@ -376,58 +376,19 @@ std::optional<std::vector<extent_info_t>> Journal::try_decode_extent_infos(
 Journal::replay_ertr::future<>
 Journal::replay_segment(
   journal_seq_t seq,
-  delta_handler_t &delta_handler)
+  delta_handler_t delta_handler)
 {
   logger().debug("replay_segment: starting at {}", seq);
-  return seastar::do_with(
-    paddr_t(seq.offset),
-    [=, &delta_handler](paddr_t &current) {
-      return crimson::do_until(
-	[=, &current, &delta_handler]() -> replay_ertr::future<bool> {
-	  return read_record_metadata(current).safe_then
-	    ([=, &current, &delta_handler](auto p)
-	     -> replay_ertr::future<bool> {
-	      if (!p.has_value()) {
-		return replay_ertr::make_ready_future<bool>(true);
-	      }
-
-	      auto &[header, bl] = *p;
-
-	      logger().debug(
-		"replay_segment: next record offset {} mdlength {} dlength {}",
-		current,
-		header.mdlength,
-		header.dlength);
-
-	      auto record_start = current;
-	      current.offset += header.mdlength + header.dlength;
-
-	      auto deltas = try_decode_deltas(
-		header,
-		bl);
-	      if (!deltas) {
-		return replay_ertr::make_ready_future<bool>(true);
-	      }
-
-	      return seastar::do_with(
-		std::move(*deltas),
-		[=, &delta_handler](auto &deltas) {
-		  return crimson::do_for_each(
-		    deltas,
-		    [=, &delta_handler](auto &info) {
-		      return delta_handler(
-			journal_seq_t{
-			  seq.segment_seq,
-			  record_start},
-			record_start.add_offset(header.mdlength),
-			info);
-		    });
-		}).safe_then([] {
-		  return replay_ertr::make_ready_future<bool>(false);
-		});
-	    });
-	});
-    });
+  return scan_segment(
+    seq.offset,
+    EXTENT_LEN_MAX,
+    [=](auto addr, auto base, const auto &delta) {
+      return delta_handler(
+	journal_seq_t{seq.segment_seq, addr},
+	base,
+	delta);
+    },
+    std::nullopt).safe_then([](auto){});
 }
 
 Journal::replay_ret Journal::replay(delta_handler_t &&delta_handler)

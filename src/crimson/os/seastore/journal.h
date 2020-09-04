@@ -328,7 +328,7 @@ private:
   replay_ertr::future<>
   replay_segment(
     journal_seq_t start,           ///< [in] starting addr, seq
-    delta_handler_t &delta_handler ///< [in] processes deltas in order
+    delta_handler_t delta_handler  ///< [in] processes deltas in order
   );
 
 };
