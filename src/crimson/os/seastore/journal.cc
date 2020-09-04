@@ -459,18 +459,60 @@ Journal::scan_segment_ret Journal::scan_segment(
   delta_handler_t *delta_handler,
   extent_handler_t *extent_info_handler)
 {
+  logger().debug("Journal::scan_segment: starting at {}", addr);
   return seastar::do_with(
     addr,
-    [=, end=(addr.offset + bytes_to_read)](auto &current) {
+    [=](paddr_t &current) {
       return crimson::do_until(
-	[this, &current]() -> scan_ertr::future<bool> {
-	  return scan_segment_ertr::future<bool>(
-	    scan_segment_ertr::ready_future_marker{},
-	    true);
-	}).safe_then([&addr] {
-	  return scan_segment_ret(
-	    scan_ertr::ready_future_marker{},
-	    addr);
+	[=, &current]() -> scan_segment_ertr::future<bool> {
+	  return read_record_metadata(current).safe_then
+	    ([=, &current](auto p)
+	     -> scan_segment_ertr::future<bool> {
+	      if (!p.has_value()) {
+		current = P_ADDR_NULL;
+		return scan_segment_ertr::make_ready_future<bool>(true);
+	      }
+
+	      auto &[header, bl] = *p;
+
+	      logger().debug(
+		"Journal::scan_segment: next record offset {} mdlength {} dlength {}",
+		current,
+		header.mdlength,
+		header.dlength);
+
+	      auto record_start = current;
+	      current.offset += header.mdlength + header.dlength;
+
+	      if (delta_handler) {
+		auto deltas = try_decode_deltas(
+		  header,
+		  bl);
+		if (!deltas) {
+		  current = P_ADDR_NULL;
+		  return scan_segment_ertr::make_ready_future<bool>(true);
+		}
+
+		return seastar::do_with(
+		  std::move(*deltas),
+		  [=](auto &deltas) {
+		    return crimson::do_for_each(
+		      deltas,
+		      [=](auto &info) {
+			return (*delta_handler)(
+			  journal_seq_t{0, record_start}, /* TODO */
+			  record_start.add_offset(header.mdlength),
+			  info);
+		      });
+		  }).safe_then([] {
+		    return scan_segment_ertr::make_ready_future<bool>(false);
+		  });
+	      } else {
+		return scan_segment_ertr::make_ready_future<bool>(false);
+	      }
+	    });
+	}).safe_then([this, &current] {
+	  return scan_segment_ertr::make_ready_future<paddr_t>(current);
 	});
     });
 }
