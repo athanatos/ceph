@@ -355,6 +355,24 @@ std::optional<std::vector<delta_info_t>> Journal::try_decode_deltas(
   return deltas;
 }
 
+std::optional<std::vector<extent_info_t>> Journal::try_decode_infos(
+  record_header_t header,
+  bufferlist &bl)
+{
+  auto bliter = bl.cbegin();
+  bliter += ceph::encoded_sizeof_bounded<record_header_t>();
+  logger().debug("{}: decoding {} extents", __func__, header.extents);
+e  std::vector<extent_info_t> extent_infos(header.extents);
+  for (auto &&i : extent_infos) {
+    try {
+      ::decode(i, bliter);
+    } catch (ceph::buffer::error &e) {
+      return std::nullopt;
+    }
+  }
+  return extent_infos;
+}
+
 Journal::replay_ertr::future<>
 Journal::replay_segment(
   journal_seq_t seq,
@@ -524,7 +542,6 @@ Journal::scan_segment_ret Journal::scan_segment(
 		      return scan_segment_ertr::now();
 		    }
 
-#if 0
 		    auto infos = try_decode_extent_infos(
 		      header,
 		      bl);
@@ -534,7 +551,6 @@ Journal::scan_segment_ret Journal::scan_segment(
 			addr);
 		      return crimson::ct_error::input_output_error::make();
 		    }
-#endif
 		    return scan_segment_ertr::now();
 		  });
 		}).safe_then([this, &current] {

@@ -292,6 +292,11 @@ private:
     record_header_t header,
     bufferlist &bl);
 
+  /// attempts to decode extent infos from bl, return nullopt if unsuccessful
+  std::optional<std::vector<extent_info_t>> try_decode_deltas(
+    record_header_t header,
+    bufferlist &bl);
+
   /**
    * scan_segment
    *
