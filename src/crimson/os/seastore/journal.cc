@@ -376,38 +376,43 @@ std::optional<std::vector<extent_info_t>> Journal::try_decode_extent_infos(
 Journal::replay_ertr::future<>
 Journal::replay_segment(
   journal_seq_t seq,
-  delta_handler_t delta_handler)
+  delta_handler_t &handler)
 {
   logger().debug("replay_segment: starting at {}", seq);
-  return scan_segment(
-    seq.offset,
-    EXTENT_LEN_MAX,
-    [=](auto addr, auto base, const auto &delta) {
-      return delta_handler(
-	journal_seq_t{seq.segment_seq, addr},
-	base,
-	delta);
-    },
-    std::nullopt).safe_then([](auto){});
+  return seastar::do_with(
+    delta_scan_handler_t(
+      [&handler, seq](auto addr, auto base, const auto &delta) {
+	return handler(
+	  journal_seq_t{seq.segment_seq, addr},
+	  base,
+	  delta);
+      }),
+    [this, seq](auto &dhandler) {
+      return scan_segment(
+	seq.offset,
+	segment_manager.get_segment_size(),
+	&dhandler,
+	nullptr).safe_then([](auto){});
+    });
 }
 
 Journal::replay_ret Journal::replay(delta_handler_t &&delta_handler)
 {
   return seastar::do_with(
     std::move(delta_handler), std::vector<journal_seq_t>(),
-    [this](auto&& handler, auto&& segments) mutable -> replay_ret {
+    [this](auto &handler, auto &segments) mutable -> replay_ret {
       return find_replay_segments().safe_then(
-        [this, &handler, &segments](auto replay_segs) {
+        [this, &handler, &segments](auto replay_segs) mutable {
           logger().debug("replay: found {} segments", replay_segs.size());
           segments = std::move(replay_segs);
-          return crimson::do_for_each(segments, [this, &handler](auto i) {
+          return crimson::do_for_each(segments, [this, &handler](auto i) mutable {
             return replay_segment(i, handler);
           });
         });
     });
 }
 
-Journal::scan_ret Journal::scan(
+Journal::scan_extents_ret Journal::scan_extents(
   paddr_t addr,
   extent_len_t bytes_to_read)
 {
@@ -415,18 +420,22 @@ Journal::scan_ret Journal::scan(
   if (addr.offset == 0) addr.offset = block_size;
 
   return seastar::do_with(
-    scan_ret_bare(),
+    scan_extents_ret_bare(),
     [=](auto &ret) {
-      return scan_segment(
-	addr,
-	bytes_to_read,
-	std::nullopt,
-	[&ret](auto addr, const auto &info) {
+      return seastar::do_with(
+	extent_handler_t([&ret](auto addr, const auto &info) mutable {
 	  ret.second.push_back(std::make_pair(addr, info));
-	  return scan_ertr::now();
-	}).safe_then([&ret](auto next) mutable {
-	  ret.first = next;
-	  return std::move(ret);
+	  return scan_extents_ertr::now();
+	}),
+	[=, &ret](auto &handler) mutable {
+	  return scan_segment(
+	    addr,
+	    bytes_to_read,
+	    nullptr,
+	    &handler).safe_then([&ret](auto next) mutable {
+	      ret.first = next;
+	      return std::move(ret);
+	    });
 	});
     });
 }
@@ -434,8 +443,8 @@ Journal::scan_ret Journal::scan(
 Journal::scan_segment_ret Journal::scan_segment(
   paddr_t addr,
   extent_len_t bytes_to_read,
-  std::optional<delta_scan_handler_t> delta_handler,
-  std::optional<extent_handler_t> extent_info_handler)
+  delta_scan_handler_t *delta_handler,
+  extent_handler_t *extent_info_handler)
 {
   logger().debug("Journal::scan_segment: starting at {}", addr);
   return seastar::do_with(
