@@ -428,4 +428,28 @@ Journal::replay_ret Journal::replay(delta_handler_t &&delta_handler)
     });
 }
 
+Journal::scan_ret Journal::scan(
+  paddr_t addr,
+  extent_len_t bytes_to_read)
+{
+  // Caller doesn't know addr of first record,
+  // addr.offset == 0 is therefore special
+  if (addr.offset == 0) addr.offset = block_size;
+
+  return seastar::do_with(
+    scan_ret_bare(),
+    addr,
+    [this, end=(addr.offset + bytes_to_read)](auto &&ret, auto &current) {
+      return crimson::do_until([this, &ret, &current]() -> scan_ertr::future<bool> {
+	  return scan_ertr::future<bool>(
+	    scan_ertr::ready_future_marker{},
+	    true);
+	}).safe_then([&ret] {
+	  return scan_ertr::future<scan_ret_bare>(
+	    scan_ertr::ready_future_marker{},
+	    std::move(ret));
+	});
+    });
+}
+
 }
