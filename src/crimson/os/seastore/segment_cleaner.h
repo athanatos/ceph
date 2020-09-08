@@ -408,6 +408,97 @@ private:
       config.max_journal_segments);
     return ret;
   }
+
+  // GC status helpers
+
+  size_t get_bytes_used_current_segment() const {
+    assert(journal_head != journal_seq_t());
+    return journal_head.offset.offset;
+  }
+
+  size_t get_bytes_available_current_segment() const {
+    return config.segment_size - get_bytes_used_current_segment();
+  }
+
+  size_t get_available_bytes() const {
+    return (empty_segments * config.segment_size) +
+      get_bytes_available_current_segment();
+  }
+
+  size_t get_total_bytes() const {
+    return config.segment_size * config.num_segments;
+  }
+
+  size_t get_unavailable_bytes() const {
+    return get_total_bytes() - get_available_bytes();
+  }
+
+  /// Returns bytes currently occupied by live extents (not journal)
+  size_t get_used_bytes() const {
+    return used_bytes;
+  }
+
+  /// Returns the number of bytes in unavailable segments that are not live
+  size_t get_reclaimable_bytes() const {
+    return get_unavailable_bytes() - get_used_bytes();
+  }
+
+  /**
+   * get_reclaim_ratio
+   *
+   * Returns the ratio of unavailable space that is not currently used.
+   */
+  double get_reclaim_ratio() const {
+    if (get_unavailable_bytes() == 0) return 0;
+    return (double)get_reclaimable_bytes() / (double)get_unavailable_bytes();
+  }
+
+  /**
+   * get_available_ratio
+   *
+   * Returns ratio of available space to write to total space
+   */
+  double get_available_ratio() const {
+    return (double)get_available_bytes() / (double)get_total_bytes();
+  }
+
+  size_t get_immediate_bytes_to_gc_for_reclaim() const {
+    if (get_available_ratio() < config.reclaim_ratio_usage_min)
+      return 0;
+
+    if (get_reclaim_ratio() < config.reclaim_ratio_hard_limit)
+      return 0;
+
+    // Literal back-of-the-envelope math here, check before merging
+    // At least it looks positive!
+    return get_unavailable_bytes() *
+      ((1 / get_reclaim_ratio()) - (1 / config.reclaim_ratio_hard_limit));
+  }
+
+  size_t get_immediate_bytes_to_gc_for_available() const {
+    if (get_available_ratio() < config.available_ratio_hard_limit) {
+      return 0;
+    }
+
+    // Literal back-of-the-envelope math here, check before merging
+    // At least it looks positive!
+    const double reclaim = get_reclaim_ratio();
+    const double total = get_total_bytes();
+    const double aratio = get_available_ratio();
+    const double taratio = config.available_ratio_hard_limit;
+    return ((1 - reclaim) / (double)total) * (aratio - taratio);
+  }
+
+  size_t get_immediate_bytes_to_gc() const {
+    // number of bytes to gc in order to correct reclaim ratio
+    size_t for_reclaim = get_immediate_bytes_to_gc_for_reclaim();
+
+    // number of bytes to gc in order to correct available_ratio
+    size_t for_available = get_immediate_bytes_to_gc_for_available();
+
+    return std::max(for_reclaim, for_available);
+  }
+
   void mark_closed(segment_id_t segment) {
     if (init_complete) {
       assert(segments[segment].state == Segment::segment_state_t::OPEN);
