@@ -38,7 +38,7 @@ Segment::write_ertr::future<> EphemeralSegment::write(
   if (offset < write_pointer || offset % manager.config.block_size != 0)
     return crimson::ct_error::invarg::make();
 
-  if (offset + bl.length() >= manager.config.segment_size)
+  if (offset + bl.length() > manager.config.segment_size)
     return crimson::ct_error::enospc::make();
 
   return manager.segment_write({id, offset}, bl);
@@ -148,11 +148,20 @@ SegmentManager::read_ertr::future<> EphemeralSegmentManager::read(
   size_t len,
   ceph::bufferptr &out)
 {
-  if (addr.segment >= get_num_segments())
+  if (addr.segment >= get_num_segments()) {
+    logger().debug(
+      "EphemeralSegmentManager::read: invalid segment {}",
+      addr);
     return crimson::ct_error::invarg::make();
+  }
 
-  if (addr.offset + len >= config.segment_size)
+  if (addr.offset + len > config.segment_size) {
+    logger().debug(
+      "EphemeralSegmentManager::read: invalid offset {}~{}!",
+      addr,
+      len);
     return crimson::ct_error::invarg::make();
+  }
 
   out.copy_in(0, len, buffer + get_offset(addr));
 
