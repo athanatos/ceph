@@ -144,11 +144,21 @@ SegmentManager::open_ertr::future<SegmentRef> EphemeralSegmentManager::open(
 SegmentManager::release_ertr::future<> EphemeralSegmentManager::release(
   segment_id_t id)
 {
-  if (id >= get_num_segments())
-    return crimson::ct_error::invarg::make();
+  logger().debug("EphemeralSegmentManager::release: {}", id);
 
-  if (segment_state[id] != segment_state_t::CLOSED)
+  if (id >= get_num_segments()) {
+    logger().debug(
+      "EphemeralSegmentManager::release: invalid segment {}",
+      id);
     return crimson::ct_error::invarg::make();
+  }
+
+  if (segment_state[id] != segment_state_t::CLOSED) {
+    logger().debug(
+      "EphemeralSegmentManager::release: segment id {} not closed",
+      id);
+    return crimson::ct_error::invarg::make();
+  }
 
   ::memset(buffer + get_offset({id, 0}), 0, config.segment_size);
   segment_state[id] = segment_state_t::EMPTY;
