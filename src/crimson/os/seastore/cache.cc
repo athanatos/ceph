@@ -108,6 +108,8 @@ void Cache::replace_extent(CachedExtentRef next, CachedExtentRef prev)
     dirty.erase(dirty.iterator_to(*prev));
     intrusive_ptr_release(&*prev);
     intrusive_ptr_add_ref(&*next);
+  } else {
+    add_to_dirty(next);
   }
 }
 
@@ -305,7 +307,6 @@ void Cache::complete_commit(
     i->state = CachedExtent::extent_state_t::DIRTY;
     if (i->version == 1) {
       i->dirty_from = seq;
-      add_to_dirty(i);
     }
   }
 
