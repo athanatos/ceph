@@ -398,11 +398,16 @@ Journal::replay_segment(
   logger().debug("replay_segment: starting at {}", seq);
   return seastar::do_with(
     delta_scan_handler_t(
-      [&handler, seq](auto addr, auto base, const auto &delta) {
-	return handler(
-	  journal_seq_t{seq.segment_seq, addr},
-	  base,
-	  delta);
+      [=, &handler](auto addr, auto base, const auto &delta) {
+	if (delta.paddr != P_ADDR_NULL &&
+	    segment_provider->get_seq(delta.paddr.segment) > seq.segment_seq) {
+	  return replay_ertr::now();
+	} else {
+	  return handler(
+	    journal_seq_t{seq.segment_seq, addr},
+	    base,
+	    delta);
+	}
       }),
     [this, seq](auto &dhandler) {
       return scan_segment(
