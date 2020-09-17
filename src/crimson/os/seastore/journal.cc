@@ -550,7 +550,9 @@ Journal::scan_segment_ret Journal::scan_segment(
 			return crimson::do_for_each(
 			  deltas,
 			  [=, &pos](auto &info) {
-			    auto addr = record_start.add_offset(pos);
+			    auto addr = record_start
+			      .add_offset(header.mdlength)
+			      .add_offset(pos);
 			    pos += info.len;
 			    return (*extent_info_handler)(
 			      addr,
