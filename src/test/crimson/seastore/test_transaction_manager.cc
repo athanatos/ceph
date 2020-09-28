@@ -9,7 +9,6 @@
 #include "crimson/os/seastore/cache.h"
 #include "crimson/os/seastore/transaction_manager.h"
 #include "crimson/os/seastore/segment_manager/ephemeral.h"
-#include "crimson/os/seastore/segment_manager.h"
 
 #include "test/crimson/seastore/test_block.h"
 
@@ -49,7 +48,7 @@ std::ostream &operator<<(std::ostream &lhs, const test_extent_record_t &rhs) {
 }
 
 struct transaction_manager_test_t : public seastar_test_suite_t {
-  std::unique_ptr<SegmentManager> segment_manager;
+  segment_manager::EphemeralSegmentManagerRef segment_manager;
   std::unique_ptr<SegmentCleaner> segment_cleaner;
   std::unique_ptr<Journal> journal;
   std::unique_ptr<Cache> cache;
@@ -60,7 +59,7 @@ struct transaction_manager_test_t : public seastar_test_suite_t {
   std::mt19937 gen;
 
   transaction_manager_test_t()
-    : segment_manager(create_ephemeral(segment_manager::DEFAULT_TEST_EPHEMERAL)),
+    : segment_manager(segment_manager::create_ephemeral()),
       gen(rd()) {
     init();
   }
@@ -98,7 +97,8 @@ struct transaction_manager_test_t : public seastar_test_suite_t {
   }
 
   seastar::future<> set_up_fut() final {
-    return segment_manager->init().safe_then([this] {
+    return segment_manager->init(segment_manager::DEFAULT_TEST_EPHEMERAL
+    ).safe_then([this] {
       return tm->mkfs();
     }).safe_then([this] {
       return tm->close();

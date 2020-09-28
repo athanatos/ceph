@@ -7,7 +7,7 @@
 
 #include "crimson/os/seastore/journal.h"
 #include "crimson/os/seastore/cache.h"
-#include "crimson/os/seastore/segment_manager.h"
+#include "crimson/os/seastore/segment_manager/ephemeral.h"
 #include "crimson/os/seastore/lba_manager/btree/btree_lba_manager.h"
 
 #include "test/crimson/seastore/test_block.h"
@@ -26,7 +26,7 @@ using namespace crimson::os::seastore::lba_manager::btree;
 
 struct btree_lba_manager_test :
   public seastar_test_suite_t, JournalSegmentProvider {
-  SegmentManagerRef segment_manager;
+  segment_manager::EphemeralSegmentManagerRef segment_manager;
   Journal journal;
   Cache cache;
   BtreeLBAManagerRef lba_manager;
@@ -34,7 +34,7 @@ struct btree_lba_manager_test :
   const size_t block_size;
 
   btree_lba_manager_test()
-    : segment_manager(create_ephemeral(segment_manager::DEFAULT_TEST_EPHEMERAL)),
+    : segment_manager(segment_manager::create_ephemeral()),
       journal(*segment_manager),
       cache(*segment_manager),
       lba_manager(new BtreeLBAManager(*segment_manager, cache)),
@@ -72,7 +72,7 @@ struct btree_lba_manager_test :
   }
 
   seastar::future<> set_up_fut() final {
-    return segment_manager->init(
+    return segment_manager->init(segment_manager::DEFAULT_TEST_EPHEMERAL
     ).safe_then([this] {
       return journal.open_for_write();
     }).safe_then([this](auto addr) {

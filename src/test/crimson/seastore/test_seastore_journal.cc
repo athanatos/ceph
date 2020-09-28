@@ -7,7 +7,7 @@
 
 #include "crimson/common/log.h"
 #include "crimson/os/seastore/journal.h"
-#include "crimson/os/seastore/segment_manager.h"
+#include "crimson/os/seastore/segment_manager/ephemeral.h"
 
 using namespace crimson;
 using namespace crimson::os;
@@ -63,7 +63,7 @@ struct record_validator_t {
 };
 
 struct journal_test_t : seastar_test_suite_t, JournalSegmentProvider {
-  std::unique_ptr<SegmentManager> segment_manager;
+  segment_manager::EphemeralSegmentManagerRef segment_manager;
   std::unique_ptr<Journal> journal;
 
   std::vector<record_validator_t> records;
@@ -73,7 +73,7 @@ struct journal_test_t : seastar_test_suite_t, JournalSegmentProvider {
   const segment_off_t block_size;
 
   journal_test_t()
-    : segment_manager(create_ephemeral(segment_manager::DEFAULT_TEST_EPHEMERAL)),
+    : segment_manager(segment_manager::create_ephemeral()),
       block_size(segment_manager->get_block_size())
   {
   }
@@ -91,7 +91,7 @@ struct journal_test_t : seastar_test_suite_t, JournalSegmentProvider {
   seastar::future<> set_up_fut() final {
     journal.reset(new Journal(*segment_manager));
     journal->set_segment_provider(this);
-    return segment_manager->init(
+    return segment_manager->init(segment_manager::DEFAULT_TEST_EPHEMERAL
     ).safe_then([this] {
       return journal->open_for_write();
     }).safe_then(

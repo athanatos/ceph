@@ -5,7 +5,7 @@
 
 #include "crimson/os/seastore/cache.h"
 #include "crimson/os/seastore/transaction_manager.h"
-#include "crimson/os/seastore/segment_manager.h"
+#include "crimson/os/seastore/segment_manager/ephemeral.h"
 #include "crimson/os/seastore/extentmap_manager.h"
 
 #include "test/crimson/seastore/test_block.h"
@@ -22,7 +22,7 @@ namespace {
 
 
 struct extentmap_manager_test_t : public seastar_test_suite_t {
-  std::unique_ptr<SegmentManager> segment_manager;
+  segment_manager::EphemeralSegmentManagerRef segment_manager;
   SegmentCleaner segment_cleaner;
   Journal journal;
   Cache cache;
@@ -31,7 +31,7 @@ struct extentmap_manager_test_t : public seastar_test_suite_t {
   ExtentMapManagerRef extmap_manager;
 
   extentmap_manager_test_t()
-    : segment_manager(create_ephemeral(segment_manager::DEFAULT_TEST_EPHEMERAL)),
+    : segment_manager(segment_manager::create_ephemeral()),
       segment_cleaner(SegmentCleaner::config_t::default_from_segment_manager(
 			*segment_manager)),
       journal(*segment_manager),
@@ -46,7 +46,8 @@ struct extentmap_manager_test_t : public seastar_test_suite_t {
   }
 
   seastar::future<> set_up_fut() final {
-    return segment_manager->init().safe_then([this] {
+    return segment_manager->init(segment_manager::DEFAULT_TEST_EPHEMERAL
+    ).safe_then([this] {
       return tm.mkfs();
     }).safe_then([this] {
       return tm.mount();

@@ -17,6 +17,15 @@ namespace {
 
 namespace crimson::os::seastore::segment_manager {
 
+std::ostream &operator<<(std::ostream &lhs, const ephemeral_config_t &c) {
+  return lhs << "ephemeral_config_t(size=" << c.size << ", block_size=" << c.block_size
+	     << ", segment_size=" << c.segment_size << ")";
+}
+
+EphemeralSegmentManagerRef create_ephemeral() {
+  return EphemeralSegmentManagerRef(new EphemeralSegmentManager);
+}
+
 EphemeralSegment::EphemeralSegment(
   EphemeralSegmentManager &manager, segment_id_t id)
   : manager(manager), id(id) {}
@@ -43,9 +52,6 @@ Segment::write_ertr::future<> EphemeralSegment::write(
 
   return manager.segment_write({id, offset}, bl);
 }
-
-EphemeralSegmentManager::EphemeralSegmentManager(ephemeral_config_t config)
-  : config(config) {}
 
 Segment::close_ertr::future<> EphemeralSegmentManager::segment_close(segment_id_t id)
 {
@@ -83,8 +89,10 @@ Segment::write_ertr::future<> EphemeralSegmentManager::segment_write(
   return Segment::write_ertr::now();
 }
 
-EphemeralSegmentManager::init_ertr::future<> EphemeralSegmentManager::init()
+EphemeralSegmentManager::init_ertr::future<> EphemeralSegmentManager::init(
+  ephemeral_config_t in_config)
 {
+  config = in_config;
   logger().debug(
     "Initing ephemeral segment manager with config {}",
     config);
