@@ -7,9 +7,41 @@
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
 #include <seastar/core/future.hh>
 
+#include "crimson/common/layout.h"
+
 #include "crimson/os/seastore/segment_manager.h"
 
-namespace crimson::os::seastore::segment_manager {
+namespace crimson::os::seastore::segment_manager::block {
+
+/**
+ * SegmentStateTracker
+ *
+ * Tracks lifecycle state of each segment using space at the beginning
+ * of the drive.
+ */
+class SegmentStateTracker {
+  using segment_state_t = Segment::segment_state_t;
+  struct segment_state_block_t {
+    using L = absl::container_internal::Layout<uint8_t>;
+    static constexpr size_t SIZE = 4<<10;
+    static constexpr size_t CAPACITY = SIZE;
+    static constexpr L layout{CAPACITY};
+
+    bufferptr bptr;
+    segment_state_block_t() : bptr(CAPACITY) {}
+
+    segment_state_t get(size_t offset) {
+      return static_cast<segment_state_t>(
+	layout.template Pointer<0>(
+	  bptr.c_str())[offset]);
+    }
+
+    void set(size_t offset, segment_state_t state) {
+      layout.template Pointer<0>(bptr.c_str())[offset] =
+	static_cast<uint8_t>(state);
+    }
+  };
+};
 
 class BlockSegmentManager;
 class BlockSegment final : public Segment {

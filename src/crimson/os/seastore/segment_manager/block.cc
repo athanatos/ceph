@@ -15,7 +15,7 @@ namespace {
   }
 }
 
-namespace crimson::os::seastore::segment_manager {
+namespace crimson::os::seastore::segment_manager::block {
 
 BlockSegment::BlockSegment(
   BlockSegmentManager &manager, segment_id_t id)
