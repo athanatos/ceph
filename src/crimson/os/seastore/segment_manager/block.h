@@ -27,8 +27,12 @@ class SegmentStateTracker {
     static constexpr size_t CAPACITY = SIZE;
     static constexpr L layout{CAPACITY};
 
+    bool dirty = false;
+
     bufferptr bptr;
-    segment_state_block_t() : bptr(CAPACITY) {}
+    segment_state_block_t() : bptr(CAPACITY) {
+      bptr.zero();
+    }
 
     segment_state_t get(size_t offset) {
       return static_cast<segment_state_t>(
@@ -41,6 +45,11 @@ class SegmentStateTracker {
 	static_cast<uint8_t>(state);
     }
   };
+
+  std::vector<segment_state_block_t> blocks;
+  SegmentStateTracker(size_t segments)
+    : blocks((segments + segment_state_block_t::CAPACITY - 1) /
+	     segment_state_block_t::CAPACITY) {}
 };
 
 class BlockSegmentManager;
