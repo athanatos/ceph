@@ -13,6 +13,18 @@
 
 namespace crimson::os::seastore::segment_manager::block {
 
+struct block_sm_superblock_t {
+  size_t size = 0;
+  size_t segment_size = 0;
+
+  DENC(block_sm_superblock_t, v, p) {
+    DENC_START(1, 1, p);
+    denc(v.size, p);
+    denc(v.segment_size, p);
+    DENC_FINISH(p);
+  }
+};
+
 /**
  * SegmentStateTracker
  *
@@ -21,15 +33,16 @@ namespace crimson::os::seastore::segment_manager::block {
  */
 class SegmentStateTracker {
   using segment_state_t = Segment::segment_state_t;
-  struct segment_state_block_t {
+  class segment_state_block_t {
+    bool dirty = false;
+    bufferptr bptr;
+
+  public:
     using L = absl::container_internal::Layout<uint8_t>;
     static constexpr size_t SIZE = 4<<10;
     static constexpr size_t CAPACITY = SIZE;
     static constexpr L layout{CAPACITY};
 
-    bool dirty = false;
-
-    bufferptr bptr;
     segment_state_block_t() : bptr(CAPACITY) {
       bptr.zero();
     }
@@ -41,15 +54,38 @@ class SegmentStateTracker {
     }
 
     void set(size_t offset, segment_state_t state) {
+      dirty = true;
       layout.template Pointer<0>(bptr.c_str())[offset] =
 	static_cast<uint8_t>(state);
     }
+
+    bool is_dirty() const { return dirty; }
   };
 
   std::vector<segment_state_block_t> blocks;
   SegmentStateTracker(size_t segments)
     : blocks((segments + segment_state_block_t::CAPACITY - 1) /
 	     segment_state_block_t::CAPACITY) {}
+
+  size_t get_size() const {
+    return blocks.size() * segment_state_block_t::SIZE;
+  }
+
+  size_t get_capacity() const {
+    return blocks.size() * segment_state_block_t::CAPACITY;
+  }
+
+  segment_state_t get(size_t offset) {
+    assert(offset < get_capacity());
+    return blocks[offset / segment_state_block_t::CAPACITY].get(
+      offset % segment_state_block_t::CAPACITY);
+  }
+
+  void set(size_t offset, segment_state_t state) {
+    assert(offset < get_capacity());
+    blocks[offset / segment_state_block_t::CAPACITY].set(
+      offset % segment_state_block_t::CAPACITY, state);
+  }
 };
 
 class BlockSegmentManager;
@@ -71,28 +107,39 @@ public:
 };
 
 class BlockSegmentManager final : public SegmentManager {
-  friend class BlockSegment;
-  using segment_state_t = Segment::segment_state_t;
+public:
+  using access_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error,
+    crimson::ct_error::permission_denied,
+    crimson::ct_error::enoent>;
 
-  struct block_config_t {
+
+  struct mount_config_t {
     std::string path;
-    size_t size = 0;
-    size_t block_size = 0;
+  };
+  using mount_ertr = access_ertr;
+  using mount_ret = access_ertr::future<>;
+  mount_ret mount(mount_config_t);
+
+  struct mkfs_config_t {
     size_t segment_size = 0;
   };
-  const block_config_t config;
+  using mkfs_ertr = access_ertr;
+  using mkfs_ret = mkfs_ertr::future<>;
+  mkfs_ret mkfs(mkfs_config_t);
 
-  size_t get_offset(paddr_t addr) {
-    return (addr.segment * config.segment_size) + addr.offset;
-  }
+  struct block_params_t {
+    std::string path;
 
-  std::vector<segment_state_t> segment_state;
+    // superblock/mkfs option
+    size_t segment_size = 0;
 
-  char *buffer = nullptr;
+    // inferred from device geometry
+    size_t size = 0;
+    size_t block_size = 0;
+  };
+  block_params_t params;
 
-  Segment::close_ertr::future<> segment_close(segment_id_t id);
-
-public:
   BlockSegmentManager() = default;
   ~BlockSegmentManager();
 
@@ -106,13 +153,13 @@ public:
     ceph::bufferptr &out) final;
 
   size_t get_size() const final {
-    return config.size;
+    return params.size;
   }
   segment_off_t get_block_size() const {
-    return config.block_size;
+    return params.block_size;
   }
   segment_off_t get_segment_size() const {
-    return config.segment_size;
+    return params.segment_size;
   }
 
   void reopen();
@@ -122,6 +169,24 @@ public:
     paddr_t addr,
     ceph::bufferlist bl,
     bool ignore_check=false);
+
+private:
+  friend class BlockSegment;
+  using segment_state_t = Segment::segment_state_t;
+
+  size_t get_offset(paddr_t addr) {
+    return (addr.segment * params.segment_size) + addr.offset;
+  }
+
+  std::vector<segment_state_t> segment_state;
+
+  char *buffer = nullptr;
+
+  Segment::close_ertr::future<> segment_close(segment_id_t id);
 };
 
 }
+
+WRITE_CLASS_DENC_BOUNDED(
+  crimson::os::seastore::segment_manager::block::block_sm_superblock_t
+)

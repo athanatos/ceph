@@ -35,10 +35,10 @@ Segment::close_ertr::future<> BlockSegment::close()
 Segment::write_ertr::future<> BlockSegment::write(
   segment_off_t offset, ceph::bufferlist bl)
 {
-  if (offset < write_pointer || offset % manager.config.block_size != 0)
+  if (offset < write_pointer || offset % manager.params.block_size != 0)
     return crimson::ct_error::invarg::make();
 
-  if (offset + bl.length() > manager.config.segment_size)
+  if (offset + bl.length() > manager.params.segment_size)
     return crimson::ct_error::enospc::make();
 
   return manager.segment_write({id, offset}, bl);
@@ -46,10 +46,7 @@ Segment::write_ertr::future<> BlockSegment::write(
 
 Segment::close_ertr::future<> BlockSegmentManager::segment_close(segment_id_t id)
 {
-  if (segment_state[id] != segment_state_t::OPEN)
-    return crimson::ct_error::invarg::make();
-
-  segment_state[id] = segment_state_t::CLOSED;
+  // TODO
   return Segment::close_ertr::now();
 }
 
@@ -59,29 +56,31 @@ Segment::write_ertr::future<> BlockSegmentManager::segment_write(
   bool ignore_check)
 {
   logger().debug(
-    "segment_write to segment {} at offset {}, physical offset {}, len {}, crc {}",
+    "segment_write to segment {} at offset {}, physical offset {}, len {}",
     addr.segment,
     addr.offset,
     get_offset(addr),
-    bl.length(),
-    bl.crc32c(1));
-  if (!ignore_check && segment_state[addr.segment] != segment_state_t::OPEN)
-    return crimson::ct_error::invarg::make();
+    bl.length());
 
-  bl.begin().copy(bl.length(), buffer + get_offset(addr));
 
-  // DEBUGGING, remove
-  bufferptr out(bl.length());
-  out.copy_in(0, bl.length(), buffer + get_offset(addr));
-  bufferlist bl2;
-  bl2.append(out);
-  assert(bl2.crc32c(1) == bl.crc32c(1));
-
+  // TODO
   return Segment::write_ertr::now();
 }
 
 BlockSegmentManager::~BlockSegmentManager()
 {
+}
+
+BlockSegmentManager::mount_ret BlockSegmentManager::mount(mount_config_t)
+{
+  // TODO
+  return mount_ertr::now();
+}
+
+BlockSegmentManager::mkfs_ret BlockSegmentManager::mkfs(mkfs_config_t)
+{
+  // TODO
+  return mkfs_ertr::now();
 }
 
 SegmentManager::open_ertr::future<SegmentRef> BlockSegmentManager::open(
@@ -92,6 +91,7 @@ SegmentManager::open_ertr::future<SegmentRef> BlockSegmentManager::open(
     return crimson::ct_error::invarg::make();
   }
 
+  // TODO
   return open_ertr::make_ready_future<SegmentRef>(nullptr);
 }
 
@@ -107,13 +107,7 @@ SegmentManager::release_ertr::future<> BlockSegmentManager::release(
     return crimson::ct_error::invarg::make();
   }
 
-  if (segment_state[id] != segment_state_t::CLOSED) {
-    logger().error(
-      "BlockSegmentManager::release: segment id {} not closed",
-      id);
-    return crimson::ct_error::invarg::make();
-  }
-
+  // TODO
   return release_ertr::now();
 }
 
@@ -129,7 +123,7 @@ SegmentManager::read_ertr::future<> BlockSegmentManager::read(
     return crimson::ct_error::invarg::make();
   }
 
-  if (addr.offset + len > config.segment_size) {
+  if (addr.offset + len > params.segment_size) {
     logger().error(
       "BlockSegmentManager::read: invalid offset {}~{}!",
       addr,
@@ -137,6 +131,7 @@ SegmentManager::read_ertr::future<> BlockSegmentManager::read(
     return crimson::ct_error::invarg::make();
   }
 
+  // TODO
   return read_ertr::now();
 }
 
