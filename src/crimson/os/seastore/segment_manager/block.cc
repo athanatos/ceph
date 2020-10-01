@@ -17,6 +17,43 @@ namespace {
 
 namespace crimson::os::seastore::segment_manager::block {
 
+struct block_sm_superblock_t {
+  size_t size = 0;
+  size_t segment_size = 0;
+
+  DENC(block_sm_superblock_t, v, p) {
+    DENC_START(1, 1, p);
+    denc(v.size, p);
+    denc(v.segment_size, p);
+    DENC_FINISH(p);
+  }
+};
+
+BlockSegmentManager::access_ertr::future<
+  std::pair<seastar::file, seastar::stat_data>
+  >
+open_device(std::string_view path, seastar::open_flags mode)
+{
+  return seastar::open_file_dma(path, mode).then([path](auto file) {
+    return seastar::file_stat(path, seastar::follow_symlink::yes).then(
+      [file=std::move(file)](auto stat) {
+	return std::make_pair(std::move(file), stat);
+      });
+  });
+}
+
+block_sm_superblock_t make_superblock(
+  BlockSegmentManager::mkfs_config_t config)
+{
+  return block_sm_superblock_t{};
+}
+
+BlockSegmentManager::access_ertr::future<>
+write_superblock(seastar::file &device, block_sm_superblock_t sb)
+{
+  return BlockSegmentManager::access_ertr::now();
+}
+
 BlockSegment::BlockSegment(
   BlockSegmentManager &manager, segment_id_t id)
   : manager(manager), id(id) {}
@@ -71,20 +108,6 @@ BlockSegmentManager::~BlockSegmentManager()
 {
 }
 
-BlockSegmentManager::access_ertr::future<
-  std::pair<seastar::file, seastar::stat_data>
-  >
-open_device(std::string_view path, seastar::open_flags mode)
-{
-  return seastar::open_file_dma(path, mode).then([path](auto file) {
-    return seastar::file_stat(path, seastar::follow_symlink::yes).then(
-      [file=std::move(file)](auto stat) {
-	return std::make_pair(std::move(file), stat);
-      });
-  });
-}
-  
-
 BlockSegmentManager::mount_ret BlockSegmentManager::mount(mount_config_t)
 {
   // TODO
@@ -102,7 +125,8 @@ BlockSegmentManager::mkfs_ret BlockSegmentManager::mkfs(mkfs_config_t config)
       ).safe_then([=, &device, &stat](auto p) {
 	device = std::move(p.first);
 	stat = p.second;
-	return mkfs_ertr::now();
+	auto sb = make_superblock(config);
+	return write_superblock(device, sb);
       });
     });
 }
@@ -160,3 +184,7 @@ SegmentManager::read_ertr::future<> BlockSegmentManager::read(
 }
 
 }
+
+WRITE_CLASS_DENC_BOUNDED(
+  crimson::os::seastore::segment_manager::block::block_sm_superblock_t
+)

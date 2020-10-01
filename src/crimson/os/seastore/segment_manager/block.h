@@ -16,18 +16,6 @@
 
 namespace crimson::os::seastore::segment_manager::block {
 
-struct block_sm_superblock_t {
-  size_t size = 0;
-  size_t segment_size = 0;
-
-  DENC(block_sm_superblock_t, v, p) {
-    DENC_START(1, 1, p);
-    denc(v.size, p);
-    denc(v.segment_size, p);
-    DENC_FINISH(p);
-  }
-};
-
 /**
  * SegmentStateTracker
  *
@@ -193,6 +181,3 @@ private:
 
 }
 
-WRITE_CLASS_DENC_BOUNDED(
-  crimson::os::seastore::segment_manager::block::block_sm_superblock_t
-)
