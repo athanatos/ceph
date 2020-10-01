@@ -5,7 +5,10 @@
 
 #include <boost/intrusive_ptr.hpp>
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
+
+#include <seastar/core/file.hh>
 #include <seastar/core/future.hh>
+#include <seastar/core/reactor.hh>
 
 #include "crimson/common/layout.h"
 
@@ -122,11 +125,12 @@ public:
   mount_ret mount(mount_config_t);
 
   struct mkfs_config_t {
+    std::string path;
     size_t segment_size = 0;
   };
   using mkfs_ertr = access_ertr;
   using mkfs_ret = mkfs_ertr::future<>;
-  mkfs_ret mkfs(mkfs_config_t);
+  static mkfs_ret mkfs(mkfs_config_t);
 
   struct block_params_t {
     std::string path;
@@ -138,7 +142,6 @@ public:
     size_t size = 0;
     size_t block_size = 0;
   };
-  block_params_t params;
 
   BlockSegmentManager() = default;
   ~BlockSegmentManager();
@@ -173,6 +176,9 @@ public:
 private:
   friend class BlockSegment;
   using segment_state_t = Segment::segment_state_t;
+
+  block_params_t params;
+  seastar::file device;
 
   size_t get_offset(paddr_t addr) {
     return (addr.segment * params.segment_size) + addr.offset;

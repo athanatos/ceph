@@ -71,16 +71,40 @@ BlockSegmentManager::~BlockSegmentManager()
 {
 }
 
+BlockSegmentManager::access_ertr::future<
+  std::pair<seastar::file, seastar::stat_data>
+  >
+open_device(std::string_view path, seastar::open_flags mode)
+{
+  return seastar::open_file_dma(path, mode).then([path](auto file) {
+    return seastar::file_stat(path, seastar::follow_symlink::yes).then(
+      [file=std::move(file)](auto stat) {
+	return std::make_pair(std::move(file), stat);
+      });
+  });
+}
+  
+
 BlockSegmentManager::mount_ret BlockSegmentManager::mount(mount_config_t)
 {
   // TODO
   return mount_ertr::now();
 }
 
-BlockSegmentManager::mkfs_ret BlockSegmentManager::mkfs(mkfs_config_t)
+BlockSegmentManager::mkfs_ret BlockSegmentManager::mkfs(mkfs_config_t config)
 {
-  // TODO
-  return mkfs_ertr::now();
+  return seastar::do_with(
+    seastar::file{},
+    seastar::stat_data{},
+    [=](auto &device, auto &stat) {
+      return open_device(
+	config.path, seastar::open_flags::rw
+      ).safe_then([=, &device, &stat](auto p) {
+	device = std::move(p.first);
+	stat = p.second;
+	return mkfs_ertr::now();
+      });
+    });
 }
 
 SegmentManager::open_ertr::future<SegmentRef> BlockSegmentManager::open(
