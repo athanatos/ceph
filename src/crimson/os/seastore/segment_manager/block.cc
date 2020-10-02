@@ -17,17 +17,40 @@ namespace {
 
 namespace crimson::os::seastore::segment_manager::block {
 
+static constexpr size_t ALIGNMENT = 4096;
+
 struct block_sm_superblock_t {
   size_t size = 0;
   size_t segment_size = 0;
+  size_t block_size = 0;
 
   DENC(block_sm_superblock_t, v, p) {
     DENC_START(1, 1, p);
     denc(v.size, p);
     denc(v.segment_size, p);
+    denc(v.block_size, p);
     DENC_FINISH(p);
   }
 };
+
+}
+
+WRITE_CLASS_DENC_BOUNDED(
+  crimson::os::seastore::segment_manager::block::block_sm_superblock_t
+)
+
+namespace crimson::os::seastore::segment_manager::block {
+
+block_sm_superblock_t make_superblock(
+  const BlockSegmentManager::mkfs_config_t &config,
+  const seastar::stat_data &data)
+{
+  return block_sm_superblock_t{
+    data.size,
+    config.segment_size,
+    data.block_size
+  };
+}
 
 BlockSegmentManager::access_ertr::future<
   std::pair<seastar::file, seastar::stat_data>
@@ -42,16 +65,63 @@ open_device(std::string_view path, seastar::open_flags mode)
   });
 }
 
-block_sm_superblock_t make_superblock(
-  BlockSegmentManager::mkfs_config_t config)
-{
-  return block_sm_superblock_t{};
-}
-
 BlockSegmentManager::access_ertr::future<>
 write_superblock(seastar::file &device, block_sm_superblock_t sb)
 {
-  return BlockSegmentManager::access_ertr::now();
+  assert(ceph::encoded_sizeof_bounded<block_sm_superblock_t>() <
+	 sb.block_size);
+  return seastar::do_with(
+    bufferptr(ceph::buffer::create_page_aligned(sb.block_size)),
+    [=, &device](auto &bp) {
+      bufferlist bl;
+      ::encode(sb, bl);
+      auto iter = bl.begin();
+      assert(bl.length() < sb.block_size);
+      iter.copy(bl.length(), bp.c_str());
+      return device.dma_write(
+	0,
+	bp.c_str(),
+	bp.length()
+      ).then([sb](auto size) -> BlockSegmentManager::access_ertr::future<> {
+	  if (size < sb.block_size) {
+	    // seastar/.../file.hh indicates that a short write here means io
+	    // error
+	    return crimson::ct_error::input_output_error::make();
+	  }
+	  return BlockSegmentManager::access_ertr::now();
+	});
+    });
+}
+
+BlockSegmentManager::access_ertr::future<block_sm_superblock_t>
+read_superblock(seastar::file &device, seastar::stat_data sd)
+{
+  assert(ceph::encoded_sizeof_bounded<block_sm_superblock_t>() <
+	 sd.block_size);
+  return seastar::do_with(
+    bufferptr(ceph::buffer::create_page_aligned(sd.block_size)),
+    [=, &device](auto &bp) {
+      return device.dma_read(
+	0,
+	bp.c_str(),
+	sd.block_size
+      ).then([=, &bp](auto size)
+	     -> BlockSegmentManager::access_ertr::future<block_sm_superblock_t> {
+	  if (size < sd.block_size) {
+	    // seastar/.../file.hh indicates that a short write here means io
+	    // error
+	    return crimson::ct_error::input_output_error::make();
+	  }
+	  bufferlist bl;
+	  bl.push_back(bp);
+	  block_sm_superblock_t ret;
+	  auto bliter = bl.cbegin();
+	  ::decode(ret, bliter);
+	  return BlockSegmentManager::access_ertr::future<block_sm_superblock_t>(
+	    BlockSegmentManager::access_ertr::ready_future_marker{},
+	    ret);
+      });
+    });
 }
 
 BlockSegment::BlockSegment(
@@ -125,7 +195,7 @@ BlockSegmentManager::mkfs_ret BlockSegmentManager::mkfs(mkfs_config_t config)
       ).safe_then([=, &device, &stat](auto p) {
 	device = std::move(p.first);
 	stat = p.second;
-	auto sb = make_superblock(config);
+	auto sb = make_superblock(config, stat);
 	return write_superblock(device, sb);
       });
     });
@@ -184,7 +254,3 @@ SegmentManager::read_ertr::future<> BlockSegmentManager::read(
 }
 
 }
-
-WRITE_CLASS_DENC_BOUNDED(
-  crimson::os::seastore::segment_manager::block::block_sm_superblock_t
-)
