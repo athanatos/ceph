@@ -24,11 +24,16 @@ struct block_sm_superblock_t {
   size_t segment_size = 0;
   size_t block_size = 0;
 
+  size_t segments = 0;
+  uint64_t first_segment_offset = 0;
+
   DENC(block_sm_superblock_t, v, p) {
     DENC_START(1, 1, p);
     denc(v.size, p);
     denc(v.segment_size, p);
     denc(v.block_size, p);
+    denc(v.segments, p);
+    denc(v.first_segment_offset, p);
     DENC_FINISH(p);
   }
 };
@@ -41,17 +46,27 @@ WRITE_CLASS_DENC_BOUNDED(
 
 namespace crimson::os::seastore::segment_manager::block {
 
+static
 block_sm_superblock_t make_superblock(
   const BlockSegmentManager::mkfs_config_t &config,
   const seastar::stat_data &data)
 {
+  size_t raw_segments = data.size / config.segment_size;
+  size_t tracker_size = SegmentStateTracker::get_raw_size(
+    raw_segments,
+    data.block_size);
+  size_t segments = (data.size - tracker_size - data.block_size)
+    / config.segment_size;
   return block_sm_superblock_t{
     data.size,
     config.segment_size,
-    data.block_size
+    data.block_size,
+    segments,
+    tracker_size + data.block_size
   };
 }
 
+static 
 BlockSegmentManager::access_ertr::future<
   std::pair<seastar::file, seastar::stat_data>
   >
@@ -65,6 +80,44 @@ open_device(std::string_view path, seastar::open_flags mode)
   });
 }
 
+static write_ertr::future<> do_write(
+  seastar::file &device,
+  uint64_t offset,
+  bufferptr &bptr)
+{
+  return device.dma_write(
+    offset,
+    bptr.c_str(),
+    bptr.length()
+  ).then([length=bptr.length()](auto result)
+	 -> write_ertr::future<> {
+      if (result == length) {
+	return crimson::ct_error::input_output_error::make();
+      }
+      return write_ertr::now();
+    });
+}
+
+static read_ertr::future<> do_read(
+  seastar::file &device,
+  uint64_t offset,
+  bufferptr &bptr)
+{
+  return device.dma_read(
+    offset,
+    bptr.c_str(),
+    bptr.length()
+  ).then([length=bptr.length()](auto result)
+	 -> read_ertr::future<> {
+      if (result == length) {
+	return crimson::ct_error::input_output_error::make();
+      }
+      return read_ertr::now();
+    });
+}
+  
+  
+static
 BlockSegmentManager::access_ertr::future<>
 write_superblock(seastar::file &device, block_sm_superblock_t sb)
 {
@@ -78,21 +131,14 @@ write_superblock(seastar::file &device, block_sm_superblock_t sb)
       auto iter = bl.begin();
       assert(bl.length() < sb.block_size);
       iter.copy(bl.length(), bp.c_str());
-      return device.dma_write(
+      return do_write(
+	device,
 	0,
-	bp.c_str(),
-	bp.length()
-      ).then([sb](auto size) -> BlockSegmentManager::access_ertr::future<> {
-	  if (size < sb.block_size) {
-	    // seastar/.../file.hh indicates that a short write here means io
-	    // error
-	    return crimson::ct_error::input_output_error::make();
-	  }
-	  return BlockSegmentManager::access_ertr::now();
-	});
+	bp);
     });
 }
 
+static
 BlockSegmentManager::access_ertr::future<block_sm_superblock_t>
 read_superblock(seastar::file &device, seastar::stat_data sd)
 {
@@ -101,17 +147,11 @@ read_superblock(seastar::file &device, seastar::stat_data sd)
   return seastar::do_with(
     bufferptr(ceph::buffer::create_page_aligned(sd.block_size)),
     [=, &device](auto &bp) {
-      return device.dma_read(
+      return do_read(
+	device,
 	0,
-	bp.c_str(),
-	sd.block_size
-      ).then([=, &bp](auto size)
-	     -> BlockSegmentManager::access_ertr::future<block_sm_superblock_t> {
-	  if (size < sd.block_size) {
-	    // seastar/.../file.hh indicates that a short write here means io
-	    // error
-	    return crimson::ct_error::input_output_error::make();
-	  }
+	bp
+      ).safe_then([=, &bp] {
 	  bufferlist bl;
 	  bl.push_back(bp);
 	  block_sm_superblock_t ret;

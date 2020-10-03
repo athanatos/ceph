@@ -16,6 +16,11 @@
 
 namespace crimson::os::seastore::segment_manager::block {
 
+using write_ertr = crimson::errorator<
+  crimson::ct_error::input_output_error>;
+using read_ertr = crimson::errorator<
+  crimson::ct_error::input_output_error>;
+
 /**
  * SegmentStateTracker
  *
@@ -24,59 +29,51 @@ namespace crimson::os::seastore::segment_manager::block {
  */
 class SegmentStateTracker {
   using segment_state_t = Segment::segment_state_t;
-  class segment_state_block_t {
-    bool dirty = false;
-    bufferptr bptr;
 
-  public:
-    using L = absl::container_internal::Layout<uint8_t>;
-    static constexpr size_t SIZE = 4<<10;
-    static constexpr size_t CAPACITY = SIZE;
-    static constexpr L layout{CAPACITY};
+  bufferptr bptr;
 
-    segment_state_block_t() : bptr(CAPACITY) {
-      bptr.zero();
-    }
+  using L = absl::container_internal::Layout<uint8_t>;
+  const L layout;
 
-    segment_state_t get(size_t offset) {
-      return static_cast<segment_state_t>(
-	layout.template Pointer<0>(
-	  bptr.c_str())[offset]);
-    }
+public:
+  static size_t get_raw_size(size_t segments, size_t block_size) {
+    return p2roundup(segments, block_size);
+  }
 
-    void set(size_t offset, segment_state_t state) {
-      dirty = true;
-      layout.template Pointer<0>(bptr.c_str())[offset] =
-	static_cast<uint8_t>(state);
-    }
-
-    bool is_dirty() const { return dirty; }
-  };
-
-  std::vector<segment_state_block_t> blocks;
-  SegmentStateTracker(size_t segments)
-    : blocks((segments + segment_state_block_t::CAPACITY - 1) /
-	     segment_state_block_t::CAPACITY) {}
+  SegmentStateTracker(size_t segments, size_t block_size)
+    : bptr(ceph::buffer::create_page_aligned(
+	     get_raw_size(segments, block_size))),
+      layout(bptr.length())
+  {}
 
   size_t get_size() const {
-    return blocks.size() * segment_state_block_t::SIZE;
+    return bptr.length();
   }
 
   size_t get_capacity() const {
-    return blocks.size() * segment_state_block_t::CAPACITY;
+    return bptr.length();
   }
 
   segment_state_t get(size_t offset) {
     assert(offset < get_capacity());
-    return blocks[offset / segment_state_block_t::CAPACITY].get(
-      offset % segment_state_block_t::CAPACITY);
+    return static_cast<segment_state_t>(
+      layout.template Pointer<0>(
+	bptr.c_str())[offset]);
   }
 
   void set(size_t offset, segment_state_t state) {
     assert(offset < get_capacity());
-    blocks[offset / segment_state_block_t::CAPACITY].set(
-      offset % segment_state_block_t::CAPACITY, state);
+    layout.template Pointer<0>(bptr.c_str())[offset] =
+      static_cast<uint8_t>(state);
   }
+
+  write_ertr::future<> write_out(
+    seastar::file &device,
+    uint64_t offset);
+
+  read_ertr::future<> read_in(
+    seastar::file &device,
+    uint64_t offset);
 };
 
 class BlockSegmentManager;
