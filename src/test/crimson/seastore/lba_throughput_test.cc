@@ -5,18 +5,12 @@
 #include <boost/program_options/variables_map.hpp>
 #include <boost/program_options/parsers.hpp>
 
-#include <seastar/core/alien.hh>
-#include <seastar/core/app-template.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/internal/pollable_fd.hh>
-#include <seastar/core/posix.hh>
-#include <seastar/core/reactor.hh>
-
-#include "crimson/os/seastore/segment_cleaner.h"
 #include "crimson/os/seastore/cache.h"
-#include "crimson/os/seastore/transaction_manager.h"
+#include "crimson/os/seastore/segment_cleaner.h"
 #include "crimson/os/seastore/segment_manager/block.h"
+#include "crimson/os/seastore/transaction_manager.h"
 
+#include "test/crimson/seastar_runner.h"
 #include "test/crimson/seastore/test_block.h"
 
 
@@ -26,7 +20,6 @@ public:
 
 int main(int argc, char** argv)
 {
-#if 0
   namespace po = boost::program_options;
   po::options_description desc{"Allowed options"};
   desc.add_options()
@@ -57,16 +50,7 @@ int main(int argc, char** argv)
   }
   std::vector<const char*> args(argv, argv + argc);
 
-  auto count = vm["count"].as<unsigned>();
   seastar::app_template app;
-
-  SeastarContext sc;
-  auto job = sc.with_seastar([&] {
-    auto fut = seastar::alien::submit_to(0, [addr, role, count] {
-      return seastar::now();
-    });
-    fut.wait();
-  });
 
   std::vector<char*> av{argv[0]};
   std::transform(begin(unrecognized_options),
@@ -75,7 +59,9 @@ int main(int argc, char** argv)
                  [](auto& s) {
                    return const_cast<char*>(s.c_str());
                  });
-  sc.run(app, av.size(), av.data());
-  job.join();
-#endif
+
+  SeastarRunner sc;
+  sc.init(av.size(), av.data());
+  sc.run([&] { return seastar::now(); });
+  sc.stop();
 }
