@@ -15,70 +15,8 @@ namespace {
   }
 }
 
-namespace crimson::os::seastore::segment_manager::block {
-
-static constexpr size_t ALIGNMENT = 4096;
-
-struct block_sm_superblock_t {
-  size_t size = 0;
-  size_t segment_size = 0;
-  size_t block_size = 0;
-
-  size_t segments = 0;
-  uint64_t first_segment_offset = 0;
-
-  DENC(block_sm_superblock_t, v, p) {
-    DENC_START(1, 1, p);
-    denc(v.size, p);
-    denc(v.segment_size, p);
-    denc(v.block_size, p);
-    denc(v.segments, p);
-    denc(v.first_segment_offset, p);
-    DENC_FINISH(p);
-  }
-};
-
-}
-
-WRITE_CLASS_DENC_BOUNDED(
-  crimson::os::seastore::segment_manager::block::block_sm_superblock_t
-)
 
 namespace crimson::os::seastore::segment_manager::block {
-
-static
-block_sm_superblock_t make_superblock(
-  const BlockSegmentManager::mkfs_config_t &config,
-  const seastar::stat_data &data)
-{
-  size_t raw_segments = data.size / config.segment_size;
-  size_t tracker_size = SegmentStateTracker::get_raw_size(
-    raw_segments,
-    data.block_size);
-  size_t segments = (data.size - tracker_size - data.block_size)
-    / config.segment_size;
-  return block_sm_superblock_t{
-    data.size,
-    config.segment_size,
-    data.block_size,
-    segments,
-    tracker_size + data.block_size
-  };
-}
-
-static 
-BlockSegmentManager::access_ertr::future<
-  std::pair<seastar::file, seastar::stat_data>
-  >
-open_device(std::string_view path, seastar::open_flags mode)
-{
-  return seastar::open_file_dma(path, mode).then([path](auto file) {
-    return seastar::file_stat(path, seastar::follow_symlink::yes).then(
-      [file=std::move(file)](auto stat) {
-	return std::make_pair(std::move(file), stat);
-      });
-  });
-}
 
 static write_ertr::future<> do_write(
   seastar::file &device,
@@ -115,7 +53,64 @@ static read_ertr::future<> do_read(
       return read_ertr::now();
     });
 }
-  
+
+write_ertr::future<>
+SegmentStateTracker::write_out(
+  seastar::file &device,
+  uint64_t offset)
+{
+  return do_write(
+    device,
+    offset,
+    bptr);
+}
+
+write_ertr::future<>
+SegmentStateTracker::read_in(
+  seastar::file &device,
+  uint64_t offset)
+{
+  return do_read(
+    device,
+    offset,
+    bptr);
+}
+
+static
+block_sm_superblock_t make_superblock(
+  const BlockSegmentManager::mkfs_config_t &config,
+  const seastar::stat_data &data)
+{
+  size_t raw_segments = data.size / config.segment_size;
+  size_t tracker_size = SegmentStateTracker::get_raw_size(
+    raw_segments,
+    data.block_size);
+  size_t segments = (data.size - tracker_size - data.block_size)
+    / config.segment_size;
+  return block_sm_superblock_t{
+    data.size,
+    config.segment_size,
+    data.block_size,
+    segments,
+    data.block_size,
+    tracker_size + data.block_size
+  };
+}
+
+static 
+BlockSegmentManager::access_ertr::future<
+  std::pair<seastar::file, seastar::stat_data>
+  >
+open_device(std::string_view path, seastar::open_flags mode)
+{
+  return seastar::open_file_dma(path, mode).then([path](auto file) {
+    return seastar::file_stat(path, seastar::follow_symlink::yes).then(
+      [file=std::move(file)](auto stat) {
+	return std::make_pair(std::move(file), stat);
+      });
+  });
+}
+
   
 static
 BlockSegmentManager::access_ertr::future<>
@@ -182,10 +177,10 @@ Segment::close_ertr::future<> BlockSegment::close()
 Segment::write_ertr::future<> BlockSegment::write(
   segment_off_t offset, ceph::bufferlist bl)
 {
-  if (offset < write_pointer || offset % manager.params.block_size != 0)
+  if (offset < write_pointer || offset % manager.superblock.block_size != 0)
     return crimson::ct_error::invarg::make();
 
-  if (offset + bl.length() > manager.params.segment_size)
+  if (offset + bl.length() > manager.superblock.segment_size)
     return crimson::ct_error::enospc::make();
 
   return manager.segment_write({id, offset}, bl);
@@ -193,8 +188,9 @@ Segment::write_ertr::future<> BlockSegment::write(
 
 Segment::close_ertr::future<> BlockSegmentManager::segment_close(segment_id_t id)
 {
-  // TODO
-  return Segment::close_ertr::now();
+  assert(tracker);
+  tracker->set(id, segment_state_t::CLOSED);
+  return tracker->write_out(device, superblock.tracker_offset);
 }
 
 Segment::write_ertr::future<> BlockSegmentManager::segment_write(
@@ -209,19 +205,44 @@ Segment::write_ertr::future<> BlockSegmentManager::segment_write(
     get_offset(addr),
     bl.length());
 
-
-  // TODO
-  return Segment::write_ertr::now();
+  
+  // TODO send an iovec and avoid the copy -- bl should have aligned
+  // constituent buffers and they will remain unmodified until the write
+  // completes
+  bufferptr bp(ceph::buffer::create_page_aligned(bl.length()));
+  auto iter = bl.cbegin();
+  iter.copy(bl.length(), bp.c_str());
+  return do_write(device, get_offset(addr), bp); // TODO flushes
 }
 
 BlockSegmentManager::~BlockSegmentManager()
 {
 }
 
-BlockSegmentManager::mount_ret BlockSegmentManager::mount(mount_config_t)
+BlockSegmentManager::mount_ret BlockSegmentManager::mount(mount_config_t config)
 {
-  // TODO
-  return mount_ertr::now();
+  return open_device(config.path, seastar::open_flags::rw
+  ).safe_then([=](auto p) {
+    device = std::move(p.first);
+    auto sd = p.second;
+    return read_superblock(device, sd);
+  }).safe_then([=](auto sb) {
+    superblock = sb;
+    tracker = std::make_unique<SegmentStateTracker>(
+      superblock.size,
+      superblock.block_size);
+    return tracker->read_in(
+      device,
+      superblock.tracker_offset
+    ).safe_then([this] {
+      for (segment_id_t i = 0; i < tracker->get_capacity(); ++i) {
+	if (tracker->get(i) == segment_state_t::OPEN) {
+	  tracker->set(i, segment_state_t::CLOSED);
+	}
+      }
+      return tracker->write_out(device, superblock.tracker_offset);
+    });
+  });
 }
 
 BlockSegmentManager::mkfs_ret BlockSegmentManager::mkfs(mkfs_config_t config)
@@ -229,14 +250,18 @@ BlockSegmentManager::mkfs_ret BlockSegmentManager::mkfs(mkfs_config_t config)
   return seastar::do_with(
     seastar::file{},
     seastar::stat_data{},
-    [=](auto &device, auto &stat) {
+    block_sm_superblock_t{},
+    [=](auto &device, auto &stat, auto &sb) {
       return open_device(
 	config.path, seastar::open_flags::rw
-      ).safe_then([=, &device, &stat](auto p) {
+      ).safe_then([=, &device, &stat, &sb](auto p) {
 	device = std::move(p.first);
 	stat = p.second;
-	auto sb = make_superblock(config, stat);
+	sb = make_superblock(config, stat);
 	return write_superblock(device, sb);
+      }).safe_then([=, &device, &stat, &sb] {
+	SegmentStateTracker tracker(sb.size, sb.block_size);
+	return tracker.write_out(device, sb.tracker_offset);
       });
     });
 }
@@ -249,8 +274,21 @@ SegmentManager::open_ertr::future<SegmentRef> BlockSegmentManager::open(
     return crimson::ct_error::invarg::make();
   }
 
-  // TODO
-  return open_ertr::make_ready_future<SegmentRef>(nullptr);
+  if (tracker->get(id) != segment_state_t::EMPTY) {
+    logger().error(
+      "BlockSegmentManager::open: invalid segment {} state {}",
+      id,
+      tracker->get(id));
+    return crimson::ct_error::invarg::make();
+  }
+
+  tracker->set(id, segment_state_t::OPEN);
+  return tracker->write_out(device, superblock.tracker_offset
+  ).safe_then([this, id] {
+    return open_ertr::future<SegmentRef>(
+      open_ertr::ready_future_marker{},
+      SegmentRef(new BlockSegment(*this, id)));
+  });
 }
 
 SegmentManager::release_ertr::future<> BlockSegmentManager::release(
@@ -265,8 +303,16 @@ SegmentManager::release_ertr::future<> BlockSegmentManager::release(
     return crimson::ct_error::invarg::make();
   }
 
-  // TODO
-  return release_ertr::now();
+  if (tracker->get(id) != segment_state_t::CLOSED) {
+    logger().error(
+      "BlockSegmentManager::release: invalid segment {} state {}",
+      id,
+      tracker->get(id));
+    return crimson::ct_error::invarg::make();
+  }
+
+  tracker->set(id, segment_state_t::EMPTY);
+  return tracker->write_out(device, superblock.tracker_offset);
 }
 
 SegmentManager::read_ertr::future<> BlockSegmentManager::read(
@@ -281,7 +327,7 @@ SegmentManager::read_ertr::future<> BlockSegmentManager::read(
     return crimson::ct_error::invarg::make();
   }
 
-  if (addr.offset + len > params.segment_size) {
+  if (addr.offset + len > superblock.segment_size) {
     logger().error(
       "BlockSegmentManager::read: invalid offset {}~{}!",
       addr,
@@ -289,8 +335,18 @@ SegmentManager::read_ertr::future<> BlockSegmentManager::read(
     return crimson::ct_error::invarg::make();
   }
 
-  // TODO
-  return read_ertr::now();
+  if (tracker->get(addr.segment) == segment_state_t::EMPTY) {
+    logger().error(
+      "BlockSegmentManager::release: read on invalid segment {} state {}",
+      addr.segment,
+      tracker->get(addr.segment));
+    return crimson::ct_error::invarg::make();
+  }
+
+  return do_read(
+    device,
+    get_offset(addr),
+    out);
 }
 
 }
