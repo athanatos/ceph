@@ -12,7 +12,11 @@ target_link_libraries(
 
 add_executable(seastore_lba_throughput_test
 lba_throughput_test.cc)
-target_link_libraries(seastore_lba_throughput_test crimson)
+target_link_libraries(
+  seastore_lba_throughput_test
+  crimson-os
+  crimson-common
+  crimson-seastore)
 
 add_executable(unittest_btree_lba_manager
   test_btree_lba_manager.cc

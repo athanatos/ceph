@@ -142,6 +142,11 @@ public:
   using mkfs_ertr = access_ertr;
   using mkfs_ret = mkfs_ertr::future<>;
   static mkfs_ret mkfs(mkfs_config_t);
+  
+  using close_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error
+    >;
+  close_ertr::future<> close();
 
   BlockSegmentManager() = default;
   ~BlockSegmentManager();

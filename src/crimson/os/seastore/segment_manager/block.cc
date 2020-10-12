@@ -266,6 +266,11 @@ BlockSegmentManager::mkfs_ret BlockSegmentManager::mkfs(mkfs_config_t config)
     });
 }
 
+BlockSegmentManager::close_ertr::future<> BlockSegmentManager::close()
+{
+  return BlockSegmentManager::close_ertr::now();
+}
+
 SegmentManager::open_ertr::future<SegmentRef> BlockSegmentManager::open(
   segment_id_t id)
 {
