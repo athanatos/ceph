@@ -24,6 +24,11 @@ using namespace crimson::os;
 using namespace crimson::os::seastore;
 using namespace crimson::os::seastore::segment_manager::block;
 
+namespace {
+  seastar::logger& logger() {
+    return crimson::get_logger(ceph_subsys_test);
+  }
+}
 
 /**
  * LBAThroughputBackend
@@ -83,6 +88,8 @@ public:
   virtual seastar::future<> mkfs() = 0;
   virtual seastar::future<> mount() = 0;
   virtual seastar::future<> close() = 0;
+
+  virtual ~LBAThroughputBackend() {}
 };
 using LBAThroughputBackendRef = std::unique_ptr<LBAThroughputBackend>;
 
@@ -154,7 +161,9 @@ int main(int argc, char** argv)
     ("backend", po::value<std::string>()->default_value("transaction_manager"),
      "Backend to use for workload")
     ("segment_size", po::value<uint32_t>()->default_value(128<<20 /* 128M */),
-     "size to use for segments");
+     "size to use for segments")
+    ("debug", po::value<bool>()->default_value(false),
+     "enable debugging");
 
   po::options_description io_pattern_options{"IO Pattern Options"};
   LBAThroughputTest::config_t io_config;
@@ -178,6 +187,7 @@ int main(int argc, char** argv)
       std::cout << desc << std::endl;
       return 0;
     }
+
     po::notify(vm);
     unrecognized_options =
       po::collect_unrecognized(parsed.options, po::include_positional);
@@ -199,6 +209,13 @@ int main(int argc, char** argv)
 
   SeastarRunner sc;
   sc.init(av.size(), av.data());
+
+  if (vm.count("debug")) {
+    seastar::global_logger_registry().set_all_loggers_level(
+      seastar::log_level::debug
+    );
+  }
+
   sc.run([=] {
     auto backend = get_backend(backend_config);
     auto tester = get_backend(backend_config);
@@ -211,6 +228,8 @@ int main(int argc, char** argv)
 	  return backend->mount();
 	}).then([&] {
 	  return tester.run();
+	}).then([&] {
+	  return backend->close();
 	});
       });
   });
@@ -233,6 +252,7 @@ class TMBackend final : public LBAThroughputBackend {
 
 public:
   TMBackend(config_t config) : config(config) {}
+  ~TMBackend() final {}
 
   bufferptr get_buffer(size_t size) final {
     return ceph::buffer::create_page_aligned(size);
@@ -295,9 +315,6 @@ public:
   }
 
   void init() {
-    segment_manager = std::make_unique<
-      segment_manager::block::BlockSegmentManager
-      >();
     segment_cleaner = std::make_unique<SegmentCleaner>(
       SegmentCleaner::config_t::default_from_segment_manager(
 	*segment_manager),
@@ -321,17 +338,28 @@ public:
 
   seastar::future<> mkfs() final {
     assert(config.path);
-    init();
+    segment_manager = std::make_unique<
+      segment_manager::block::BlockSegmentManager
+      >();
+    logger().debug("mkfs");
     return segment_manager->mkfs(
       { *config.path, config.segment_size }
     ).safe_then([this] {
+      logger().debug("");
+      return segment_manager->mount({ *config.path });
+    }).safe_then([this] {
+      init();
+      logger().debug("tm mkfs");
       return tm->mkfs();
     }).safe_then([this] {
+      logger().debug("tm close");
       return tm->close();
     }).safe_then([this] {
+      logger().debug("sm close");
       return segment_manager->close();
     }).safe_then([this] {
       clear();
+      logger().debug("mkfs complete");
       return TransactionManager::mkfs_ertr::now();
     }).handle_error(
       crimson::ct_error::assert_all{}
@@ -339,15 +367,23 @@ public:
   }
 
   seastar::future<> mount() final {
-    init();
-    return tm->mount(
-    ).handle_error(
+    segment_manager = std::make_unique<
+      segment_manager::block::BlockSegmentManager
+      >();
+    return segment_manager->mount({ *config.path }
+    ).safe_then([this] {
+      init();
+      return tm->mount();
+    }).handle_error(
       crimson::ct_error::assert_all{}
     );
   };
 
   seastar::future<> close() final {
-    return tm->close().safe_then([this] {
+    return segment_manager->close(
+    ).safe_then([this] {
+      return tm->close();
+    }).safe_then([this] {
       clear();
       return seastar::now();
     }).handle_error(
