@@ -3,10 +3,6 @@
 
 #pragma once
 
-#include <random>
-
-#include "test/crimson/gtest_seastar.h"
-
 #include "crimson/os/seastore/segment_cleaner.h"
 #include "crimson/os/seastore/cache.h"
 #include "crimson/os/seastore/transaction_manager.h"
@@ -69,7 +65,7 @@ protected:
       return tm->mount();
     }).handle_error(
       crimson::ct_error::all_same_way([] {
-	ASSERT_FALSE("Unable to mount");
+	ceph_abort("Unable to mount");
       })
     );
   }
@@ -78,7 +74,7 @@ protected:
     return tm->close(
     ).handle_error(
       crimson::ct_error::all_same_way([] {
-	ASSERT_FALSE("Unable to close");
+	ceph_abort("Unable to close");
       })
     );
   }
