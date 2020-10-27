@@ -8,7 +8,6 @@
 #include <linux/nbd.h>
 #include <linux/fs.h>
 
-#include "include/byteorder.h"
 #include "common/ceph_time.h"
 
 #include "crimson/os/seastore/cache.h"
@@ -127,7 +126,7 @@ struct request_context_t {
 
   unsigned err = 0;
   std::optional<bufferptr> in_buffer;
-  std::optional<bufferptr> out_buffer;
+  std::optional<bufferlist> out_buffer;
 
   bool check_magic() const {
     // todo
@@ -135,7 +134,7 @@ struct request_context_t {
   }
 
   uint32_t get_command() const {
-    return type & 0xFFFF;
+    return type & 0xff;
   }
 
   bool has_input_buffer() const {
@@ -152,14 +151,27 @@ struct request_context_t {
       memcpy(handle, wire.handle, sizeof(handle));
       from = ntohll(wire.from);
       len = ntohl(wire.len);
+      logger().debug(
+	"Got request, magic {}, type {}, from {}, len {}",
+	magic,
+	type,
+	from,
+	len);
+      logger().debug(
+	"Got wire request, magic {}, type {}, from {}, len {}",
+	wire.magic,
+	wire.type,
+	wire.from,
+	wire.len);
  
-      auto next = seastar::now();
       if (has_input_buffer()) {
-	next = in.read_exactly(len).then([this, &in](auto buf) {
+	return in.read_exactly(len).then([this, &in](auto buf) {
 	  in_buffer = ceph::buffer::create_page_aligned(len);
 	  in_buffer->copy_in(0, len, buf.get());
 	  return seastar::now();
 	});
+      } else {
+	return seastar::now();
       }
     });
   }
@@ -176,10 +188,16 @@ struct request_context_t {
 	  reinterpret_cast<char*>(&reply), sizeof(reply)
 	).then([this, &out] {
 	  if (out_buffer) {
-	    return out.write(out_buffer->c_str(), out_buffer->length());
+	    return seastar::do_for_each(
+	      out_buffer->buffers(),
+	      [&out](auto &ptr) {
+		return out.write(ptr.c_str(), ptr.length());
+	      });
 	  } else {
 	    return seastar::now();
 	  }
+	}).then([this, &out] {
+	  return out.flush();
 	});
       });
   }
@@ -204,11 +222,11 @@ public:
       desc.add_options()
 	("uds-path",
 	 po::value<std::string>()
-	 ->default_value("")
+	 ->default_value("/tmp/store_nbd_socket.sock")
 	 ->notifier([this](auto s) {
 	   uds_path = s;
 	 }),
-	 "/tmp/store_nbd_socket.sock"
+	 "Path to domain socket for nbd"
 	);
     }
   };
@@ -301,15 +319,15 @@ int main(int argc, char** argv)
 }
 
 class nbd_oldstyle_negotiation_t {
-  ceph_le64 magic = init_le64(0x4e42444d41474943);
-  ceph_le64 magic2 = init_le64(0x00420281861253);
-  ceph_le64 size;
-  ceph_le32 flags;
+  uint64_t magic = ntohll(0x4e42444d41474943);
+  uint64_t magic2 = ntohll(0x00420281861253);
+  uint64_t size = 0;
+  uint32_t flags = ntohl(0);
   char reserved[124] = {0};
 
 public:
-  nbd_oldstyle_negotiation_t(size_t size, unsigned flags)
-    : size(init_le64(size)), flags(init_le32(flags)) {}
+  nbd_oldstyle_negotiation_t(uint64_t size, uint32_t flags)
+    : size(htonll(size)), flags(htonl(flags)) {}
 } __attribute__((packed));
 
 seastar::future<> send_negotiation(
@@ -319,7 +337,7 @@ seastar::future<> send_negotiation(
   return seastar::do_with(
     nbd_oldstyle_negotiation_t(
       size,
-      0 /* flags TODO */),
+      1),
     [&out](auto &negotiation) {
       return out.write(
 	reinterpret_cast<char*>(&negotiation), sizeof(negotiation));
@@ -329,55 +347,60 @@ seastar::future<> send_negotiation(
 }
 
 seastar::future<> handle_command(
+  BlockDriver &backend,
   request_context_t &context,
   seastar::output_stream<char> &out)
 {
+  logger().debug("got command {}", context.get_command());
   return ([&] {
     switch (context.get_command()) {
     case NBD_CMD_WRITE:
-      logger().error("Got write");
-      return seastar::now();
+      return backend.write(
+	context.from,
+	*context.in_buffer);
     case NBD_CMD_READ:
-      logger().error("Got read");
-      context.out_buffer = ceph::buffer::create_page_aligned(
-	context.len);
-      return seastar::now();
+      return backend.read(
+	context.from,
+	context.len).then([&context] (auto buffer) {
+	  context.out_buffer = buffer;
+	});
     case NBD_CMD_DISC:
-      assert(0 == "disc");
-      return seastar::now();
+      throw std::system_error(std::make_error_code(std::errc::bad_message));
     case NBD_CMD_TRIM:
-      assert(0 == "trim");
-      return seastar::now();
+      throw std::system_error(std::make_error_code(std::errc::bad_message));
     default:
-      assert(0 == "unrecognized command");
-      return seastar::now();
+      throw std::system_error(std::make_error_code(std::errc::bad_message));
     }
   })().then([&] {
+    logger().debug("Writing reply");
     return context.write_reply(out);
   });
 }
   
 
 seastar::future<> handle_commands(
+  BlockDriver &backend,
   seastar::input_stream<char>& in,
   seastar::output_stream<char>& out)
 {
+  logger().debug("handle_commands");
   return seastar::keep_doing(
     [&] {
-      return in.read_exactly(sizeof(struct nbd_request)
-      ).then([&](auto buf) {
-	auto request_ref = std::make_unique<request_context_t>();
-	auto &request = *request_ref;
-	return request.read_request(in
-	).then([&, req=std::move(request_ref)] {
-	  return handle_command(request, out);
-	});
+      logger().debug("waiting for command");
+      auto request_ref = std::make_unique<request_context_t>();
+      auto &request = *request_ref;
+      return request.read_request(in
+      ).then([&] {
+	return handle_command(backend, request, out);
+      }).then([req=std::move(request_ref)] {
+	logger().debug("complete");
       });
     });
 }
 
 seastar::future<> NBDHandler::run()
 {
+  logger().debug("About to listen on {}", uds_path);
   return seastar::do_with(
     seastar::engine().listen(
       seastar::socket_address{
@@ -387,6 +410,7 @@ seastar::future<> NBDHandler::run()
 	[this] { /* TODO */ return false; },
 	[this, &socket] {
 	  return socket.accept().then([this](auto acc) {
+	    logger().debug("Accepted");
 	    return seastar::do_with(
 	      std::move(acc.connection),
 	      [this](auto &conn) {
@@ -398,7 +422,13 @@ seastar::future<> NBDHandler::run()
 		      backend.get_size(),
 		      output
 		    ).then([&, this] {
-		      return handle_commands(input, output);
+		      return handle_commands(backend, input, output);
+		    }).finally([&] {
+		      return input.close();
+		    }).finally([&] {
+		      return output.close();
+		    }).handle_exception([](auto e) {
+		      return seastar::now();
 		    });
 		  });
 	      });
@@ -429,6 +459,7 @@ public:
   seastar::future<> write(
     off_t offset,
     bufferptr ptr) final {
+    logger().debug("Writing offset {}", offset);
     assert(offset % segment_manager->get_block_size() == 0);
     assert(ptr.length() == (size_t)segment_manager->get_block_size());
     return seastar::do_with(
@@ -460,6 +491,7 @@ public:
   seastar::future<bufferlist> read(
     off_t offset,
     size_t size) final {
+    logger().debug("Reading offset {}", offset);
     assert(offset % segment_manager->get_block_size() == 0);
     assert(size % (size_t)segment_manager->get_block_size() == 0);
     return seastar::do_with(
@@ -470,11 +502,18 @@ public:
 	  size_t cur = offset;
 	  bufferlist bl;
 	  for (auto &i: ext_list) {
-	    assert(cur == i.first);
+	    if (cur != i.first) {
+	      assert(cur < i.first);
+	      bl.append_zero(i.first - cur);
+	      cur = i.first;
+	    }
 	    bl.append(i.second->get_bptr());
 	    cur += i.second->get_bptr().length();
 	  }
-	  assert(bl.length() == size);
+	  if (bl.length() != size) {
+	    assert(bl.length() < size);
+	    bl.append_zero(size - bl.length());
+	  }
 	  return seastar::make_ready_future<bufferlist>(std::move(bl));
 	});
       }).handle_error(
@@ -505,7 +544,7 @@ public:
   }
 
   size_t get_size() const final {
-    return segment_manager->get_size();
+    return segment_manager->get_size() * .5;
   }
 
   seastar::future<> mkfs() {
