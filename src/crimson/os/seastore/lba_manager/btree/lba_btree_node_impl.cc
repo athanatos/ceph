@@ -109,10 +109,15 @@ LBAInternalNode::mutate_mapping_ret LBAInternalNode::mutate_mapping(
   laddr_t laddr,
   mutate_func_t &&f)
 {
+  auto mutation_pt = get_containing_child(laddr);
+  if (mutation_pt == end()) {
+    assert(0 == "impossible");
+    return crimson::ct_error::enoent::make();
+  }
   return get_lba_btree_extent(
     c,
     get_meta().depth - 1,
-    get_containing_child(laddr)->get_val(),
+    mutation_pt->get_val(),
     get_paddr()
   ).safe_then([this, c, laddr](LBANodeRef extent) {
     if (extent->at_min_capacity()) {
@@ -484,6 +489,11 @@ LBALeafNode::mutate_mapping_ret LBALeafNode::mutate_mapping(
   laddr_t laddr,
   mutate_func_t &&f)
 {
+  auto mutation_pt = find(laddr);
+  if (mutation_pt == end()) {
+    return crimson::ct_error::enoent::make();
+  }
+
   if (!is_pending()) {
     return c.cache.duplicate_for_write(c.trans, this)->cast<LBALeafNode>(
     )->mutate_mapping(
@@ -493,10 +503,6 @@ LBALeafNode::mutate_mapping_ret LBALeafNode::mutate_mapping(
   }
 
   ceph_assert(!at_min_capacity());
-  auto mutation_pt = find(laddr);
-  if (mutation_pt == end()) {
-    return crimson::ct_error::enoent::make();
-  }
 
   auto cur = mutation_pt.get_val();
   auto mutated = f(cur);

@@ -66,9 +66,7 @@ struct btree_lba_manager_test :
 	cache.complete_commit(*t, addr, seq);
 	lba_manager->complete_transaction(*t);
       },
-      crimson::ct_error::all_same_way([](auto e) {
-	ceph_assert(0 == "Hit error submitting to journal");
-      }));
+      crimson::ct_error::assert_all{});
   }
 
   seastar::future<> set_up_fut() final {

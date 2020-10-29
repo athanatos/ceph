@@ -470,9 +470,10 @@ public:
 	  *t,
 	  offset
 	).safe_then([](auto){}).handle_error(
-	  crimson::ct_error::enoent::discard{},
+	  crimson::ct_error::enoent::handle([](auto) { return seastar::now(); }),
 	  crimson::ct_error::pass_further_all{}
 	).safe_then([=, &t, &ptr] {
+	  logger().debug("dec_ref complete");
 	  return tm->alloc_extent<TestBlock>(
 	    *t,
 	    offset,
@@ -481,6 +482,7 @@ public:
 	  assert(ext->get_laddr() == (size_t)offset);
 	  assert(ext->get_bptr().length() == ptr.length());
 	  ext->get_bptr().swap(ptr);
+	  logger().debug("submitting transaction");
 	  return tm->submit_transaction(std::move(t));
 	});
       }).handle_error(

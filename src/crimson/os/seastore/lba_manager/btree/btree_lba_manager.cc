@@ -510,7 +510,7 @@ BtreeLBAManager::update_refcount_ret BtreeLBAManager::update_refcount(
       return out;
     }).safe_then([](auto result) {
       return ref_update_result_t{result.refcount, result.paddr};
-    });
+    }).finally([] { logger().debug("update_refcount done"); });
 }
 
 BtreeLBAManager::update_mapping_ret BtreeLBAManager::update_mapping(
