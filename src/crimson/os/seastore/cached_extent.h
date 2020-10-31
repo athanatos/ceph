@@ -392,6 +392,7 @@ protected:
     if (!addr.is_relative()) {
       return addr;
     } else if (is_mutation_pending()) {
+      ceph_assert(!addr.is_block_relative());
       return addr;
     } else {
       ceph_assert(is_initial_pending());
