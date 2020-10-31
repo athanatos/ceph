@@ -272,8 +272,19 @@ private:
     record_size_t rsize,
     record_t &&record);
 
-  /// validate metadata
+  /// validate embedded metadata checksum
   static bool validate_metadata(const bufferlist &bl);
+
+  /// read and validate data
+  using read_validate_data_ertr = SegmentManager::read_ertr;
+  using read_validate_data_ret = read_validate_data_ertr::future<bool>;
+  read_validate_data_ret read_validate_data(
+    paddr_t record_base,
+    const record_header_t &header  ///< caller must ensure lifetime through
+                                   ///  future resolution
+  );
+    
+    
 
   /// do record write
   using write_record_ertr = crimson::errorator<
@@ -310,23 +321,24 @@ private:
     replay_segments_t>;
   find_replay_segments_fut find_replay_segments();
 
+  /// attempts to decode deltas from bl, return nullopt if unsuccessful
+  std::optional<std::vector<delta_info_t>> try_decode_deltas(
+    record_header_t header,
+    const bufferlist &bl);
+
+  /// attempts to decode extent infos from bl, return nullopt if unsuccessful
+  std::optional<std::vector<extent_info_t>> try_decode_extent_infos(
+    record_header_t header,
+    const bufferlist &bl);
+
   /// read record metadata for record starting at start
   using read_record_metadata_ertr = replay_ertr;
   using read_record_metadata_ret = read_record_metadata_ertr::future<
     std::optional<std::pair<record_header_t, bufferlist>>
     >;
   read_record_metadata_ret read_record_metadata(
-    paddr_t start);
-
-  /// attempts to decode deltas from bl, return nullopt if unsuccessful
-  std::optional<std::vector<delta_info_t>> try_decode_deltas(
-    record_header_t header,
-    bufferlist &bl);
-
-  /// attempts to decode extent infos from bl, return nullopt if unsuccessful
-  std::optional<std::vector<extent_info_t>> try_decode_extent_infos(
-    record_header_t header,
-    bufferlist &bl);
+    paddr_t start,
+    segment_nonce_t nonce);
 
   /**
    * scan_segment
@@ -354,6 +366,46 @@ private:
     delta_scan_handler_t *delta_handler,
     extent_handler_t *extent_info_handler
   );
+
+  /// scan segment for end incrementally
+  struct scan_valid_records_cursor {
+    bool last_valid_header_found = false;
+    paddr_t offset;
+    paddr_t last_committed;
+
+    struct found_record_t {
+      paddr_t offset;
+      record_header_t header;
+      bufferlist mdbuffer;
+
+      found_record_t(
+	paddr_t offset,
+	const record_header_t &header,
+	const bufferlist &mdbuffer)
+	: offset(offset), header(header), mdbuffer(mdbuffer) {}
+    };
+    std::deque<found_record_t> pending_records;
+
+    scan_valid_records_cursor(
+      paddr_t offset)
+      : offset(offset) {}
+  };
+
+  using scan_valid_records_ertr = SegmentManager::read_ertr;
+  using scan_valid_records_ret = scan_valid_records_ertr::future<
+    size_t>;
+  using found_record_handler_t = std::function<
+    scan_valid_records_ertr::future<>(
+      paddr_t record_block_base,
+      // callee may assume header and bl will remain valid until
+      // returned future resolves
+      const record_header_t &header,
+      const bufferlist &bl)>;
+  scan_valid_records_ret scan_valid_records(
+    scan_valid_records_cursor &cursor,
+    segment_nonce_t nonce,
+    size_t budget,
+    found_record_handler_t &handler);
 
   /// replays records starting at start through end of segment
   replay_ertr::future<>

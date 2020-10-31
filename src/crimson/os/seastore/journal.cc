@@ -159,6 +159,20 @@ bool Journal::validate_metadata(const bufferlist &bl)
   return test_crc == recorded_crc;
 }
 
+Journal::read_validate_data_ret Journal::read_validate_data(
+  paddr_t record_base,
+  const record_header_t &header)
+{
+  return segment_manager.read(
+    record_base.add_offset(header.mdlength),
+    header.dlength
+  ).safe_then([=, &header](auto bptr) {
+    bufferlist bl;
+    bl.append(bptr);
+    return bl.crc32c(-1) == header.data_crc;
+  });
+}
+
 Journal::write_record_ret Journal::write_record(
   record_size_t rsize,
   record_t &&record)
@@ -409,7 +423,8 @@ Journal::find_replay_segments_fut Journal::find_replay_segments()
 }
 
 Journal::read_record_metadata_ret Journal::read_record_metadata(
-  paddr_t start)
+  paddr_t start,
+  segment_nonce_t nonce)
 {
   if (start.offset + block_size > (int64_t)segment_manager.get_segment_size()) {
     return read_record_metadata_ret(
@@ -418,7 +433,7 @@ Journal::read_record_metadata_ret Journal::read_record_metadata(
   }
   return segment_manager.read(start, block_size
   ).safe_then(
-    [this, start](bufferptr bptr) mutable
+    [=](bufferptr bptr) mutable
     -> read_record_metadata_ret {
       logger().debug("read_record_metadata: reading {}", start);
       bufferlist bl;
@@ -428,6 +443,11 @@ Journal::read_record_metadata_ret Journal::read_record_metadata(
       try {
 	decode(header, bp);
       } catch (ceph::buffer::error &e) {
+	return read_record_metadata_ret(
+	  read_record_metadata_ertr::ready_future_marker{},
+	  std::nullopt);
+      }
+      if (header.segment_nonce != nonce) {
 	return read_record_metadata_ret(
 	  read_record_metadata_ertr::ready_future_marker{},
 	  std::nullopt);
@@ -448,17 +468,28 @@ Journal::read_record_metadata_ret Journal::read_record_metadata(
 		std::make_pair(std::move(header), std::move(bl)));
 	    });
       } else {
-	  return read_record_metadata_ret(
-	    read_record_metadata_ertr::ready_future_marker{},
-	    std::make_pair(std::move(header), std::move(bl))
-	  );
+	return read_record_metadata_ret(
+	  read_record_metadata_ertr::ready_future_marker{},
+	  std::make_pair(std::move(header), std::move(bl))
+	);
+      }
+    }).safe_then([=](auto p) {
+      if (p && validate_metadata(p->second)) {
+	return read_record_metadata_ret(
+	  read_record_metadata_ertr::ready_future_marker{},
+	  std::move(*p)
+	);
+      } else {
+	return read_record_metadata_ret(
+	  read_record_metadata_ertr::ready_future_marker{},
+	  std::nullopt);
       }
     });
 }
 
 std::optional<std::vector<delta_info_t>> Journal::try_decode_deltas(
   record_header_t header,
-  bufferlist &bl)
+  const bufferlist &bl)
 {
   auto bliter = bl.cbegin();
   bliter += ceph::encoded_sizeof_bounded<record_header_t>();
@@ -478,7 +509,7 @@ std::optional<std::vector<delta_info_t>> Journal::try_decode_deltas(
 
 std::optional<std::vector<extent_info_t>> Journal::try_decode_extent_infos(
   record_header_t header,
-  bufferlist &bl)
+  const bufferlist &bl)
 {
   auto bliter = bl.cbegin();
   bliter += ceph::encoded_sizeof_bounded<record_header_t>();
@@ -503,34 +534,57 @@ Journal::replay_segment(
 {
   logger().debug("replay_segment: starting at {}", seq);
   return seastar::do_with(
-    delta_scan_handler_t(
-      [=, &handler](auto addr, auto base, const auto &delta) {
-	/* The journal may validly contain deltas for extents in since released
-	 * segments.  We can detect those cases by whether the segment in question
-	 * currently has a sequence number > the current journal segment seq.
-	 * We can safely skip these deltas because the extent must already have
-	 * been rewritten.
-	 *
-	 * Note, this comparison exploits the fact that SEGMENT_SEQ_NULL is
-	 * a large number.
-	 */
-	if (delta.paddr != P_ADDR_NULL &&
-	    segment_provider->get_seq(delta.paddr.segment) > seq.segment_seq) {
-	  return replay_ertr::now();
-	} else {
-	  return handler(
-	    journal_seq_t{seq.segment_seq, addr},
-	    base,
-	    delta);
+    scan_valid_records_cursor(seq.offset),
+    found_record_handler_t(
+      [=, &handler](paddr_t base,
+		    const record_header_t &header,
+		    const bufferlist &mdbuf) {
+	auto deltas = try_decode_deltas(
+	  header,
+	  mdbuf);
+	if (!deltas) {
+	  // This should be impossible, we did check the crc on the mdbuf
+	  logger().error(
+	    "Journal::scan_segment unable to decode deltas for record {}",
+	    base);
+	  assert(deltas);
 	}
+
+	return seastar::do_with(
+	  std::move(*deltas),
+	  [=](auto &deltas) {
+	    return crimson::do_for_each(
+	      deltas,
+	      [=](auto &delta) {
+		/* The journal may validly contain deltas for extents in
+		 * since released segments.  We can detect those cases by
+		 * whether the segment in question currently has a sequence
+		 * number > the current journal segment seq. We can safely
+		 * skip these deltas because the extent must already have
+		 * been rewritten.
+		 *
+		 * Note, this comparison exploits the fact that
+		 * SEGMENT_SEQ_NULL is a large number.
+		 */
+		if (delta.paddr != P_ADDR_NULL &&
+		    (segment_provider->get_seq(delta.paddr.segment) >
+		     seq.segment_seq)) {
+		  return replay_ertr::now();
+		} else {
+		  return handler(
+		    journal_seq_t{seq.segment_seq, base},
+		    base.add_offset(header.mdlength),
+		    delta);
+		}
+	      });
+	  });
       }),
-    [=](auto &dhandler) {
-      return scan_segment(
-	seq.offset,
-	segment_manager.get_segment_size(),
+    [=](auto &cursor, auto &dhandler) {
+      return scan_valid_records(
+	cursor,
 	header.segment_nonce,
-	&dhandler,
-	nullptr).safe_then([](auto){});
+	std::numeric_limits<size_t>::max(),
+	dhandler).safe_then([](auto){});
     });
 }
 
@@ -598,7 +652,7 @@ Journal::scan_segment_ret Journal::scan_segment(
     [=](paddr_t &current) {
       return crimson::do_until(
 	[=, &current]() -> scan_segment_ertr::future<bool> {
-	  return read_record_metadata(current).safe_then
+	  return read_record_metadata(current, nonce).safe_then
 	    ([=, &current](auto p)
 	     -> scan_segment_ertr::future<bool> {
 	      if (!p.has_value()) {
@@ -707,5 +761,110 @@ Journal::scan_segment_ret Journal::scan_segment(
 	});
     });
 }
+
+Journal::scan_valid_records_ret Journal::scan_valid_records(
+    scan_valid_records_cursor &cursor,
+    segment_nonce_t nonce,
+    size_t budget,
+    found_record_handler_t &handler)
+{
+  auto retref = std::make_unique<size_t>(0);
+  auto budget_used = *retref;
+  return crimson::do_until(
+    [=, &cursor, &budget_used, &handler]() mutable
+    -> scan_valid_records_ertr::future<bool> {
+      return [=, &handler, &cursor, &budget_used] {
+	if (!cursor.last_valid_header_found) {
+	  return read_record_metadata(cursor.offset, nonce
+	  ).safe_then([=, &cursor, &budget_used, &handler](auto md) {
+	    logger().debug(
+	      "Journal::scan_valid_records: read complete {}",
+	      cursor.offset);
+	    if (!md) {
+	      logger().debug(
+		"Journal::scan_valid_records: found invalid header at {}",
+		cursor.offset);
+	      cursor.last_valid_header_found = true;
+	      return scan_valid_records_ertr::now();
+	    } else {
+	      logger().debug(
+		"Journal::scan_valid_records: valid record read at {}",
+		cursor.offset);
+	      cursor.last_committed = paddr_t{
+		cursor.offset.segment,
+		md->first.committed_to};
+	      cursor.pending_records.emplace_back(
+		cursor.offset,
+		md->first,
+		md->second);
+	      cursor.offset.offset +=
+		md->first.dlength + md->first.mdlength;
+	      return scan_valid_records_ertr::now();
+	    }
+	  }).safe_then([=, &cursor, &budget_used, &handler] {
+	    return crimson::do_until(
+	      [=, &budget_used, &cursor, &handler] {
+		logger().debug(
+		  "Journal::scan_valid_records: valid record read, processing queue");
+		if (cursor.pending_records.empty()) {
+		  /* This is only possible if the segment is empty.
+		   * A record's last_commited must be prior to its own
+		   * location since it itself cannot yet have been committed
+		   * at its own time of submission.  Thus, the most recently
+		   * read record must always fall after cursor.last_committed */
+		  return scan_valid_records_ertr::make_ready_future<bool>(true);
+		}
+		logger().debug("TODO REMOVE checking queue");
+		auto &next = cursor.pending_records.front();
+		if (next.offset > cursor.last_committed) {
+		  return scan_valid_records_ertr::make_ready_future<bool>(true);
+		}
+		budget_used +=
+		  next.header.dlength + next.header.mdlength;
+		logger().debug("TODO REMOVE calling handler");
+		return handler(
+		  next.offset,
+		  next.header,
+		  next.mdbuffer
+		).safe_then([&cursor] {
+		  cursor.pending_records.pop_front();
+		  return scan_valid_records_ertr::make_ready_future<bool>(false);
+		});
+	      });
+	  });
+	} else {
+	  assert(!cursor.pending_records.empty());
+	  auto &next = cursor.pending_records.front();
+	  return read_validate_data(next.offset, next.header
+	  ).safe_then([=, &budget_used, &next, &cursor, &handler](auto valid) {
+	    if (!valid) {
+	      cursor.pending_records.clear();
+	      return scan_valid_records_ertr::now();
+	    }
+	    budget_used +=
+	      next.header.dlength + next.header.mdlength;
+	    return handler(
+	      next.offset,
+	      next.header,
+	      next.mdbuffer
+	    ).safe_then([&cursor] {
+	      cursor.pending_records.pop_front();
+	      return scan_valid_records_ertr::now();
+	    });
+	  });
+	}
+      }().safe_then([=, &budget_used, &cursor] {
+	return scan_valid_records_ertr::make_ready_future<bool>(
+	  (cursor.last_valid_header_found && cursor.pending_records.empty()) ||
+	  budget_used >= budget
+	);
+      });
+    }).safe_then([retref=std::move(retref)]() mutable -> scan_valid_records_ret {
+      return scan_valid_records_ret(
+	scan_valid_records_ertr::ready_future_marker{},
+	std::move(*retref));
+    });
+}
+
 
 }
