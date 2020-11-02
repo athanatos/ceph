@@ -270,6 +270,8 @@ enum class extent_types_t : uint8_t {
   EXTMAP_INNER = 4,
   EXTMAP_LEAF = 5,
   ONODE_BLOCK_STAGED = 6,
+  OMAP_INNER = 7,
+  OMAP_LEAF = 8,
 
   // Test Block Types
   TEST_BLOCK = 0xF0,
