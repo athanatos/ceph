@@ -94,6 +94,10 @@ public:
     return config.segment_size;
   }
 
+  seastore_meta_t get_meta() const final {
+    return meta;
+  }
+
   void remount();
 
   // public so tests can bypass segment interface when simpler
