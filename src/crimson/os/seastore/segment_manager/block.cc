@@ -142,7 +142,7 @@ write_superblock(seastar::file &device, block_sm_superblock_t sb)
     bufferptr(ceph::buffer::create_page_aligned(sb.block_size)),
     [=, &device](auto &bp) {
       bufferlist bl;
-      ::encode(sb, bl);
+      encode(sb, bl);
       auto iter = bl.begin();
       assert(bl.length() < sb.block_size);
       iter.copy(bl.length(), bp.c_str());
@@ -171,7 +171,7 @@ read_superblock(seastar::file &device, seastar::stat_data sd)
 	  bl.push_back(bp);
 	  block_sm_superblock_t ret;
 	  auto bliter = bl.cbegin();
-	  ::decode(ret, bliter);
+	  decode(ret, bliter);
 	  return BlockSegmentManager::access_ertr::future<block_sm_superblock_t>(
 	    BlockSegmentManager::access_ertr::ready_future_marker{},
 	    ret);
