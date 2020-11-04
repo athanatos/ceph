@@ -10,6 +10,7 @@
 #include "include/denc.h"
 #include "include/buffer.h"
 #include "include/cmp.h"
+#include "include/uuid.h"
 
 namespace crimson::os::seastore {
 
@@ -17,6 +18,11 @@ using depth_t = int32_t;
 using depth_le_t = ceph_les32;
 
 using checksum_t = uint32_t;
+
+// Immutable metadata for seastore set a mkfs time
+struct seastore_meta_t {
+  uuid_d seastore_id;
+};
 
 // Identifies segment location on disk, see SegmentManager,
 using segment_id_t = uint32_t;
