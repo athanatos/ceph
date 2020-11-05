@@ -22,6 +22,12 @@ using checksum_t = uint32_t;
 // Immutable metadata for seastore set a mkfs time
 struct seastore_meta_t {
   uuid_d seastore_id;
+
+  DENC(seastore_meta_t, v, p) {
+    DENC_START(1, 1, p);
+    denc(v.seastore_id, p);
+    DENC_FINISH(p);
+  }
 };
 
 // Identifies segment location on disk, see SegmentManager,
@@ -356,6 +362,7 @@ struct record_t {
 
 }
 
+WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::seastore_meta_t)
 WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::paddr_t)
 WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::journal_seq_t)
 WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::delta_info_t)

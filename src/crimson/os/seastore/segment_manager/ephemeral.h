@@ -54,6 +54,7 @@ class EphemeralSegmentManager final : public SegmentManager {
   using segment_state_t = Segment::segment_state_t;
 
   const ephemeral_config_t config;
+  std::optional<seastore_meta_t> meta;
 
   size_t get_offset(paddr_t addr) {
     return (addr.segment * config.segment_size) + addr.offset;
@@ -94,8 +95,9 @@ public:
     return config.segment_size;
   }
 
-  seastore_meta_t get_meta() const final {
-    return meta;
+  const seastore_meta_t &get_meta() const final {
+    assert(meta);
+    return *meta;
   }
 
   void remount();
