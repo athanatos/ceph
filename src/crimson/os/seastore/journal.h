@@ -55,6 +55,8 @@ struct record_header_t {
   uint32_t deltas;                // number of deltas
   uint32_t extents;               // number of extents
   segment_nonce_t segment_nonce;// nonce of containing segment
+  segment_off_t committed_to;   // records in this segment prior to committed_to
+                                // have been fully written
   uint32_t data_crc;            // crc of data payload
   
 
@@ -65,6 +67,7 @@ struct record_header_t {
     denc(v.deltas, p);
     denc(v.extents, p);
     denc(v.segment_nonce, p);
+    denc(v.committed_to, p);
     denc(v.data_crc, p);
     DENC_FINISH(p);
   }
@@ -306,14 +309,6 @@ private:
     replay_segments_t>;
   find_replay_segments_fut find_replay_segments();
 
-  /// read record metadata for record starting at start
-  using read_record_metadata_ertr = replay_ertr;
-  using read_record_metadata_ret = read_record_metadata_ertr::future<
-    std::optional<std::pair<record_header_t, bufferlist>>
-    >;
-  read_record_metadata_ret read_record_metadata(
-    paddr_t start);
-
   /// attempts to decode deltas from bl, return nullopt if unsuccessful
   std::optional<std::vector<delta_info_t>> try_decode_deltas(
     record_header_t header,
@@ -323,6 +318,14 @@ private:
   std::optional<std::vector<extent_info_t>> try_decode_extent_infos(
     record_header_t header,
     bufferlist &bl);
+
+  /// read record metadata for record starting at start
+  using read_record_metadata_ertr = replay_ertr;
+  using read_record_metadata_ret = read_record_metadata_ertr::future<
+    std::optional<std::pair<record_header_t, bufferlist>>
+    >;
+  read_record_metadata_ret read_record_metadata(
+    paddr_t start);
 
   /**
    * scan_segment

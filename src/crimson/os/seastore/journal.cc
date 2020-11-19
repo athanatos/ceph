@@ -103,6 +103,7 @@ ceph::bufferlist Journal::encode_record(
     (uint32_t)record.deltas.size(),
     (uint32_t)record.extents.size(),
     current_segment_nonce,
+    0 /* committed_to todo */,
     data_bl.crc32c(-1)
   };
   encode(header, bl);
