@@ -283,6 +283,7 @@ private:
   );
     
     
+
   /// do record write
   using write_record_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
