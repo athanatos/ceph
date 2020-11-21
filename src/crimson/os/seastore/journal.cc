@@ -470,7 +470,7 @@ Journal::read_validate_record_metadata_ret Journal::read_validate_record_metadat
 
 std::optional<std::vector<delta_info_t>> Journal::try_decode_deltas(
   record_header_t header,
-  bufferlist &bl)
+  const bufferlist &bl)
 {
   auto bliter = bl.cbegin();
   bliter += ceph::encoded_sizeof_bounded<record_header_t>();
@@ -490,7 +490,7 @@ std::optional<std::vector<delta_info_t>> Journal::try_decode_deltas(
 
 std::optional<std::vector<extent_info_t>> Journal::try_decode_extent_infos(
   record_header_t header,
-  bufferlist &bl)
+  const bufferlist &bl)
 {
   auto bliter = bl.cbegin();
   bliter += ceph::encoded_sizeof_bounded<record_header_t>();
