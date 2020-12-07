@@ -39,10 +39,12 @@ struct OMapInnerNode
 
   static constexpr extent_types_t type = extent_types_t::OMAP_INNER;
 
-  omap_node_meta_t get_node_meta() const final {return get_meta();}
-  bool extent_is_overflow(size_t size) {return is_overflow(size);}
-  bool extent_under_median() {return under_median();}
-  uint32_t get_node_size() {return get_size();}
+  omap_node_meta_t get_node_meta() const final { return get_meta(); }
+  bool extent_will_overflow(size_t ksize, std::optional<size_t> vsize) const {
+    return is_overflow(ksize);
+  }
+  bool extent_is_below_min() const { return below_min(); }
+  uint32_t get_node_size() { return get_size(); }
 
   CachedExtentRef duplicate_for_write() final {
     assert(delta_buffer.empty());
@@ -56,22 +58,41 @@ struct OMapInnerNode
 
   get_value_ret get_value(omap_context_t oc, const std::string &key) final;
 
-  insert_ret insert(omap_context_t oc, std::string &key, std::string &value) final;
+  insert_ret insert(omap_context_t oc, const std::string &key, const std::string &value) final;
 
   rm_key_ret rm_key(omap_context_t oc, const std::string &key) final;
 
-  list_keys_ret list_keys(omap_context_t oc, std::vector<std::string> &result) final;
+  list_keys_ret list_keys(omap_context_t oc, std::string &start, size_t max_result_size) final;
 
-  list_ret list(omap_context_t oc, std::vector<std::pair<std::string, std::string>> &result) final;
+  list_ret list(omap_context_t oc, std::string &start, size_t max_result_size) final;
 
   clear_ret clear(omap_context_t oc) final;
 
-  split_children_ret make_split_children(omap_context_t oc, OMapNodeRef pnode) final;
+  using split_children_ertr = TransactionManager::alloc_extent_ertr;
+  using split_children_ret = split_children_ertr::future
+          <std::tuple<OMapInnerNodeRef, OMapInnerNodeRef, std::string>>;
+  split_children_ret make_split_children(omap_context_t oc);
 
-  full_merge_ret make_full_merge(omap_context_t oc, OMapNodeRef right, OMapNodeRef pnode) final;
+  full_merge_ret make_full_merge(omap_context_t oc, OMapNodeRef right) final;
 
   make_balanced_ret
-    make_balanced(omap_context_t oc, OMapNodeRef right, bool prefer_left, OMapNodeRef pnode) final;
+    make_balanced(omap_context_t oc, OMapNodeRef right) final;
+
+  using make_replace_ertr = TransactionManager::alloc_extent_ertr;
+  using make_replace_ret = make_replace_ertr::future<mutation_result_t>;
+  make_replace_ret make_replace(omap_context_t oc, internal_iterator_t liter,
+                                internal_iterator_t riter,
+                                std::tuple<OMapNodeRef, OMapNodeRef, std::string> tuple);
+
+  using merge_entry_ertr = TransactionManager::read_extent_ertr;
+  using merge_entry_ret = merge_entry_ertr::future<mutation_result_t>;
+  merge_entry_ret merge_entry(omap_context_t oc,
+                              internal_iterator_t iter, OMapNodeRef entry);
+
+  using handle_split_ertr = TransactionManager::read_extent_ertr;
+  using handle_split_ret = handle_split_ertr::future<mutation_result_t>;
+  handle_split_ret handle_split(omap_context_t oc, internal_iterator_t iter,
+                                      mutation_result_t mresult);
 
   std::ostream &print_detail_l(std::ostream &out) const final;
 
@@ -80,7 +101,6 @@ struct OMapInnerNode
   }
 
   ceph::bufferlist get_delta() final {
-    assert(!delta_buffer.empty());
     ceph::bufferlist bl;
     delta_buffer.encode(bl);
     return bl;
@@ -92,28 +112,6 @@ struct OMapInnerNode
     buffer.decode(bl);
     buffer.replay(*this);
   }
-
-  using split_entry_ertr = TransactionManager::read_extent_ertr;
-  using split_entry_ret = split_entry_ertr::future<OMapNodeRef>;
-  split_entry_ret split_entry(omap_context_t oc, std::string &key,
-                              internal_iterator_t, OMapNodeRef entry);
-
-  using make_split_entry_ertr = TransactionManager::read_extent_ertr;
-  using make_split_entry_ret = make_split_entry_ertr::future
-        <std::tuple<OMapNodeRef, OMapNodeRef, std::string>>;
-  make_split_entry_ret make_split_entry(omap_context_t oc, std::string key,
-                              internal_iterator_t, OMapNodeRef entry);
-
-  using checking_parent_ertr = TransactionManager::read_extent_ertr;
-  using checking_parent_ret = checking_parent_ertr::future
-        <std::pair<OMapInnerNodeRef, internal_iterator_t>>;
-  checking_parent_ret checking_parent(omap_context_t oc, std::string key,
-                                     internal_iterator_t, OMapInnerNodeRef entry);
-
-  using merge_entry_ertr = TransactionManager::read_extent_ertr;
-  using merge_entry_ret = merge_entry_ertr::future<OMapNodeRef>;
-  merge_entry_ret merge_entry(omap_context_t oc, const std::string &key,
-                              internal_iterator_t iter, OMapNodeRef entry);
 
   internal_iterator_t get_containing_child(const std::string &key);
 
@@ -134,6 +132,7 @@ struct OMapLeafNode
     StringKVLeafNodeLayout<
       omap_node_meta_t, omap_node_meta_le_t> {
 
+  using OMapLeafNodeRef = TCachedExtentRef<OMapLeafNode>;
   using internal_iterator_t = const_iterator;
   template <typename... T>
   OMapLeafNode(T&&... t) :
@@ -143,9 +142,11 @@ struct OMapLeafNode
   static constexpr extent_types_t type = extent_types_t::OMAP_LEAF;
 
   omap_node_meta_t get_node_meta() const final { return get_meta(); }
-  bool extent_is_overflow(size_t size) {return is_overflow(size);}
-  bool extent_under_median() {return under_median();}
-  uint32_t get_node_size() {return get_size();}
+  bool extent_will_overflow(size_t ksize, std::optional<size_t> vsize) const {
+    return is_overflow(ksize, *vsize);
+  }
+  bool extent_is_below_min() const { return below_min(); }
+  uint32_t get_node_size() { return get_size(); }
 
   CachedExtentRef duplicate_for_write() final {
     assert(delta_buffer.empty());
@@ -159,29 +160,30 @@ struct OMapLeafNode
 
   get_value_ret get_value(omap_context_t oc, const std::string &key) final;
 
-  insert_ret insert(omap_context_t oc, std::string &key, std::string &value) final;
+  insert_ret insert(omap_context_t oc, const std::string &key, const std::string &value) final;
 
   rm_key_ret rm_key(omap_context_t oc, const std::string &key) final;
 
-  list_keys_ret list_keys(omap_context_t oc, std::vector<std::string> &result) final;
+  list_keys_ret list_keys(omap_context_t oc, std::string &start, size_t max_result_size) final;
 
-  list_ret list(omap_context_t oc, std::vector<std::pair<std::string, std::string>> &result) final;
+  list_ret list(omap_context_t oc, std::string &start, size_t max_result_size) final;
 
   clear_ret clear(omap_context_t oc) final;
 
-  split_children_ret make_split_children(omap_context_t oc, OMapNodeRef pnode) final;
+  using split_children_ertr = TransactionManager::alloc_extent_ertr;
+  using split_children_ret = split_children_ertr::future
+          <std::tuple<OMapLeafNodeRef, OMapLeafNodeRef, std::string>>;
+  split_children_ret make_split_children(omap_context_t oc);
 
-  full_merge_ret make_full_merge(omap_context_t oc, OMapNodeRef right, OMapNodeRef pnode) final;
+  full_merge_ret make_full_merge(omap_context_t oc, OMapNodeRef right) final;
 
-  make_balanced_ret make_balanced(omap_context_t oc, OMapNodeRef _right, bool prefer_left,
-                                  OMapNodeRef pnode) final;
+  make_balanced_ret make_balanced(omap_context_t oc, OMapNodeRef _right) final;
 
   extent_types_t get_type() const final {
     return type;
   }
 
   ceph::bufferlist get_delta() final {
-    assert(!delta_buffer.empty());
     ceph::bufferlist bl;
     delta_buffer.encode(bl);
     return bl;
@@ -202,7 +204,7 @@ struct OMapLeafNode
   get_leaf_entries(std::string &key);
 
 };
-using OMapLeafNodeRef = TCachedExtentRef<OMapLeafNode>;
+using OMapLeafNodeRef = OMapLeafNode::OMapLeafNodeRef;
 
 std::ostream &operator<<(std::ostream &out, const omap_inner_key_t &rhs);
 std::ostream &operator<<(std::ostream &out, const omap_leaf_key_t &rhs);

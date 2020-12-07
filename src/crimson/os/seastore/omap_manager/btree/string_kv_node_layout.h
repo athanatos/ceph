@@ -311,10 +311,16 @@ public:
 
   void journal_inner_insert(
     const_iterator _iter,
-    const omap_inner_key_t &node_key,
-    const std::string &val,
+    const laddr_t laddr,
+    const std::string val,
     delta_inner_buffer_t *recorder) {
     auto iter = iterator(this, _iter.index);
+    omap_inner_key_t node_key;
+    node_key.laddr = laddr;
+    node_key.key_len = val.size() + 1;
+    node_key.key_off = iter.get_index() == 0 ?
+                       node_key.key_len :
+                       (iter - 1).get_node_key().key_off + node_key.key_len;
     if (recorder) {
       recorder->insert(
         node_key,
@@ -325,9 +331,11 @@ public:
 
   void journal_inner_update(
     const_iterator _iter,
-    const omap_inner_key_t node_key,
+    const laddr_t laddr,
     delta_inner_buffer_t *recorder) {
     auto iter = iterator(this, _iter.index);
+    auto node_key = iter.get_node_key();
+    node_key.laddr = laddr;
     if (recorder) {
       recorder->update(node_key, iter->get_node_val());
     }
@@ -336,15 +344,21 @@ public:
 
   void journal_inner_replace(
     const_iterator _iter,
-    const omap_inner_key_t &key,
-    const std::string &val,
+    const laddr_t laddr,
+    const std::string val,
     delta_inner_buffer_t *recorder) {
     auto iter = iterator(this, _iter.index);
+    omap_inner_key_t node_key;
+    node_key.laddr = laddr;
+    node_key.key_len = val.size() + 1;
+    node_key.key_off = iter.get_index() == 0?
+                       node_key.key_len :
+                       (iter - 1).get_node_key().key_off + node_key.key_len;
     if (recorder) {
       recorder->remove(iter->get_node_val());
-      recorder->insert(key, val);
+      recorder->insert(node_key, val);
     }
-    inner_replace(iter, key, val);
+    inner_replace(iter, node_key, val);
   }
 
   void journal_inner_remove(
@@ -486,7 +500,7 @@ public:
     *layout.template Pointer<1>(buf) = MetaInt(meta);
   }
 
-  uint32_t used_space() {
+  uint32_t used_space() const {
     uint32_t count = get_size();
     if (count) {
       omap_inner_key_t last_key = omap_inner_key_t(get_node_key_ptr()[count-1]);
@@ -496,11 +510,11 @@ public:
     }
   }
 
-  uint32_t free_space() {
+  uint32_t free_space() const {
     return capacity() - used_space();
   }
 
-  uint16_t capacity() {
+  uint16_t capacity() const {
     return BlockSize - (reinterpret_cast<char*>(layout.template Pointer<2>(buf))-
                         reinterpret_cast<char*>(layout.template Pointer<0>(buf)));
   }
@@ -509,10 +523,10 @@ public:
     return  buf + (BlockSize - off);
   }
 
-  bool is_overflow(size_t size){
-    return free_space() < (sizeof(omap_inner_key_le_t) + size);
+  bool is_overflow(size_t ksize) const {
+    return free_space() < (sizeof(omap_inner_key_le_t) + ksize);
   }
-  bool under_median(){
+  bool below_min() const {
     return free_space() > (capacity() / 2);
   }
 
@@ -586,14 +600,12 @@ public:
    * balance_into_new_nodes
    *
    * Takes the contents of left and right and copies them into
-   * replacement_left and replacement_right such that in the
-   * event that the number of elements is odd the extra goes to
-   * the left side iff prefer_left.
+   * replacement_left and replacement_right such that
+   * the size of replacement_left just >= 1/2 of (left + right)
    */
   static std::string balance_into_new_nodes(
     const StringKVInnerNodeLayout &left,
     const StringKVInnerNodeLayout &right,
-    bool prefer_left,
     StringKVInnerNodeLayout &replacement_left,
     StringKVInnerNodeLayout &replacement_right)
   {
@@ -741,12 +753,13 @@ private:
   }
 
   /**
-   * copy_from_foreign
+   * copy_from_foreign_head
    *
-   * Copies entries from [from_src, to_src) to tgt.
-   *
+   * Copy from another node begin entries to this node.
+   * [from_src, to_src) is another node entry range.
+   * tgt is this node entry to copy to.
    * tgt and from_src must be from different nodes.
-   * from_src and to_src must be from the same node.
+   * from_src and to_src must be in the same node.
    */
   static void copy_from_foreign_head(
     iterator tgt,
@@ -763,6 +776,15 @@ private:
       to_src->get_node_key_ptr() - from_src->get_node_key_ptr());
   }
 
+  /**
+   * copy_from_foreign_back
+   *
+   * Copy from another node back entries to this node.
+   * [from_src, to_src) is another node entry range.
+   * tgt is this node entry to copy to.
+   * tgt and from_src must be from different nodes.
+   * from_src and to_src must be in the same node.
+   */
   void copy_from_foreign_back(
     iterator tgt,
     const_iterator from_src,
@@ -790,6 +812,15 @@ private:
     }
   }
 
+  /**
+   * append copy_from_foreign_ahead
+   *
+   * append another node head entries to this node back.
+   * [from_src, to_src) is another node entry range.
+   * tgt is this node entry to copy to.
+   * tgt and from_src must be from different nodes.
+   * from_src and to_src must be in the same node.
+   */
   void append_copy_from_foreign_head(
     iterator tgt,
     const_iterator from_src,
@@ -816,9 +847,9 @@ private:
   }
 
   /**
-   * copy_from_local
+   * local_move_back
    *
-   * Copies entries from [from_src, to_src) to tgt.
+   * move this node entries range [from_src, to_src) back to tgt position.
    *
    * tgt, from_src, and to_src must be from the same node.
    */
@@ -846,6 +877,13 @@ private:
       to_src->get_node_key_ptr() - from_src->get_node_key_ptr());
   }
 
+  /**
+   * local_move_ahead
+   *
+   * move this node entries range [from_src, to_src) ahead to tgt position.
+   *
+   * tgt, from_src, and to_src must be from the same node.
+   */
   static void local_move_ahead(
     iterator tgt,
     iterator from_src,
@@ -986,9 +1024,6 @@ public:
     }
 
     std::string get_node_val() {
-     if(node->buf == nullptr)
-       asm volatile("int $3");
-
      std::string s(get_node_val_ptr());
       return s;
     }
@@ -1328,7 +1363,7 @@ public:
     *layout.template Pointer<1>(buf) = MetaInt(meta);
   }
 
-  uint32_t used_space() {
+  uint32_t used_space() const {
     uint32_t count = get_size();
     if (count) {
       omap_leaf_key_t last_key = omap_leaf_key_t(get_node_key_ptr()[count-1]);
@@ -1338,11 +1373,11 @@ public:
     }
   }
 
-  uint32_t free_space() {
+  uint32_t free_space() const {
     return capacity() - used_space();
   }
 
-  uint32_t capacity() {
+  uint32_t capacity() const {
     return BlockSize - (reinterpret_cast<char*>(layout.template Pointer<2>(buf))-
                         reinterpret_cast<char*>(layout.template Pointer<0>(buf)));
   }
@@ -1350,10 +1385,10 @@ public:
     return buf + (BlockSize - off);
   }
 
-  bool is_overflow(size_t size){
-    return free_space() < (sizeof(omap_leaf_key_le_t) + size);
+  bool is_overflow(size_t ksize, size_t vsize) const {
+    return free_space() < (sizeof(omap_leaf_key_le_t) + ksize + vsize);
   }
-  bool under_median(){
+  bool below_min() const {
     return free_space() > (capacity() / 2);
   }
 
@@ -1428,14 +1463,12 @@ public:
    * balance_into_new_nodes
    *
    * Takes the contents of left and right and copies them into
-   * replacement_left and replacement_right such that in the
-   * event that the number of elements is odd the extra goes to
-   * the left side iff prefer_left.
+   * replacement_left and replacement_right such that
+   * the size of replacement_left side just >= 1/2 of the total size (left + right).
    */
   static std::string balance_into_new_nodes(
     const StringKVLeafNodeLayout &left,
     const StringKVLeafNodeLayout &right,
-    bool prefer_left,
     StringKVLeafNodeLayout &replacement_left,
     StringKVLeafNodeLayout &replacement_right)
   {
@@ -1528,7 +1561,7 @@ private:
       if (iter != iter_end()) {
         assert(iter->get_node_val() > key);
       }
-      assert(is_overflow(key.size() + 1 + val.size() + 1) == false);
+      assert(is_overflow(key.size() + 1, val.size() + 1) == false);
     }
     omap_leaf_key_t node_key;
     if (iter == iter_begin()) {
@@ -1557,7 +1590,7 @@ private:
     const std::string &val) {
     assert(iter != iter_end());
     if (VALIDATE_INVARIANTS) {
-      assert(is_overflow(val.size()+1) == false);
+      assert(is_overflow(0, val.size() + 1) == false);
     }
     leaf_remove(iter);
     leaf_insert(iter, key, val);
@@ -1583,12 +1616,13 @@ private:
   }
 
   /**
-   * copy_from_foreign
+   * copy_from_foreign_head
    *
-   * Copies entries from [from_src, to_src) to tgt.
-   *
+   * Copy from another node begin entries to this node.
+   * [from_src, to_src) is another node entry range.
+   * tgt is this node entry to copy to.
    * tgt and from_src must be from different nodes.
-   * from_src and to_src must be from the same node.
+   * from_src and to_src must be in the same node.
    */
   static void copy_from_foreign_head(
     iterator tgt,
@@ -1605,6 +1639,15 @@ private:
       to_src->get_node_key_ptr() - from_src->get_node_key_ptr());
   }
 
+  /**
+   * copy_from_foreign_back
+   *
+   * Copy from another node back entries to this node.
+   * [from_src, to_src) is another node entry range.
+   * tgt is this node entry to copy to.
+   * tgt and from_src must be from different nodes.
+   * from_src and to_src must be in the same node.
+   */
   void copy_from_foreign_back(
     iterator tgt,
     const_iterator from_src,
@@ -1633,6 +1676,15 @@ private:
     }
   }
 
+  /**
+   * append copy_from_foreign_ahead
+   *
+   * append another node head entries to this node back.
+   * [from_src, to_src) is another node entry range.
+   * tgt is this node entry to copy to.
+   * tgt and from_src must be from different nodes.
+   * from_src and to_src must be in the same node.
+   */
   void append_copy_from_foreign_head(
     iterator tgt,
     const_iterator from_src,
@@ -1660,9 +1712,9 @@ private:
   }
 
   /**
-   * copy_from_local
+   * local_move_back
    *
-   * Copies entries from [from_src, to_src) to tgt.
+   * move this node entries range [from_src, to_src) back to tgt position.
    *
    * tgt, from_src, and to_src must be from the same node.
    */
@@ -1690,6 +1742,13 @@ private:
       to_src->get_node_key_ptr() - from_src->get_node_key_ptr());
   }
 
+  /**
+   * local_move_ahead
+   *
+   * move this node entries range [from_src, to_src) ahead to tgt position.
+   *
+   * tgt, from_src, and to_src must be from the same node.
+   */
   static void local_move_ahead(
     iterator tgt,
     iterator from_src,

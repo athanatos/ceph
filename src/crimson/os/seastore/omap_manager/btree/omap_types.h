@@ -44,8 +44,8 @@ struct omap_node_meta_le_t {
 };
 
 struct omap_inner_key_t {
-  uint32_t key_off = 0;
-  uint32_t key_len = 0;
+  uint16_t key_off = 0;
+  uint16_t key_len = 0;
   laddr_t laddr = 0;
 
   omap_inner_key_t() = default;
