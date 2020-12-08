@@ -411,7 +411,7 @@ seastar::future<> NBDHandler::run()
 	[this, &socket] {
 	  return socket.accept().then([this](auto acc) {
 	    logger().debug("Accepted");
-	    return seastar::do_with(
+	    static_cast<void>(seastar::do_with(
 	      std::move(acc.connection),
 	      [this](auto &conn) {
 		return seastar::do_with(
@@ -431,7 +431,8 @@ seastar::future<> NBDHandler::run()
 		      return seastar::now();
 		    });
 		  });
-	      });
+	      }));
+	    return seastar::now();
 	  });
 	});
     });
