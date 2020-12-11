@@ -36,51 +36,64 @@ std::ostream &OMapInnerNode::print_detail_l(std::ostream &out) const
 	     << ", depth=" << get_meta().depth;
 }
 
+/**
+ * make_split_insert
+ *
+ * insert an  entry at iter, with the address of key.
+ * will result in a split outcome encoded in the returned mutation_result_t
+ */
+OMapInnerNode::make_split_insert_ret
+OMapInnerNode::make_split_insert(omap_context_t oc, internal_iterator_t iter,
+                                 std::string key, laddr_t laddr)
+{
+  return make_split_children(oc).safe_then([=] (auto tuple) {
+    auto [left, right, pivot] = tuple;
+    if (pivot > key) {
+      auto liter = left->iter_idx(iter.get_index());
+      left->journal_inner_insert(liter, laddr, key,
+                                 left->maybe_get_delta_buffer());
+    } else {  //right
+      auto riter = right->iter_idx(iter.get_index() - left->get_node_size());
+      right->journal_inner_insert(riter, laddr, key,
+                                  right->maybe_get_delta_buffer());
+    }
+    return make_split_insert_ret(
+           make_split_insert_ertr::ready_future_marker{},
+           mutation_result_t(mutation_status_t::SPLITTED, tuple, std::nullopt));
+  });
+
+}
+
+
 OMapInnerNode::handle_split_ret
 OMapInnerNode::handle_split(omap_context_t oc, internal_iterator_t iter,
                                mutation_result_t mresult)
 {
   logger().debug("{}: {}","OMapInnerNode",  __func__);
+  if (!is_pending()) {
+    auto mut = oc.tm.get_mutable_extent(oc.t, this)->cast<OMapInnerNode>();
+    auto mut_iter = mut->iter_idx(iter.get_index());
+    return mut->handle_split(oc, mut_iter, mresult);
+  }
   auto [left, right, pivot] = *(mresult.split_tuple);
+  //update will not cause overflow do it first.
+  journal_inner_update(iter, left->get_laddr(), maybe_get_delta_buffer());
   if (!extent_will_overflow(pivot.size() + 1, std::nullopt)) {
-    if (!is_pending()) {
-      auto mut = oc.tm.get_mutable_extent(oc.t, this)->cast<OMapInnerNode>();
-      auto mut_iter = mut->iter_idx(iter.get_index());
-      return mut->handle_split(oc, mut_iter, mresult);
-    }
-    journal_inner_update(iter, left->get_laddr(), maybe_get_delta_buffer());
     journal_inner_insert(iter + 1, right->get_laddr(), pivot,
                          maybe_get_delta_buffer());
     return insert_ret(
            insert_ertr::ready_future_marker{},
            mutation_result_t(mutation_status_t::SUCCESS, std::nullopt, std::nullopt));
   } else {
-    return make_split_children(oc)
-      .safe_then([this, oc, iter, mresult = std::move(mresult)] (auto tuple) {
-       //parent node left and right
-       auto [p_left, p_right, p_pivot] = tuple;
-       //child node left and right
-       auto [c_left, c_right, c_pivot] = *(mresult.split_tuple);
-       if (c_pivot < p_pivot) {  //left
-         auto mut_iter = p_left->iter_idx(iter.get_index());
-         p_left->journal_inner_update(mut_iter, c_left->get_laddr(),
-                                      p_left->maybe_get_delta_buffer());
-         p_left->journal_inner_insert(mut_iter + 1, c_right->get_laddr(), c_pivot,
-                                      p_left->maybe_get_delta_buffer());
-       } else {  //right
-         auto mut_iter = p_right->iter_idx(iter.get_index() - p_left->get_node_size());
-         p_right->journal_inner_update(mut_iter, c_left->get_laddr(),
-                                       p_right->maybe_get_delta_buffer());
-         p_right->journal_inner_insert(mut_iter + 1, c_right->get_laddr(), c_pivot,
-                                         p_right->maybe_get_delta_buffer());
-       }
+    return make_split_insert(oc, iter + 1, pivot, right->get_laddr())
+      .safe_then([this, oc] (auto m_result) {
        return oc.tm.dec_ref(oc.t, get_laddr())
-         .safe_then([tuple = std::move(tuple)] (auto ret) {
+         .safe_then([m_result = std::move(m_result)] (auto ret) {
           return insert_ret(
                  insert_ertr::ready_future_marker{},
-                 mutation_result_t(mutation_status_t::SPLITTED, tuple, std::nullopt));
+                 m_result);
        });
-    });
+   });
   }
 }
 
@@ -289,50 +302,6 @@ OMapInnerNode::make_balanced(omap_context_t oc, OMapNodeRef _right)
   });
 }
 
-/**
- * make_replace
- *
- * Replaces entries in [liter, rliter] with the address of replacement tuple.
- * will result in a split outcome encoded in the returned mutation_result_t
- */
-OMapInnerNode::make_replace_ret
-OMapInnerNode::make_replace(omap_context_t oc, internal_iterator_t liter,
-                            internal_iterator_t riter,
-                            std::tuple<OMapNodeRef, OMapNodeRef, std::string> tuple)
-{
-  return make_split_children(oc).safe_then([=] (auto p_tuple) {
-    //parent node left and right
-    auto [p_left, p_right, p_pivot] = p_tuple;
-    //child node replacement left and right
-    auto [replacement_l, replacement_r, replacement_pivot] = tuple;
-    if (riter.get_index() < p_left->get_node_size()) {
-      auto mut_liter = p_left->iter_idx(liter.get_index());
-      p_left->journal_inner_update(mut_liter, replacement_l->get_laddr(),
-                                   p_left->maybe_get_delta_buffer());
-      p_left->journal_inner_replace(mut_liter + 1, replacement_r->get_laddr(),
-                           replacement_pivot, p_left->maybe_get_delta_buffer());
-    } else if (riter.get_index() == p_left->get_node_size()) {
-      auto mut_liter = p_left->iter_idx(liter.get_index());
-      p_left->journal_inner_update(mut_liter, replacement_l->get_laddr(),
-                                   p_left->maybe_get_delta_buffer());
-      auto  mut_riter = p_right->iter_idx(0);
-      p_right->journal_inner_replace(mut_riter, replacement_r->get_laddr(),
-                           replacement_pivot, p_right->maybe_get_delta_buffer());
-      std::get<2>(p_tuple) == replacement_pivot;
-    } else {  //right
-      auto mut_liter = p_right->iter_idx(liter.get_index() - p_left->get_node_size());
-      p_right->journal_inner_update(mut_liter, replacement_l->get_laddr(),
-                                    p_right->maybe_get_delta_buffer());
-      p_right->journal_inner_replace(mut_liter + 1, replacement_r->get_laddr(),
-                                    replacement_pivot, p_right->maybe_get_delta_buffer());
-    }
-    return make_replace_ret(
-           make_replace_ertr::ready_future_marker{},
-           mutation_result_t(mutation_status_t::SPLITTED, p_tuple, std::nullopt));
-  });
-
-}
-
 OMapInnerNode::merge_entry_ret
 OMapInnerNode::merge_entry(omap_context_t oc, internal_iterator_t iter, OMapNodeRef entry)
 {
@@ -375,8 +344,9 @@ OMapInnerNode::merge_entry(omap_context_t oc, internal_iterator_t iter, OMapNode
       logger().debug("{}::merge_entry balanced l {} r {}", __func__, *l, *r);
       return l->make_balanced(oc, r).safe_then([=] (auto tuple) {
         auto [replacement_l, replacement_r, replacement_pivot] = tuple;
+        //update will not cuase overflow, do it first
+        journal_inner_update(liter, replacement_l->get_laddr(), maybe_get_delta_buffer());
         if (!extent_will_overflow(replacement_pivot.size() + 1, std::nullopt)) {
-          journal_inner_update(liter, replacement_l->get_laddr(), maybe_get_delta_buffer());
           journal_inner_replace(riter, replacement_r->get_laddr(),
                                 replacement_pivot, maybe_get_delta_buffer());
           std::list<laddr_t> dec_laddrs{l->get_laddr(), r->get_laddr()};
@@ -387,8 +357,10 @@ OMapInnerNode::merge_entry(omap_context_t oc, internal_iterator_t iter, OMapNode
           });
         } else {
           logger().debug("{}::merge_entry balanced and split {} r {}", __func__, *l, *r);
-          return make_replace(oc, liter, riter, tuple).safe_then([this, oc, l = l, r = r]
-            (auto mresult) {
+          //use remove and insert to instead of replace, remove not cause split do it first
+          journal_inner_remove(riter, maybe_get_delta_buffer());
+          return make_split_insert(oc, riter, replacement_pivot, replacement_r->get_laddr())
+            .safe_then([this, oc, l = l, r = r] (auto mresult) {
             std::list<laddr_t> dec_laddrs{l->get_laddr(), r->get_laddr(), get_laddr()};
             return oc.tm.dec_ref(oc.t, dec_laddrs)
               .safe_then([mresult = std::move(mresult)] (auto &&ret){

@@ -78,11 +78,10 @@ struct OMapInnerNode
   make_balanced_ret
     make_balanced(omap_context_t oc, OMapNodeRef right) final;
 
-  using make_replace_ertr = TransactionManager::alloc_extent_ertr;
-  using make_replace_ret = make_replace_ertr::future<mutation_result_t>;
-  make_replace_ret make_replace(omap_context_t oc, internal_iterator_t liter,
-                                internal_iterator_t riter,
-                                std::tuple<OMapNodeRef, OMapNodeRef, std::string> tuple);
+  using make_split_insert_ertr = TransactionManager::alloc_extent_ertr;
+  using make_split_insert_ret = make_split_insert_ertr::future<mutation_result_t>;
+  make_split_insert_ret make_split_insert(omap_context_t oc, internal_iterator_t iter,
+                                          std::string key, laddr_t laddr);
 
   using merge_entry_ertr = TransactionManager::read_extent_ertr;
   using merge_entry_ret = merge_entry_ertr::future<mutation_result_t>;
