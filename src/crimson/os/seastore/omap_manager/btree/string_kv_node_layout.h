@@ -27,6 +27,42 @@ template <
 
 
 /**
+  * copy_from_foreign
+  *
+  * Copy from another node back entries to this node.
+  * [from_src, to_src) is another node entry range.
+  * tgt is this node entry to copy to.
+  * tgt and from_src must be from different nodes.
+  * from_src and to_src must be in the same node.
+  */
+template <typename iterator, typename const_iterator>
+static void copy_from_foreign(
+  iterator tgt,
+  const_iterator from_src,
+  const_iterator to_src) {
+  assert(tgt->node != from_src->node);
+  assert(to_src->node == from_src->node);
+  if (from_src == to_src)
+    return;
+
+  auto to_copy = (from_src->get_right_ptr_end() - to_src->get_right_ptr_end());
+  assert(to_copy > 0);
+  memcpy(
+    tgt->get_right_ptr_end() - to_copy,
+    to_src->get_right_ptr_end(),
+    to_copy);
+  memcpy(
+    tgt->get_node_key_ptr(),
+    from_src->get_node_key_ptr(),
+    to_src->get_node_key_ptr() - from_src->get_node_key_ptr());
+
+  auto offset_diff = tgt->get_right_offset_end() - from_src->get_right_offset_end();
+  for (auto i = tgt; i != tgt + (to_src - from_src); ++i) {
+    i->update_offset(offset_diff);
+  }
+}
+
+/**
  * StringKVInnerNodeLayout
  *
  * Reusable implementation of a fixed size key mapping
@@ -53,6 +89,10 @@ public:
   template <bool is_const>
   struct iter_t {
     friend class StringKVInnerNodeLayout;
+
+    template <typename iterator, typename const_iterator>
+    friend void copy_from_foreign(iterator, const_iterator, const_iterator);
+
     using parent_t = typename crimson::common::maybe_const_t<StringKVInnerNodeLayout, is_const>::type;
 
     parent_t node;
@@ -167,6 +207,47 @@ public:
     }
 
   private:
+    int get_right_offset() const {
+      return get_node_key().key_off;
+    }
+
+    int get_right_offset_end() const {
+      if (index == 0)
+	return 0;
+      else
+	return (*this - 1)->get_right_offset();
+    }
+
+    char *get_right_ptr() {
+      return node->buf + BLOCK_SIZE - get_right_offset();
+    }
+
+    const char *get_right_ptr() const {
+      static_assert(!is_const);
+      return node->buf + BLOCK_SIZE - get_right_offset();
+    }
+
+    char *get_right_ptr_end() {
+      if (index == 0)
+	return node->buf + BLOCK_SIZE;
+      else
+	return (*this - 1)->get_right_ptr();
+    }
+
+    const char *get_right_ptr_end() const {
+      if (index == 0)
+	return node->buf + BLOCK_SIZE;
+      else
+	return (*this - 1)->get_right_ptr();
+    }
+
+    void update_offset(int offset) {
+      auto key = get_node_key();
+      assert(offset + key.key_off >= 0);
+      key.key_off += offset;
+      set_node_key(key);
+    }
+
     void set_node_key(omap_inner_key_t _lb) const {
       static_assert(!is_const);
       omap_inner_key_le_t lb;
@@ -559,10 +640,10 @@ public:
     auto piviter = get_split_pivot();
     assert(piviter != iter_end());
 
-    left.copy_from_foreign_head(left.iter_begin(), iter_begin(), piviter);
+    copy_from_foreign(left.iter_begin(), iter_begin(), piviter);
     left.set_size(piviter - iter_begin());
 
-    right.copy_from_foreign_back(right.iter_begin(), piviter, iter_end());
+    copy_from_foreign(right.iter_begin(), piviter, iter_end());
     right.set_size(iter_end() - piviter);
 
     auto [lmeta, rmeta] = get_meta().split_into();
@@ -582,13 +663,13 @@ public:
   void merge_from(
     const StringKVInnerNodeLayout &left,
     const StringKVInnerNodeLayout &right) {
-    copy_from_foreign_head(
+    copy_from_foreign(
       iter_end(),
       left.iter_begin(),
       left.iter_end());
     set_size(left.get_size());
 
-    append_copy_from_foreign_head(
+    copy_from_foreign(
       iter_end(),
       right.iter_begin(),
       right.iter_end());
@@ -642,37 +723,37 @@ public:
       left.iter_idx(pivot_idx)->get_node_val();
 
     if (pivot_size < left_size) {
-      replacement_left.copy_from_foreign_head(
+      copy_from_foreign(
         replacement_left.iter_end(),
         left.iter_begin(),
         left.iter_idx(pivot_idx));
       replacement_left.set_size(pivot_idx);
 
-      replacement_right.copy_from_foreign_back(
+      copy_from_foreign(
         replacement_right.iter_end(),
         left.iter_idx(pivot_idx),
         left.iter_end());
       replacement_right.set_size(left.get_size() - pivot_idx);
 
-      replacement_right.append_copy_from_foreign_head(
+      copy_from_foreign(
         replacement_right.iter_end(),
         right.iter_begin(),
         right.iter_end());
       replacement_right.set_size(right.get_size() + left.get_size()- pivot_idx);
     } else {
-      replacement_left.copy_from_foreign_head(
+      copy_from_foreign(
         replacement_left.iter_end(),
         left.iter_begin(),
         left.iter_end());
       replacement_left.set_size(left.get_size());
 
-      replacement_left.append_copy_from_foreign_head(
+      copy_from_foreign(
         replacement_left.iter_end(),
         right.iter_begin(),
         right.iter_idx(pivot_idx - left.get_size()));
       replacement_left.set_size(pivot_idx);
 
-      replacement_right.copy_from_foreign_back(
+      copy_from_foreign(
         replacement_right.iter_end(),
         right.iter_idx(pivot_idx - left.get_size()),
         right.iter_end());
@@ -753,100 +834,6 @@ private:
   }
 
   /**
-   * copy_from_foreign_head
-   *
-   * Copy from another node begin entries to this node.
-   * [from_src, to_src) is another node entry range.
-   * tgt is this node entry to copy to.
-   * tgt and from_src must be from different nodes.
-   * from_src and to_src must be in the same node.
-   */
-  static void copy_from_foreign_head(
-    iterator tgt,
-    const_iterator from_src,
-    const_iterator to_src) {
-    assert(tgt->node != from_src->node);
-    assert(to_src->node == from_src->node);
-    void* des = tgt.node->from_end((to_src -1)->get_node_key().key_off);
-    void* src = (to_src - 1)->get_node_val_ptr();
-    size_t len = (to_src -1)->get_node_key().key_off;
-    memcpy(des, src, len);
-    memcpy(
-      tgt->get_node_key_ptr(), from_src->get_node_key_ptr(),
-      to_src->get_node_key_ptr() - from_src->get_node_key_ptr());
-  }
-
-  /**
-   * copy_from_foreign_back
-   *
-   * Copy from another node back entries to this node.
-   * [from_src, to_src) is another node entry range.
-   * tgt is this node entry to copy to.
-   * tgt and from_src must be from different nodes.
-   * from_src and to_src must be in the same node.
-   */
-  void copy_from_foreign_back(
-    iterator tgt,
-    const_iterator from_src,
-    const_iterator to_src) {
-    assert(tgt->node != from_src->node);
-    assert(to_src->node == from_src->node);
-    auto offset = from_src.get_index() == 0? 0: (from_src-1)->get_node_key().key_off;
-    void* des = tgt.node->from_end((to_src -1)->get_node_key().key_off - offset);
-    void* src = (to_src - 1)->get_node_val_ptr();
-    size_t len = from_src.get_index() == 0? (to_src -1)->get_node_key().key_off:
-                 (from_src-1)->get_node_val_ptr() - (to_src -1)->get_node_val_ptr();
-    memcpy(des, src, len);
-    memcpy(
-      tgt->get_node_key_ptr(), from_src->get_node_key_ptr(),
-      to_src->get_node_key_ptr() - from_src->get_node_key_ptr());
-    if ( from_src.get_index() == 0)
-      return;
-
-    omap_inner_key_t key = (from_src - 1)->get_node_key();
-    auto end_idx = tgt.get_index() + to_src.get_index() - from_src.get_index();
-    for (auto ite = tgt; ite.get_index() != end_idx; ite++) {
-       omap_inner_key_t node_key = ite->get_node_key();
-       node_key.key_off -= key.key_off;
-       ite->set_node_key(node_key);
-    }
-  }
-
-  /**
-   * append copy_from_foreign_ahead
-   *
-   * append another node head entries to this node back.
-   * [from_src, to_src) is another node entry range.
-   * tgt is this node entry to copy to.
-   * tgt and from_src must be from different nodes.
-   * from_src and to_src must be in the same node.
-   */
-  void append_copy_from_foreign_head(
-    iterator tgt,
-    const_iterator from_src,
-    const_iterator to_src) {
-    assert(tgt->node != from_src->node);
-    assert(to_src->node == from_src->node);
-    if (from_src == to_src)
-      return;
-
-    void* des = tgt.node->from_end((to_src -1)->get_node_key().key_off + (tgt - 1)->get_node_key().key_off);
-    void* src = (to_src - 1)->get_node_val_ptr();
-    size_t len = (to_src -1)->get_node_key().key_off;
-    memcpy(des, src, len);
-    memcpy(
-      tgt->get_node_key_ptr(), from_src->get_node_key_ptr(),
-      to_src->get_node_key_ptr() - from_src->get_node_key_ptr());
-    omap_inner_key_t key = (tgt - 1)->get_node_key();
-    auto end_idx = tgt.get_index() + to_src.get_index() - from_src.get_index();
-    for (auto ite = tgt; ite.get_index() != end_idx; ite++) {
-       omap_inner_key_t node_key = ite->get_node_key();
-       node_key.key_off += key.key_off;
-       ite->set_node_key(node_key);
-    }
-  }
-
-  /**
    * local_move_back
    *
    * move this node entries range [from_src, to_src) back to tgt position.
@@ -923,6 +910,9 @@ public:
   struct iter_t {
     friend class StringKVLeafNodeLayout;
     using parent_t = typename crimson::common::maybe_const_t<StringKVLeafNodeLayout, is_const>::type;
+
+    template <typename iterator, typename const_iterator>
+    friend void copy_from_foreign(iterator, const_iterator, const_iterator);
 
     parent_t node;
     uint16_t index;
@@ -1061,6 +1051,49 @@ public:
     }
 
   private:
+    int get_right_offset() const {
+      return get_node_key().key_off;
+    }
+
+    int get_right_offset_end() const {
+      if (index == 0)
+	return 0;
+      else
+	return (*this - 1)->get_right_offset();
+    }
+
+    char *get_right_ptr() {
+      return node->buf + BLOCK_SIZE - get_right_offset();
+    }
+
+    const char *get_right_ptr() const {
+      static_assert(!is_const);
+      return node->buf + BLOCK_SIZE - get_right_offset();
+    }
+
+    char *get_right_ptr_end() {
+      if (index == 0)
+	return node->buf + BLOCK_SIZE;
+      else
+	return (*this - 1)->get_right_ptr();
+    }
+
+    const char *get_right_ptr_end() const {
+      if (index == 0)
+	return node->buf + BLOCK_SIZE;
+      else
+	return (*this - 1)->get_right_ptr();
+    }
+
+    void update_offset(int offset) {
+      auto key = get_node_key();
+      assert(offset + key.key_off >= 0);
+      assert(offset + key.val_off >= 0);
+      key.key_off += offset;
+      key.val_off += offset;
+      set_node_key(key);
+    }
+
     void set_node_key(omap_leaf_key_t _lb) const {
       static_assert(!is_const);
       omap_leaf_key_le_t lb;
@@ -1422,10 +1455,10 @@ public:
     auto piviter = get_split_pivot();
     assert (piviter != iter_end());
 
-    left.copy_from_foreign_head(left.iter_begin(), iter_begin(), piviter);
+    copy_from_foreign(left.iter_begin(), iter_begin(), piviter);
     left.set_size(piviter - iter_begin());
 
-    right.copy_from_foreign_back(right.iter_begin(), piviter, iter_end());
+    copy_from_foreign(right.iter_begin(), piviter, iter_end());
     right.set_size(iter_end() - piviter);
 
     auto [lmeta, rmeta] = get_meta().split_into();
@@ -1446,12 +1479,12 @@ public:
     const StringKVLeafNodeLayout &left,
     const StringKVLeafNodeLayout &right)
   {
-    copy_from_foreign_head(
+    copy_from_foreign(
       iter_end(),
       left.iter_begin(),
       left.iter_end());
     set_size(left.get_size());
-    append_copy_from_foreign_head(
+    copy_from_foreign(
       iter_end(),
       right.iter_begin(),
       right.iter_end());
@@ -1505,37 +1538,37 @@ public:
       left.iter_idx(pivot_idx)->get_node_val();
 
     if (pivot_size < left_size) {
-      replacement_left.copy_from_foreign_head(
+      copy_from_foreign(
         replacement_left.iter_end(),
         left.iter_begin(),
         left.iter_idx(pivot_idx));
       replacement_left.set_size(pivot_idx);
 
-      replacement_right.copy_from_foreign_back(
+      copy_from_foreign(
         replacement_right.iter_end(),
         left.iter_idx(pivot_idx),
         left.iter_end());
       replacement_right.set_size(left.get_size() - pivot_idx);
 
-      replacement_right.append_copy_from_foreign_head(
+      copy_from_foreign(
         replacement_right.iter_end(),
         right.iter_begin(),
         right.iter_end());
       replacement_right.set_size(right.get_size() + left.get_size() - pivot_idx);
     } else {
-      replacement_left.copy_from_foreign_head(
+      copy_from_foreign(
         replacement_left.iter_end(),
         left.iter_begin(),
         left.iter_end());
       replacement_left.set_size(left.get_size());
 
-      replacement_left.append_copy_from_foreign_head(
+      copy_from_foreign(
         replacement_left.iter_end(),
         right.iter_begin(),
         right.iter_idx(pivot_idx - left.get_size()));
       replacement_left.set_size(pivot_idx);
 
-      replacement_right.copy_from_foreign_back(
+      copy_from_foreign(
         replacement_right.iter_end(),
         right.iter_idx(pivot_idx - left.get_size()),
         right.iter_end());
@@ -1613,102 +1646,6 @@ private:
   }
   const omap_leaf_key_le_t *get_node_key_ptr() const {
     return L::Partial(1, 1, get_size()).template Pointer<2>(buf);
-  }
-
-  /**
-   * copy_from_foreign_head
-   *
-   * Copy from another node begin entries to this node.
-   * [from_src, to_src) is another node entry range.
-   * tgt is this node entry to copy to.
-   * tgt and from_src must be from different nodes.
-   * from_src and to_src must be in the same node.
-   */
-  static void copy_from_foreign_head(
-    iterator tgt,
-    const_iterator from_src,
-    const_iterator to_src) {
-    assert(tgt->node != from_src->node);
-    assert(to_src->node == from_src->node);
-    void* des = tgt.node->from_end((to_src -1)->get_node_key().key_off);
-    void* src = (to_src - 1)->get_node_val_ptr();
-    size_t len = (to_src -1)->get_node_key().key_off;
-    memcpy(des, src, len);
-    memcpy(
-      tgt->get_node_key_ptr(), from_src->get_node_key_ptr(),
-      to_src->get_node_key_ptr() - from_src->get_node_key_ptr());
-  }
-
-  /**
-   * copy_from_foreign_back
-   *
-   * Copy from another node back entries to this node.
-   * [from_src, to_src) is another node entry range.
-   * tgt is this node entry to copy to.
-   * tgt and from_src must be from different nodes.
-   * from_src and to_src must be in the same node.
-   */
-  void copy_from_foreign_back(
-    iterator tgt,
-    const_iterator from_src,
-    const_iterator to_src) {
-    assert(tgt->node != from_src->node);
-    assert(to_src->node == from_src->node);
-    auto offset = from_src.get_index() == 0? 0: (from_src-1)->get_node_key().key_off;
-
-    void* des = tgt.node->from_end((to_src -1)->get_node_key().key_off - offset);
-    void* src = (to_src - 1)->get_node_val_ptr();
-    size_t len = from_src.get_index() == 0? (to_src -1)->get_node_key().key_off:
-                 (from_src-1)->get_node_val_ptr() - (to_src -1)->get_node_val_ptr();
-    memcpy(des, src, len);
-    memcpy(
-      tgt->get_node_key_ptr(), from_src->get_node_key_ptr(),
-      to_src->get_node_key_ptr() - from_src->get_node_key_ptr());
-    if ( from_src.get_index() == 0)
-      return;
-
-    omap_leaf_key_t key = (from_src - 1)->get_node_key();
-    for (auto ite = tgt; ite.get_index() < (tgt.get_index() + to_src.get_index() - from_src.get_index()); ite++) {
-       omap_leaf_key_t node_key = ite->get_node_key();
-       node_key.key_off -= key.key_off;
-       node_key.val_off -= key.key_off;
-       ite->set_node_key(node_key);
-    }
-  }
-
-  /**
-   * append copy_from_foreign_ahead
-   *
-   * append another node head entries to this node back.
-   * [from_src, to_src) is another node entry range.
-   * tgt is this node entry to copy to.
-   * tgt and from_src must be from different nodes.
-   * from_src and to_src must be in the same node.
-   */
-  void append_copy_from_foreign_head(
-    iterator tgt,
-    const_iterator from_src,
-    const_iterator to_src) {
-    assert(tgt->node != from_src->node);
-    assert(to_src->node == from_src->node);
-    if (from_src == to_src)
-      return;
-
-    void* des = tgt.node->from_end((to_src -1)->get_node_key().key_off + (tgt - 1)->get_node_key().key_off);
-    void* src = (to_src - 1)->get_node_val_ptr();
-    size_t len = (to_src -1)->get_node_key().key_off;
-    memcpy(des, src, len);
-    memcpy(
-      tgt->get_node_key_ptr(), from_src->get_node_key_ptr(),
-      to_src->get_node_key_ptr() - from_src->get_node_key_ptr());
-    omap_leaf_key_t key = (tgt - 1)->get_node_key();
-    auto end_idx = tgt.get_index() + to_src.get_index() - from_src.get_index();
-    for (auto ite = tgt; ite.get_index() != end_idx; ite++) {
-       omap_leaf_key_t node_key = ite->get_node_key();
-       node_key.key_off += key.key_off;
-       node_key.val_off += key.key_off;
-       ite->set_node_key(node_key);
-    }
   }
 
   /**
