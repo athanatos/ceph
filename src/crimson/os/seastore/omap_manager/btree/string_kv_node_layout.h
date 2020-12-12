@@ -12,7 +12,7 @@
 #include "crimson/common/fixed_kv_node_layout.h"
 #include "crimson/os/seastore/omap_manager/btree/omap_types.h"
 
-#define BlockSize 4096
+#define BLOCK_SIZE 4096
 namespace crimson::os::seastore::omap_manager {
 
 template <
@@ -123,7 +123,7 @@ public:
     }
 
     char *get_node_val_ptr() {
-      auto tail = node->buf + BlockSize;
+      auto tail = node->buf + BLOCK_SIZE;
       if (*this == node->iter_end())
         return tail;
       else {
@@ -132,7 +132,7 @@ public:
     }
 
     const char *get_node_val_ptr() const {
-      auto tail = node->buf + BlockSize;
+      auto tail = node->buf + BLOCK_SIZE;
       if ( *this == node->iter_end())
         return tail;
       else {
@@ -515,12 +515,12 @@ public:
   }
 
   uint16_t capacity() const {
-    return BlockSize - (reinterpret_cast<char*>(layout.template Pointer<2>(buf))-
+    return BLOCK_SIZE - (reinterpret_cast<char*>(layout.template Pointer<2>(buf))-
                         reinterpret_cast<char*>(layout.template Pointer<0>(buf)));
   }
 
   char* from_end(int off) {
-    return  buf + (BlockSize - off);
+    return  buf + (BLOCK_SIZE - off);
   }
 
   bool is_overflow(size_t ksize) const {
@@ -863,7 +863,7 @@ private:
     void* des = (to_src-1)->get_node_val_ptr() - key.key_len;
     void* src = (to_src-1)->get_node_val_ptr();
     size_t len = from_src.get_index() == 0?
-                 from_src->node->buf + BlockSize - (to_src-1)->get_node_val_ptr():
+                 from_src->node->buf + BLOCK_SIZE - (to_src-1)->get_node_val_ptr():
                  (from_src-1)->get_node_val_ptr() - (to_src-1)->get_node_val_ptr();
 
     memmove(des, src, len);
@@ -993,7 +993,7 @@ public:
     }
 
     char *get_node_val_ptr() {
-      auto tail = node->buf + BlockSize;
+      auto tail = node->buf + BLOCK_SIZE;
       if ( *this == node->iter_end())
         return tail;
       else
@@ -1001,7 +1001,7 @@ public:
     }
 
     const char *get_node_val_ptr() const {
-      auto tail = node->buf + BlockSize;
+      auto tail = node->buf + BLOCK_SIZE;
       if ( *this == node->iter_end())
         return tail;
       else
@@ -1009,12 +1009,12 @@ public:
     }
 
     char *get_string_val_ptr() {
-      auto tail = node->buf + BlockSize;
+      auto tail = node->buf + BLOCK_SIZE;
       return tail - static_cast<int>(get_node_key().val_off);
     }
 
     const char *get_string_val_ptr() const {
-      auto tail = node->buf + BlockSize;
+      auto tail = node->buf + BLOCK_SIZE;
       return tail - static_cast<int>(get_node_key().val_off);
     }
 
@@ -1378,11 +1378,11 @@ public:
   }
 
   uint32_t capacity() const {
-    return BlockSize - (reinterpret_cast<char*>(layout.template Pointer<2>(buf))-
+    return BLOCK_SIZE - (reinterpret_cast<char*>(layout.template Pointer<2>(buf))-
                         reinterpret_cast<char*>(layout.template Pointer<0>(buf)));
   }
   char* from_end(int off) {
-    return buf + (BlockSize - off);
+    return buf + (BLOCK_SIZE - off);
   }
 
   bool is_overflow(size_t ksize, size_t vsize) const {
@@ -1728,7 +1728,7 @@ private:
     void* des = (to_src-1)->get_node_val_ptr() - (key.key_len + key.val_len);
     void* src = (to_src-1)->get_node_val_ptr();
     size_t len = from_src.get_index() == 0?
-                 from_src->node->buf + BlockSize - (to_src-1)->get_node_val_ptr():
+                 from_src->node->buf + BLOCK_SIZE - (to_src-1)->get_node_val_ptr():
                  (from_src-1)->get_node_val_ptr() - (to_src-1)->get_node_val_ptr();
     memmove(des, src, len);
     for ( auto ite = from_src; ite < to_src; ite++) {
