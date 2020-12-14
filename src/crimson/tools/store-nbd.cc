@@ -36,6 +36,7 @@
 #include <linux/fs.h>
 
 #include <seastar/core/byteorder.hh>
+#include <seastar/core/rwlock.hh>
 
 #include "crimson/os/seastore/cache.h"
 #include "crimson/os/seastore/segment_cleaner.h"
@@ -146,6 +147,11 @@ struct request_context_t {
   std::optional<bufferptr> in_buffer;
   std::optional<bufferlist> out_buffer;
 
+  using ref = std::unique_ptr<request_context_t>;
+  static ref make_ref() {
+    return std::make_unique<request_context_t>();
+  }
+
   bool check_magic() const {
     // todo
     return true;
@@ -208,6 +214,43 @@ struct request_context_t {
       }
     }).then([&out] {
       return out.flush();
+    });
+  }
+};
+
+struct RequestWriter {
+  seastar::rwlock lock;
+  seastar::output_stream<char> stream;
+  bool stopped = false;
+  int pending = 0;
+
+  RequestWriter(
+    seastar::output_stream<char> &&stream) : stream(std::move(stream)) {}
+  RequestWriter(RequestWriter &&) = default;
+
+  seastar::future<> complete(request_context_t::ref &&req) {
+    if (stopped)
+      throw std::system_error(
+	std::make_error_code(
+	  std::errc::operation_canceled));
+    auto &request = *req;
+    ++pending;
+    return lock.write_lock(
+    ).then([&request, this] {
+      return request.write_reply(stream);
+    }).finally([&, this, req=std::move(req)] {
+      --pending;
+      lock.write_unlock();
+      return seastar::now();
+    });
+  }
+
+  seastar::future<> close() {
+    stopped = true;
+    return lock.write_lock(
+    ).then([this] {
+      assert(pending == 0);
+      return stream.close();
     });
   }
 };
@@ -354,21 +397,22 @@ seastar::future<> send_negotiation(
 
 seastar::future<> handle_command(
   BlockDriver &backend,
-  request_context_t &context,
-  seastar::output_stream<char> &out)
+  request_context_t::ref request_ref,
+  RequestWriter &out)
 {
-  logger().debug("got command {}", context.get_command());
+  auto &request = *request_ref;
+  logger().debug("got command {}", request.get_command());
   return ([&] {
-    switch (context.get_command()) {
+    switch (request.get_command()) {
     case NBD_CMD_WRITE:
       return backend.write(
-	context.from,
-	*context.in_buffer);
+	request.from,
+	*request.in_buffer);
     case NBD_CMD_READ:
       return backend.read(
-	context.from,
-	context.len).then([&context] (auto buffer) {
-	  context.out_buffer = buffer;
+	request.from,
+	request.len).then([&] (auto buffer) {
+	  request.out_buffer = buffer;
 	});
     case NBD_CMD_DISC:
       throw std::system_error(std::make_error_code(std::errc::bad_message));
@@ -377,9 +421,8 @@ seastar::future<> handle_command(
     default:
       throw std::system_error(std::make_error_code(std::errc::bad_message));
     }
-  })().then([&] {
-    logger().debug("Writing reply");
-    return context.write_reply(out);
+  })().then([&, request_ref=std::move(request_ref)]() mutable {
+    return out.complete(std::move(request_ref));
   });
 }
 
@@ -387,19 +430,18 @@ seastar::future<> handle_command(
 seastar::future<> handle_commands(
   BlockDriver &backend,
   seastar::input_stream<char>& in,
-  seastar::output_stream<char>& out)
+  RequestWriter &out)
 {
   logger().debug("handle_commands");
   return seastar::keep_doing(
     [&] {
       logger().debug("waiting for command");
-      auto request_ref = std::make_unique<request_context_t>();
+      auto request_ref = request_context_t::make_ref();
       auto &request = *request_ref;
       return request.read_request(in
-      ).then([&] {
-	return handle_command(backend, request, out);
-      }).then([req=std::move(request_ref)] {
-	logger().debug("complete");
+      ).then([&, request_ref=std::move(request_ref)]() mutable {
+	static_cast<void>(handle_command(backend, std::move(request_ref), out));
+	return seastar::now();
       });
     });
 }
@@ -416,16 +458,16 @@ seastar::future<> NBDHandler::run()
 	[this, &socket] {
 	  return socket.accept().then([this](auto acc) {
 	    logger().debug("Accepted");
-	    static_cast<void>(seastar::do_with(
+	    return seastar::do_with(
 	      std::move(acc.connection),
 	      [this](auto &conn) {
 		return seastar::do_with(
 		  conn.input(),
-		  conn.output(),
+		  RequestWriter{conn.output()},
 		  [&, this](auto &input, auto &output) {
 		    return send_negotiation(
 		      backend.get_size(),
-		      output
+		      output.stream
 		    ).then([&, this] {
 		      return handle_commands(backend, input, output);
 		    }).finally([&] {
@@ -436,8 +478,7 @@ seastar::future<> NBDHandler::run()
 		      return seastar::now();
 		    });
 		  });
-	      }));
-	    return seastar::now();
+	      });
 	  });
 	});
     });
