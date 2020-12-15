@@ -131,6 +131,15 @@ private:
   segment_id_t to_release = NULL_SEG_ID;
 
   Transaction(bool weak) : weak(weak) {}
+
+public:
+  ~Transaction() {
+    for (auto i = write_set.begin();
+	 i != write_set.end();) {
+      i->state = CachedExtent::extent_state_t::INVALID;
+      write_set.erase(*i++);
+    }
+  }
 };
 using TransactionRef = Transaction::Ref;
 

@@ -494,6 +494,7 @@ public:
   }
 
   void erase(CachedExtent &extent) {
+    assert(extent.parent_index);
     extent_index.erase(extent);
     extent.parent_index = nullptr;
   }
@@ -537,6 +538,8 @@ public:
       extent_index.erase(l);
     }
   }
+
+  ~ExtentIndex() { assert(extent_index.empty()); }
 };
 
 class LogicalCachedExtent;

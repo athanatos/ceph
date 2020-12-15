@@ -352,7 +352,7 @@ TEST_F(transaction_manager_test_t, mutate)
   });
 }
 
-TEST_F(transaction_manager_test_t, mutate_conflict)
+TEST_F(transaction_manager_test_t, allocate_lba_conflict)
 {
   constexpr laddr_t SIZE = 4096;
   run_async([this] {
@@ -370,7 +370,6 @@ TEST_F(transaction_manager_test_t, mutate_conflict)
     ASSERT_EQ(ADDR, extent->get_laddr());
     check_mappings(t);
     check();
-    extent.reset();
 
     auto extent2 = alloc_extent(
       t2,
