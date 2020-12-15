@@ -177,6 +177,7 @@ TransactionManager::submit_transaction(
   ).safe_then([this, t=std::move(t)]() mutable -> submit_transaction_ertr::future<> {
     auto record = cache.try_construct_record(*t);
     if (!record) {
+      logger().debug("TransactionManager::submit_transaction conflict");
       return crimson::ct_error::eagain::make();
     }
 

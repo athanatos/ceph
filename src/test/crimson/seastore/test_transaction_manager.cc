@@ -263,9 +263,33 @@ struct transaction_manager_test_t :
       }).unsafe_get0();
   }
 
-  void submit_transaction(test_transaction_t t) {
-    tm->submit_transaction(std::move(t.t)).unsafe_get();
-    test_mappings = t.mappings;
+  bool try_submit_transaction(test_transaction_t t) {
+    using ertr = TransactionManager::submit_transaction_ertr;
+    using ret = ertr::future<bool>;
+    bool success = tm->submit_transaction(std::move(t.t)
+    ).safe_then([]() -> ret {
+      return ertr::make_ready_future<bool>(true);
+    }).handle_error(
+      [](const crimson::ct_error::eagain &e) {
+	return seastar::make_ready_future<bool>(false);
+      },
+      crimson::ct_error::pass_further_all{}
+    ).unsafe_get0();
+    
+    if (success)
+      test_mappings = t.mappings;
+
+    return success;
+  }
+
+  void submit_transaction(test_transaction_t &&t) {
+    bool success = try_submit_transaction(std::move(t));
+    EXPECT_TRUE(success);
+  }
+
+  void submit_transaction_expect_conflict(test_transaction_t &&t) {
+    bool success = try_submit_transaction(std::move(t));
+    EXPECT_FALSE(success);
   }
 };
 
@@ -327,6 +351,42 @@ TEST_F(transaction_manager_test_t, mutate)
     check();
   });
 }
+
+TEST_F(transaction_manager_test_t, mutate_conflict)
+{
+  constexpr laddr_t SIZE = 4096;
+  run_async([this] {
+    constexpr laddr_t ADDR = 0xFF * SIZE;
+    constexpr laddr_t ADDR2 = 0xFE * SIZE;
+    auto t = create_transaction();
+    auto t2 = create_transaction();
+
+    // These should conflict as they should both modify the lba root
+    auto extent = alloc_extent(
+      t,
+      ADDR,
+      SIZE,
+      'a');
+    ASSERT_EQ(ADDR, extent->get_laddr());
+    check_mappings(t);
+    check();
+    extent.reset();
+
+    auto extent2 = alloc_extent(
+      t2,
+      ADDR2,
+      SIZE,
+      'a');
+    ASSERT_EQ(ADDR2, extent2->get_laddr());
+    check_mappings(t2);
+    extent2.reset();
+
+    submit_transaction(std::move(t2));
+    submit_transaction_expect_conflict(std::move(t));
+  });
+}
+
+#if 0
 
 TEST_F(transaction_manager_test_t, create_remove_same_transaction)
 {
@@ -497,3 +557,5 @@ TEST_F(transaction_manager_test_t, random_writes)
     }
   });
 }
+
+#endif
