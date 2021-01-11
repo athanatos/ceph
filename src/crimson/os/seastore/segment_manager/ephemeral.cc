@@ -55,7 +55,9 @@ Segment::write_ertr::future<> EphemeralSegment::write(
   if (offset + bl.length() > (size_t)manager.get_segment_size())
     return crimson::ct_error::enospc::make();
 
-  return manager.segment_write({id, offset}, bl);
+  return orderer.sequence([&] {
+    return manager.segment_write({id, offset}, bl);
+  });
 }
 
 Segment::close_ertr::future<> EphemeralSegmentManager::segment_close(segment_id_t id)

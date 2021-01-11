@@ -8,6 +8,7 @@
 #include <boost/intrusive_ptr.hpp>
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
 #include <seastar/core/future.hh>
+#include <seastar/core/shared_mutex.hh>
 
 #include "include/ceph_assert.h"
 #include "crimson/os/seastore/seastore_types.h"
@@ -15,6 +16,21 @@
 #include "crimson/osd/exceptions.h"
 
 namespace crimson::os::seastore {
+
+class segment_handle_orderer_t {
+  seastar::shared_mutex mutex;
+public:
+  template <typename F>
+  auto sequence(F &&f) {
+    auto lfut = mutex.lock();
+    return std::invoke(std::forward<F>(f)
+    ).safe_then([lfut=std::move(lfut)]() mutable {
+      return std::move(lfut);
+    }).finally([this] {
+      mutex.unlock();
+    });
+  }
+};
 
 class Segment : public boost::intrusive_ref_counter<
   Segment,
