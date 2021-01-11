@@ -45,6 +45,9 @@ Cache::retire_extent_ret Cache::retire_extent_if_cached(
       return retire_extent_ertr::now();
     });
   } else {
+    // TODO BEFORE MERGE: need to ensure that transaction commit
+    // notices if a concurrent transaction loaded addr into cache
+    // after this check
     return retire_extent_ertr::now();
   }
 }

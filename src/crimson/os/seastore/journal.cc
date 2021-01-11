@@ -191,6 +191,9 @@ Journal::write_record_ret Journal::write_record(
   return current_journal_segment->write(target, to_write).handle_error(
     write_record_ertr::pass_further{},
     crimson::ct_error::assert_all{ "TODO" }).safe_then([this, target] {
+      logger().debug(
+	"write_record, target {} complete",
+	target);
       committed_to = target;
       return write_record_ret(
 	write_record_ertr::ready_future_marker{},

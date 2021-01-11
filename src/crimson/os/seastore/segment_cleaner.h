@@ -363,6 +363,10 @@ public:
   }
 
   void set_journal_head(journal_seq_t head) {
+    crimson::get_logger(ceph_subsys_filestore).debug(
+      "SegmentCleaner::set_journal_head: journal_head {} head (new) {}",
+      journal_head,
+      head);
     assert(journal_head == journal_seq_t() || head >= journal_head);
     journal_head = head;
   }
