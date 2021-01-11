@@ -5,6 +5,8 @@
 
 #include <iostream>
 
+#include "crimson/common/operation.h"
+
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/cached_extent.h"
 #include "crimson/os/seastore/root_block.h"
@@ -18,6 +20,8 @@ namespace crimson::os::seastore {
  */
 class Transaction {
 public:
+  OperationRef operation;
+
   using Ref = std::unique_ptr<Transaction>;
   enum class get_extent_ret {
     PRESENT,
@@ -130,16 +134,60 @@ private:
   ///< if != NULL_SEG_ID, release this segment after completion
   segment_id_t to_release = NULL_SEG_ID;
 
-  Transaction(bool weak) : weak(weak) {}
+  Transaction(
+    OperationRef op,
+    bool weak
+  ) : operation(op), weak(weak) {}
+
+public:
+  ~Transaction() {
+    for (auto i = write_set.begin();
+	 i != write_set.end();) {
+      i->state = CachedExtent::extent_state_t::INVALID;
+      write_set.erase(*i++);
+    }
+  }
 };
 using TransactionRef = Transaction::Ref;
 
+/**
+ * PlaceholderOperation
+ *
+ * Once seastore is more complete, I expect to update the externally
+ * facing interfaces to permit passing the osd level operation through.
+ * Until then (and for tests likely permanently) we'll use this unregistered
+ * placeholder for the pipeline phases necessary for journal correctness.
+ */
+class PlaceholderOperation : public Operation {
+public:
+  using IRef = boost::intrusive_ptr<PlaceholderOperation>;
+
+  unsigned get_type() const final {
+    return 0;
+  }
+
+  const char *get_type_name() const final {
+    return "crimson::os::seastore::PlaceholderOperation";
+  }
+
+private:
+  void dump_detail(ceph::Formatter *f) const final {}
+  void print(std::ostream &) const final {}
+};
+
 inline TransactionRef make_transaction() {
-  return std::unique_ptr<Transaction>(new Transaction(false));
+  return std::unique_ptr<Transaction>(
+    new Transaction(
+      new PlaceholderOperation,
+      false
+    ));
 }
 
 inline TransactionRef make_weak_transaction() {
-  return std::unique_ptr<Transaction>(new Transaction(true));
+  return std::unique_ptr<Transaction>(
+    new Transaction(
+      new PlaceholderOperation,
+      true));
 }
 
 }
