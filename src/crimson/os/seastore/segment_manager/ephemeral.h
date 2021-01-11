@@ -36,6 +36,8 @@ class EphemeralSegment final : public Segment {
   EphemeralSegmentManager &manager;
   const segment_id_t id;
   segment_off_t write_pointer = 0;
+
+  segment_handle_orderer_t orderer;
 public:
   EphemeralSegment(EphemeralSegmentManager &manager, segment_id_t id);
 
