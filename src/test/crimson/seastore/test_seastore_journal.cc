@@ -64,6 +64,7 @@ struct record_validator_t {
 
 struct journal_test_t : seastar_test_suite_t, JournalSegmentProvider {
   segment_manager::EphemeralSegmentManagerRef segment_manager;
+  WritePipeline pipeline;
   std::unique_ptr<Journal> journal;
 
   std::vector<record_validator_t> records;
@@ -76,6 +77,7 @@ struct journal_test_t : seastar_test_suite_t, JournalSegmentProvider {
     : segment_manager(segment_manager::create_test_ephemeral()),
       block_size(segment_manager->get_block_size())
   {
+    journal->set_write_pipeline(&pipeline);
   }
 
   segment_id_t next = 0;
@@ -151,7 +153,10 @@ struct journal_test_t : seastar_test_suite_t, JournalSegmentProvider {
   auto submit_record(T&&... _record) {
     auto record{std::forward<T>(_record)...};
     records.push_back(record);
-    auto [addr, _] = journal->submit_record(std::move(record)).unsafe_get0();
+    OrderingHandle handle = get_dummy_ordering_handle();
+    auto [addr, _] = journal->submit_record(
+      std::move(record),
+      handle).unsafe_get0();
     records.back().record_final_offset = addr;
     return addr;
   }

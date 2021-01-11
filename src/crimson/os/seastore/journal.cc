@@ -178,7 +178,8 @@ Journal::read_validate_data_ret Journal::read_validate_data(
 
 Journal::write_record_ret Journal::write_record(
   record_size_t rsize,
-  record_t &&record)
+  record_t &&record,
+  OrderingHandle &handle)
 {
   ceph::bufferlist to_write = encode_record(
     rsize, std::move(record));
@@ -190,18 +191,21 @@ Journal::write_record_ret Journal::write_record(
     rsize.mdlength,
     rsize.dlength,
     target);
-  return current_journal_segment->write(target, to_write).handle_error(
-    write_record_ertr::pass_further{},
-    crimson::ct_error::assert_all{
-      "Invalid error in Journal::write_record"
-    }).safe_then([this, target] {
-      committed_to = target;
-      return write_record_ret(
-	write_record_ertr::ready_future_marker{},
-	paddr_t{
-	  current_journal_segment->get_segment_id(),
-	  target});
-    });
+  return handle.enter(write_pipeline->device_submission
+  ).then([this, target, to_write = std::move(to_write)] {
+    return current_journal_segment->write(target, to_write).handle_error(
+      write_record_ertr::pass_further{},
+      crimson::ct_error::assert_all{
+	"Invalid error in Journal::write_record"
+	  }).safe_then([this, target] {
+	    committed_to = target;
+	    return write_record_ret(
+	      write_record_ertr::ready_future_marker{},
+	      paddr_t{
+		current_journal_segment->get_segment_id(),
+		  target});
+	  });
+  });
 }
 
 Journal::record_size_t Journal::get_encoded_record_length(
