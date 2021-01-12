@@ -5,8 +5,6 @@
 
 #include <iostream>
 
-#include "crimson/common/operation.h"
-
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/cached_extent.h"
 #include "crimson/os/seastore/root_block.h"
@@ -20,7 +18,6 @@ namespace crimson::os::seastore {
  */
 class Transaction {
 public:
-  OperationRef operation;
 
   using Ref = std::unique_ptr<Transaction>;
   enum class get_extent_ret {
@@ -135,9 +132,8 @@ private:
   segment_id_t to_release = NULL_SEG_ID;
 
   Transaction(
-    OperationRef op,
     bool weak
-  ) : operation(op), weak(weak) {}
+  ) : weak(weak) {}
 
 public:
   ~Transaction() {
@@ -150,35 +146,9 @@ public:
 };
 using TransactionRef = Transaction::Ref;
 
-/**
- * PlaceholderOperation
- *
- * Once seastore is more complete, I expect to update the externally
- * facing interfaces to permit passing the osd level operation through.
- * Until then (and for tests likely permanently) we'll use this unregistered
- * placeholder for the pipeline phases necessary for journal correctness.
- */
-class PlaceholderOperation : public Operation {
-public:
-  using IRef = boost::intrusive_ptr<PlaceholderOperation>;
-
-  unsigned get_type() const final {
-    return 0;
-  }
-
-  const char *get_type_name() const final {
-    return "crimson::os::seastore::PlaceholderOperation";
-  }
-
-private:
-  void dump_detail(ceph::Formatter *f) const final {}
-  void print(std::ostream &) const final {}
-};
-
 inline TransactionRef make_transaction() {
   return std::unique_ptr<Transaction>(
     new Transaction(
-      new PlaceholderOperation,
       false
     ));
 }
@@ -186,7 +156,6 @@ inline TransactionRef make_transaction() {
 inline TransactionRef make_weak_transaction() {
   return std::unique_ptr<Transaction>(
     new Transaction(
-      new PlaceholderOperation,
       true));
 }
 
