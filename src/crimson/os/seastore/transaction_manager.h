@@ -290,6 +290,11 @@ private:
   Cache &cache;
   LBAManager &lba_manager;
   Journal &journal;
+
+  // submission pipeline
+  OrderedPipelinePhase prepare_phase{"TransactionManager::prepare_phase"};
+  OrderedPipelinePhase journal_phase{"TransactionManager::journal_phase"};
+  // Journal submission phase, see Journal
 };
 using TransactionManagerRef = std::unique_ptr<TransactionManager>;
 

@@ -173,21 +173,28 @@ TransactionManager::submit_transaction(
   TransactionRef t)
 {
   logger().debug("TransactionManager::submit_transaction");
-  return segment_cleaner.do_immediate_work(*t
-  ).safe_then([this, t=std::move(t)]() mutable -> submit_transaction_ertr::future<> {
-    auto record = cache.try_construct_record(*t);
+  auto &tref = *t;
+  return tref.handle.enter(prepare_phase
+  ).then([this, &tref]() mutable {
+    return segment_cleaner.do_immediate_work(tref);
+  }).safe_then([this, &tref]() mutable
+	       -> submit_transaction_ertr::future<> {
+    logger().debug("TransactionManager::submit_transaction after do_immediate");
+    auto record = cache.try_construct_record(tref);
     if (!record) {
       logger().debug("TransactionManager::submit_transaction conflict");
       return crimson::ct_error::eagain::make();
     }
 
-    return journal.submit_record(std::move(*record)
-    ).safe_then([this, t=std::move(t)](auto p) mutable {
+    return tref.handle.enter(journal_phase
+    ).then([this, record=std::move(record)]() mutable {
+      return journal.submit_record(std::move(*record));
+    }).safe_then([this, &tref](auto p) mutable {
       auto [addr, journal_seq] = p;
       segment_cleaner.set_journal_head(journal_seq);
-      cache.complete_commit(*t, addr, journal_seq, &segment_cleaner);
-      lba_manager.complete_transaction(*t);
-      auto to_release = t->get_segment_to_release();
+      cache.complete_commit(tref, addr, journal_seq, &segment_cleaner);
+      lba_manager.complete_transaction(tref);
+      auto to_release = tref.get_segment_to_release();
       if (to_release != NULL_SEG_ID) {
 	segment_cleaner.mark_segment_released(to_release);
 	return segment_manager.release(to_release);
@@ -199,7 +206,9 @@ TransactionManager::submit_transaction(
       crimson::ct_error::all_same_way([](auto e) {
 	ceph_assert(0 == "Hit error submitting to journal");
       }));
-  });
+    }).finally([t=std::move(t)]() mutable {
+      t->handle.exit();
+    });
 }
 
 TransactionManager::get_next_dirty_extents_ret

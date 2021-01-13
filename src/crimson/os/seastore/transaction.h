@@ -5,6 +5,7 @@
 
 #include <iostream>
 
+#include "crimson/os/seastore/ordering_handle.h"
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/cached_extent.h"
 #include "crimson/os/seastore/root_block.h"
@@ -18,6 +19,7 @@ namespace crimson::os::seastore {
  */
 class Transaction {
 public:
+  OrderingHandle handle;
 
   using Ref = std::unique_ptr<Transaction>;
   enum class get_extent_ret {
@@ -132,8 +134,9 @@ private:
   segment_id_t to_release = NULL_SEG_ID;
 
   Transaction(
+    OrderingHandle &&handle,
     bool weak
-  ) : weak(weak) {}
+  ) : handle(std::move(handle)), weak(weak) {}
 
 public:
   ~Transaction() {
@@ -149,6 +152,7 @@ using TransactionRef = Transaction::Ref;
 inline TransactionRef make_transaction() {
   return std::unique_ptr<Transaction>(
     new Transaction(
+      get_dummy_ordering_handle(),
       false
     ));
 }
@@ -156,6 +160,7 @@ inline TransactionRef make_transaction() {
 inline TransactionRef make_weak_transaction() {
   return std::unique_ptr<Transaction>(
     new Transaction(
+      get_dummy_ordering_handle(),
       true));
 }
 
