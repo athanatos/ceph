@@ -260,6 +260,7 @@ using LBANodeRef = LBANode::LBANodeRef;
  */
 Cache::get_extent_ertr::future<LBANodeRef> get_lba_btree_extent(
   op_context_t c, ///< [in] context structure
+  CachedExtentRef parent, ///< [in] paddr ref source
   depth_t depth,  ///< [in] depth of node to fetch
   paddr_t offset, ///< [in] physical addr of node
   paddr_t base    ///< [in] depending on user, block addr or record addr

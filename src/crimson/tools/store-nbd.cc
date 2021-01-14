@@ -507,29 +507,39 @@ public:
     logger().debug("Writing offset {}", offset);
     assert(offset % segment_manager->get_block_size() == 0);
     assert(ptr.length() == (size_t)segment_manager->get_block_size());
-    return seastar::do_with(
-      tm->create_transaction(),
-      std::move(ptr),
-      [this, offset](auto &t, auto &ptr) {
-	return tm->dec_ref(
-	  *t,
-	  offset
-	).safe_then([](auto){}).handle_error(
-	  crimson::ct_error::enoent::handle([](auto) { return seastar::now(); }),
-	  crimson::ct_error::pass_further_all{}
-	).safe_then([=, &t, &ptr] {
-	  logger().debug("dec_ref complete");
-	  return tm->alloc_extent<TestBlock>(
-	    *t,
-	    offset,
-	    ptr.length());
-	}).safe_then([=, &t, &ptr](auto ext) mutable {
-	  assert(ext->get_laddr() == (size_t)offset);
-	  assert(ext->get_bptr().length() == ptr.length());
-	  ext->get_bptr().swap(ptr);
-	  logger().debug("submitting transaction");
-	  return tm->submit_transaction(std::move(t));
-	});
+    return crimson::do_until(
+      [this, offset, ptr=std::move(ptr)] {
+	return seastar::do_with(
+	  tm->create_transaction(),
+	  ptr,
+	  [this, offset](auto &t, auto &ptr) mutable {
+	    return tm->dec_ref(
+	      *t,
+	      offset
+	    ).safe_then([](auto){}).handle_error(
+	      crimson::ct_error::enoent::handle([](auto) { return seastar::now(); }),
+	      crimson::ct_error::pass_further_all{}
+	    ).safe_then([=, &t, &ptr] {
+	      logger().debug("dec_ref complete");
+	      return tm->alloc_extent<TestBlock>(
+		*t,
+		offset,
+		ptr.length());
+	    }).safe_then([=, &t, &ptr](auto ext) mutable {
+	      assert(ext->get_laddr() == (size_t)offset);
+	      assert(ext->get_bptr().length() == ptr.length());
+	      ext->get_bptr().swap(ptr);
+	      logger().debug("submitting transaction");
+	      return tm->submit_transaction(std::move(t));
+	    }).safe_then([] {
+	      return true;
+	    }).handle_error(
+	      crimson::ct_error::eagain::handle([]{
+		return seastar::make_ready_future<bool>(false);
+	      }),
+	      crimson::ct_error::pass_further_all{}
+	    );
+	  });
       }).handle_error(
 	crimson::ct_error::assert_all{}
       );

@@ -137,7 +137,8 @@ public:
    * - disk
    */
   using get_extent_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error>;
+    crimson::ct_error::input_output_error,
+    crimson::ct_error::eagain>;
   template <typename T>
   get_extent_ertr::future<TCachedExtentRef<T>> get_extent(
     paddr_t offset,       ///< [in] starting addr
