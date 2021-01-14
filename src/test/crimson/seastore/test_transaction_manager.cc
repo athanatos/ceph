@@ -231,7 +231,7 @@ struct transaction_manager_test_t :
 	if (i.first < addr) {
 	  EXPECT_FALSE(i.first + i.second.desc.len > addr);
 	} else {
-	  EXPECT_FALSE(addr + len < i.first);
+	  EXPECT_FALSE(addr + len > i.first);
 	}
       }
     }
@@ -538,6 +538,7 @@ struct transaction_manager_test_t :
 };
 
 #if 0
+#endif
 TEST_F(transaction_manager_test_t, basic)
 {
   constexpr laddr_t SIZE = 4096;
@@ -869,7 +870,6 @@ TEST_F(transaction_manager_test_t, random_writes)
     }
   });
 }
-#endif
 
 TEST_F(transaction_manager_test_t, random_writes_concurrent)
 {
@@ -879,15 +879,23 @@ TEST_F(transaction_manager_test_t, random_writes_concurrent)
   constexpr size_t BSIZE = 4<<10;
   constexpr size_t BLOCKS = TOTAL / BSIZE;
   run_async([this] {
-    for (unsigned i = 0; i < BLOCKS; ++i) {
-      auto t = create_transaction();
-      auto extent = alloc_extent(
-	t,
-	i * BSIZE,
-	BSIZE);
-      ASSERT_EQ(i * BSIZE, extent->get_laddr());
-      submit_transaction(std::move(t));
-    }
+    seastar::parallel_for_each(
+      boost::make_counting_iterator(0u),
+      boost::make_counting_iterator(WRITE_STREAMS),
+      [&](auto idx) {
+	for (unsigned i = idx; i < BLOCKS; i += WRITE_STREAMS) {
+	  while (true) {
+	    auto t = create_transaction();
+	    auto extent = alloc_extent(
+	      t,
+	      i * BSIZE,
+	      BSIZE);
+	    ASSERT_EQ(i * BSIZE, extent->get_laddr());
+	    if (try_submit_transaction(std::move(t)))
+	      break;
+	  }
+	}
+      }).get0();
 
     int writes = 0;
     unsigned failures = 0;
