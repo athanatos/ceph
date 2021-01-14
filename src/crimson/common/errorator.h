@@ -774,7 +774,7 @@ public:
     return all_same_way_t<ErrorFunc>{std::forward<ErrorFunc>(error_func)};
   };
 
-  // get a new errorator by extending current one with new error
+  // get a new errorator by extending current one with new errors
   template <class... NewAllowedErrorsT>
   using extend = errorator<AllowedErrors..., NewAllowedErrorsT...>;
 
@@ -810,6 +810,9 @@ public:
     static_assert(sizeof...(EmptyPack) == 0);
     using type = errorator<AllowedErrors...>;
   };
+
+  template <class E>
+  using extend_ertr = typename unify<E>::type;
 
   template <typename T=void, typename... A>
   static future<T> make_ready_future(A&&... value) {
@@ -951,9 +954,13 @@ public:
   template <class T>
   using futurize = ::seastar::futurize<T>;
 
-  // get a new errorator by extending current one with new error
+  // get a new errorator by extending current one with errors
   template <class... NewAllowedErrors>
   using extend = errorator<NewAllowedErrors...>;
+
+  // get a new errorator by extending current one with errors
+  template <class E>
+  using extend_ertr = E;
 
   // errorator with empty error set never contains any error
   template <class T>
