@@ -75,7 +75,8 @@ public:
   /**
    * Read extents corresponding to specified lba range
    */
-  using read_extent_ertr = SegmentManager::read_ertr;
+  using read_extent_ertr = LBAManager::get_mapping_ertr::extend_ertr<
+    SegmentManager::read_ertr>;
   template <typename T>
   using read_extent_ret = read_extent_ertr::future<lextent_list_t<T>>;
   template <typename T>
@@ -182,7 +183,7 @@ public:
    * Allocates a new block of type T with the minimum lba range of size len
    * greater than hint.
    */
-  using alloc_extent_ertr = SegmentManager::read_ertr;
+  using alloc_extent_ertr = LBAManager::alloc_extent_ertr;
   template <typename T>
   using alloc_extent_ret = alloc_extent_ertr::future<TCachedExtentRef<T>>;
   template <typename T>
@@ -259,9 +260,7 @@ public:
    *
    * Get onode-tree root logical address
    */
-  using read_onode_root_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error
-    >;
+  using read_onode_root_ertr = read_extent_ertr;
   using read_onode_root_ret = read_onode_root_ertr::future<laddr_t>;
   read_onode_root_ret read_onode_root(Transaction &t) {
     return cache.get_root(t).safe_then([](auto croot) {
