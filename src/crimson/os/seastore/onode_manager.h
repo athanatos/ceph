@@ -48,7 +48,7 @@ using OnodeManagerRef = std::unique_ptr<OnodeManager>;
 
 namespace onode_manager {
 
-OnodeManagerRef create_ephemeral() {
+inline OnodeManagerRef create_ephemeral() {
   return OnodeManagerRef();
 }
 
