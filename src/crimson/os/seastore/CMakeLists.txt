@@ -35,6 +35,7 @@ add_library(crimson-seastore STATIC
   extentmap_manager/btree/btree_extentmap_manager.cc
   seastore.cc
   ../../../test/crimson/seastore/test_block.cc
+  ${PROJECT_SOURCE_DIR}/src/os/Transaction.cc
 	)
 target_link_libraries(crimson-seastore
   crimson)
