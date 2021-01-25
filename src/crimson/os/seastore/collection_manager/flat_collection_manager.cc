@@ -32,6 +32,10 @@ FlatCollectionManager::mkfs(Transaction &t, unsigned block_size)
       coll_root_t coll_root = coll_root_t(root_extent->get_laddr());
       coll_block_size = block_size;
       return mkfs_ertr::make_ready_future<coll_root_t>(coll_root);
+  }).handle_error(
+    mkfs_ertr::pass_further{},
+    crimson::ct_error::assert_all{
+      "Invalid error in FlatCollectionManager::mkfs"
   });
 }
 
@@ -47,6 +51,10 @@ FlatCollectionManager::get_coll_root(const coll_root_t &coll_root, Transaction &
       assert(extents.size() == 1);
       [[maybe_unused]] auto [laddr, e] = extents.front();
       return get_root_ertr::make_ready_future<CollectionNodeRef>(std::move(e));
+  }).handle_error(
+    get_root_ertr::pass_further{},
+    crimson::ct_error::assert_all{
+      "Invalid error in FlatCollectionManager::get_coll_root"
   });
 }
 
@@ -94,6 +102,10 @@ FlatCollectionManager::handle_overflow(coll_root_t &coll_root, Transaction &t,
         handle_overflow_ertr::ready_future_marker{},
         std::move(root_extent));
     });
+  }).handle_error(
+    handle_overflow_ertr::pass_further{},
+    crimson::ct_error::assert_all{
+      "Invalid error in FlatCollectionManager::handle_overflow"
   });
 }
 
