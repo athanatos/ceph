@@ -20,50 +20,56 @@ namespace crimson::os::seastore {
   * Information for locating CollectionManager information, addr should be
   * embedded into the TransactionManager root.
   */
-  class coll_root_t {
-    laddr_t coll_root_laddr;
+class coll_root_t {
+  laddr_t coll_root_laddr;
+  
+  enum state_t : uint8_t {
+    CLEAN = 0,   /// No pending mutations
+    MUTATED = 1, /// coll_root_laddr state must be written back to persistence
+    NONE = 0xFF  /// Not yet mounted, should not be exposed to user
+  } state = NONE;
 
-    enum state_t : uint8_t {
-      CLEAN = 0,   /// No pending mutations
-      MUTATED = 1, /// coll_root_laddr state must be written back to persistence
-      NONE = 0xFF  /// Not yet mounted, should not be exposed to user
-    } state = NONE;
-
-  public:
-    coll_root_t(laddr_t laddr)
+public:
+  coll_root_t(laddr_t laddr)
     : coll_root_laddr(laddr) {}
 
-    bool must_update_location() const {
-      return state == MUTATED;
-    }
+  bool must_update_location() const {
+    return state == MUTATED;
+  }
 
-    laddr_t get_location() const {
-      return coll_root_laddr;
-    }
-    void set_location(laddr_t laddr) {
-      coll_root_laddr = laddr;
-    }
-    state_t get_status() const{
-      return state;
-    }
-    void set_status(state_t s) {
-      state = s;
-    }
-  };
+  laddr_t get_location() const {
+    return coll_root_laddr;
+  }
 
-  struct coll_info_t {
-    unsigned split_bits;
+  void set_location(laddr_t laddr) {
+    coll_root_laddr = laddr;
+  }
 
-    coll_info_t(unsigned bits)
+  state_t get_status() const{
+    return state;
+  }
+
+  void set_status(state_t s) {
+    state = s;
+  }
+};
+
+struct coll_info_t {
+  unsigned split_bits;
+
+  coll_info_t(unsigned bits)
     : split_bits(bits) {}
-  };
+};
 
 /// Interface for maintaining set of collections
 class CollectionManager {
 public:
-  using base_ertr = TransactionManager::read_extent_ertr;
-    /// Initialize collection manager instance for an empty store
-  using mkfs_ertr = TransactionManager::alloc_extent_ertr;
+  using base_ertr = TransactionManager::base_ertr;
+
+  /// Initialize collection manager instance for an empty store
+  using mkfs_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error
+    >;
   using mkfs_ret = mkfs_ertr::future<coll_root_t>;
   virtual mkfs_ret mkfs(
     Transaction &t,
@@ -76,8 +82,7 @@ public:
     coll_root_t &root,
     Transaction &t,
     coll_t cid,
-    coll_info_t info
-  ) = 0;
+    coll_info_t info) = 0;
 
   /// List collections with info
   using list_ertr = base_ertr;
@@ -102,15 +107,15 @@ public:
     coll_root_t &coll_root,
     Transaction &t,
     coll_t cid,
-    coll_info_t info
-  ) = 0;
+    coll_info_t info) = 0;
 
   virtual ~CollectionManager() {}
 };
 using CollectionManagerRef = std::unique_ptr<CollectionManager>;
 
 namespace collection_manager {
-/* creat CollectionMapManager for Collection  */
+
+/* create CollectionMapManager for Collection  */
 CollectionManagerRef create_coll_manager(
   TransactionManager &trans_manager);
 
