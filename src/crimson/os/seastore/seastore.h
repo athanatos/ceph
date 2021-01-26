@@ -18,6 +18,7 @@
 #include "crimson/os/futurized_store.h"
 #include "crimson/os/seastore/transaction.h"
 #include "crimson/os/seastore/onode_manager.h"
+#include "crimson/os/seastore/collection_manager.h"
 
 namespace crimson::os::seastore {
 
@@ -161,6 +162,8 @@ private:
   }
 
   TransactionManager &transaction_manager;
+
+  std::unique_ptr<CollectionManager> collection_manager;
   std::unique_ptr<OnodeManager> onode_manager;
 
   using tm_ertr = TransactionManager::base_ertr;
