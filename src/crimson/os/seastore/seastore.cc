@@ -461,7 +461,27 @@ SeaStore::tm_ret SeaStore::_create_collection(
   internal_context_t &ctx,
   const coll_t& cid, int bits)
 {
-  return tm_ertr::now();
+  return transaction_manager.read_collection_root(
+    *ctx.transaction
+  ).safe_then([=, &ctx](auto laddr) {
+    return seastar::do_with(
+      coll_root_t(laddr),
+      [=, &ctx](auto &cmroot) {
+	return collection_manager->create(
+	  cmroot,
+	  *ctx.transaction,
+	  cid,
+	  bits
+	).safe_then([=, &ctx, &cmroot](auto) {
+	  // param here denotes whether it already existed, probably error
+	  if (cmroot.must_update_location()) {
+	    transaction_manager.write_collection_root(
+	      *ctx.transaction,
+	      cmroot.get_location());
+	  }
+	});
+      });
+  });
 }
 
 boost::intrusive_ptr<SeastoreCollection> SeaStore::_get_collection(const coll_t& cid)
