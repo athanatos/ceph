@@ -232,7 +232,7 @@ seastar::future<> SeaStore::do_transaction(
       }).safe_then([this, &ctx] {
 	return onode_manager->write_dirty(*ctx.transaction, ctx.onodes);
       }).safe_then([this, &ctx] {
-	return transaction_manager.submit_transaction(std::move(ctx.transaction));
+	return transaction_manager->submit_transaction(std::move(ctx.transaction));
       }).safe_then([&ctx]() {
 	for (auto i : {
 	    ctx.ext_transaction.get_on_applied(),
@@ -461,7 +461,7 @@ SeaStore::tm_ret SeaStore::_create_collection(
   internal_context_t &ctx,
   const coll_t& cid, int bits)
 {
-  return transaction_manager.read_collection_root(
+  return transaction_manager->read_collection_root(
     *ctx.transaction
   ).safe_then([=, &ctx](auto laddr) {
     return seastar::do_with(
@@ -475,7 +475,7 @@ SeaStore::tm_ret SeaStore::_create_collection(
 	).safe_then([=, &ctx, &cmroot](auto) {
 	  // param here denotes whether it already existed, probably error
 	  if (cmroot.must_update_location()) {
-	    transaction_manager.write_collection_root(
+	    transaction_manager->write_collection_root(
 	      *ctx.transaction,
 	      cmroot.get_location());
 	  }
