@@ -36,10 +36,9 @@ public:
     TransactionManagerRef tm,
     CollectionManagerRef cm,
     OnodeManagerRef om
-  ) :
-    transaction_manager(std::move(tm)),
-    collection_manager(std::move(cm)),
-    onode_manager(std::move(om)) {}
+  ) : transaction_manager(std::move(tm)),
+      collection_manager(std::move(cm)),
+      onode_manager(std::move(om)) {}
 
   ~SeaStore();
     
