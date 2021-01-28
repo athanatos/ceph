@@ -15,6 +15,7 @@
 #include "include/uuid.h"
 
 #include "os/Transaction.h"
+#include "crimson/os/futurized_collection.h"
 #include "crimson/os/futurized_store.h"
 #include "crimson/os/seastore/transaction.h"
 #include "crimson/os/seastore/onode_manager.h"
