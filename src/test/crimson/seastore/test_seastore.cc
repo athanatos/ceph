@@ -37,10 +37,9 @@ struct seastore_test_t :
   seastar::future<> set_up_fut() final {
     return tm_setup(
     ).then([this] {
-      coll = seastore->create_new_collection(coll_name).get0();
-      CTransaction t;
-      t.create_collection(coll_name, 16);
-      do_transaction(std::move(t));
+      return seastore->create_new_collection(coll_name);
+    }).then([this](auto coll_ref) {
+      coll = coll_ref;
     });
   }
 
@@ -63,10 +62,25 @@ ghobject_t make_oid(int i) {
       sobject_t(ss.str(), CEPH_NOSNAP)));
 }
 
-TEST_F(seastore_test_t, basic)
+template <typename T, typename V>
+auto contains(const T &t, const V &v) {
+  return std::find(
+    t.begin(),
+    t.end(),
+    v) == t.end();
+}
+
+TEST_F(seastore_test_t, collection_create_list)
 {
   run_async([this] {
     CTransaction t;
-    do_transaction(std::move(t));
+    coll_t test_coll{spg_t{pg_t{1, 0}}};
+    seastore->create_new_collection(test_coll).get0();
+
+    auto collections = seastore->list_collections().get0();
+
+    EXPECT_EQ(collections.size(), 2);
+    EXPECT_TRUE(contains(collections, coll_name));
+    EXPECT_TRUE(contains(collections,  test_coll));
   });
 }

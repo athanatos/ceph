@@ -75,7 +75,14 @@ SeaStore::list_objects(CollectionRef ch,
 seastar::future<CollectionRef> SeaStore::create_new_collection(const coll_t& cid)
 {
   auto c = _get_collection(cid);
-  return seastar::make_ready_future<CollectionRef>(c);
+  return repeat_with_internal_context(
+    c,
+    ceph::os::Transaction{},
+    [this, cid](auto &ctx) {
+      return tm_ertr::now(); 
+    }).then([c] {
+      return CollectionRef(c);
+    });
 }
 
 seastar::future<CollectionRef> SeaStore::open_collection(const coll_t& cid)
@@ -377,17 +384,6 @@ SeaStore::tm_ret SeaStore::_write(
   logger().debug("{}: {} {} ~ {}",
                 __func__, *onode, offset, len);
   assert(len == bl.length());
-
-/*
-  return onode_manager->get_or_create_onode(cid, oid).safe_then([=, &bl](auto ref) {
-    return;
-  }).handle_error(
-    crimson::ct_error::enoent::handle([]() {
-      return;
-    }),
-    OnodeManager::open_ertr::pass_further{}
-  );
-  */
   return tm_ertr::now();
 }
 
