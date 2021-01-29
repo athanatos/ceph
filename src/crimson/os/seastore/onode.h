@@ -14,35 +14,58 @@
 
 namespace crimson::os::seastore {
 
-// in-memory onode, in addition to the stuff that should be persisted to disk,
-// it may contain intrusive hooks for LRU, rw locks etc
+struct onode_layout_t {
+  ceph_le32 size;
+};
+
+inline bool operator==(
+  const onode_layout_t &lhs,
+  const onode_layout_t &rhs) {
+  return lhs.size == rhs.size;
+}
+
+/**
+ * Onode
+ *
+ * Interface manipulated by seastore.  OnodeManager implementations should
+ * return objects derived from this interface with layout referencing
+ * internal representation of onode_layout_t.
+ */
 class Onode : public boost::intrusive_ref_counter<
   Onode,
   boost::thread_unsafe_counter>
 {
+  onode_layout_t *layout = nullptr;
 public:
-  Onode(std::string_view s)
-    : payload{s}
+  Onode(onode_layout_t *layout)
+    : layout(layout)
   {}
-  size_t size() const;
-  const std::string& get() const {
-    return payload;
-  }
-  void encode(void* buffer, size_t len);
-  DENC(Onode, v, p) {
-    DENC_START(1, 1, p);
-    denc(v.payload, p);
-    DENC_FINISH(p);
+
+  size_t get_object_size() const {
+    return layout->size;
   }
 
-private:
-  // dummy payload
-  std::string payload;
+  size_t get_onode_ondisk_size() const {
+    return 0; // TODO
+  }
+
+  template <typename F>
+  void with_mutable(F &&f) {
+    mark_mutable();
+    f(*layout);
+  }
+
+  bool operator==(const Onode &rhs) const {
+    return *layout == *rhs.layout;
+  }
+
+protected:
+
+  /// Prepare underlying representation for mutation
+  virtual void mark_mutable() = 0;
 };
 
-bool operator==(const Onode& lhs, const Onode& rhs);
+
 std::ostream& operator<<(std::ostream &out, const Onode &rhs);
 using OnodeRef = boost::intrusive_ptr<Onode>;
 }
-
-WRITE_CLASS_DENC(crimson::os::seastore::Onode)
