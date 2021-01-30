@@ -12,6 +12,7 @@
 #include "crimson/os/seastore/seastore.h"
 #include "crimson/os/seastore/segment_manager.h"
 #include "crimson/os/seastore/collection_manager/flat_collection_manager.h"
+#include "crimson/os/seastore/onode_manager/staged-fltree/fltree_onode_manager.h"
 
 using namespace crimson;
 using namespace crimson::os;
