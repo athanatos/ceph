@@ -12,6 +12,8 @@
 #include "include/buffer.h"
 #include "include/denc.h"
 
+#include "crimson/os/seastore/transaction.h"
+
 namespace crimson::os::seastore {
 
 struct onode_layout_t {
@@ -37,13 +39,8 @@ class Onode : public boost::intrusive_ref_counter<
 {
 public:
 
-  virtual onode_layout_t &get_layout() const = 0;
-
-#if 0
-protected:
-  /// Prepare underlying representation for mutation
-  virtual void mark_mutable() = 0;
-#endif
+  virtual const onode_layout_t &get_layout() const = 0;
+  virtual onode_layout_t &get_mutable_layout(Transaction &t) = 0;
 };
 
 

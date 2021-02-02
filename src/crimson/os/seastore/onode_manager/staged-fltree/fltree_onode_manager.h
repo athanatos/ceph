@@ -14,16 +14,10 @@ struct FLTreeOnode : Onode, Value {
   static constexpr value_magic_t HEADER_MAGIC = value_magic_t::ONODE;
 
   enum class status_t {
-    NEW,
     STABLE,
     MUTATED,
     DELETED
   } status;
-
-  // TODO: can be a union
-  using cursor_t = Btree<FLTreeOnode>::Cursor;
-  std::optional<cursor_t> cursor;
-  std::optional<onode_layout_t> mutated;
 
   FLTreeOnode(FLTreeOnode&&) = default;
   FLTreeOnode& operator=(FLTreeOnode&&) = delete;
@@ -49,14 +43,25 @@ struct FLTreeOnode : Onode, Value {
     }
   };
 
-  onode_layout_t &get_layout() const final {
-    return *(static_cast<onode_layout_t*>(nullptr));
+  const onode_layout_t &get_layout() const final {
+    return *read_payload<onode_layout_t>();
   }
-#if 0
-  void mark_mutable() final {
-    // TODO
+
+  onode_layout_t &get_mutable_layout(Transaction &t) final {
+    auto p = prepare_mutate_payload<
+      onode_layout_t,
+      Recorder>(t);
+    status = status_t::MUTATED;
+    return *reinterpret_cast<onode_layout_t*>(p.first.get_write());
+  };
+
+  void populate_recorder(Transaction &t) {
+    auto p = prepare_mutate_payload<
+      onode_layout_t,
+      Recorder>(t);
+    status = status_t::STABLE;
+    // TODO: fill in recorder
   }
-#endif
 };
 
 using OnodeTree = Btree<FLTreeOnode>;
@@ -73,12 +78,18 @@ public:
   get_or_create_onode_ret get_or_create_onode(
     Transaction &trans,
     const ghobject_t &hoid) final {
-    return tree.find(trans, hoid
-    ).safe_then([this, &trans, &hoid](auto cursor)
+    return tree.insert(
+      trans, hoid,
+      OnodeTree::tree_value_config_t{sizeof(onode_layout_t)}
+    ).safe_then([this, &trans, &hoid](auto p)
 		-> get_or_create_onode_ret {
-      
+      auto [cursor, created] = std::move(p);
+      auto val = OnodeRef(new FLTreeOnode(cursor.value()));
+      if (created) {
+	val->get_mutable_layout(trans) = onode_layout_t{};
+      }
       return seastar::make_ready_future<OnodeRef>(
-	OnodeRef(new FLTreeOnode(cursor.value()))
+	val
       );
     }).handle_error(
       get_or_create_onode_ertr::pass_further{},
@@ -90,13 +101,50 @@ public:
   get_or_create_onodes_ret get_or_create_onodes(
     Transaction &trans,
     const std::vector<ghobject_t> &hoids) final {
-    return seastar::make_ready_future<std::vector<OnodeRef>>();
+    return seastar::do_with(
+      std::vector<OnodeRef>(),
+      [this, &hoids, &trans](auto &ret) {
+	ret.reserve(hoids.size());
+	return crimson::do_for_each(
+	  hoids,
+	  [this, &trans, &ret](auto &hoid) {
+	    return get_or_create_onode(trans, hoid
+	    ).safe_then([this, &ret](auto &&onoderef) {
+	      ret.push_back(std::move(onoderef));
+	    });
+	  }).safe_then([&ret] {
+	    return std::move(ret);
+	  });
+      });
   }
 
   write_dirty_ret write_dirty(
     Transaction &trans,
     const std::vector<OnodeRef> &onodes) final {
-    return seastar::now();
+    return crimson::do_for_each(
+      onodes,
+      [this, &trans](auto &onode) -> OnodeTree::btree_future<> {
+	auto &flonode = static_cast<FLTreeOnode&>(*onode);
+	switch (flonode.status) {
+	case FLTreeOnode::status_t::MUTATED: {
+	  flonode.populate_recorder(trans);
+	  return seastar::now();
+	}
+	case FLTreeOnode::status_t::DELETED: {
+	  return tree.erase(trans, flonode).safe_then([](auto) {});
+	}
+	case FLTreeOnode::status_t::STABLE: {
+	  return seastar::now();
+	}
+	default:
+	  __builtin_unreachable();
+	}
+      }).handle_error(
+	write_dirty_ertr::pass_further{},
+	crimson::ct_error::assert_all{
+	  "Invalid error in FLTreeOnodeManager::get_or_create_onode"
+	}
+      );
   }
 
   ~FLTreeOnodeManager();
