@@ -10,7 +10,7 @@ std::ostream& operator<<(std::ostream &out, const Onode &rhs)
 {
   auto &layout = rhs.get_layout();
   return out << "Onode("
-	     << "size=" << layout.size
+	     << "size=" << static_cast<uint32_t>(layout.size)
 	     << ")";
 }
 
