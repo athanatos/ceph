@@ -108,7 +108,7 @@ auto get_seastore(
   return std::make_unique<SeaStore>(
     std::move(tm),
     std::move(cm),
-    std::unique_ptr<OnodeManager>());
+    std::make_unique<crimson::os::seastore::onode::FLTreeOnodeManager>(*tm));
 }
 
 
