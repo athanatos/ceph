@@ -16,7 +16,7 @@ namespace crimson::os::seastore {
 
 struct onode_layout_t {
   ceph_le32 size;
-};
+} __attribute__((packed));
 
 inline bool operator==(
   const onode_layout_t &lhs,
@@ -35,34 +35,15 @@ class Onode : public boost::intrusive_ref_counter<
   Onode,
   boost::thread_unsafe_counter>
 {
-  onode_layout_t *layout = nullptr;
 public:
-  Onode(onode_layout_t *layout)
-    : layout(layout)
-  {}
 
-  size_t get_object_size() const {
-    return layout->size;
-  }
+  virtual onode_layout_t &get_layout() const = 0;
 
-  size_t get_onode_ondisk_size() const {
-    return 0; // TODO
-  }
-
-  template <typename F>
-  void with_mutable(F &&f) {
-    mark_mutable();
-    f(*layout);
-  }
-
-  bool operator==(const Onode &rhs) const {
-    return *layout == *rhs.layout;
-  }
-
+#if 0
 protected:
-
   /// Prepare underlying representation for mutation
   virtual void mark_mutable() = 0;
+#endif
 };
 
 
