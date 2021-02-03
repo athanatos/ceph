@@ -73,7 +73,16 @@ public:
   FLTreeOnodeManager(TransactionManager &tm) :
     tree(std::make_unique<SeastoreNodeExtentManager>(
 	   tm, laddr_t{})) {}
-    
+
+  mkfs_ret mkfs(Transaction &t) {
+    return tree.mkfs(t
+    ).handle_error(
+      mkfs_ertr::pass_further{},
+      crimson::ct_error::assert_all{
+	"Invalid error in FLTreeOnodeManager::mkfs"
+      }
+    );
+  }
   
   get_or_create_onode_ret get_or_create_onode(
     Transaction &trans,
@@ -98,6 +107,7 @@ public:
       }
     );
   }
+
   get_or_create_onodes_ret get_or_create_onodes(
     Transaction &trans,
     const std::vector<ghobject_t> &hoids) final {
