@@ -52,7 +52,22 @@ seastar::future<> SeaStore::umount()
 
 seastar::future<> SeaStore::mkfs(uuid_d new_osd_fsid)
 {
-  return seastar::now();
+  return transaction_manager->mkfs(
+  ).safe_then([this] {
+    return seastar::do_with(
+      make_transaction(),
+      [this](auto &t) {
+	return onode_manager->mkfs(*t
+	).safe_then([this, &t] {
+	  return transaction_manager->submit_transaction(
+	    std::move(t));
+	});
+      });
+  }).handle_error(
+    crimson::ct_error::assert_all{
+      "Invalid error in SeaStore::mkfs"
+    }
+  );
 }
 
 seastar::future<store_statfs_t> SeaStore::stat() const
@@ -79,7 +94,10 @@ seastar::future<CollectionRef> SeaStore::create_new_collection(const coll_t& cid
     c,
     ceph::os::Transaction{},
     [this, cid](auto &ctx) {
-      return tm_ertr::now(); 
+      return _create_collection(
+	ctx,
+	cid,
+	4 /* TODO */);
     }).then([c] {
       return CollectionRef(c);
     });

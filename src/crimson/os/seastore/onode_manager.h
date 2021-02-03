@@ -23,6 +23,10 @@ namespace crimson::os::seastore {
 class OnodeManager {
   using base_ertr = TransactionManager::base_ertr;
 public:
+  using mkfs_ertr = TransactionManager::mkfs_ertr;
+  using mkfs_ret = mkfs_ertr::future<>;
+  virtual mkfs_ret mkfs(Transaction &t) = 0;
+  
   using get_or_create_onode_ertr = base_ertr;
   using get_or_create_onode_ret = get_or_create_onode_ertr::future<
     OnodeRef>;
