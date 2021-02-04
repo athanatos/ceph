@@ -3,6 +3,8 @@
 
 #include "seastore.h"
 
+#include <algorithm>
+
 #include <boost/algorithm/string/trim.hpp>
 #include <fmt/format.h>
 #include <fmt/ostream.h>
@@ -37,12 +39,23 @@ struct SeastoreCollection final : public FuturizedCollection {
 
 seastar::future<> SeaStore::stop()
 {
-  return seastar::now();
+  return transaction_manager->close(
+  ).handle_error(
+    crimson::ct_error::assert_all{
+      "Invalid error in SeaStore::stop"
+    }
+  );
+      
 }
 
 seastar::future<> SeaStore::mount()
 {
-  return seastar::now();
+  return transaction_manager->mount(
+  ).handle_error(
+    crimson::ct_error::assert_all{
+      "Invalid error in SeaStore::mount"
+    }
+  );
 }
 
 seastar::future<> SeaStore::umount()
@@ -59,6 +72,11 @@ seastar::future<> SeaStore::mkfs(uuid_d new_osd_fsid)
       [this](auto &t) {
 	return onode_manager->mkfs(*t
 	).safe_then([this, &t] {
+	  return collection_manager->mkfs(*t, 16384);
+	}).safe_then([this, &t](auto coll_root) {
+	  transaction_manager->write_collection_root(
+	    *t,
+	    coll_root.get_location());
 	  return transaction_manager->submit_transaction(
 	    std::move(t));
 	});
@@ -110,7 +128,34 @@ seastar::future<CollectionRef> SeaStore::open_collection(const coll_t& cid)
 
 seastar::future<std::vector<coll_t>> SeaStore::list_collections()
 {
-  return seastar::make_ready_future<std::vector<coll_t>>();
+  return seastar::do_with(
+    std::vector<coll_t>(),
+    [this](auto &ret) {
+      return repeat_eagain([this, &ret] {
+
+	return seastar::do_with(
+	  make_transaction(),
+	  [this, &ret](auto &t) {
+	    return transaction_manager->read_collection_root(*t
+	    ).safe_then([this, &ret, &t](auto laddr) {
+	      return collection_manager->list(
+		coll_root_t(laddr),
+		*t);
+	    }).safe_then([this, &ret, &t](auto colls) {
+	      ret.resize(colls.size());
+	      std::transform(
+		colls.begin(), colls.end(), ret.begin(),
+		[](auto p) { return p.first; });
+	    });
+	  });
+      }).safe_then([&ret] {
+	return seastar::make_ready_future<std::vector<coll_t>>(ret);
+      });
+    }).handle_error(
+      crimson::ct_error::assert_all{
+	"Invalid error in SeaStore::list_collections"
+      }
+    );
 }
 
 SeaStore::read_errorator::future<ceph::bufferlist> SeaStore::read(
