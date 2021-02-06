@@ -67,10 +67,10 @@ auto contains(const T &t, const V &v) {
   return std::find(
     t.begin(),
     t.end(),
-    v) == t.end();
+    v) != t.end();
 }
 
-TEST_F(seastore_test_t, collection_create_list)
+TEST_F(seastore_test_t, collection_create_list_remove)
 {
   run_async([this] {
     CTransaction t;
@@ -80,6 +80,7 @@ TEST_F(seastore_test_t, collection_create_list)
     auto collections = seastore->list_collections().get0();
 
     EXPECT_EQ(collections.size(), 2);
+
     EXPECT_TRUE(contains(collections, coll_name));
     EXPECT_TRUE(contains(collections,  test_coll));
   });

@@ -115,11 +115,15 @@ seastar::future<CollectionRef> SeaStore::create_new_collection(const coll_t& cid
       return _create_collection(
 	ctx,
 	cid,
-	4 /* TODO */);
+	4 /* TODO */
+      ).safe_then([this, &ctx] {
+	return transaction_manager->submit_transaction(std::move(ctx.transaction));
+      });
     }).then([c] {
       return CollectionRef(c);
     });
 }
+
 
 seastar::future<CollectionRef> SeaStore::open_collection(const coll_t& cid)
 {
@@ -531,7 +535,7 @@ SeaStore::tm_ret SeaStore::_create_collection(
 	  *ctx.transaction,
 	  cid,
 	  bits
-	).safe_then([=, &ctx, &cmroot](auto) {
+	).safe_then([=, &ctx, &cmroot] {
 	  // param here denotes whether it already existed, probably error
 	  if (cmroot.must_update_location()) {
 	    transaction_manager->write_collection_root(
