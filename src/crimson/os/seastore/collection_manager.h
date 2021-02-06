@@ -77,7 +77,7 @@ public:
 
   /// Create collection
   using create_ertr = base_ertr;
-  using create_ret = create_ertr::future<bool>;
+  using create_ret = create_ertr::future<>;
   virtual create_ret create(
     coll_root_t &root,
     Transaction &t,
@@ -94,7 +94,7 @@ public:
 
   /// Remove cid
   using remove_ertr = base_ertr;
-  using remove_ret = remove_ertr::future<bool>;
+  using remove_ret = remove_ertr::future<>;
   virtual remove_ret remove(
     const coll_root_t &coll_root,
     Transaction &t,
@@ -102,7 +102,7 @@ public:
 
   /// Update info for cid
   using update_ertr = base_ertr;
-  using update_ret = base_ertr::future<bool>;
+  using update_ret = base_ertr::future<>;
   virtual update_ret update(
     coll_root_t &coll_root,
     Transaction &t,

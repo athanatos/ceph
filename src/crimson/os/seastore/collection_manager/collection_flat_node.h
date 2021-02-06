@@ -6,31 +6,112 @@
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/transaction_manager.h"
 #include "crimson/os/seastore/collection_manager.h"
-#include "crimson/os/seastore/collection_manager/flat_node_layout.h"
 
-namespace crimson::os::seastore::collection_manager{
+namespace crimson::os::seastore::collection_manager {
 struct coll_context_t {
   TransactionManager &tm;
   Transaction &t;
 };
 
+using base_coll_map_t = std::map<denc_coll_t, uint32_t>;
+struct coll_map_t : base_coll_map_t {
+  void insert(coll_t coll, unsigned bits) {
+    auto [iter, inserted] = emplace(
+      std::make_pair(denc_coll_t{coll}, bits)
+    );
+    assert(inserted);
+  }
+  
+  void update(coll_t coll, unsigned bits) {
+    (*this)[denc_coll_t{coll}] = bits;
+  }
+
+  void remove(coll_t coll) {
+    erase(denc_coll_t{coll});
+  }
+};
+
+struct delta_t {
+  enum class op_t : uint_fast8_t {
+    INSERT,
+    UPDATE,
+    REMOVE,
+    INVALID
+  } op = op_t::INVALID;
+
+  denc_coll_t coll;
+  uint32_t bits = 0;
+
+  delta_t() = default;
+
+  DENC(delta_t, v, p) {
+    DENC_START(1, 1, p);
+    denc(v.op, p);
+    denc(v.coll, p);
+    denc(v.bits, p);
+    DENC_FINISH(p);
+  }
+
+  void replay(coll_map_t &l) const;
+};
+}
+WRITE_CLASS_DENC(crimson::os::seastore::collection_manager::delta_t)
+
+
+namespace crimson::os::seastore::collection_manager {
+class delta_buffer_t {
+  std::vector<delta_t> buffer;
+public:
+  bool empty() const {
+    return buffer.empty();
+  }
+
+  void insert(coll_t coll, uint32_t bits) {
+    buffer.push_back(delta_t{delta_t::op_t::INSERT, denc_coll_t(coll), bits});
+  }
+  void update(coll_t coll, uint32_t bits) {
+    buffer.push_back(delta_t{delta_t::op_t::UPDATE, denc_coll_t(coll), bits});
+  }
+  void remove(coll_t coll) {
+    buffer.push_back(delta_t{delta_t::op_t::REMOVE, denc_coll_t(coll), 0});
+  }
+  void replay(coll_map_t &l) {
+    for (auto &i: buffer) {
+      i.replay(l);
+    }
+  }
+
+  void clear() { buffer.clear(); }
+
+  DENC(delta_buffer_t, v, p) {
+    DENC_START(1, 1, p);
+    denc(v.buffer, p);
+    DENC_FINISH(p);
+  }
+};
+}
+WRITE_CLASS_DENC(crimson::os::seastore::collection_manager::delta_buffer_t)
+
+namespace crimson::os::seastore::collection_manager {
 struct CollectionNode
-  : LogicalCachedExtent,
-    FlatNodeLayout {
+: LogicalCachedExtent {
   using CollectionNodeRef = TCachedExtentRef<CollectionNode>;
 
   template <typename... T>
   CollectionNode(T&&... t)
-  : LogicalCachedExtent(std::forward<T>(t)...),
-    FlatNodeLayout() {}
+    : LogicalCachedExtent(std::forward<T>(t)...) {
+    read_to_local();
+  }
 
   static constexpr extent_types_t type = extent_types_t::COLL_BLOCK;
+
+  coll_map_t decoded;
+  delta_buffer_t delta_buffer;
 
   CachedExtentRef duplicate_for_write() final {
     assert(delta_buffer.empty());
     return CachedExtentRef(new CollectionNode(*this));
   }
-  delta_buffer_t delta_buffer;
   delta_buffer_t *maybe_get_delta_buffer() {
     return is_mutation_pending() ? &delta_buffer : nullptr;
   }
@@ -41,53 +122,37 @@ struct CollectionNode
 
   using create_ertr = CollectionManager::create_ertr;
   using create_ret = CollectionManager::create_ret;
-  create_ret create(coll_context_t cc, std::string key, unsigned bits);
+  create_ret create(coll_context_t cc, coll_t coll, unsigned bits);
 
   using remove_ertr = CollectionManager::remove_ertr;
   using remove_ret = CollectionManager::remove_ret;
-  remove_ret remove(coll_context_t cc, std::string key);
+  remove_ret remove(coll_context_t cc, coll_t coll);
 
   using update_ertr = CollectionManager::update_ertr;
   using update_ret = CollectionManager::update_ret;
-  update_ret update(coll_context_t cc, std::string key, unsigned bits);
+  update_ret update(coll_context_t cc, coll_t coll, unsigned bits);
 
   void read_to_local() {
-    ceph::buffer::ptr bptr(get_length());
-    memcpy(bptr.c_str(), get_bptr().c_str(), get_length());
-    ceph::bufferlist bl;
-    bl.push_back(bptr);
-    auto p = bl.cbegin();
-    unsigned num;
-    ceph::decode(num, p);
-    coll_kv.resize(num);
-    for (auto &&i : coll_kv) {
-      ceph::decode(i.key, p);
-      ceph::decode(i.val, p);
-    }
-
+    bufferlist bl;
+    bl.append(get_bptr());
+    auto iter = bl.cbegin();
+    decode((base_coll_map_t&)decoded, iter);
   }
 
   void copy_to_node() {
     bufferlist bl;
-    unsigned num = coll_kv.size();
-    ceph::encode(num, bl);
-    for (auto &&i : coll_kv) {
-      ceph::encode(i.key, bl);
-      ceph::encode(i.val, bl);
-    }
-    bl.rebuild();
-    memset(get_bptr().c_str(),0, get_length());
-    memcpy(get_bptr().c_str(), bl.front().c_str(), bl.front().length());
-  }
-
-  void copy_from_other(CollectionNodeRef other) {
-    memcpy(get_bptr().c_str(), other->get_bptr().c_str(), other->get_length());
+    encode((base_coll_map_t&)decoded, bl);
+    auto iter = bl.begin();
+    auto size = encoded_sizeof((base_coll_map_t&)decoded);
+    assert(size <= get_bptr().length());
+    iter.copy(size, get_bptr().c_str());
   }
 
   ceph::bufferlist get_delta() final {
     assert(!delta_buffer.empty());
     ceph::bufferlist bl;
     encode(delta_buffer, bl);
+    delta_buffer.clear();
     return bl;
   }
 
@@ -96,8 +161,7 @@ struct CollectionNode
     delta_buffer_t buffer;
     auto bptr = bl.begin();
     decode(buffer, bptr);
-    read_to_local();
-    buffer.replay(*this);
+    buffer.replay(decoded);
     copy_to_node();
   }
 

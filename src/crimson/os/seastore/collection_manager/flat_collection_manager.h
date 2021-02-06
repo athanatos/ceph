@@ -24,11 +24,6 @@ class FlatCollectionManager : public CollectionManager {
   using get_root_ret = get_root_ertr::future<CollectionNodeRef>;
   get_root_ret get_coll_root(const coll_root_t &coll_root, Transaction &t);
 
-  using handle_overflow_ertr = CollectionManager::base_ertr;
-  using handle_overflow_ret = handle_overflow_ertr::future<CollectionNodeRef>;
-  handle_overflow_ret handle_overflow(coll_root_t &coll_root, Transaction &t,
-                                      CollectionNodeRef extent);
-
 public:
   explicit FlatCollectionManager(TransactionManager &tm);
 

@@ -63,69 +63,30 @@ FlatCollectionManager::create(coll_root_t &coll_root, Transaction &t,
                               coll_t cid, coll_info_t info)
 {
   logger().debug("FlatCollectionManager: {}", __func__);
-  return get_coll_root(coll_root, t)
-    .safe_then([this, &coll_root, &t, cid, info] (auto &&extent) {
-    std::string key = stringify(cid);
-    if (extent->is_overflow(key, info.split_bits, coll_block_size)) {
-      return handle_overflow(coll_root, t, extent)
-        .safe_then([this, &t, cid, info](auto &&extent) {
-        return extent->create(get_coll_context(t), stringify(cid), info.split_bits);
-      });
-    } else {
-      return extent->create(get_coll_context(t), stringify(cid), info.split_bits);
-    }
+  return get_coll_root(coll_root, t
+  ).safe_then([this, &coll_root, &t, cid, info] (auto &&extent) {
+    return extent->create(get_coll_context(t), cid, info.split_bits);
   });
-
 }
+
 FlatCollectionManager::list_ret
 FlatCollectionManager::list(const coll_root_t &coll_root, Transaction &t)
 {
   logger().debug("FlatCollectionManager: {}", __func__);
-  return get_coll_root(coll_root, t).safe_then([this, &t] (auto extent) {
+  return get_coll_root(coll_root, t
+  ).safe_then([this, &t] (auto extent) {
     return extent->list();
   });
 }
-FlatCollectionManager::handle_overflow_ret
-FlatCollectionManager::handle_overflow(coll_root_t &coll_root, Transaction &t,
-                                       CollectionNodeRef extent)
-{
-  logger().debug("FlatCollectionManager: {}", __func__);
-  return tm.alloc_extent<CollectionNode>(t, L_ADDR_MIN, coll_block_size + COLL_INIT_BLOCK)
-    .safe_then([this, &coll_root, &t, extent] (auto &&root_extent) {
-    root_extent->copy_from_other(extent);
-    coll_root.set_location(root_extent->get_laddr());
-    coll_root.set_status(coll_root_t::state_t::MUTATED);
-    coll_block_size += COLL_INIT_BLOCK;
-    return tm.dec_ref(t, extent->get_laddr())
-      .safe_then([root_extent = std::move(root_extent)] (auto ret) {
-      return handle_overflow_ret(
-        handle_overflow_ertr::ready_future_marker{},
-        std::move(root_extent));
-    });
-  }).handle_error(
-    handle_overflow_ertr::pass_further{},
-    crimson::ct_error::assert_all{
-      "Invalid error in FlatCollectionManager::handle_overflow"
-  });
-}
-
 
 FlatCollectionManager::update_ret
 FlatCollectionManager::update(coll_root_t &coll_root, Transaction &t,
                               coll_t cid, coll_info_t info)
 {
   logger().debug("FlatCollectionManager: {}", __func__);
-  return get_coll_root(coll_root, t)
-    .safe_then([this, &coll_root, &t, cid, info] (auto extent) {
-    std::string key = stringify(cid);
-    if (extent->is_overflow(key, info.split_bits, coll_block_size)) {
-      return handle_overflow(coll_root, t, extent)
-        .safe_then([this, &t, cid, info](auto &&extent) {
-        return extent->update(get_coll_context(t), stringify(cid), info.split_bits);
-      });
-    } else {
-      return extent->update(get_coll_context(t), stringify(cid), info.split_bits);
-    }
+  return get_coll_root(coll_root, t
+  ).safe_then([this, &coll_root, &t, cid, info] (auto extent) {
+    return extent->update(get_coll_context(t), cid, info.split_bits);
   });
 }
 
@@ -135,7 +96,7 @@ FlatCollectionManager::remove(const coll_root_t &coll_root, Transaction &t,
 {
   logger().debug("FlatCollectionManager: {}", __func__);
   return get_coll_root(coll_root, t).safe_then([this, &t, cid] (auto extent) {
-    return extent->remove(get_coll_context(t), stringify(cid));
+    return extent->remove(get_coll_context(t), cid);
   });
 }
 
