@@ -46,6 +46,7 @@ std::ostream &CollectionNode::print_detail_l(std::ostream &out) const
 CollectionNode::list_ret
 CollectionNode::list()
 {
+  read_to_local();
   logger().debug("CollectionNode:{}, {}", __func__, *this);
   std::vector<std::pair<coll_t, coll_info_t>> list_result;
   for (auto &&it : decoded) {
@@ -63,38 +64,40 @@ CollectionNode::list()
 CollectionNode::create_ret
 CollectionNode::create(coll_context_t cc, coll_t coll, unsigned bits)
 {
+  read_to_local();
   logger().debug("CollectionNode:{}", __func__);
   if (!is_pending()) {
     auto mut = cc.tm.get_mutable_extent(cc.t, this)->cast<CollectionNode>();
     return mut->create(cc, coll, bits);
   }
-  // TODO check for existence
-  if (auto buffer = maybe_get_delta_buffer(); buffer) {
-    buffer->insert(coll, bits);
-  }
   logger().debug("CollectionNode::create {} {} {}", coll, bits, *this);
-  decoded.insert(coll, bits);
+  auto [iter, inserted] = decoded.insert(coll, bits);
+  assert(inserted);
   if (encoded_sizeof((base_coll_map_t&)decoded) > get_bptr().length()) {
+    decoded.erase(iter);
     return create_ret( 
       create_ertr::ready_future_marker{},
-      node_status_t::OVERFLOW);
+      create_result_t::OVERFLOW);
   } else {
+    if (auto buffer = maybe_get_delta_buffer(); buffer) {
+      buffer->insert(coll, bits);
+    }
     copy_to_node();
     return create_ret(
       create_ertr::ready_future_marker{},
-      node_status_t::HEALTH);
+      create_result_t::SUCCESS);
   }
 }
 
 CollectionNode::update_ret
 CollectionNode::update(coll_context_t cc, coll_t coll, unsigned bits)
 {
+  read_to_local();
   logger().debug("CollectionNode:{}", __func__);
   if (!is_pending()) {
     auto mut = cc.tm.get_mutable_extent(cc.t, this)->cast<CollectionNode>();
     return mut->update(cc, coll, bits);
   }
-  // TODO check for existence
   if (auto buffer = maybe_get_delta_buffer(); buffer) {
     buffer->update(coll, bits);
   }
@@ -106,12 +109,12 @@ CollectionNode::update(coll_context_t cc, coll_t coll, unsigned bits)
 CollectionNode::remove_ret
 CollectionNode::remove(coll_context_t cc, coll_t coll)
 {
+  read_to_local();
   logger().debug("CollectionNode:{}", __func__);
   if (!is_pending()) {
     auto mut = cc.tm.get_mutable_extent(cc.t, this)->cast<CollectionNode>();
     return mut->remove(cc, coll);
   }
-  // TODO check for existence
   if (auto buffer = maybe_get_delta_buffer(); buffer) {
     buffer->remove(coll);
   }

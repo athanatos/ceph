@@ -27,11 +27,13 @@ FlatCollectionManager::mkfs(Transaction &t, unsigned block_size)
 {
 
   logger().debug("FlatCollectionManager: {}", __func__);
-  return tm.alloc_extent<CollectionNode>(t, L_ADDR_MIN, block_size)
-    .safe_then([this, block_size](auto&& root_extent) {
-      coll_root_t coll_root = coll_root_t(root_extent->get_laddr());
-      coll_block_size = block_size;
-      return mkfs_ertr::make_ready_future<coll_root_t>(coll_root);
+  return tm.alloc_extent<CollectionNode>(t, L_ADDR_MIN, block_size
+  ).safe_then([this, block_size](auto&& root_extent) {
+    coll_root_t coll_root = coll_root_t(
+      root_extent->get_laddr(),
+      block_size
+    );
+    return mkfs_ertr::make_ready_future<coll_root_t>(coll_root);
   });
 }
 
@@ -40,13 +42,15 @@ FlatCollectionManager::get_coll_root(const coll_root_t &coll_root, Transaction &
 {
   logger().debug("FlatCollectionManager: {}", __func__);
   assert(coll_root.get_location() != L_ADDR_NULL);
-  laddr_t laddr = coll_root.get_location();
   auto cc = get_coll_context(t);
-  return cc.tm.read_extents<CollectionNode>(cc.t, laddr, coll_block_size).safe_then(
-    [](auto&& extents) {
-      assert(extents.size() == 1);
-      [[maybe_unused]] auto [laddr, e] = extents.front();
-      return get_root_ertr::make_ready_future<CollectionNodeRef>(std::move(e));
+  return cc.tm.read_extents<CollectionNode>(
+    cc.t,
+    coll_root.get_location(),
+    coll_root.get_size()
+  ).safe_then([](auto&& extents) {
+    assert(extents.size() == 1);
+    [[maybe_unused]] auto [laddr, e] = extents.front();
+    return get_root_ertr::make_ready_future<CollectionNodeRef>(std::move(e));
   });
 }
 
@@ -55,28 +59,37 @@ FlatCollectionManager::create(coll_root_t &coll_root, Transaction &t,
                               coll_t cid, coll_info_t info)
 {
   logger().debug("FlatCollectionManager: {}", __func__);
-  return get_coll_root(coll_root, t)
-    .safe_then([this, &coll_root, &t, cid, info] (auto &&extent) {
-    return extent->create(get_coll_context(t), cid, info.split_bits)
-      .safe_then([this, &coll_root, &t, extent = std::move(extent)] (auto ret) {
-      if (ret == node_status_t::OVERFLOW) {
+  return get_coll_root(coll_root, t
+  ).safe_then([=, &coll_root, &t] (auto &&extent) {
+    return extent->create(
+      get_coll_context(t), cid, info.split_bits
+    ).safe_then([=, &coll_root, &t] (auto ret) {
+      switch (ret) {
+      case CollectionNode::create_result_t::OVERFLOW: {
         logger().debug("FlatCollectionManager: {} overflow!", __func__);
-        return tm.alloc_extent<CollectionNode>(t, L_ADDR_MIN, coll_block_size + COLL_INIT_BLOCK)
-          .safe_then([this, &coll_root, &t, extent] (auto &&root_extent) {
-          coll_root.set_location(root_extent->get_laddr());
-          coll_root.set_status(coll_root_t::state_t::MUTATED);
-          coll_block_size += COLL_INIT_BLOCK;
-          static_cast<base_coll_map_t>(root_extent->decoded).insert(extent->decoded.begin(),
-                                                        extent->decoded.end());
-          root_extent->copy_to_node();
-          return tm.dec_ref(t, extent->get_laddr())
-            .safe_then([] (auto ret) {
+	auto new_size = coll_root.get_size() * 2; // double each time
+        return tm.alloc_extent<CollectionNode>(
+	  t, L_ADDR_MIN, new_size
+	).safe_then([=, &coll_root, &t] (auto &&root_extent) {
+          coll_root.update(root_extent->get_laddr(), root_extent->get_length());
+
+	  root_extent->decoded = extent->decoded;
+	  root_extent->loaded = true;
+	  return root_extent->create(
+	    get_coll_context(t), cid, info.split_bits
+	  ).safe_then([=, &t](auto result) {
+	    assert(result == CollectionNode::create_result_t::SUCCESS);
+	    return tm.dec_ref(t, extent->get_laddr());
+	  }).safe_then([] (auto) {
             return create_ertr::make_ready_future<>();
           });
         });
-      } else {
+      }
+      case CollectionNode::create_result_t::SUCCESS: {
         return create_ertr::make_ready_future<>();
       }
+      }
+      __builtin_unreachable();
     });
   });
 

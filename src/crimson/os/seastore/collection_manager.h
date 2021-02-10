@@ -22,6 +22,7 @@ namespace crimson::os::seastore {
   */
   class coll_root_t {
     laddr_t coll_root_laddr;
+    segment_off_t size = 0;
 
     enum state_t : uint8_t {
       CLEAN = 0,   /// No pending mutations
@@ -30,24 +31,26 @@ namespace crimson::os::seastore {
     } state = NONE;
 
   public:
-    coll_root_t(laddr_t laddr)
-    : coll_root_laddr(laddr) {}
+    coll_root_t() : state(state_t::NONE) {}
 
-    bool must_update_location() const {
+    coll_root_t(laddr_t laddr, size_t size)
+      : coll_root_laddr(laddr), size(size), state(state_t::CLEAN) {}
+
+    bool must_update() const {
       return state == MUTATED;
+    }
+
+    void update(laddr_t addr, segment_off_t s) {
+      state = state_t::MUTATED;
+      coll_root_laddr = addr;
+      size = s;
     }
 
     laddr_t get_location() const {
       return coll_root_laddr;
     }
-    void set_location(laddr_t laddr) {
-      coll_root_laddr = laddr;
-    }
-    state_t get_status() const{
-      return state;
-    }
-    void set_status(state_t s) {
-      state = s;
+    auto get_size() const {
+      return size;
     }
   };
 
@@ -56,6 +59,10 @@ namespace crimson::os::seastore {
 
     coll_info_t(unsigned bits)
     : split_bits(bits) {}
+
+    bool operator==(const coll_info_t &rhs) const {
+      return split_bits == rhs.split_bits;
+    }
   };
 
 /// Interface for maintaining set of collections

@@ -12,18 +12,13 @@ struct coll_context_t {
   TransactionManager &tm;
   Transaction &t;
 };
-enum class node_status_t : uint8_t {
-  HEALTH = 0,
-  OVERFLOW = 1
-};
 
 using base_coll_map_t = std::map<denc_coll_t, uint32_t>;
 struct coll_map_t : base_coll_map_t {
-  void insert(coll_t coll, unsigned bits) {
-    auto [iter, inserted] = emplace(
+  auto insert(coll_t coll, unsigned bits) {
+    return emplace(
       std::make_pair(denc_coll_t{coll}, bits)
     );
-    assert(inserted);
   }
 
   void update(coll_t coll, unsigned bits) {
@@ -101,11 +96,11 @@ struct CollectionNode
   : LogicalCachedExtent {
   using CollectionNodeRef = TCachedExtentRef<CollectionNode>;
 
+  bool loaded = false;
+
   template <typename... T>
   CollectionNode(T&&... t)
-  : LogicalCachedExtent(std::forward<T>(t)...) {
-     read_to_local();
-  }
+    : LogicalCachedExtent(std::forward<T>(t)...) {}
 
   static constexpr extent_types_t type = extent_types_t::COLL_BLOCK;
 
@@ -124,8 +119,13 @@ struct CollectionNode
   using list_ret = CollectionManager::list_ret;
   list_ret list();
 
+
+  enum class create_result_t : uint8_t {
+    SUCCESS,
+    OVERFLOW
+  };
   using create_ertr = CollectionManager::create_ertr;
-  using create_ret = create_ertr::future<node_status_t>;
+  using create_ret = create_ertr::future<create_result_t>;
   create_ret create(coll_context_t cc, coll_t coll, unsigned bits);
 
   using remove_ertr = CollectionManager::remove_ertr;
@@ -137,10 +137,12 @@ struct CollectionNode
   update_ret update(coll_context_t cc, coll_t coll, unsigned bits);
 
   void read_to_local() {
+    if (loaded) return;
     bufferlist bl;
     bl.append(get_bptr());
     auto iter = bl.cbegin();
     decode((base_coll_map_t&)decoded, iter);
+    loaded = true;
   }
 
   void copy_to_node() {

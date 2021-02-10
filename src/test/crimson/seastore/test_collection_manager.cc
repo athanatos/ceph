@@ -1,5 +1,6 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
+
 #include "os/ObjectStore.h"
 #include "test/crimson/gtest_seastar.h"
 #include "test/crimson/seastore/transaction_manager_test_state.h"
@@ -56,13 +57,11 @@ struct collection_manager_test_t :
 
   void checking_mappings(coll_root_t &coll_root, Transaction &t) {
     auto coll_list = collection_manager->list(coll_root, t).unsafe_get0();
-    for (auto &[cid, info] : test_coll_mappings) {
-      std::vector<std::pair<coll_t, coll_info_t>>::iterator it;
-      for (it = coll_list.begin(); it != coll_list.end(); it++) {
-        if (it->first == cid && it->second.split_bits == info.split_bits)
-           break;
-      }
-      EXPECT_NE(it, coll_list.end());
+    EXPECT_EQ(test_coll_mappings.size(), coll_list.size());
+    for (std::pair<coll_t, coll_info_t> p : test_coll_mappings) {
+      EXPECT_NE(
+	std::find(coll_list.begin(), coll_list.end(), p),
+	coll_list.end());
     }
   }
 
@@ -72,11 +71,11 @@ struct collection_manager_test_t :
   }
 
 };
-/*
+
 TEST_F(collection_manager_test_t, basic)
 {
   run_async([this] {
-    coll_root_t coll_root(L_ADDR_NULL);
+    coll_root_t coll_root;
     {
       auto t = tm->create_transaction();
       coll_root = collection_manager->mkfs(*t, COLL_INIT_BLOCK).unsafe_get0();
@@ -113,17 +112,17 @@ TEST_F(collection_manager_test_t, basic)
     }
   });
 }
-*/
+
 TEST_F(collection_manager_test_t, overflow)
 {
   run_async([this] {
-    coll_root_t coll_root(L_ADDR_NULL);
+    coll_root_t coll_root;
     {
       auto t = tm->create_transaction();
       coll_root = collection_manager->mkfs(*t, COLL_INIT_BLOCK).unsafe_get0();
       tm->submit_transaction(std::move(t)).unsafe_get();
     }
-    coll_root_t old_coll_root(coll_root.get_location());
+    auto old_location = coll_root.get_location();
 
     auto t = tm->create_transaction();
     for (int i = 0; i < 412; i++) {
@@ -132,18 +131,18 @@ TEST_F(collection_manager_test_t, overflow)
       test_coll_mappings.emplace(cid, coll_info_t(i));
     }
     tm->submit_transaction(std::move(t)).unsafe_get();
-    EXPECT_NE(old_coll_root.get_location(), coll_root.get_location());
+    EXPECT_NE(old_location, coll_root.get_location());
     checking_mappings(coll_root);
 
     replay();
     checking_mappings(coll_root);
   });
 }
-/*
+
 TEST_F(collection_manager_test_t, update)
 {
   run_async([this] {
-    coll_root_t coll_root(L_ADDR_NULL);
+    coll_root_t coll_root;
     {
       auto t = tm->create_transaction();
       coll_root = collection_manager->mkfs(*t, COLL_INIT_BLOCK).unsafe_get0();
@@ -170,4 +169,4 @@ TEST_F(collection_manager_test_t, update)
     replay();
     checking_mappings(coll_root);
   });
-}*/
+}

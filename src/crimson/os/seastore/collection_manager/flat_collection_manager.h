@@ -14,7 +14,6 @@ namespace crimson::os::seastore::collection_manager {
 
 class FlatCollectionManager : public CollectionManager {
   TransactionManager &tm;
-  unsigned coll_block_size;
 
   coll_context_t get_coll_context(Transaction &t) {
     return coll_context_t{tm, t};
