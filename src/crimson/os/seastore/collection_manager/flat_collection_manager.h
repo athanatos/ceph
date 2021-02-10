@@ -26,7 +26,7 @@ class FlatCollectionManager : public CollectionManager {
 public:
   explicit FlatCollectionManager(TransactionManager &tm);
 
-  mkfs_ret mkfs(Transaction &t, unsigned block_size) final;
+  mkfs_ret mkfs(Transaction &t) final;
 
   create_ret create(coll_root_t &coll_root, Transaction &t, coll_t cid,
                     coll_info_t info) final;

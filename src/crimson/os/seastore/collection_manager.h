@@ -10,8 +10,6 @@
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/transaction_manager.h"
 
-#define COLL_INIT_BLOCK 4096
-
 namespace crimson::os::seastore {
 
 /**
@@ -73,8 +71,7 @@ public:
   using mkfs_ertr = TransactionManager::alloc_extent_ertr;
   using mkfs_ret = mkfs_ertr::future<coll_root_t>;
   virtual mkfs_ret mkfs(
-    Transaction &t,
-    unsigned block_size) = 0;
+    Transaction &t) = 0;
 
   /// Create collection
   using create_ertr = base_ertr;

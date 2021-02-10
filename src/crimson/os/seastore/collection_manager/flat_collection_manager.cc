@@ -18,20 +18,24 @@ namespace {
 
 namespace crimson::os::seastore::collection_manager {
 
+constexpr static segment_off_t MIN_FLAT_BLOCK_SIZE = 4<<10;
+constexpr static segment_off_t MAX_FLAT_BLOCK_SIZE = 4<<20;
+
 FlatCollectionManager::FlatCollectionManager(
   TransactionManager &tm)
   : tm(tm) {}
 
 FlatCollectionManager::mkfs_ret
-FlatCollectionManager::mkfs(Transaction &t, unsigned block_size)
+FlatCollectionManager::mkfs(Transaction &t)
 {
 
   logger().debug("FlatCollectionManager: {}", __func__);
-  return tm.alloc_extent<CollectionNode>(t, L_ADDR_MIN, block_size
-  ).safe_then([this, block_size](auto&& root_extent) {
+  return tm.alloc_extent<CollectionNode>(
+    t, L_ADDR_MIN, MIN_FLAT_BLOCK_SIZE
+  ).safe_then([this](auto&& root_extent) {
     coll_root_t coll_root = coll_root_t(
       root_extent->get_laddr(),
-      block_size
+      MIN_FLAT_BLOCK_SIZE
     );
     return mkfs_ertr::make_ready_future<coll_root_t>(coll_root);
   });
@@ -68,6 +72,10 @@ FlatCollectionManager::create(coll_root_t &coll_root, Transaction &t,
       case CollectionNode::create_result_t::OVERFLOW: {
         logger().debug("FlatCollectionManager: {} overflow!", __func__);
 	auto new_size = coll_root.get_size() * 2; // double each time
+
+	// TODO return error probably, but such a nonsensically large number of
+	// collections would create a ton of other problems as well
+	assert(new_size < MAX_FLAT_BLOCK_SIZE);
         return tm.alloc_extent<CollectionNode>(
 	  t, L_ADDR_MIN, new_size
 	).safe_then([=, &coll_root, &t] (auto &&root_extent) {

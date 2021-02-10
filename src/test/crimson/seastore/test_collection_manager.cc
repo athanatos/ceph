@@ -78,7 +78,7 @@ TEST_F(collection_manager_test_t, basic)
     coll_root_t coll_root;
     {
       auto t = tm->create_transaction();
-      coll_root = collection_manager->mkfs(*t, COLL_INIT_BLOCK).unsafe_get0();
+      coll_root = collection_manager->mkfs(*t).unsafe_get0();
       tm->submit_transaction(std::move(t)).unsafe_get();
     }
     {
@@ -119,7 +119,7 @@ TEST_F(collection_manager_test_t, overflow)
     coll_root_t coll_root;
     {
       auto t = tm->create_transaction();
-      coll_root = collection_manager->mkfs(*t, COLL_INIT_BLOCK).unsafe_get0();
+      coll_root = collection_manager->mkfs(*t).unsafe_get0();
       tm->submit_transaction(std::move(t)).unsafe_get();
     }
     auto old_location = coll_root.get_location();
@@ -145,7 +145,7 @@ TEST_F(collection_manager_test_t, update)
     coll_root_t coll_root;
     {
       auto t = tm->create_transaction();
-      coll_root = collection_manager->mkfs(*t, COLL_INIT_BLOCK).unsafe_get0();
+      coll_root = collection_manager->mkfs(*t).unsafe_get0();
       tm->submit_transaction(std::move(t)).unsafe_get();
     }
     {
