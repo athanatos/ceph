@@ -56,12 +56,4 @@ public:
 };
 using OnodeManagerRef = std::unique_ptr<OnodeManager>;
 
-namespace onode_manager {
-
-inline OnodeManagerRef create_ephemeral() {
-  return OnodeManagerRef();
-}
-
-}
-
 }
