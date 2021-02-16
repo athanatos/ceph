@@ -85,6 +85,29 @@ public:
       }
     );
   }
+
+  get_onode_ret get_onode(
+    Transaction &trans,
+    const ghobject_t &hoid) final {
+    return tree.find(
+      trans, hoid
+    ).safe_then([this, &trans, &hoid](auto cursor)
+		-> get_onode_ret {
+      if (cursor == tree.end()) {
+	return crimson::ct_error::enoent::make();
+      }
+      auto val = OnodeRef(new FLTreeOnode(cursor.value()));
+      return seastar::make_ready_future<OnodeRef>(
+	val
+      );
+    }).handle_error(
+      get_onode_ertr::pass_further{},
+      crimson::ct_error::assert_all{
+	"Invalid error in FLTreeOnodeManager::get_onode"
+      }
+    );
+  }
+
   
   get_or_create_onode_ret get_or_create_onode(
     Transaction &trans,

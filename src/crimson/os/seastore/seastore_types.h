@@ -176,7 +176,7 @@ constexpr paddr_t make_fake_paddr(segment_off_t off) {
   return paddr_t{FAKE_SEG_ID, off};
 }
 
-struct __attribute((aligned(8), packed)) paddr_le_t {
+struct __attribute((packed)) paddr_le_t {
   ceph_le32 segment = init_le32(NULL_SEG_ID);
   ceph_les32 offset = init_les32(NULL_SEG_OFF);
 
@@ -229,7 +229,7 @@ constexpr laddr_t L_ADDR_NULL = std::numeric_limits<laddr_t>::max();
 constexpr laddr_t L_ADDR_ROOT = std::numeric_limits<laddr_t>::max() - 1;
 constexpr laddr_t L_ADDR_LBAT = std::numeric_limits<laddr_t>::max() - 2;
 
-struct __attribute((aligned(8), packed)) laddr_le_t {
+struct __attribute((packed)) laddr_le_t {
   ceph_le64 laddr = init_le64(L_ADDR_NULL);
 
   laddr_le_t() = default;
@@ -368,7 +368,7 @@ struct record_t {
 };
 
 struct omap_root_t {
-  laddr_t addr = 0;
+  laddr_t addr = L_ADDR_NULL;
   depth_t depth = 0;
   bool mutated = false;
 
@@ -380,6 +380,10 @@ struct omap_root_t {
   omap_root_t(omap_root_t &&o) = default;
   omap_root_t &operator=(const omap_root_t &o) = default;
   omap_root_t &operator=(omap_root_t &&o) = default;
+
+  bool is_null() const {
+    return addr == L_ADDR_NULL;
+  }
 
   bool must_update() const {
     return mutated;
@@ -400,8 +404,8 @@ struct omap_root_t {
   }
 };
 
-class __attribute__((aligned(8), packed)) omap_root_le_t {
-  laddr_le_t addr;
+class __attribute__((packed)) omap_root_le_t {
+  laddr_le_t addr = laddr_le_t(L_ADDR_NULL);
   depth_le_t depth = init_depth_le(0);
 
 public: 
@@ -428,7 +432,7 @@ public:
 /**
  * lba_root_t 
  */
-class __attribute__((aligned(8), packed)) lba_root_t {
+class __attribute__((packed)) lba_root_t {
   paddr_le_t root_addr;
   depth_le_t depth = init_extent_len_le(0);
   
@@ -503,7 +507,7 @@ public:
  * Information for locating CollectionManager information, to be embedded
  * in root block.
  */
-class __attribute__((aligned(8), packed)) coll_root_le_t {
+class __attribute__((packed)) coll_root_le_t {
   laddr_le_t addr;
   extent_len_le_t size = init_extent_len_le(0);
   
@@ -536,7 +540,7 @@ public:
  * Contains information required to find metadata roots.
  * TODO: generalize this to permit more than one lba_manager implementation
  */
-struct __attribute__((aligned(8), packed)) root_t {
+struct __attribute__((packed)) root_t {
   lba_root_t lba_root;
   laddr_le_t onode_root;
   coll_root_le_t collection_root;

@@ -16,6 +16,7 @@
 
 #include "crimson/os/futurized_collection.h"
 
+#include "crimson/os/seastore/omap_manager/btree/btree_omap_manager.h"
 #include "crimson/os/seastore/segment_manager/ephemeral.h"
 #include "crimson/os/seastore/onode_manager.h"
 
@@ -217,8 +218,18 @@ seastar::future<struct stat> SeaStore::stat(
       st.st_blocks = (st.st_size + st.st_blksize - 1) / st.st_blksize;
       st.st_nlink = 1;
       return seastar::make_ready_future<struct stat>();
-    });
+    }).handle_error(
+      crimson::ct_error::assert_all{
+	"Invalid error in SeaStore::stat"
+       }
+    );
 }
+
+using crimson::os::seastore::omap_manager::BtreeOMapManager;
+
+using omap_int_ertr_t = OMapManager::base_ertr::extend<
+  crimson::ct_error::enoent
+  >;
 
 auto
 SeaStore::omap_get_header(
@@ -232,14 +243,48 @@ SeaStore::omap_get_header(
 auto
 SeaStore::omap_get_values(
   CollectionRef ch,
-  const ghobject_t& oid,
-  const omap_keys_t& keys)
+  const ghobject_t &oid,
+  const omap_keys_t &keys)
   -> read_errorator::future<omap_values_t>
 {
+  using int_ret_t = omap_int_ertr_t::future<omap_values_t>;
   auto c = static_cast<SeastoreCollection*>(ch.get());
-  logger().debug("{} {} {}",
-                __func__, c->get_cid(), oid);
-  return seastar::make_ready_future<omap_values_t>();
+  return repeat_with_onode<omap_values_t>(
+    c,
+    oid,
+    [this, &oid, &keys](auto &t, auto &onode) -> int_ret_t {
+      auto omap_root = onode.get_layout().omap_root.get();
+      if (omap_root.is_null()) {
+	return seastar::make_ready_future<omap_values_t>();
+      } else {
+	return seastar::do_with(
+	  BtreeOMapManager(*transaction_manager),
+	  omap_root,
+	  omap_values_t(),
+	  [&, this](auto &manager, auto &root, auto &ret) -> int_ret_t {
+	    return crimson::do_for_each(
+	      keys.begin(),
+	      keys.end(),
+	      [&, this](auto &key) {
+		return manager.omap_get_value(
+		  root,
+		  t,
+		  key
+		).safe_then([&ret](auto &&p) {
+		  bufferlist bl;
+		  bl.append(p.second);
+		  ret.emplace(
+		    std::make_pair(
+		      std::move(p.first),
+		      std::move(bl)));
+		  return seastar::now();
+		});
+	      }).safe_then([&ret] {
+		return std::move(ret);
+	      });
+	  });
+      }
+    });
 }
 
 auto

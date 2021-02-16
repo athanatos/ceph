@@ -168,7 +168,7 @@ private:
   }
 
   template <typename Ret, typename F>
-  seastar::future<Ret> repeat_with_onode(
+  auto repeat_with_onode(
     CollectionRef ch,
     const ghobject_t &oid,
     F &&f) {
@@ -180,9 +180,8 @@ private:
       std::forward<F>(f),
       [=](auto &oid, auto &ret, auto &t, auto &onode, auto &f) {
 	return repeat_eagain([&, this] {
-
 	  t = make_transaction();
-	  return onode_manager->get_or_create_onode(
+	  return onode_manager->get_onode(
 	    *t, oid
 	  ).safe_then([&, this](auto onode_ret) {
 	    onode = std::move(onode_ret);
@@ -190,10 +189,7 @@ private:
 	  }).safe_then([&ret](auto _ret) {
 	    ret = _ret;
 	  });
-
-	}).handle_error(
-	  crimson::ct_error::assert_all{}
-	).then([&ret] {
+	}).safe_then([&ret] {
 	  return seastar::make_ready_future<Ret>(ret);
 	});
       });

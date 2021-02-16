@@ -26,6 +26,16 @@ public:
   using mkfs_ertr = TransactionManager::mkfs_ertr;
   using mkfs_ret = mkfs_ertr::future<>;
   virtual mkfs_ret mkfs(Transaction &t) = 0;
+
+  using get_onode_ertr = base_ertr::extend<
+    crimson::ct_error::enoent>;
+  using get_onode_ret = get_onode_ertr::future<
+    OnodeRef>;
+  virtual get_onode_ret get_onode(
+    Transaction &trans,
+    const ghobject_t &hoid) {
+    return seastar::make_ready_future<OnodeRef>();
+  }
   
   using get_or_create_onode_ertr = base_ertr;
   using get_or_create_onode_ret = get_or_create_onode_ertr::future<
