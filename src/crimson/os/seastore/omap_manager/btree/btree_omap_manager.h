@@ -76,13 +76,10 @@ public:
   omap_rm_key_ret omap_rm_key(omap_root_t &omap_root, Transaction &t,
                               const std::string &key) final;
 
-  omap_list_keys_ret omap_list_keys(const omap_root_t &omap_root, Transaction &t,
-                                    std::string &start,
-                                    size_t max_result_size = MAX_SIZE) final;
-
-  omap_list_ret omap_list(const omap_root_t &omap_root, Transaction &t,
-                          std::string &start,
-                          size_t max_result_size = MAX_SIZE) final;
+  omap_list_ret omap_list(const omap_root_t &omap_root,
+			  Transaction &t,
+			  const std::optional<std::string> &start,
+			  size_t max_result_size) final;
 
   omap_clear_ret omap_clear(omap_root_t &omap_root, Transaction &t) final;
 

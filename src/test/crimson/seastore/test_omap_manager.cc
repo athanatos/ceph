@@ -74,67 +74,31 @@ struct omap_manager_test_t :
     test_omap_mappings.erase(test_omap_mappings.find(key));
   }
 
-  list_keys_result_t list_keys(
-    omap_root_t &omap_root,
+  void list(
+    const omap_root_t &omap_root,
     Transaction &t,
-    std::string &start,
+    const std::optional<std::string> &start,
     size_t max = MAX_SIZE) {
-    auto ret = omap_manager->omap_list_keys(omap_root, t, start, max).unsafe_get0();
-    if (start == "" && max == MAX_SIZE) {
-      EXPECT_EQ(test_omap_mappings.size(), ret.keys.size());
-      for ( auto &i : ret.keys) {
-        auto it = test_omap_mappings.find(i);
-        EXPECT_NE(it, test_omap_mappings.end());
-        EXPECT_EQ(i, it->first);
-      }
-      EXPECT_EQ(ret.next, std::nullopt);
-    } else {
-      size_t i =0;
-      auto it = test_omap_mappings.find(start);
-      for (; it != test_omap_mappings.end() && i < max; it++) {
-        EXPECT_EQ(ret.keys[i], it->first);
-        i++;
-      }
-      if (it == test_omap_mappings.end()) {
-        EXPECT_EQ(ret.next, std::nullopt);
-      } else {
-        EXPECT_EQ(ret.keys.size(), max);
-        EXPECT_EQ(ret.next, it->first);
-      }
-    }
-    return ret;
-  }
 
-  list_kvs_result_t list(
-    omap_root_t &omap_root,
-    Transaction &t,
-    std::string &start,
-    size_t max = MAX_SIZE) {
-    auto ret = omap_manager->omap_list(omap_root, t, start, max).unsafe_get0();
-    if (start == "" && max == MAX_SIZE) {
-      EXPECT_EQ(test_omap_mappings.size(), ret.kvs.size());
-      for ( auto &i : ret.kvs) {
-        auto it = test_omap_mappings.find(i.first);
-        EXPECT_NE(it, test_omap_mappings.end());
-        EXPECT_EQ(i.second, it->second);
-      }
-      EXPECT_EQ(ret.next, std::nullopt);
-    } else {
-      size_t i = 0;
-      auto it = test_omap_mappings.find(start);
-      for (; it != test_omap_mappings.end() && i < max; it++) {
-        EXPECT_EQ(ret.kvs[i].first, it->first);
-        i++;
-      }
-      if (it == test_omap_mappings.end()) {
-        EXPECT_EQ(ret.next, std::nullopt);
-      } else {
-        EXPECT_EQ(ret.kvs.size(), max);
-        EXPECT_EQ(ret.next, it->first);
-      }
-    }
+    auto [complete, results] = omap_manager->omap_list(
+      omap_root, t, start, max
+    ).unsafe_get0();
 
-    return ret;
+    auto it = start ?
+      test_omap_mappings.upper_bound(*start) :
+      test_omap_mappings.begin();
+    for (auto &&[k, v]: results) {
+      EXPECT_NE(it, test_omap_mappings.end());
+      if (it == test_omap_mappings.end())
+	return;
+      EXPECT_EQ(k, it->first);
+      it++;
+    }
+    if (it == test_omap_mappings.end()) {
+      EXPECT_TRUE(complete);
+    } else {
+      EXPECT_EQ(results.size(), max);
+    }
   }
 
   void clear(
@@ -392,27 +356,31 @@ TEST_F(omap_manager_test_t, force_split_listkeys_list_clear)
       tm->submit_transaction(std::move(t)).unsafe_get();
       check_mappings(omap_root);
     }
-    std::string empty = "";
-    auto t = tm->create_transaction();
-    [[maybe_unused]] auto keys = list_keys(omap_root, *t, empty);
-    tm->submit_transaction(std::move(t)).unsafe_get();
 
-    t = tm->create_transaction();
-    keys = list_keys(omap_root, *t, temp, 100);
-    tm->submit_transaction(std::move(t)).unsafe_get();
+    {
+      auto t = tm->create_transaction();
+      list(omap_root, *t, std::nullopt);
+    }
 
-    t = tm->create_transaction();
-    [[maybe_unused]] auto ls = list(omap_root, *t, empty);
-    tm->submit_transaction(std::move(t)).unsafe_get();
+    {
+      auto t = tm->create_transaction();
+      list(omap_root, *t, temp, 100);
+    }
 
-    t = tm->create_transaction();
-    ls = list(omap_root, *t, temp, 100);
-    tm->submit_transaction(std::move(t)).unsafe_get();
+    {
+      auto t = tm->create_transaction();
+      list(omap_root, *t, std::nullopt);
+    }
 
-    t = tm->create_transaction();
-    clear(omap_root, *t);
-    tm->submit_transaction(std::move(t)).unsafe_get();
+    {
+      auto t = tm->create_transaction();
+      list(omap_root, *t, temp, 100);
+    }
 
+    {
+      auto t = tm->create_transaction();
+      clear(omap_root, *t);
+    }
   });
 }
 

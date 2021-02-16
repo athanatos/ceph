@@ -63,14 +63,12 @@ struct OMapNode : LogicalCachedExtent {
   using rm_key_ret = rm_key_ertr::future<mutation_result_t>;
   virtual rm_key_ret rm_key(omap_context_t oc, const std::string &key) = 0;
 
-  using list_keys_ertr = OMapManager::omap_list_keys_ertr;
-  using list_keys_ret = OMapManager::omap_list_keys_ret;
-  virtual list_keys_ret list_keys(omap_context_t oc, std::string &start,
-                                  size_t max_result_size) = 0;
-
   using list_ertr = base_ertr;
+  using list_bare_ret = OMapManager::omap_list_bare_ret;
   using list_ret = OMapManager::omap_list_ret;
-  virtual list_ret list(omap_context_t oc, std::string &start, size_t max_result_size) = 0;
+  virtual list_ret list(omap_context_t oc,
+			const std::optional<std::string> &start,
+			size_t max_result_size) = 0;
 
   using clear_ertr = base_ertr;
   using clear_ret = clear_ertr::future<>;

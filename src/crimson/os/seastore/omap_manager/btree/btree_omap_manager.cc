@@ -73,7 +73,7 @@ BtreeOMapManager::handle_root_merge(
   auto root = *(mresult.need_merge);
   auto iter = root->cast<OMapInnerNode>()->iter_begin();
   omap_root.update(
-    iter->get_node_key().laddr,
+    iter->get_val(),
     omap_root.depth -= 1);
   return oc.tm.dec_ref(oc.t, root->get_laddr()
   ).safe_then([](auto &&ret) -> handle_root_merge_ret {
@@ -152,42 +152,18 @@ BtreeOMapManager::omap_rm_key(omap_root_t &omap_root, Transaction &t, const std:
 
 }
 
-BtreeOMapManager::omap_list_keys_ret
-BtreeOMapManager::omap_list_keys(const omap_root_t &omap_root, Transaction &t,
-                                 std::string &start, size_t max_result_size)
-{
-  logger().debug("{}", __func__);
-  return get_omap_root(
-    get_omap_context(t),
-    omap_root
-  ).safe_then([this, &t, &start,
-    max_result_size] (auto extent) {
-    return extent->list_keys(get_omap_context(t), start, max_result_size)
-      .safe_then([](auto &&result) {
-      return omap_list_keys_ret(
-             omap_list_keys_ertr::ready_future_marker{},
-             std::move(result));
-    });
-  });
-
-}
-
 BtreeOMapManager::omap_list_ret
-BtreeOMapManager::omap_list(const omap_root_t &omap_root, Transaction &t,
-                            std::string &start, size_t max_result_size)
+BtreeOMapManager::omap_list(const omap_root_t &omap_root,
+			    Transaction &t,
+			    const std::optional<std::string> &start,
+			    size_t max_result_size = MAX_SIZE)
 {
   logger().debug("{}", __func__);
   return get_omap_root(
     get_omap_context(t),
     omap_root
-  ).safe_then([this, &t, &start, max_result_size]
-    (auto extent) {
-    return extent->list(get_omap_context(t), start, max_result_size)
-      .safe_then([](auto &&result) {
-      return omap_list_ret(
-             omap_list_ertr::ready_future_marker{},
-             std::move(result));
-    });
+  ).safe_then([this, &t, &start, max_result_size](auto extent) {
+    return extent->list(get_omap_context(t), start, max_result_size);
   });
 }
 

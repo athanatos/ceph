@@ -61,9 +61,9 @@ struct OMapInnerNode
 
   rm_key_ret rm_key(omap_context_t oc, const std::string &key) final;
 
-  list_keys_ret list_keys(omap_context_t oc, std::string &start, size_t max_result_size) final;
-
-  list_ret list(omap_context_t oc, std::string &start, size_t max_result_size) final;
+  list_ret list(omap_context_t oc,
+		const std::optional<std::string> &start,
+		size_t max_result_size) final;
 
   clear_ret clear(omap_context_t oc) final;
 
@@ -113,9 +113,6 @@ struct OMapInnerNode
     decode(buffer, bptr);
     buffer.replay(*this);
   }
-
-  internal_iterator_t get_containing_child(const std::string &key);
-
 };
 using OMapInnerNodeRef = OMapInnerNode::OMapInnerNodeRef;
 /**
@@ -164,9 +161,9 @@ struct OMapLeafNode
 
   rm_key_ret rm_key(omap_context_t oc, const std::string &key) final;
 
-  list_keys_ret list_keys(omap_context_t oc, std::string &start, size_t max_result_size) final;
-
-  list_ret list(omap_context_t oc, std::string &start, size_t max_result_size) final;
+  list_ret list(omap_context_t oc,
+		const std::optional<std::string> &start,
+		size_t max_result_size) final;
 
   clear_ret clear(omap_context_t oc) final;
 
