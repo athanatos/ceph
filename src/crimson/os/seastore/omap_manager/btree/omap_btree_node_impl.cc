@@ -114,7 +114,8 @@ OMapInnerNode::get_value_ret
 OMapInnerNode::get_value(omap_context_t oc, const std::string &key)
 {
   logger().debug("OMapInnerNode: {} key = {}",  __func__, key);
-  auto child_pt = string_lower_bound(key);
+  auto child_pt = get_containing_child(key);
+  assert(child_pt != iter_end());
   auto laddr = child_pt->get_val();
   return omap_load_extent(oc, laddr, get_meta().depth - 1).safe_then(
     [oc, &key] (auto extent) {
@@ -126,7 +127,7 @@ OMapInnerNode::insert_ret
 OMapInnerNode::insert(omap_context_t oc, const std::string &key, const std::string &value)
 {
   logger().debug("OMapInnerNode: {}  {}->{}",  __func__, key, value);
-  auto child_pt = string_lower_bound(key);
+  auto child_pt = get_containing_child(key);
   assert(child_pt != iter_end());
   auto laddr = child_pt->get_val();
   return omap_load_extent(oc, laddr, get_meta().depth - 1).safe_then(
@@ -149,7 +150,7 @@ OMapInnerNode::rm_key_ret
 OMapInnerNode::rm_key(omap_context_t oc, const std::string &key)
 {
   logger().debug("OMapInnerNode: {}", __func__);
-  auto child_pt = string_lower_bound(key);
+  auto child_pt = get_containing_child(key);
   assert(child_pt != iter_end());
   auto laddr = child_pt->get_val();
   return omap_load_extent(oc, laddr, get_meta().depth - 1).safe_then(
@@ -184,28 +185,27 @@ OMapInnerNode::list(omap_context_t oc,
 		    size_t max_result_size)
 {
   logger().debug("OMapInnerNode: {}", __func__);
+
   auto child_iter = start ?
-    string_upper_bound(*start) :
-    iter_begin();
-  if (child_iter != iter_end())
-    --child_iter;
+    get_containing_child(*start) :
+    iter_cbegin();
+  assert(child_iter != iter_cend());
 
   return seastar::do_with(
     child_iter,
-    iter_end(),
+    iter_cend(),
     list_bare_ret(),
     [=, &start](auto &biter, auto &eiter, auto &ret) {
       auto &[complete, result] = ret;
       return crimson::do_until(
-	[&, this]() -> list_ertr::future<bool> {
+	[&, oc, this]() -> list_ertr::future<bool> {
 	  if (biter == eiter  || result.size() == max_result_size)
 	    return list_ertr::make_ready_future<bool>(true);
-	  
 	  auto laddr = biter->get_val();
 	  return omap_load_extent(
 	    oc, laddr,
 	    get_meta().depth - 1
-	  ).safe_then([&, this] (auto &&extent) {
+	  ).safe_then([&, oc, this] (auto &&extent) {
 	    return extent->list(
 	      oc,
 	      start,
@@ -370,6 +370,14 @@ OMapInnerNode::merge_entry(omap_context_t oc, internal_iterator_t iter, OMapNode
     }
   });
 
+}
+
+OMapInnerNode::internal_iterator_t
+OMapInnerNode::get_containing_child(const std::string &key)
+{
+  auto iter = std::find_if(iter_begin(), iter_end(),
+       [&key](auto it) { return it.contains(key); });
+  return iter;
 }
 
 std::ostream &OMapLeafNode::print_detail_l(std::ostream &out) const

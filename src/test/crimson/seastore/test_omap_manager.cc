@@ -149,6 +149,7 @@ char* rand_string(char* str, const int len)
   return str;
 }
 
+#if 0
 TEST_F(omap_manager_test_t, basic)
 {
   run_async([this] {
@@ -326,6 +327,7 @@ TEST_F(omap_manager_test_t, force_leafnode_split_merge_fullandbalanced)
   });
 }
 
+#endif
 
 TEST_F(omap_manager_test_t, force_split_listkeys_list_clear)
 {
@@ -383,6 +385,8 @@ TEST_F(omap_manager_test_t, force_split_listkeys_list_clear)
     }
   });
 }
+
+#if 0
 
 TEST_F(omap_manager_test_t, internal_force_split)
 {
@@ -564,3 +568,5 @@ TEST_F(omap_manager_test_t, internal_force_split_to_root)
     check_mappings(omap_root);
   });
 }
+
+#endif

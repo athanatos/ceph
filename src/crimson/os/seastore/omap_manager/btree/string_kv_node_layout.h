@@ -413,6 +413,9 @@ public:
     void set_node_val(const std::string &str) {
       static_assert(!is_const);
       assert(str.size() == get_node_key().key_len);
+      assert(get_node_key().key_off >= str.size());
+      assert(get_node_key().key_off < OMAP_BLOCK_SIZE);
+      assert(str.size() < OMAP_BLOCK_SIZE);
       ::memcpy(get_node_val_ptr(), str.data(), str.size());
     }
 
@@ -430,6 +433,16 @@ public:
     laddr_t get_val() const {
       return get_node_key().laddr;
     }
+
+    bool contains(std::string_view key) const {
+      assert(*this != node->iter_end());
+      auto next = *this + 1;
+      if (next == node->iter_end()) {
+        return get_key() <= key;
+      } else {
+	return (get_key() <= key) && (next->get_key() > key);
+      }
+    }
   };
   using const_iterator = iter_t<true>;
   using iterator = iter_t<false>;
@@ -443,12 +456,6 @@ public:
     const std::string &key,
     delta_inner_buffer_t *recorder) {
     auto iter = iterator(this, _iter.index);
-    omap_inner_key_t node_key;
-    node_key.laddr = laddr;
-    node_key.key_len = key.size() + 1;
-    node_key.key_off = iter.get_index() == 0 ?
-                       node_key.key_len :
-                       (iter - 1).get_node_key().key_off + node_key.key_len;
     if (recorder) {
       recorder->insert(
         key,
@@ -498,16 +505,22 @@ public:
     *layout.template Pointer<0>(buf) = s;
   }
 
-  const_iterator iter_begin() const {
+  const_iterator iter_cbegin() const {
     return const_iterator(
       this,
       0);
   }
+  const_iterator iter_begin() const {
+    return iter_cbegin();
+  }
 
-  const_iterator iter_end() const {
+  const_iterator iter_cend() const {
     return const_iterator(
       this,
       get_size());
+  }
+  const_iterator iter_end() const {
+    return iter_cend();
   }
 
   iterator iter_begin() {
@@ -805,15 +818,24 @@ private:
       assert(iter->get_key() > key);
     }
     assert(!is_overflow(key.size()));
-    if (iter != iter_end())
-      copy_from_local(key.size(), iter + 1, iter, iter_end());
 
-    auto nkey = iter.get_node_key();
+    if (iter != iter_end()) {
+      copy_from_local(key.size(), iter + 1, iter, iter_end());
+    }
+
+    omap_inner_key_t nkey;
     nkey.key_len = key.size();
     nkey.laddr = val;
+    if (iter != iter_begin()) {
+      auto pkey = (iter - 1).get_node_key();
+      nkey.key_off = nkey.key_len + pkey.key_off;
+    } else {
+      nkey.key_off = nkey.key_len;
+    }
+
     iter->set_node_key(nkey);
-    iter->set_node_val(key);
     set_size(get_size() + 1);
+    iter->set_node_val(key);
   }
 
   void inner_update(

@@ -31,7 +31,7 @@ BtreeOMapManager::initialize_omap(Transaction &t)
       root_extent->set_size(0);
       omap_node_meta_t meta{1};
       root_extent->set_meta(meta);
-      omap_root_t omap_root = omap_root_t(1, root_extent->get_laddr());
+      omap_root_t omap_root = omap_root_t(root_extent->get_laddr(), 1);
       return initialize_omap_ertr::make_ready_future<omap_root_t>(omap_root);
   });
 }
@@ -59,7 +59,7 @@ BtreeOMapManager::handle_root_split(
                                 "", nroot->maybe_get_delta_buffer());
     nroot->journal_inner_insert(nroot->iter_begin() + 1, right->get_laddr(),
                                 pivot, nroot->maybe_get_delta_buffer());
-    omap_root.update(nroot->get_laddr(), omap_root.depth += 1);
+    omap_root.update(nroot->get_laddr(), omap_root.get_depth() + 1);
     return seastar::now();
   });
 }

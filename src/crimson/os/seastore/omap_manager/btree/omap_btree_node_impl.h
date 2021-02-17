@@ -113,8 +113,11 @@ struct OMapInnerNode
     decode(buffer, bptr);
     buffer.replay(*this);
   }
+
+  internal_iterator_t get_containing_child(const std::string &key);
 };
 using OMapInnerNodeRef = OMapInnerNode::OMapInnerNodeRef;
+
 /**
  * OMapLeafNode
  *
