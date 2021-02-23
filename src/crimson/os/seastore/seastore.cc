@@ -16,6 +16,7 @@
 
 #include "crimson/os/futurized_collection.h"
 
+#include "crimson/os/seastore/omap_manager/btree/btree_omap_manager.h"
 #include "crimson/os/seastore/segment_manager/ephemeral.h"
 #include "crimson/os/seastore/onode_manager.h"
 
@@ -224,6 +225,12 @@ seastar::future<struct stat> SeaStore::stat(
     );
 }
 
+using crimson::os::seastore::omap_manager::BtreeOMapManager;
+
+using omap_int_ertr_t = OMapManager::base_ertr::extend<
+  crimson::ct_error::enoent
+  >;
+
 auto
 SeaStore::omap_get_header(
   CollectionRef c,
@@ -236,29 +243,94 @@ SeaStore::omap_get_header(
 auto
 SeaStore::omap_get_values(
   CollectionRef ch,
-  const ghobject_t& oid,
-  const omap_keys_t& keys)
+  const ghobject_t &oid,
+  const omap_keys_t &keys)
   -> read_errorator::future<omap_values_t>
 {
+  using int_ret_t = omap_int_ertr_t::future<omap_values_t>;
   auto c = static_cast<SeastoreCollection*>(ch.get());
-  logger().debug("{} {} {}",
-                __func__, c->get_cid(), oid);
-  return seastar::make_ready_future<omap_values_t>();
+  return repeat_with_onode<omap_values_t>(
+    c,
+    oid,
+    [this, &oid, &keys](auto &t, auto &onode) -> int_ret_t {
+      auto omap_root = onode.get_layout().omap_root.get();
+      if (omap_root.is_null()) {
+	return seastar::make_ready_future<omap_values_t>();
+      } else {
+	return seastar::do_with(
+	  BtreeOMapManager(*transaction_manager),
+	  omap_root,
+	  omap_values_t(),
+	  [&, this](auto &manager, auto &root, auto &ret) -> int_ret_t {
+	    return crimson::do_for_each(
+	      keys.begin(),
+	      keys.end(),
+	      [&, this](auto &key) {
+		return manager.omap_get_value(
+		  root,
+		  t,
+		  key
+		).safe_then([&ret, &key](auto &&p) {
+		  if (p) {
+		    bufferlist bl;
+		    bl.append(*p);
+		    ret.emplace(
+		      std::make_pair(
+			std::move(key),
+			std::move(bl)));
+		  }
+		  return seastar::now();
+		});
+	      }).safe_then([&ret] {
+		return std::move(ret);
+	      });
+	  });
+      }
+    });
 }
 
 auto
 SeaStore::omap_get_values(
   CollectionRef ch,
   const ghobject_t &oid,
-  const std::optional<string> &start)
+  const std::optional<string> &_start)
   -> read_errorator::future<std::tuple<bool, SeaStore::omap_values_t>>
 {
   auto c = static_cast<SeastoreCollection*>(ch.get());
   logger().debug(
     "{} {} {}",
     __func__, c->get_cid(), oid);
-  return seastar::make_ready_future<std::tuple<bool, omap_values_t>>(
-    std::make_tuple(false, omap_values_t()));
+  using ret_bare_t = std::tuple<bool, SeaStore::omap_values_t>;
+  using int_ret_t = omap_int_ertr_t::future<ret_bare_t>;
+  return repeat_with_onode<ret_bare_t>(
+    c,
+    oid,
+    [this, &oid, &_start](auto &t, auto &onode) -> int_ret_t {
+      auto omap_root = onode.get_layout().omap_root.get();
+      if (omap_root.is_null()) {
+	return seastar::make_ready_future<ret_bare_t>(
+	  true, omap_values_t{}
+	);
+      } else {
+	return seastar::do_with(
+	  BtreeOMapManager(*transaction_manager),
+	  omap_root,
+	  _start.value_or(std::string()),
+	  [&, this](auto &manager, auto &root, auto &start) -> int_ret_t {
+	    return manager.omap_list(
+	      root,
+	      t,
+	      start,
+	      128 /* TODO */
+	    ).safe_then([](auto &&p) {
+	      // TODO, update to fix OMapManager
+	      return seastar::make_ready_future<ret_bare_t>(
+		true, omap_values_t{}
+	      );
+	    });
+	  });
+      }
+    });
 }
 
 seastar::future<FuturizedStore::OmapIteratorRef> SeaStore::get_omap_iterator(
@@ -474,8 +546,25 @@ SeaStore::tm_ret SeaStore::_omap_set_values(
   logger().debug(
     "{}: {} {} keys",
     __func__, *onode, aset.size());
-
-  return tm_ertr::now();
+  return seastar::do_with(
+    BtreeOMapManager(*transaction_manager),
+    onode->get_layout().omap_root.get(),
+    std::move(aset),
+    [&ctx, &onode, this](
+      auto &omap_manager,
+      auto &omap_root,
+      auto &keys) {
+      return crimson::do_for_each(
+	keys.begin(),
+	keys.end(),
+	[&, this](auto &p) {
+	  return omap_manager.omap_set_key(
+	    omap_root,
+	    *ctx.transaction,
+	    p.first,
+	    p.second);
+	});
+    });
 }
 
 SeaStore::tm_ret SeaStore::_omap_set_header(
@@ -486,18 +575,34 @@ SeaStore::tm_ret SeaStore::_omap_set_header(
   logger().debug(
     "{}: {} {} bytes",
     __func__, *onode, header.length());
+  assert(0 == "not supported yet");
   return tm_ertr::now();
 }
 
 SeaStore::tm_ret SeaStore::_omap_rmkeys(
   internal_context_t &ctx,
   OnodeRef &onode,
-  const omap_keys_t& aset)
+  const omap_keys_t& keys)
 {
   logger().debug(
     "{} {} {} keys",
-    __func__, *onode, aset.size());
-  return tm_ertr::now();
+    __func__, *onode, keys.size());
+  return seastar::do_with(
+    BtreeOMapManager(*transaction_manager),
+    onode->get_layout().omap_root.get(),
+    [&ctx, &onode, &keys, this](
+      auto &omap_manager,
+      auto &omap_root) {
+      return crimson::do_for_each(
+	keys.begin(),
+	keys.end(),
+	[&, this](auto &p) {
+	  return omap_manager.omap_rm_key(
+	    omap_root,
+	    *ctx.transaction,
+	    p);
+	});
+    });
 }
 
 SeaStore::tm_ret SeaStore::_omap_rmkeyrange(
@@ -509,6 +614,7 @@ SeaStore::tm_ret SeaStore::_omap_rmkeyrange(
   logger().debug(
     "{} {} first={} last={}",
     __func__, *onode, first, last);
+  assert(0 == "not supported yet");
   return tm_ertr::now();
 }
 
