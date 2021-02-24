@@ -16,15 +16,10 @@
 
 namespace crimson::os::seastore {
 
-struct onode_layout_t {
-  ceph_le32 size;
+struct __attribute__((packed)) onode_layout_t {
+  ceph_le32 size = init_le32(0);
+  omap_root_le_t omap_root;
 } __attribute__((packed));
-
-inline bool operator==(
-  const onode_layout_t &lhs,
-  const onode_layout_t &rhs) {
-  return lhs.size == rhs.size;
-}
 
 /**
  * Onode
