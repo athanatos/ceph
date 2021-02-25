@@ -97,6 +97,29 @@ public:
    *        it it is not set, list all keys after string start.
    * @retval listed key->value mapping and next key
    */
+  class omap_list_config_t {
+    size_t max_result_size = MAX_SIZE;
+    bool inclusive = false;
+
+  public:
+    omap_list_config_t(
+      size_t max_result_size,
+      bool inclusive)
+      : max_result_size(max_result_size),
+	inclusive(inclusive) {}
+    omap_list_config_t() {}
+    omap_list_config_t(const omap_list_config_t &) = default;
+    omap_list_config_t(omap_list_config_t &&) = default;
+    omap_list_config_t &operator=(const omap_list_config_t &) = default;
+    omap_list_config_t &operator=(omap_list_config_t &&) = default;
+
+    auto with_reduced_max(size_t reduced_by) const {
+      return omap_list_config_t(
+	max_result_size - reduced_by,
+	inclusive
+      );
+    }
+  };
   using omap_list_ertr = base_ertr;
   using omap_list_bare_ret = std::pair<
     bool,
@@ -106,7 +129,7 @@ public:
     const omap_root_t &omap_root,
     Transaction &t,
     const std::optional<std::string> &start,
-    size_t max_result_size = MAX_SIZE) = 0;
+    omap_list_config_t config = omap_list_config_t()) = 0;
 
   /**
    * clear all omap tree key->value mapping

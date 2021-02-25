@@ -165,14 +165,17 @@ BtreeOMapManager::omap_list(
   const omap_root_t &omap_root,
   Transaction &t,
   const std::optional<std::string> &start,
-  size_t max_result_size = MAX_SIZE)
+  omap_list_config_t config)
 {
   logger().debug("{}", __func__);
   return get_omap_root(
     get_omap_context(t),
     omap_root
-  ).safe_then([this, &t, &start, max_result_size](auto extent) {
-    return extent->list(get_omap_context(t), start, max_result_size);
+  ).safe_then([this, &t, &start, config](auto extent) {
+    return extent->list(
+      get_omap_context(t),
+      start,
+      config);
   });
 }
 

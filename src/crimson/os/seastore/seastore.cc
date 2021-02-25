@@ -320,8 +320,7 @@ SeaStore::omap_get_values(
 	    return manager.omap_list(
 	      root,
 	      t,
-	      start,
-	      128 /* TODO */
+	      start
 	    ).safe_then([](auto &&p) {
 	      return seastar::make_ready_future<ret_bare_t>(
 		p.first, p.second
@@ -342,8 +341,6 @@ class SeaStoreOmapIterator : FuturizedStore::OmapIterator {
 
   omap_values_t current;
   omap_values_t::iterator iter;
-
-  bool is_valid = false;
 public:
   SeaStoreOmapIterator(
     CollectionRef ch,
@@ -362,11 +359,11 @@ public:
   seastar::future<> upper_bound(const std::string &after) final {
     return seastar::now();
   }
-  seastar::future<> lower_bound(const std::string &to) final {
+  seastar::future<> lower_bound(const std::string &from) final {
     return seastar::now();
   }
   bool valid() const {
-    return is_valid;
+    return iter != current.end();
   }
   seastar::future<> next() final {
     return seastar::now();

@@ -137,8 +137,10 @@ struct omap_manager_test_t :
       logger().debug("list on start");
     }
 
+    OMapManager::omap_list_config_t config{};
+    config.max_result_size = max;
     auto [complete, results] = omap_manager->omap_list(
-      omap_root, t, start, max
+      omap_root, t, start, config
     ).unsafe_get0();
 
     auto it = start ?
