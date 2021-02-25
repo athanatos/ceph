@@ -323,15 +323,61 @@ SeaStore::omap_get_values(
 	      start,
 	      128 /* TODO */
 	    ).safe_then([](auto &&p) {
-	      // TODO, update to fix OMapManager
 	      return seastar::make_ready_future<ret_bare_t>(
-		true, omap_values_t{}
+		p.first, p.second
 	      );
 	    });
 	  });
       }
     });
 }
+
+class SeastoreOmapIterator : FuturizedStore::OmapIterator {
+  CollectionRef ch;
+  TransactionRef t;
+  OmapManager manager;
+  const onode_root_t root;
+
+  omap_values_t current;
+  omap_values_t iter;
+
+  bool is_valid = false;
+public:
+  SeastoreOmapIterator(
+    CollectionRef ch,
+    TransactionRef t,
+    OmapManager &&manager,
+    const onode_root_t &root) :
+    ch(ch), t(t), manager(std::move(manager)), root(root),
+    iter(current.begin())
+  {}
+    
+  seastar::future<> seek_to_first() final {
+    return seastar::now();
+  }
+  seastar::future<> upper_bound(const std::string &after) final {
+    return seastar::now();
+  }
+  seastar::future<> lower_bound(const std::string &to) final {
+    return seastar::now();
+  }
+  bool valid() const {
+    return is_valid;
+  }
+  seastar::future<> next() final {
+    return seastar::now();
+  }
+  std::string key() {
+    return iter->first;
+  }
+  ceph::buffer::list value() {
+    return iter>second;
+  }
+  int status() const {
+    return 0;
+  }
+  ~OmapIterator() {}
+};
 
 seastar::future<FuturizedStore::OmapIteratorRef> SeaStore::get_omap_iterator(
   CollectionRef ch,

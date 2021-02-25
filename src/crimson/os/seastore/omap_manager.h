@@ -100,7 +100,7 @@ public:
   using omap_list_ertr = base_ertr;
   using omap_list_bare_ret = std::pair<
     bool,
-    std::map<std::string, bufferlist>>;
+    std::map<std::string, bufferlist, std::less<>>>;
   using omap_list_ret = omap_list_ertr::future<omap_list_bare_ret>;
   virtual omap_list_ret omap_list(
     const omap_root_t &omap_root,
