@@ -332,23 +332,27 @@ SeaStore::omap_get_values(
     });
 }
 
-class SeastoreOmapIterator : FuturizedStore::OmapIterator {
+class SeaStoreOmapIterator : FuturizedStore::OmapIterator {
+  using omap_values_t = FuturizedStore::omap_values_t;
+
   CollectionRef ch;
   TransactionRef t;
-  OmapManager manager;
-  const onode_root_t root;
+  BtreeOMapManager manager;
+  const omap_root_t root;
 
   omap_values_t current;
-  omap_values_t iter;
+  omap_values_t::iterator iter;
 
   bool is_valid = false;
 public:
-  SeastoreOmapIterator(
+  SeaStoreOmapIterator(
     CollectionRef ch,
-    TransactionRef t,
-    OmapManager &&manager,
-    const onode_root_t &root) :
-    ch(ch), t(t), manager(std::move(manager)), root(root),
+    TransactionRef &&t,
+    BtreeOMapManager &&manager,
+    const omap_root_t &root) :
+    ch(ch), t(std::move(t)),
+    manager(std::move(manager)),
+    root(root),
     iter(current.begin())
   {}
     
@@ -371,12 +375,12 @@ public:
     return iter->first;
   }
   ceph::buffer::list value() {
-    return iter>second;
+    return iter->second;
   }
   int status() const {
     return 0;
   }
-  ~OmapIterator() {}
+  ~SeaStoreOmapIterator() {}
 };
 
 seastar::future<FuturizedStore::OmapIteratorRef> SeaStore::get_omap_iterator(
