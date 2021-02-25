@@ -546,24 +546,42 @@ SeaStore::tm_ret SeaStore::_omap_set_values(
   logger().debug(
     "{}: {} {} keys",
     __func__, *onode, aset.size());
+
   return seastar::do_with(
     BtreeOMapManager(*transaction_manager),
     onode->get_layout().omap_root.get(),
     std::move(aset),
     [&ctx, &onode, this](
       auto &omap_manager,
-      auto &omap_root,
-      auto &keys) {
-      return crimson::do_for_each(
-	keys.begin(),
-	keys.end(),
-	[&, this](auto &p) {
-	  return omap_manager.omap_set_key(
-	    omap_root,
-	    *ctx.transaction,
-	    p.first,
-	    p.second);
+      auto &onode_omap_root,
+      auto &keys
+    ) {
+
+      tm_ertr::future<> maybe_create_root =
+	!onode_omap_root.is_null() ?
+	tm_ertr::now() :
+	omap_manager.initialize_omap(*ctx.transaction
+	).safe_then([&onode_omap_root](auto new_root) {
+	  onode_omap_root = new_root;
 	});
+ 	
+      return maybe_create_root.safe_then([&, this] {
+	return crimson::do_for_each(
+	  keys.begin(),
+	  keys.end(),
+	  [&, this](auto &p) {
+	    return omap_manager.omap_set_key(
+	      onode_omap_root,
+	      *ctx.transaction,
+	      p.first,
+	      p.second);
+	  });
+      }).safe_then([&, this] {
+	if (onode_omap_root.must_update()) {
+	  onode->get_mutable_layout(*ctx.transaction
+	  ).omap_root.update(onode_omap_root);
+	}
+      });
     });
 }
 
@@ -587,22 +605,32 @@ SeaStore::tm_ret SeaStore::_omap_rmkeys(
   logger().debug(
     "{} {} {} keys",
     __func__, *onode, keys.size());
-  return seastar::do_with(
-    BtreeOMapManager(*transaction_manager),
-    onode->get_layout().omap_root.get(),
-    [&ctx, &onode, &keys, this](
-      auto &omap_manager,
-      auto &omap_root) {
-      return crimson::do_for_each(
-	keys.begin(),
-	keys.end(),
-	[&, this](auto &p) {
-	  return omap_manager.omap_rm_key(
-	    omap_root,
-	    *ctx.transaction,
-	    p);
-	});
-    });
+  auto omap_root = onode->get_layout().omap_root.get();
+  if (omap_root.is_null()) {
+    return seastar::now();
+  } else {
+    return seastar::do_with(
+      BtreeOMapManager(*transaction_manager),
+      onode->get_layout().omap_root.get(),
+      [&ctx, &onode, &keys, this](
+	auto &omap_manager,
+	auto &omap_root) {
+	return crimson::do_for_each(
+	  keys.begin(),
+	  keys.end(),
+	  [&, this](auto &p) {
+	    return omap_manager.omap_rm_key(
+	      omap_root,
+	      *ctx.transaction,
+	      p);
+	  }).safe_then([&, this] {
+	    if (omap_root.must_update()) {
+	      onode->get_mutable_layout(*ctx.transaction
+	      ).omap_root.update(omap_root);
+	    }
+	  });
+      });
+  }
 }
 
 SeaStore::tm_ret SeaStore::_omap_rmkeyrange(

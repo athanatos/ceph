@@ -31,7 +31,8 @@ BtreeOMapManager::initialize_omap(Transaction &t)
       root_extent->set_size(0);
       omap_node_meta_t meta{1};
       root_extent->set_meta(meta);
-      omap_root_t omap_root = omap_root_t(root_extent->get_laddr(), 1);
+      omap_root_t omap_root;
+      omap_root.update(root_extent->get_laddr(), 1);
       return initialize_omap_ertr::make_ready_future<omap_root_t>(omap_root);
   });
 }
