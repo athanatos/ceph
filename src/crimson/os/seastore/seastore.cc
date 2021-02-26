@@ -289,12 +289,11 @@ SeaStore::omap_get_values(
     });
 }
 
-auto
-SeaStore::omap_get_values(
+SeaStore::omap_get_values_ret_t SeaStore::omap_list(
   CollectionRef ch,
   const ghobject_t &oid,
-  const std::optional<string> &_start)
-  -> read_errorator::future<std::tuple<bool, SeaStore::omap_values_t>>
+  const std::optional<string> &_start,
+  OMapManager::omap_list_config_t config)
 {
   auto c = static_cast<SeastoreCollection*>(ch.get());
   logger().debug(
@@ -331,42 +330,91 @@ SeaStore::omap_get_values(
     });
 }
 
-class SeaStoreOmapIterator : FuturizedStore::OmapIterator {
+SeaStore::omap_get_values_ret_t SeaStore::omap_get_values(
+  CollectionRef ch,
+  const ghobject_t &oid,
+  const std::optional<string> &_start)
+{
+  return omap_list(
+    ch, oid, _start, 
+    OMapManager::omap_list_config_t::with_inclusive(false));
+}
+
+class SeaStoreOmapIterator : public FuturizedStore::OmapIterator {
   using omap_values_t = FuturizedStore::omap_values_t;
 
+  SeaStore &seastore;
   CollectionRef ch;
-  TransactionRef t;
-  BtreeOMapManager manager;
-  const omap_root_t root;
+  const ghobject_t &oid;
 
   omap_values_t current;
   omap_values_t::iterator iter;
+
+  seastar::future<> repopulate_from(
+    std::optional<std::string> from,
+    bool inclusive) {
+    return seastar::do_with(
+      from,
+      [this, inclusive](auto &from) {
+	return seastore.omap_list(
+	  ch,
+	  oid,
+	  from,
+	  OMapManager::omap_list_config_t::with_inclusive(inclusive)
+	).safe_then([this](auto p) {
+	  auto &[complete, values] = p;
+	  current.swap(values);
+	  if (current.empty()) {
+	    assert(complete);
+	  } else {
+	    iter = current.begin();
+	  }
+	});
+      }).handle_error(
+	crimson::ct_error::assert_all{
+	  "Invalid error in SeaStore::_create_collection"
+        }
+      );
+  }
 public:
   SeaStoreOmapIterator(
+    SeaStore &seastore,
     CollectionRef ch,
-    TransactionRef &&t,
-    BtreeOMapManager &&manager,
-    const omap_root_t &root) :
-    ch(ch), t(std::move(t)),
-    manager(std::move(manager)),
-    root(root),
+    const ghobject_t &oid) :
+    seastore(seastore),
+    ch(ch),
+    oid(oid),
     iter(current.begin())
   {}
     
   seastar::future<> seek_to_first() final {
-    return seastar::now();
+    return repopulate_from(
+      std::nullopt,
+      false);
   }
   seastar::future<> upper_bound(const std::string &after) final {
-    return seastar::now();
+    return repopulate_from(
+      after,
+      false);
   }
   seastar::future<> lower_bound(const std::string &from) final {
-    return seastar::now();
+    return repopulate_from(
+      from,
+      true);
   }
   bool valid() const {
     return iter != current.end();
   }
   seastar::future<> next() final {
-    return seastar::now();
+    assert(valid());
+    auto prev = iter++;
+    if (iter == current.end()) {
+      return repopulate_from(
+	prev->first,
+	false);
+    } else {
+      return seastar::now();
+    }
   }
   std::string key() {
     return iter->first;
@@ -384,7 +432,11 @@ seastar::future<FuturizedStore::OmapIteratorRef> SeaStore::get_omap_iterator(
   CollectionRef ch,
   const ghobject_t& oid)
 {
-  return seastar::make_ready_future<FuturizedStore::OmapIteratorRef>();
+  return seastar::make_ready_future<FuturizedStore::OmapIteratorRef>(
+    new SeaStoreOmapIterator(
+      *this,
+      ch, 
+      oid));
 }
 
 seastar::future<std::map<uint64_t, uint64_t>> SeaStore::fiemap(

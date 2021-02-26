@@ -97,11 +97,10 @@ public:
    *        it it is not set, list all keys after string start.
    * @retval listed key->value mapping and next key
    */
-  class omap_list_config_t {
+  struct omap_list_config_t {
     size_t max_result_size = MAX_SIZE;
     bool inclusive = false;
 
-  public:
     omap_list_config_t(
       size_t max_result_size,
       bool inclusive)
@@ -112,6 +111,18 @@ public:
     omap_list_config_t(omap_list_config_t &&) = default;
     omap_list_config_t &operator=(const omap_list_config_t &) = default;
     omap_list_config_t &operator=(omap_list_config_t &&) = default;
+
+    static omap_list_config_t with_max(size_t max) {
+      omap_list_config_t ret{};
+      ret.max_result_size = max;
+      return ret;
+    }
+
+    static omap_list_config_t with_inclusive(bool inclusive) {
+      omap_list_config_t ret{};
+      ret.inclusive = inclusive;
+      return ret;
+    }
 
     auto with_reduced_max(size_t reduced_by) const {
       return omap_list_config_t(
