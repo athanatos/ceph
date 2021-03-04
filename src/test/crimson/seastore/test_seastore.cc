@@ -232,7 +232,7 @@ TEST_F(seastore_test_t, omap_test_iterator)
       return ss.str();
     };
     auto &test_obj = get_object(make_oid(0));
-    for (unsigned i = 0; i < 20; ++i) {
+    for (unsigned i = 0; i < 50; ++i) {
       test_obj.set_omap(
 	*seastore,
 	make_key(i),

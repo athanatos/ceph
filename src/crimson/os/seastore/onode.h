@@ -19,6 +19,7 @@ namespace crimson::os::seastore {
 struct __attribute__((packed)) onode_layout_t {
   ceph_le32 size = init_le32(0);
   omap_root_le_t omap_root;
+  extmap_root_le_t extmap_root;
 } __attribute__((packed));
 
 /**

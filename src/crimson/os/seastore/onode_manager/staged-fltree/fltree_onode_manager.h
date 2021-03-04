@@ -28,6 +28,8 @@ struct FLTreeOnode : Onode, Value {
   template <typename... T>
   FLTreeOnode(T&&... args) : Value(std::forward<T>(args)...) {}
 
+  
+
   struct Recorder : public ValueDeltaRecorder {
     Recorder(bufferlist &bl) : ValueDeltaRecorder(bl) {}
     
@@ -36,10 +38,10 @@ struct FLTreeOnode : Onode, Value {
     }
     
     void apply_value_delta(
-      ceph::bufferlist::const_iterator&,
-      NodeExtentMutable&,
+      ceph::bufferlist::const_iterator &bliter,
+      NodeExtentMutable &value,
       laddr_t) final {
-      // TODO
+      
     }
   };
 
@@ -61,6 +63,8 @@ struct FLTreeOnode : Onode, Value {
       Recorder>(t);
     status = status_t::STABLE;
     // TODO: fill in recorder
+    ceph::buffer::ptr bptr(sizeof(onode_layout_t));
+    *reinterpret_cast<onode_layout_t*>(bptr.c_str()) = get_layout();
   }
 
   ~FLTreeOnode() final {}
