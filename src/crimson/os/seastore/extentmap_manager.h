@@ -48,24 +48,9 @@ public:
   ~extent_mapping_t() {}
 };
 
-enum class extmap_root_state_t : uint8_t {
-  INITIAL = 0,
-  MUTATED = 1,
-  NONE = 0xFF
-};
-
 using extent_map_list_t = std::list<extent_mapping_t>;
 std::ostream &operator<<(std::ostream &out, const extent_mapping_t &rhs);
 std::ostream &operator<<(std::ostream &out, const extent_map_list_t &rhs);
-
-struct extmap_root_t {
-  depth_t depth = 0;
-  extmap_root_state_t state;
-  laddr_t extmap_root_laddr;
-  extmap_root_t(depth_t dep, laddr_t laddr)
-  : depth(dep),
-    extmap_root_laddr(laddr) { state = extmap_root_state_t::INITIAL; }
-};
 
 /**
  * Abstract interface for managing the object inner offset to logical addr
