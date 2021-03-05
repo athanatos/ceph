@@ -780,7 +780,6 @@ SeaStore::tm_ret SeaStore::_create_collection(
 	  cid,
 	  bits
 	).safe_then([=, &ctx, &cmroot] {
-	  // param here denotes whether it already existed, probably error
 	  if (cmroot.must_update()) {
 	    transaction_manager->write_collection_root(
 	      *ctx.transaction,
