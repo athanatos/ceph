@@ -32,7 +32,7 @@ BtreeExtentMapManager::initialize_extmap(Transaction &t)
     root_extent->set_size(0);
     extmap_node_meta_t meta{1};
     root_extent->set_meta(meta);
-    extmap_root_t extmap_root = extmap_root_t(1, root_extent->get_laddr());
+    extmap_root_t extmap_root = extmap_root_t(root_extent->get_laddr(), 1);
     return initialize_extmap_ertr::make_ready_future<extmap_root_t>(extmap_root);
   });
 }
@@ -41,9 +41,11 @@ BtreeExtentMapManager::get_root_ret
 BtreeExtentMapManager::get_extmap_root(
   const extmap_root_t &extmap_root, Transaction &t)
 {
-  assert(extmap_root.extmap_root_laddr != L_ADDR_NULL);
-  laddr_t laddr = extmap_root.extmap_root_laddr;
-  return extmap_load_extent(get_ext_context(t), laddr, extmap_root.depth);
+  assert(extmap_root.get_location() != L_ADDR_NULL);
+  return extmap_load_extent(
+    get_ext_context(t),
+    extmap_root.get_location(),
+    extmap_root.get_depth());
 }
 
 BtreeExtentMapManager::find_lextent_ret
@@ -99,9 +101,9 @@ BtreeExtentMapManager::insert_lextent(
       nroot->journal_insert(
 	nroot->begin(), OBJ_ADDR_MIN,
 	root->get_laddr(), nullptr);
-      extmap_root.extmap_root_laddr = nroot->get_laddr();
-      extmap_root.depth = root->get_node_meta().depth + 1;
-      extmap_root.state = extmap_root_state_t::MUTATED;
+      extmap_root.update(
+	nroot->get_laddr(),
+	root->get_node_meta().depth + 1);
       return nroot->split_entry(
 	get_ext_context(t), logical_offset, nroot->begin(), root);
     });
