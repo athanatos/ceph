@@ -99,7 +99,7 @@ BtreeExtentMapManager::insert_lextent(
       extmap_node_meta_t meta{root->get_node_meta().depth + 1};
       nroot->set_meta(meta);
       nroot->journal_insert(
-	nroot->begin(), OBJ_ADDR_MIN,
+	nroot->begin(), 0,
 	root->get_laddr(), nullptr);
       extmap_root.update(
 	nroot->get_laddr(),
