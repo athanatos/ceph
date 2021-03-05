@@ -68,53 +68,74 @@ struct extmap_root_t {
 };
 
 /**
- * Abstract interface for managing the object inner offset to logical addr mapping
- * each onode has an extentmap tree for a particular onode.
+ * Abstract interface for managing the object inner offset to logical addr
+ * mapping each onode has an extentmap tree for a particular onode.
  */
 class ExtentMapManager {
 public:
   using initialize_extmap_ertr = TransactionManager::alloc_extent_ertr;
   using initialize_extmap_ret = initialize_extmap_ertr::future<extmap_root_t>;
-  virtual initialize_extmap_ret initialize_extmap(Transaction &t) = 0;
+  virtual initialize_extmap_ret initialize_extmap(
+    Transaction &t
+  ) = 0;
 
-  /* find_lextents
+  /**
+   * find_lextents
    *
    * Return a list of all extent_mapping_t overlapping any portion of lo~len.
-   * or if not find any overlap extent_mapping_t will return the next extent after the range.
+   * or if not find any overlap extent_mapping_t will return the next extent
+   * after the range.
    */
   using find_lextent_ertr = TransactionManager::read_extent_ertr;
   using find_lextent_ret = find_lextent_ertr::future<extent_map_list_t>;
-  virtual find_lextent_ret
-    find_lextent(const extmap_root_t &extmap_root, Transaction &t, objaddr_t lo, extent_len_t len) = 0;
+  virtual find_lextent_ret find_lextent(
+    const extmap_root_t &extmap_root,
+    Transaction &t,
+    objaddr_t lo,
+    extent_len_t len
+  ) = 0;
 
-  /* add_lextent
+  /**
+   * add_lextent
    *
    * add a new mapping (object offset -> laddr, length) to extent map
    * return the added extent_mapping_t
    */
   using add_lextent_ertr = TransactionManager::read_extent_ertr;
   using add_lextent_ret = add_lextent_ertr::future<extent_mapping_t>;
-  virtual add_lextent_ret
-    add_lextent(extmap_root_t &extmap_root, Transaction &t, objaddr_t lo, lext_map_val_t val) = 0;
+  virtual add_lextent_ret add_lextent(
+    extmap_root_t &extmap_root,
+    Transaction &t,
+    objaddr_t lo,
+    lext_map_val_t val
+  ) = 0;
 
-  /* rm_lextent
+  /**
+   * rm_lextent
    *
    * remove an existing extent mapping from extent map
    * return true if the extent mapping is removed, otherwise return false
    */
   using rm_lextent_ertr = TransactionManager::read_extent_ertr;
   using rm_lextent_ret = rm_lextent_ertr::future<bool>;
-  virtual rm_lextent_ret rm_lextent(extmap_root_t &extmap_root, Transaction &t, objaddr_t lo, lext_map_val_t val) = 0;
+  virtual rm_lextent_ret rm_lextent(
+    extmap_root_t &extmap_root,
+    Transaction &t,
+    objaddr_t lo,
+    lext_map_val_t val
+  ) = 0;
 
   virtual ~ExtentMapManager() {}
 };
 using ExtentMapManagerRef = std::unique_ptr<ExtentMapManager>;
 
 namespace extentmap_manager {
-/* creat ExtentMapManager for an extentmap
- * if it is a new extmap after create_extentmap_manager need call initialize_extmap
- * to initialize the extent map before use it
- * if it is an exsiting extmap, needn't initialize_extmap
+
+/**
+ * create_extentmap_manager
+ *
+ * Create concrete ExtentMapManager object.  See initialize_extmap for
+ * creating a new instance within a TransactionManager.
  */
 ExtentMapManagerRef create_extentmap_manager(
   TransactionManager &trans_manager);
