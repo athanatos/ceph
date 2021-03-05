@@ -123,7 +123,7 @@ struct extentmap_manager_test_t :
 TEST_F(extentmap_manager_test_t, basic)
 {
   run_async([this] {
-    extmap_root_t extmap_root(0, L_ADDR_NULL);
+    extmap_root_t extmap_root;
     {
       auto t = tm->create_transaction();
       extmap_root = extmap_manager->initialize_extmap(*t).unsafe_get0();
@@ -159,7 +159,7 @@ TEST_F(extentmap_manager_test_t, basic)
 TEST_F(extentmap_manager_test_t, force_leafnode_split)
 {
   run_async([this] {
-    extmap_root_t extmap_root(0, L_ADDR_NULL);
+    extmap_root_t extmap_root;
     {
       auto t = tm->create_transaction();
       extmap_root = extmap_manager->initialize_extmap(*t).unsafe_get0();
@@ -188,7 +188,7 @@ TEST_F(extentmap_manager_test_t, force_leafnode_split)
 TEST_F(extentmap_manager_test_t, force_leafnode_split_merge)
 {
   run_async([this] {
-    extmap_root_t extmap_root(0, L_ADDR_NULL);
+    extmap_root_t extmap_root;
     {
       auto t = tm->create_transaction();
       extmap_root = extmap_manager->initialize_extmap(*t).unsafe_get0();
@@ -241,7 +241,7 @@ TEST_F(extentmap_manager_test_t, force_leafnode_split_merge)
 TEST_F(extentmap_manager_test_t, force_leafnode_split_merge_replay)
 {
   run_async([this] {
-    extmap_root_t extmap_root(0, L_ADDR_NULL);
+    extmap_root_t extmap_root;
     {
       auto t = tm->create_transaction();
       extmap_root = extmap_manager->initialize_extmap(*t).unsafe_get0();

@@ -367,20 +367,21 @@ struct record_t {
   std::vector<delta_info_t> deltas;
 };
 
-struct omap_root_t {
+
+struct btree_root_t {
   laddr_t addr = L_ADDR_NULL;
   depth_t depth = 0;
   bool mutated = false;
 
-  omap_root_t() = default;
-  omap_root_t(laddr_t addr, depth_t depth)
+  btree_root_t() = default;
+  btree_root_t(laddr_t addr, depth_t depth)
     : addr(addr),
       depth(depth) {}
 
-  omap_root_t(const omap_root_t &o) = default;
-  omap_root_t(omap_root_t &&o) = default;
-  omap_root_t &operator=(const omap_root_t &o) = default;
-  omap_root_t &operator=(omap_root_t &&o) = default;
+  btree_root_t(const btree_root_t &o) = default;
+  btree_root_t(btree_root_t &&o) = default;
+  btree_root_t &operator=(const btree_root_t &o) = default;
+  btree_root_t &operator=(btree_root_t &&o) = default;
 
   bool is_null() const {
     return addr == L_ADDR_NULL;
@@ -404,31 +405,35 @@ struct omap_root_t {
     return depth;
   }
 };
+using omap_root_t = btree_root_t;
+using extmap_root_t = btree_root_t;
 
-class __attribute__((packed)) omap_root_le_t {
+class __attribute__((packed)) btree_root_le_t {
   laddr_le_t addr = laddr_le_t(L_ADDR_NULL);
   depth_le_t depth = init_depth_le(0);
 
 public: 
-  omap_root_le_t() = default;
+  btree_root_le_t() = default;
   
-  omap_root_le_t(laddr_t addr, depth_t depth)
+  btree_root_le_t(laddr_t addr, depth_t depth)
     : addr(addr), depth(init_depth_le(depth)) {}
 
-  omap_root_le_t(const omap_root_le_t &o) = default;
-  omap_root_le_t(omap_root_le_t &&o) = default;
-  omap_root_le_t &operator=(const omap_root_le_t &o) = default;
-  omap_root_le_t &operator=(omap_root_le_t &&o) = default;
+  btree_root_le_t(const btree_root_le_t &o) = default;
+  btree_root_le_t(btree_root_le_t &&o) = default;
+  btree_root_le_t &operator=(const btree_root_le_t &o) = default;
+  btree_root_le_t &operator=(btree_root_le_t &&o) = default;
   
-  void update(const omap_root_t &nroot) {
+  void update(const btree_root_t &nroot) {
     addr = nroot.get_location();
     depth = init_depth_le(nroot.get_depth());
   }
   
-  omap_root_t get() const {
-    return omap_root_t(addr, depth);
+  btree_root_t get() const {
+    return btree_root_t(addr, depth);
   }
 };
+using omap_root_le_t = btree_root_le_t;
+using extmap_root_le_t = btree_root_le_t;
 
 /**
  * lba_root_t 
