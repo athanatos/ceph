@@ -437,6 +437,10 @@ BtreeLBAManager::get_physical_extent_if_live(
     laddr,
     len
   ).safe_then([=, &t](CachedExtentRef extent) {
+    logger().debug(
+      "BtreeLBAManager::get_physical_extent_if_live: read addr {} {}",
+      addr,
+      *extent);
     return get_root(t).safe_then([=, &t](LBANodeRef root) {
       auto lba_node = extent->cast<LBANode>();
       return root->lookup(

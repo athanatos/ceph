@@ -43,6 +43,13 @@ LBAInternalNode::lookup_ret LBAInternalNode::lookup(
   auto [iter, biter] = bound(addr, addr + 1);
   assert(iter != biter);
   assert(iter + 1 == biter);
+
+  logger().debug(
+    "LBAInternalNode::lookup addr {} depth {} key {} val {}",
+    addr,
+    depth,
+    iter->get_key(),
+    iter->get_val());
   return get_lba_btree_extent(
     c,
     this,
@@ -677,8 +684,14 @@ get_lba_node_ret get_lba_btree_extent(
     return c.cache.get_extent<LBAInternalNode>(
       c.trans,
       offset,
-      LBA_BLOCK_SIZE).safe_then([c, parent](auto ret)
+      LBA_BLOCK_SIZE).safe_then([c, parent, offset](auto ret)
 				-> get_lba_node_ret {
+	logger().debug(
+	  "get_lba_btree_extent: read internal at offset {}, {}, parent {}",
+	  offset,
+	  *ret,
+	  *parent
+	);
 	auto meta = ret->get_meta();
 	if (ret->get_size()) {
 	  ceph_assert(meta.begin <= ret->begin()->get_key());
