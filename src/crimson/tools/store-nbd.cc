@@ -445,8 +445,11 @@ seastar::future<> handle_command(
     default:
       throw std::system_error(std::make_error_code(std::errc::bad_message));
     }
-  })().handle_exception([](auto e) {
-      logger().debug("handle_command saw exception {}", e);
+  })().handle_exception([&request](auto e) {
+      logger().debug(
+	"handle_command saw exception {} on {}",
+	e,
+	request.get_command() == NBD_CMD_WRITE ? "write" : "read");
       return seastar::now();
   }).then([&, request_ref=std::move(request_ref)]() mutable {
     logger().debug("handle_command complete");
