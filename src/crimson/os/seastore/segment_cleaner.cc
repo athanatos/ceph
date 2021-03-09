@@ -292,6 +292,8 @@ SegmentCleaner::do_gc_ret SegmentCleaner::do_gc(
       scan_cursor->get_offset().segment);
   }
 
+  // TODO if we get an eagain, we have to rescan -- need to hold extents until
+  // successful commit or something.
   return ecb->scan_extents(
     *scan_cursor,
     bytes
