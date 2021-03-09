@@ -305,6 +305,9 @@ TransactionManager::get_extent_if_live_ret TransactionManager::get_extent_if_liv
 	      [this, pin=std::move(pin)](CachedExtentRef ret) mutable
 	      -> get_extent_if_live_ret {
 		auto lref = ret->cast<LogicalCachedExtent>();
+		logger().debug(
+		  "TransactionManager::get_extent_if_live read {}",
+		  *lref);
 		if (!lref->has_pin()) {
 		  if (pin->has_been_invalidated() || lref->has_been_invalidated()) {
 		    return crimson::ct_error::eagain::make();
@@ -332,7 +335,20 @@ TransactionManager::get_extent_if_live_ret TransactionManager::get_extent_if_liv
       type,
       addr,
       laddr,
-      len);
+      len
+    ).safe_then([addr](auto &&ret) {
+      if (ret) {
+	logger().debug(
+	  "TransactionManager::get_extent_if_live: non-logical extent {} read {}",
+	  addr,
+	  *ret);
+      } else {
+	logger().debug(
+	  "TransactionManager::get_extent_if_live: non-logical extent {} read nullptr",
+	  addr);
+      }
+      return std::move(ret);
+    });
   }
 }
 
