@@ -257,6 +257,9 @@ struct RequestWriter {
     return lock.write_lock(
     ).then([&request, this] {
       return request.write_reply(stream);
+    }).handle_exception([](auto e) {
+      logger().debug("complete saw exception {}", e);
+      return seastar::now();
     }).finally([&, this, req=std::move(req)] {
       --pending;
       lock.write_unlock();
@@ -442,7 +445,10 @@ seastar::future<> handle_command(
     default:
       throw std::system_error(std::make_error_code(std::errc::bad_message));
     }
-  })().then([&, request_ref=std::move(request_ref)]() mutable {
+  })().handle_exception([](auto e) {
+      logger().debug("handle_command saw exception {}", e);
+      return seastar::now();
+  }).then([&, request_ref=std::move(request_ref)]() mutable {
     logger().debug("handle_command complete");
     return out.complete(std::move(request_ref));
   });

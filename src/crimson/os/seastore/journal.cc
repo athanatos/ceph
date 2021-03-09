@@ -754,6 +754,10 @@ Journal::scan_valid_records_ret Journal::scan_valid_records(
 	} else {
 	  assert(!cursor.pending_records.empty());
 	  auto &next = cursor.pending_records.front();
+	  logger().debug(
+	    "Journal::scan_validate_records: validating data for record"
+	    " header offset {}, mdlength {}, dlength {}",
+	    next.offset, next.header.mdlength, next.header.dlength);
 	  return read_validate_data(next.offset, next.header
 	  ).safe_then([=, &budget_used, &next, &cursor, &handler](auto valid) {
 	    if (!valid) {
