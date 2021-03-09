@@ -6,6 +6,7 @@
 #include <iostream>
 
 #include "seastar/core/shared_future.hh"
+#include "seastar/core/sleep.hh"
 
 #include "include/buffer.h"
 #include "crimson/os/seastore/seastore_types.h"
@@ -162,18 +163,26 @@ public:
       return segment_manager.read(
 	offset,
 	length,
-	ref->get_bptr()).safe_then(
-	  [ref=std::move(ref)]() mutable {
-	    /* TODO: crc should be checked against LBA manager */
-	    ref->last_committed_crc = ref->get_crc32c();
-
-	    ref->on_clean_read();
-	    ref->complete_io();
-	    return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
-	      std::move(ref));
-	  },
-	  get_extent_ertr::pass_further{},
-	  crimson::ct_error::discard_all{});
+	ref->get_bptr()
+      ).safe_then([] {
+	if ((rand() % 100) == 0) {
+	  return seastar::sleep(std::chrono::milliseconds(1));
+	} else {
+	  return seastar::now();
+	}
+      }).safe_then(
+	[ref=std::move(ref)]() mutable {
+	  /* TODO: crc should be checked against LBA manager */
+	  ref->last_committed_crc = ref->get_crc32c();
+	  
+	  ref->on_clean_read();
+	  ref->complete_io();
+	  return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
+	    std::move(ref));
+	},
+	get_extent_ertr::pass_further{},
+	crimson::ct_error::discard_all{}
+      );
     }
   }
 
