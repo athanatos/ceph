@@ -289,6 +289,12 @@ public:
   get_next_dirty_extents_ret get_next_dirty_extents(
     journal_seq_t seq) final;
 
+  using SegmentCleaner::ExtentCallbackInterface::scan_validate_extents_cursor;
+  using SegmentCleaner::ExtentCallbackInterface::scan_validate_extents_ret;
+  scan_validate_extents_ret scan_validate_extents(
+    scan_validate_extents_cursor &cursor,
+    extent_len_t bytes_to_read) final;
+
   using SegmentCleaner::ExtentCallbackInterface::rewrite_extent_ret;
   rewrite_extent_ret rewrite_extent(
     Transaction &t,

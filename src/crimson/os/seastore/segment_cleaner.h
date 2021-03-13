@@ -254,6 +254,20 @@ public:
       journal_seq_t bound ///< [in] return extents with dirty_from < bound
     ) = 0;
 
+    /**
+     * scan_validate_extents
+     *
+     * Returns sequence of valid (at time of check) extents from
+     * SegmentManager beginning at cursor.
+     */
+    using scan_validate_extents_cursor = Journal::scan_valid_records_cursor;
+    using scan_validate_extents_ertr = Journal::scan_extents_ertr;
+    using scan_validate_extents_ret = scan_validate_extents_ertr::future<
+      gc_relocate_extent_list_t>;
+    virtual scan_validate_extents_ret scan_validate_extents(
+      scan_validate_extents_cursor &cursor,
+      extent_len_t bytes_to_read) = 0;
+
     using extent_mapping_ertr = crimson::errorator<
       crimson::ct_error::input_output_error,
       crimson::ct_error::eagain>;
