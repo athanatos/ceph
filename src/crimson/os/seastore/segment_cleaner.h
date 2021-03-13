@@ -236,6 +236,8 @@ public:
     }
   };
 
+  using gc_relocate_extent_list_t = std::list<CachedExtentRef>;
+
   /// Callback interface for querying and operating on segments
   class ExtentCallbackInterface {
   public:
@@ -247,7 +249,7 @@ public:
      */
     using get_next_dirty_extents_ertr = crimson::errorator<>;
     using get_next_dirty_extents_ret = get_next_dirty_extents_ertr::future<
-      std::vector<CachedExtentRef>>;
+      gc_relocate_extent_list_t>;
     virtual get_next_dirty_extents_ret get_next_dirty_extents(
       journal_seq_t bound ///< [in] return extents with dirty_from < bound
     ) = 0;

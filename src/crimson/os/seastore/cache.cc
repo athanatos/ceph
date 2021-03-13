@@ -445,7 +445,7 @@ Cache::replay_delta(
 Cache::get_next_dirty_extents_ret Cache::get_next_dirty_extents(
   journal_seq_t seq)
 {
-  std::vector<CachedExtentRef> ret;
+  std::list<CachedExtentRef> ret;
   for (auto i = dirty.begin(); i != dirty.end(); ++i) {
     CachedExtentRef cand;
     if (i->dirty_from < seq) {
@@ -475,7 +475,7 @@ Cache::get_next_dirty_extents_ret Cache::get_next_dirty_extents(
 	    *ext);
 	  return ext->wait_io();
 	}).then([&ret]() mutable {
-	  return seastar::make_ready_future<std::vector<CachedExtentRef>>(
+	  return seastar::make_ready_future<std::list<CachedExtentRef>>(
 	    std::move(ret));
 	});
     });
