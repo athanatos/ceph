@@ -478,7 +478,7 @@ public:
   /// returns extents with dirty_from < seq
   using get_next_dirty_extents_ertr = crimson::errorator<>;
   using get_next_dirty_extents_ret = get_next_dirty_extents_ertr::future<
-    std::vector<CachedExtentRef>>;
+    std::list<CachedExtentRef>>;
   get_next_dirty_extents_ret get_next_dirty_extents(
     journal_seq_t seq);
 
