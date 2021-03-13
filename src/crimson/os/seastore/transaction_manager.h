@@ -300,25 +300,24 @@ public:
     Transaction &t,
     CachedExtentRef extent) final;
 
-  using SegmentCleaner::ExtentCallbackInterface::get_extent_if_live_ret;
+  /**
+   * get_extent_if_live
+   *
+   * Returns extent at specified location if still referenced by
+   * lba_manager and not removed by t.
+   *
+   * See TransactionManager::get_extent_if_live and
+   * LBAManager::get_physical_extent_if_live.
+   */
+  using get_extent_if_live_ertr = base_ertr;
+  using get_extent_if_live_ret = get_extent_if_live_ertr::future<
+    CachedExtentRef>;
   get_extent_if_live_ret get_extent_if_live(
     Transaction &t,
     extent_types_t type,
     paddr_t addr,
     laddr_t laddr,
-    segment_off_t len) final;
-
-  using scan_extents_cursor =
-    SegmentCleaner::ExtentCallbackInterface::scan_extents_cursor;
-  using scan_extents_ertr =
-    SegmentCleaner::ExtentCallbackInterface::scan_extents_ertr;
-  using scan_extents_ret =
-    SegmentCleaner::ExtentCallbackInterface::scan_extents_ret;
-  scan_extents_ret scan_extents(
-    scan_extents_cursor &cursor,
-    extent_len_t bytes_to_read) final {
-    return journal->scan_extents(cursor, bytes_to_read);
-  }
+    segment_off_t len);
 
   using release_segment_ret =
     SegmentCleaner::ExtentCallbackInterface::release_segment_ret;
