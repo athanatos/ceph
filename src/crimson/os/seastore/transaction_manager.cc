@@ -278,6 +278,57 @@ TransactionManager::get_next_dirty_extents(journal_seq_t seq)
   return cache->get_next_dirty_extents(seq);
 }
 
+TransactionManager::scan_validate_extents_ret
+TransactionManager::scan_validate_extents(
+  scan_validate_extents_cursor &cursor,
+  extent_len_t bytes_to_read)
+{
+  return journal->scan_extents(cursor, bytes_to_read
+  ).safe_then([this](auto &&addrs) {
+    return seastar::do_with(
+      std::move(addrs),
+      SegmentCleaner::gc_relocate_extent_list_t(),
+      [this](const auto &addrs, auto &ret) {
+	return repeat_eagain(
+	  [this, &ret, &addrs] {
+	    return seastar::do_with(
+	      make_transaction(),
+	      [this, &ret, &addrs](auto &t) {
+		return crimson::do_for_each(
+		  addrs,
+		  [this, &t, &ret](auto &addr_pair) {
+		    auto &[addr, info] = addr_pair;
+		    return get_extent_if_live(
+		      *t,
+		      info.type,
+		      addr,
+		      info.addr,
+		      info.len
+		    ).safe_then([this, &t, &ret, &addr](CachedExtentRef ext) {
+		      if (!ext) {
+			logger().debug(
+			  "TransactionManager::scan_validate_extents:"
+			  " addr {} dead, skipping",
+			  addr);
+		      } else {
+			logger().debug(
+			  "TransactionManager::scan_validate_extents:"
+			  " addr {} live: {}",
+			  addr,
+			  *ext);
+			ret.push_back(ext);
+		      }
+		      return seastar::now();
+		    });
+		  });
+	      });
+	  }).safe_then([&ret] {
+	    return std::move(ret);
+	  });
+      });
+  });
+}
+
 TransactionManager::rewrite_extent_ret TransactionManager::rewrite_extent(
   Transaction &t,
   CachedExtentRef extent)
