@@ -4,6 +4,7 @@
 #include "crimson/common/log.h"
 
 #include "crimson/os/seastore/segment_cleaner.h"
+#include "crimson/os/seastore/transaction_manager.h"
 
 namespace {
   seastar::logger& logger() {
@@ -263,6 +264,117 @@ SegmentCleaner::rewrite_dirty_ret SegmentCleaner::rewrite_dirty(
 	    return ecb->rewrite_extent(t, e);
 	  });
       });
+  });
+}
+
+SegmentCleaner::GCProcess::gc_process_ret SegmentCleaner::GCProcess::run()
+{
+  return seastar::do_until(
+    [this] { return stopping; },
+    [this] {
+      return maybe_wait_should_run(
+      ).then([this] {
+	logger().debug(
+	  "SegmentCleaner::GCProcess::run: "
+	  " journal_tail_target={} get_dirty_tail()={}, get_dirty_tail_limit()={}",
+	  cleaner.journal_tail_target,
+	  cleaner.get_dirty_tail(),
+	  cleaner.get_dirty_tail_limit());
+
+	logger().debug(
+	  "SegmentCleaner::do_immediate_work gc total {}, available {}, unavailable {}, used {}  available_ratio {}, reclaim_ratio {}, bytes_to_gc_for_available {}, bytes_to_gc_for_reclaim {}",
+	  cleaner.get_total_bytes(),
+	  cleaner.get_available_bytes(),
+	  cleaner.get_unavailable_bytes(),
+	  cleaner.get_used_bytes(),
+	  cleaner.get_available_ratio(),
+	  cleaner.get_reclaim_ratio(),
+	  cleaner.get_immediate_bytes_to_gc_for_available(),
+	  cleaner.get_immediate_bytes_to_gc_for_reclaim());
+
+
+	if (stopping) {
+	  return seastar::now();
+	} else if (cleaner.gc_should_trim_journal()) {
+	  return cleaner.gc_trim_journal(
+	  ).handle_error(
+	    crimson::ct_error::assert_all{
+	      "GCProcess::run encountered invalid error in gc_trim_journal"
+          });
+	} else if (cleaner.gc_should_reclaim_space()) {
+	  return cleaner.gc_reclaim_space(
+	  ).handle_error(
+	    crimson::ct_error::assert_all{
+	      "GCProcess::run encountered invalid error in gc_reclaim_space"
+          });
+	}
+	ceph_assert("should be unreachable" == 0);
+	return seastar::now();
+      });
+    });
+}
+
+SegmentCleaner::gc_trim_journal_ret SegmentCleaner::gc_trim_journal()
+{
+  return repeat_eagain(
+    [this] {
+      return seastar::do_with(
+	make_transaction(),
+	[this](auto &t) {
+	  return rewrite_dirty(*t, get_dirty_tail()
+	  ).safe_then([this, &t] {
+	    return ecb->submit_transaction_direct(
+	      std::move(t));
+	  });
+	});
+    });
+}
+
+SegmentCleaner::gc_reclaim_space_ret SegmentCleaner::gc_reclaim_space()
+{
+  if (!scan_cursor) {
+    paddr_t next = P_ADDR_NULL;
+    next.segment = get_next_gc_target();
+    if (next == P_ADDR_NULL) {
+      logger().debug(
+	"SegmentCleaner::do_gc: no segments to gc");
+      return seastar::now();
+    }
+    next.offset = 0;
+    scan_cursor =
+      std::make_unique<ExtentCallbackInterface::scan_validate_extents_cursor>(
+	next);
+    logger().debug(
+      "SegmentCleaner::do_gc: starting gc on segment {}",
+      scan_cursor->get_offset().segment);
+  } else {
+    ceph_assert(!scan_cursor->is_complete());
+  }
+
+  return ecb->scan_validate_extents(
+    *scan_cursor,
+    config.reclaim_bytes_stride
+  ).safe_then([this](auto &&extents) {
+    return repeat_eagain([this, extents=std::move(extents)]() mutable {
+      return seastar::do_with(
+	make_transaction(),
+	[this, &extents](auto &t) mutable {
+	  return crimson::do_for_each(
+	    extents,
+	    [this, &t](auto &extent) {
+	      return ecb->rewrite_extent(
+		*t,
+		extent);
+	    }
+	  ).safe_then([this, &t] {
+	    if (scan_cursor->is_complete()) {
+	      t->mark_segment_to_release(scan_cursor->get_offset().segment);
+	      scan_cursor.reset();
+	    }
+	    return ecb->submit_transaction_direct(std::move(t));
+	  });
+	});
+    });
   });
 }
 

@@ -212,14 +212,20 @@ public:
     size_t num_segments = 0;
     size_t segment_size = 0;
     size_t block_size = 0;
+
+    // TODO rename
     size_t target_journal_segments = 0;
     size_t max_journal_segments = 0;
 
     double reclaim_ratio_hard_limit = 0;
-    // don't apply reclaim ratio with available space below this
+    double reclaim_ratio_gc_threshhold = 0;
+
+    // don't apply reclaim ratio with available space below this (TODO remove)
     double reclaim_ratio_usage_min = 0;
 
     double available_ratio_hard_limit = 0;
+
+    size_t reclaim_bytes_stride = 0; // Number of bytes to reclaim on each cycle
 
     static config_t default_from_segment_manager(
       SegmentManager &manager) {
@@ -227,11 +233,13 @@ public:
 	manager.get_num_segments(),
 	static_cast<size_t>(manager.get_segment_size()),
 	(size_t)manager.get_block_size(),
-	2,
-	4,
-	.5,
-	.95,
-	.2
+	  2,    // target_journal_segments
+	  4,    // max_journal_segments
+	  .6,   // reclaim_ratio_hard_limit
+	  .3,   // reclaim_ratio_gc_threshhold
+	  .95,  // reclaim_ratio_usage_min
+	  .1,   // available_ratio_hard_limit
+	  1<<20 // reclaim 1MB per gc cycle
 	};
     }
   };
@@ -357,6 +365,9 @@ private:
 
   ExtentCallbackInterface *ecb = nullptr;
 
+  /// populated if there is an IO blocked on hard limits
+  std::optional<seastar::promise<>> blocked_io_wake;
+
 public:
   SegmentCleaner(config_t config, bool detailed = false)
     : config(config),
@@ -369,7 +380,8 @@ public:
 	(SpaceTrackerI*)new SpaceTrackerSimple(
 	  config.num_segments)),
       segments(config.num_segments),
-      empty_segments(config.num_segments) {}
+      empty_segments(config.num_segments),
+      gc_process(*this) {}
 
   get_segment_ret get_segment() final;
 
@@ -430,6 +442,7 @@ public:
       addr.segment,
       addr.offset,
       len);
+    gc_process.maybe_wake_on_space_used();
     assert(ret > 0);
   }
 
@@ -446,6 +459,7 @@ public:
       addr.segment,
       addr.offset,
       len);
+    maybe_wake_gc_blocked_io();
     assert(ret >= 0);
   }
 
@@ -473,7 +487,14 @@ public:
     return space_tracker->make_empty();
   }
 
-  void complete_init() { init_complete = true; }
+  void complete_init() {
+    init_complete = true;
+    gc_process.start();
+  }
+
+  seastar::future<> stop() {
+    return gc_process.stop();
+  }
 
   void set_extent_callback(ExtentCallbackInterface *cb) {
     ecb = cb;
@@ -547,7 +568,86 @@ private:
   }
 
   // GC status helpers
-  std::unique_ptr<ExtentCallbackInterface::scan_extents_cursor> scan_cursor;
+  std::unique_ptr<
+    ExtentCallbackInterface::scan_validate_extents_cursor
+    > scan_cursor;
+
+  /**
+   * GCProcess
+   *
+   * Background gc process.
+   */
+  class GCProcess {
+    using gc_process_ret = seastar::future<>;
+    std::optional<gc_process_ret> process_join;
+
+    SegmentCleaner &cleaner;
+
+    enum class status_t {
+      INITIAL,
+      RUNNING,
+      STOPPED
+    } status = status_t::INITIAL;
+    bool stopping = false;
+
+    std::optional<seastar::promise<>> blocking;
+
+    gc_process_ret run();
+
+    void wake() {
+      if (blocking) {
+	blocking->set_value();
+	blocking = std::nullopt;
+      }
+    }
+
+    seastar::future<> maybe_wait_should_run() {
+      return seastar::do_until(
+	[this] {
+	  return stopping || cleaner.gc_should_run();
+	},
+	[this] {
+	  ceph_assert(!blocking);
+	  blocking = seastar::promise<>();
+	  return blocking->get_future();
+	});
+    }
+  public:
+    GCProcess(SegmentCleaner &cleaner) : cleaner(cleaner) {}
+
+    void start() {
+      ceph_assert(!process_join);
+      process_join = run();
+    }
+
+    gc_process_ret stop() {
+      stopping = true;
+      wake();
+      ceph_assert(process_join);
+      auto ret = std::move(*process_join);
+      process_join = std::nullopt;
+      return ret;
+    }
+
+    void maybe_wake_on_space_used() {
+      if (cleaner.gc_should_run()) {
+	wake();
+      }
+    }
+  } gc_process;
+
+  using gc_ertr = ExtentCallbackInterface::extent_mapping_ertr::extend_ertr<
+    ExtentCallbackInterface::scan_validate_extents_ertr
+    >;
+
+  using gc_trim_journal_ertr = gc_ertr;
+  using gc_trim_journal_ret = gc_trim_journal_ertr::future<>;
+  gc_trim_journal_ret gc_trim_journal();
+
+  using gc_reclaim_space_ertr = gc_ertr;
+  using gc_reclaim_space_ret = gc_reclaim_space_ertr::future<>;
+  gc_reclaim_space_ret gc_reclaim_space();
+
 
   /**
    * do_gc
@@ -627,10 +727,73 @@ private:
   }
 
   /**
+   * should_block_on_gc
+   *
+   * Encapsulates whether block pending gc.
+   */
+  bool should_block_on_gc() const {
+    return (
+      (get_reclaim_ratio() > config.reclaim_ratio_hard_limit ||
+       get_available_ratio() < config.available_ratio_hard_limit) ||
+      (journal_tail_target > get_dirty_tail_limit())
+    );
+  }
+public:
+  seastar::future<> await_hard_limits() {
+    // The pipeline configuration prevents another IO from entering
+    // prepare until the prior one exits and clears this.
+    ceph_assert(!blocked_io_wake);
+    return seastar::do_until(
+      [this] {
+	return !should_block_on_gc();
+      },
+      [this] {
+	blocked_io_wake = seastar::promise<>();
+	return blocked_io_wake->get_future();
+      });
+  }
+private:
+  void maybe_wake_gc_blocked_io() {
+    if (!should_block_on_gc() && blocked_io_wake) {
+      blocked_io_wake->set_value();
+      blocked_io_wake = std::nullopt;
+    }
+  }
+
+  /**
+   * gc_should_reclaim_space
+   *
+   * Encapsulates logic for whether gc should be reclaiming segment space.
+   */
+  bool gc_should_reclaim_space() const {
+    return get_reclaim_ratio() > config.reclaim_ratio_gc_threshhold ||
+      get_available_ratio() < config.available_ratio_hard_limit;
+  }
+
+  /**
+   * gc_should_trim_journal
+   *
+   * Encapsulates logic for whether gc should be reclaiming segment space.
+   */
+  bool gc_should_trim_journal() const {
+    return get_dirty_tail() > journal_tail_target;
+  }
+
+  /**
+   * gc_should_run
+   *
+   * True if gc should be running.
+   */
+  bool gc_should_run() const {
+    return get_reclaim_ratio() > config.reclaim_ratio_gc_threshhold ||
+      get_available_ratio() < config.available_ratio_hard_limit;
+  }
+
+  /**
    * get_immediate_bytes_to_gc_for_reclaim
    *
    * Returns the number of bytes to gc in order to bring the
-   * reclaim ratio below reclaim_ratio_usage_min.
+   * reclaim ratio below reclaim_ratio_hard_limit.
    */
   size_t get_immediate_bytes_to_gc_for_reclaim() const {
     if (get_reclaim_ratio() < config.reclaim_ratio_hard_limit)
