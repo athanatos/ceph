@@ -295,37 +295,6 @@ public:
       CachedExtentRef extent) = 0;
 
     /**
-     * get_extent_if_live
-     *
-     * Returns extent at specified location if still referenced by
-     * lba_manager and not removed by t.
-     *
-     * See TransactionManager::get_extent_if_live and
-     * LBAManager::get_physical_extent_if_live.
-     */
-    using get_extent_if_live_ertr = extent_mapping_ertr;
-    using get_extent_if_live_ret = get_extent_if_live_ertr::future<
-      CachedExtentRef>;
-    virtual get_extent_if_live_ret get_extent_if_live(
-      Transaction &t,
-      extent_types_t type,
-      paddr_t addr,
-      laddr_t laddr,
-      segment_off_t len) = 0;
-
-    /**
-     * scan_extents
-     *
-     * Interface shim for Journal::scan_extents
-     */
-    using scan_extents_cursor = Journal::scan_valid_records_cursor;
-    using scan_extents_ertr = Journal::scan_extents_ertr;
-    using scan_extents_ret = Journal::scan_extents_ret;
-    virtual scan_extents_ret scan_extents(
-      scan_extents_cursor &cursor,
-      extent_len_t bytes_to_read) = 0;
-
-    /**
      * release_segment
      *
      * Release segment.
@@ -506,36 +475,6 @@ public:
 
   using work_ertr = ExtentCallbackInterface::extent_mapping_ertr;
 
-  /**
-   * do_immediate_work
-   *
-   * Should be invoked prior to submission of any transaction,
-   * will piggy-back work required to maintain deferred work
-   * constraints.
-   */
-  using do_immediate_work_ertr = work_ertr;
-  using do_immediate_work_ret = do_immediate_work_ertr::future<>;
-  do_immediate_work_ret do_immediate_work(
-    Transaction &t);
-
-
-  /**
-   * do_deferred_work
-   *
-   * Should be called at idle times -- will perform background
-   * operations based on deferred work constraints.
-   *
-   * If returned timespan is non-zero, caller should pause calling
-   * back into do_deferred_work before returned timespan has elapsed,
-   * or a foreground operation occurs.
-   */
-  using do_deferred_work_ertr = work_ertr;
-  using do_deferred_work_ret = do_deferred_work_ertr::future<
-    ceph::timespan
-    >;
-  do_deferred_work_ret do_deferred_work(
-    Transaction &t);
-
 private:
 
   // journal status helpers
@@ -647,19 +586,6 @@ private:
   using gc_reclaim_space_ertr = gc_ertr;
   using gc_reclaim_space_ret = gc_reclaim_space_ertr::future<>;
   gc_reclaim_space_ret gc_reclaim_space();
-
-
-  /**
-   * do_gc
-   *
-   * Performs bytes worth of gc work on t.
-   */
-  using do_gc_ertr = ExtentCallbackInterface::extent_mapping_ertr::extend_ertr<
-    ExtentCallbackInterface::scan_extents_ertr>;
-  using do_gc_ret = do_gc_ertr::future<>;
-  do_gc_ret do_gc(
-    Transaction &t,
-    size_t bytes);
 
   size_t get_bytes_used_current_segment() const {
     assert(journal_head != journal_seq_t());
