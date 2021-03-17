@@ -541,6 +541,7 @@ private:
     seastar::future<> maybe_wait_should_run() {
       return seastar::do_until(
 	[this] {
+	  cleaner.log_gc_state("GCProcess::maybe_wait_should_run");
 	  return stopping || cleaner.gc_should_run();
 	},
 	[this] {
@@ -569,6 +570,7 @@ private:
     }
 
     void maybe_wake_on_space_used() {
+      cleaner.log_gc_state("GCProcess::maybe_wake_on_space_used");
       if (cleaner.gc_should_run()) {
 	wake();
       }
@@ -683,6 +685,7 @@ private:
 	"gc_should_reclaim_space {}, "
 	"journal_head {}, "
 	"journal_tail_target {}, "
+	"dirty_tail {}, "
 	"dirty_tail_limit {}, "
 	"gc_should_trim_journal {}, ",
 	caller,
@@ -697,6 +700,7 @@ private:
 	gc_should_reclaim_space(),
 	journal_head,
 	journal_tail_target,
+	get_dirty_tail(),
 	get_dirty_tail_limit(),
 	gc_should_trim_journal()
       );
