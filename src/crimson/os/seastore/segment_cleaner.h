@@ -7,6 +7,7 @@
 
 #include "common/ceph_time.h"
 
+#include "crimson/common/log.h"
 #include "crimson/os/seastore/cached_extent.h"
 #include "crimson/os/seastore/journal.h"
 #include "crimson/os/seastore/seastore_types.h"
@@ -217,6 +218,7 @@ public:
     size_t target_journal_segments = 0;
     size_t max_journal_segments = 0;
 
+    double available_ratio_gc_max = 0;
     double reclaim_ratio_hard_limit = 0;
     double reclaim_ratio_gc_threshhold = 0;
 
@@ -235,6 +237,7 @@ public:
 	(size_t)manager.get_block_size(),
 	  2,    // target_journal_segments
 	  4,    // max_journal_segments
+	  .9,   // available_ratio_gc_max
 	  .6,   // reclaim_ratio_hard_limit
 	  .3,   // reclaim_ratio_gc_threshhold
 	  .95,  // reclaim_ratio_usage_min
@@ -522,11 +525,6 @@ private:
 
     SegmentCleaner &cleaner;
 
-    enum class status_t {
-      INITIAL,
-      RUNNING,
-      STOPPED
-    } status = status_t::INITIAL;
     bool stopping = false;
 
     std::optional<seastar::promise<>> blocking;
@@ -560,6 +558,8 @@ private:
     }
 
     gc_process_ret stop() {
+      if (!process_join)
+	return seastar::now();
       stopping = true;
       wake();
       ceph_assert(process_join);
@@ -658,12 +658,51 @@ private:
    * Encapsulates whether block pending gc.
    */
   bool should_block_on_gc() const {
+    auto aratio = get_available_ratio();
     return (
-      (get_reclaim_ratio() > config.reclaim_ratio_hard_limit ||
-       get_available_ratio() < config.available_ratio_hard_limit) ||
-      (journal_tail_target > get_dirty_tail_limit())
+      ((aratio < config.available_ratio_gc_max) &&
+       (get_reclaim_ratio() > config.reclaim_ratio_hard_limit ||
+	aratio < config.available_ratio_hard_limit)) ||
+      (get_dirty_tail_limit() > journal_tail_target)
     );
   }
+
+  void log_gc_state(const char *caller) const {
+    auto &logger = crimson::get_logger(ceph_subsys_filestore);
+    if (logger.is_enabled(seastar::log_level::debug)) {
+      logger.debug(
+	"SegmentCleaner::log_gc_state({}): "
+	"total {}, "
+	"available {}, "
+	"unavailable {}, "
+	"used {}, "
+	"reclaimable {}, "
+	"reclaim_ratio {}, "
+	"available_ratio {}, "
+	"should_block_on_gc {}, "
+	"gc_should_reclaim_space {}, "
+	"journal_head {}, "
+	"journal_tail_target {}, "
+	"dirty_tail_limit {}, "
+	"gc_should_trim_journal {}, ",
+	caller,
+	get_total_bytes(),
+	get_available_bytes(),
+	get_unavailable_bytes(),
+	get_used_bytes(),
+	get_reclaimable_bytes(),
+	get_reclaim_ratio(),
+	get_available_ratio(),
+	should_block_on_gc(),
+	gc_should_reclaim_space(),
+	journal_head,
+	journal_tail_target,
+	get_dirty_tail_limit(),
+	gc_should_trim_journal()
+      );
+    }
+  }
+
 public:
   seastar::future<> await_hard_limits() {
     // The pipeline configuration prevents another IO from entering
@@ -671,6 +710,7 @@ public:
     ceph_assert(!blocked_io_wake);
     return seastar::do_until(
       [this] {
+	log_gc_state("await_hard_limits");
 	return !should_block_on_gc();
       },
       [this] {
@@ -692,8 +732,12 @@ private:
    * Encapsulates logic for whether gc should be reclaiming segment space.
    */
   bool gc_should_reclaim_space() const {
-    return get_reclaim_ratio() > config.reclaim_ratio_gc_threshhold ||
-      get_available_ratio() < config.available_ratio_hard_limit;
+    auto aratio = get_available_ratio();
+    return (
+      (aratio < config.available_ratio_gc_max) &&
+      (get_reclaim_ratio() > config.reclaim_ratio_gc_threshhold ||
+       aratio < config.available_ratio_hard_limit)
+    );
   }
 
   /**
@@ -711,8 +755,7 @@ private:
    * True if gc should be running.
    */
   bool gc_should_run() const {
-    return get_reclaim_ratio() > config.reclaim_ratio_gc_threshhold ||
-      get_available_ratio() < config.available_ratio_hard_limit;
+    return gc_should_reclaim_space() || gc_should_trim_journal();
   }
 
   /**

@@ -216,7 +216,7 @@ SegmentCleaner::rewrite_dirty_ret SegmentCleaner::rewrite_dirty(
 	  dirty_list,
 	  [this, &t](auto &e) {
 	    logger().debug(
-	      "SegmentCleaner::do_immediate_work cleaning {}",
+	      "SegmentCleaner::rewrite_dirty cleaning {}",
 	      *e);
 	    return ecb->rewrite_extent(t, e);
 	  });
@@ -231,24 +231,7 @@ SegmentCleaner::GCProcess::gc_process_ret SegmentCleaner::GCProcess::run()
     [this] {
       return maybe_wait_should_run(
       ).then([this] {
-	logger().debug(
-	  "SegmentCleaner::GCProcess::run: "
-	  " journal_tail_target={} get_dirty_tail()={}, get_dirty_tail_limit()={}",
-	  cleaner.journal_tail_target,
-	  cleaner.get_dirty_tail(),
-	  cleaner.get_dirty_tail_limit());
-
-	logger().debug(
-	  "SegmentCleaner::do_immediate_work gc total {}, available {}, unavailable {}, used {}  available_ratio {}, reclaim_ratio {}, bytes_to_gc_for_available {}, bytes_to_gc_for_reclaim {}",
-	  cleaner.get_total_bytes(),
-	  cleaner.get_available_bytes(),
-	  cleaner.get_unavailable_bytes(),
-	  cleaner.get_used_bytes(),
-	  cleaner.get_available_ratio(),
-	  cleaner.get_reclaim_ratio(),
-	  cleaner.get_immediate_bytes_to_gc_for_available(),
-	  cleaner.get_immediate_bytes_to_gc_for_reclaim());
-
+	cleaner.log_gc_state("GCProcess::run");
 
 	if (stopping) {
 	  return seastar::now();

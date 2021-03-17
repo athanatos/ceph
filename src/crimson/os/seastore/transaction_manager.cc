@@ -49,7 +49,7 @@ TransactionManager::mkfs_ertr::future<> TransactionManager::mkfs()
 	  return lba_manager->mkfs(*transaction);
 	}).safe_then([this, &transaction] {
 	  logger().debug("TransactionManager::mkfs: about to submit_transaction");
-	  return submit_transaction(std::move(transaction)).handle_error(
+	  return submit_transaction_direct(std::move(transaction)).handle_error(
 	    crimson::ct_error::eagain::handle([] {
 	      ceph_assert(0 == "eagain impossible");
 	      return mkfs_ertr::now();
@@ -227,8 +227,10 @@ TransactionManager::submit_transaction_direct(
       lba_manager->complete_transaction(tref);
       auto to_release = tref.get_segment_to_release();
       if (to_release != NULL_SEG_ID) {
-	segment_cleaner->mark_segment_released(to_release);
-	return segment_manager.release(to_release);
+	return segment_manager.release(to_release
+	).safe_then([this, to_release] {
+	  segment_cleaner->mark_segment_released(to_release);
+	});
       } else {
 	return SegmentManager::release_ertr::now();
       }
