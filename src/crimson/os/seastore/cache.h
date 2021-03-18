@@ -482,6 +482,18 @@ public:
   get_next_dirty_extents_ret get_next_dirty_extents(
     journal_seq_t seq);
 
+  /// returns std::nullopt if no dirty extents or dirty_from for oldest
+  std::optional<journal_seq_t> get_oldest_dirty_from() const {
+    for (auto i = dirty.rbegin(); i != dirty.rend(); ++i) {
+      if (i->dirty_from != journal_seq_t()) {
+	std::make_optional(i->dirty_from);
+      } else {
+	break;
+      }
+    }
+    return std::nullopt;
+  }
+
 private:
   SegmentManager &segment_manager; ///< ref to segment_manager
   RootBlockRef root;               ///< ref to current root
