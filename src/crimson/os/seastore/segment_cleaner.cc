@@ -170,6 +170,8 @@ void SegmentCleaner::update_journal_tail_target(journal_seq_t target)
   if (journal_tail_target == journal_seq_t() || target > journal_tail_target) {
     journal_tail_target = target;
   }
+  gc_process.maybe_wake_on_space_used();
+  maybe_wake_gc_blocked_io();
 }
 
 void SegmentCleaner::update_journal_tail_committed(journal_seq_t committed)

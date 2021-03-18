@@ -809,6 +809,7 @@ private:
       assert(space_tracker->get_usage(segment) == 0);
     }
     segments[segment].state = Segment::segment_state_t::EMPTY;
+    maybe_wake_gc_blocked_io();
   }
 
   void mark_open(segment_id_t segment) {
