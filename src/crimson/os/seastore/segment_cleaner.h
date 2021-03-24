@@ -587,7 +587,12 @@ private:
 	[this] {
 	  ceph_assert(!blocking);
 	  blocking = seastar::promise<>();
-	  return blocking->get_future();
+	  crimson::get_logger(ceph_subsys_filestore
+	  ).error("GCProcess:maybe_wait_should_run: gc pausing");
+	  return blocking->get_future().then([] {
+	    crimson::get_logger(ceph_subsys_filestore
+	    ).error("GCProcess:maybe_wait_should_run: gc waking");
+	  });
 	});
     }
   public:
@@ -792,7 +797,13 @@ public:
       },
       [this] {
 	blocked_io_wake = seastar::promise<>();
-	return blocked_io_wake->get_future();
+	crimson::get_logger(ceph_subsys_filestore
+	).error("SegmentCleaner: await_hard_limts pausing IO for gc");
+	return blocked_io_wake->get_future(
+	).then([] {
+	  crimson::get_logger(ceph_subsys_filestore
+	  ).error("SegmentCleaner: await_hard_limts resuming IO");
+	});
       });
   }
 private:
