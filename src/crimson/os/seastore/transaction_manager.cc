@@ -213,14 +213,19 @@ TransactionManager::submit_transaction_direct(
 {
   logger().debug("TransactionManager::submit_transaction_direct");
   auto &tref = *t;
-  return tref.handle.enter(write_pipeline.prepare
+  return log_if_unready(
+    tref.handle.enter(write_pipeline.prepare),
+    "TransactionManager::submit_transaction_direct:write_pipeline.prepare"
   ).then([this, &tref]() mutable
 	 -> submit_transaction_ertr::future<> {
     auto record = cache->try_construct_record(tref);
     if (!record) {
+      logger().error("TransactionManager::submit_transaction_direct conflict");
       return crimson::ct_error::eagain::make();
     }
 
+    logger().error(
+      "TransactionManager::submit_transaction_direct:submit_record");
     return journal->submit_record(std::move(*record), tref.handle
     ).safe_then([this, &tref](auto p) mutable {
       auto [addr, journal_seq] = p;
@@ -244,10 +249,11 @@ TransactionManager::submit_transaction_direct(
       submit_transaction_ertr::pass_further{},
       crimson::ct_error::all_same_way([](auto e) {
 	ceph_assert(0 == "Hit error submitting to journal");
-      }));
-    }).finally([t=std::move(t)]() mutable {
-      t->handle.exit();
-    });
+      })
+    );
+  }).finally([t=std::move(t)]() mutable {
+    t->handle.exit();
+  });
 }
 
 TransactionManager::get_next_dirty_extents_ret

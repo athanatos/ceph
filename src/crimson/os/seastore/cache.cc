@@ -216,6 +216,12 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
     i->prepare_write();
     i->set_io_wait();
 
+    if (i->get_type() == extent_types_t::ROOT) {
+      logger().error(
+	"Cache::try_construct_record: set_io_wait {}",
+	*i);
+    }
+
     assert(i->get_version() > 0);
     auto final_crc = i->get_crc32c();
     if (i->get_type() == extent_types_t::ROOT) {
@@ -262,6 +268,9 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
     i->state = CachedExtent::extent_state_t::INVALID;
   }
 
+  logger().error(
+    "Cache::try_construct_record: about to scan fresh_block_list");
+
   record.extents.reserve(t.fresh_block_list.size());
   for (auto &i: t.fresh_block_list) {
     logger().debug("try_construct_record: fresh block {}", *i);
@@ -269,10 +278,10 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
     i->prepare_write();
     bl.append(i->get_bptr());
     if (i->get_type() == extent_types_t::ROOT) {
-      assert(0 == "ROOT never gets written as a fresh block");
+      ceph_assert(0 == "ROOT never gets written as a fresh block");
     }
 
-    assert(bl.length() == i->get_length());
+    ceph_assert(bl.length() == i->get_length());
     record.extents.push_back(extent_t{
 	i->get_type(),
 	i->is_logical()
@@ -282,6 +291,8 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
       });
   }
 
+  logger().error(
+    "Cache::try_construct_record: returning");
   return std::make_optional<record_t>(std::move(record));
 }
 
@@ -314,7 +325,7 @@ void Cache::complete_commit(
   // Add new copy of mutated blocks, set_io_wait to block until written
   for (auto &i: t.mutated_block_list) {
     logger().debug("complete_commit: mutated {}", *i);
-    assert(i->prior_instance);
+    ceph_assert(i->prior_instance);
     i->on_delta_write(final_block_start);
     i->prior_instance = CachedExtentRef();
     if (!i->is_valid()) {
@@ -419,7 +430,7 @@ Cache::replay_delta(
     );
     return extent_fut.safe_then([=, &delta](auto extent) {
       if (!extent) {
-	assert(delta.pversion > 0);
+	ceph_assert(delta.pversion > 0);
 	logger().debug(
 	  "replay_delta: replaying {}, extent not present so delta is obsolete",
 	  delta);
@@ -479,7 +490,7 @@ Cache::get_next_dirty_extents_ret Cache::get_next_dirty_extents(
       return seastar::do_for_each(
 	ret,
 	[](auto &ext) {
-	  logger().debug(
+	  logger().error(
 	    "get_next_dirty_extents: waiting on {}",
 	    *ext);
 	  return ext->wait_io();

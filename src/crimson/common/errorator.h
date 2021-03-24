@@ -8,6 +8,8 @@
 
 #include <seastar/core/future-util.hh>
 
+#include "crimson/common/log.h"
+
 #include "include/ceph_assert.h"
 
 namespace crimson::interruptible {
@@ -18,6 +20,20 @@ class interruptible_future_detail;
 }
 
 namespace crimson {
+
+template <typename T>
+auto log_if_unready(T &&t, const char *id) {
+  if (t.available()) {
+    return std::move(t);
+  } else {
+    crimson::get_logger(ceph_subsys_filestore
+    ).error("{} pause", id);
+    return t.finally([id] {
+      crimson::get_logger(ceph_subsys_filestore
+      ).error("{} resume", id);
+    });
+  }
+}
 
 template<typename Iterator, typename AsyncAction>
 inline auto do_for_each(Iterator begin, Iterator end, AsyncAction action) {

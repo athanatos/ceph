@@ -213,7 +213,7 @@ SegmentCleaner::rewrite_dirty_ret SegmentCleaner::rewrite_dirty(
 	return crimson::do_for_each(
 	  dirty_list,
 	  [this, &t](auto &e) {
-	    logger().debug(
+	    logger().error(
 	      "SegmentCleaner::rewrite_dirty cleaning {}",
 	      *e);
 	    return ecb->rewrite_extent(t, e);
@@ -270,10 +270,16 @@ SegmentCleaner::gc_trim_journal_ret SegmentCleaner::gc_trim_journal()
       return seastar::do_with(
 	make_transaction(),
 	[this](auto &t) {
-	  return rewrite_dirty(*t, get_dirty_tail()
+	  return log_if_unready(
+	    rewrite_dirty(*t, get_dirty_tail()),
+	    "SegmentCleaner::gc_trim_journal:rewrite_dirty"
 	  ).safe_then([this, &t] {
-	    return ecb->submit_transaction_direct(
-	      std::move(t));
+	    return log_if_unready(
+	      ecb->submit_transaction_direct(std::move(t)),
+	      "SegmentCleaner::gc_trim_journal:submit_transaction_direct"
+	    ).safe_then([] {
+	      logger().error("SegmentCleaner::gc_trim_journal: after submit");
+	    });
 	  });
 	});
     });
@@ -318,7 +324,7 @@ SegmentCleaner::gc_reclaim_space_ret SegmentCleaner::gc_reclaim_space()
 		extents,
 		[this, &t](auto &extent) {
 		  auto &[addr, info] = extent;
-		  logger().debug(
+		  logger().error(
 		    "SegmentCleaner::gc_reclaim_space: checking extent {}",
 		    info);
 		  return ecb->get_extent_if_live(
