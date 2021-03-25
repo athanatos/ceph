@@ -42,8 +42,6 @@ auto repeat_eagain(F &&f) {
 	    return true;
 	  }).handle_error(
 	    [](const crimson::ct_error::eagain &e) {
-	      crimson::get_logger(ceph_subsys_filestore
-	      ).error("repeat_eagain got eagain");
 	      return seastar::make_ready_future<bool>(false);
 	    },
 	    crimson::ct_error::pass_further_all{}

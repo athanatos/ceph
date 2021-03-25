@@ -181,8 +181,8 @@ public:
     auto rsize = get_encoded_record_length(record);
     auto total = rsize.mdlength + rsize.dlength;
     if (total > max_record_length) {
-      crimson::get_logger(ceph_subsys_filestore
-      ).error(
+      auto &logger = crimson::get_logger(ceph_subsys_filestore);
+      logger.error(
 	"Journal::submit_record: record size {} exceeds max {}",
 	total,
 	max_record_length
@@ -195,10 +195,6 @@ public:
     return roll.safe_then(
       [this, rsize, record=std::move(record), &handle]() mutable {
 	auto seq = next_journal_segment_seq - 1;
-	crimson::get_logger(ceph_subsys_filestore
-	).error(
-	  "Journal::submit_record: about to call write_record"
-	);
 	return write_record(
 	  rsize, std::move(record),
 	  handle

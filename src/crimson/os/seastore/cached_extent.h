@@ -12,7 +12,6 @@
 #include "seastar/core/shared_future.hh"
 
 #include "include/buffer.h"
-#include "crimson/common/log.h"
 #include "crimson/common/errorator.h"
 #include "crimson/os/seastore/seastore_types.h"
 
@@ -343,15 +342,7 @@ private:
     if (!io_wait_promise) {
       return seastar::now();
     } else {
-      crimson::get_logger(ceph_subsys_filestore).error(
-	"CachedExtent::wait_io: waiting on {}",
-	*this);
-      return io_wait_promise->get_shared_future(
-      ).then([this] {
-	crimson::get_logger(ceph_subsys_filestore).error(
-	  "CachedExtent::wait_io: {} ready",
-	  *this);
-      });
+      return io_wait_promise->get_shared_future();
     }
   }
 

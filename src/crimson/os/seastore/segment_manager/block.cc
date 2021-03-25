@@ -23,7 +23,7 @@ static write_ertr::future<> do_write(
   uint64_t offset,
   bufferptr &bptr)
 {
-  logger().error(
+  logger().debug(
     "block: do_write offset {} len {}",
     offset,
     bptr.length());
@@ -231,7 +231,7 @@ Segment::write_ertr::future<> BlockSegmentManager::segment_write(
   ceph::bufferlist bl,
   bool ignore_check)
 {
-  ceph_assert((bl.length() % superblock.block_size) == 0);
+  assert((bl.length() % superblock.block_size) == 0);
   logger().debug(
     "segment_write to segment {} at offset {}, physical offset {}, len {}",
     addr.segment,

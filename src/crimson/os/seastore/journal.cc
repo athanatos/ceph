@@ -196,7 +196,7 @@ Journal::write_record_ret Journal::write_record(
   auto target = written_to;
   assert((to_write.length() % block_size) == 0);
   written_to += to_write.length();
-  logger().error(
+  logger().debug(
     "write_record, mdlength {}, dlength {}, target {}",
     rsize.mdlength,
     rsize.dlength,
@@ -208,12 +208,8 @@ Journal::write_record_ret Journal::write_record(
   // in the device_submission concurrent stage to permit multiple
   // overlapping writes.
   auto write_fut = current_journal_segment->write(target, to_write);
-
-  logger().error("write_record: write started");
-
   return handle.enter(write_pipeline->device_submission
   ).then([write_fut = std::move(write_fut)]() mutable {
-    logger().error("Journal::write_record: write submitted");
     return std::move(write_fut
     ).handle_error(
       write_record_ertr::pass_further{},
@@ -228,7 +224,7 @@ Journal::write_record_ret Journal::write_record(
       "write_record: commit target {}",
       target);
     if (segment_id == current_journal_segment->get_segment_id()) {
-      ceph_assert(committed_to < target);
+      assert(committed_to < target);
       committed_to = target;
     }
     return write_record_ret(
@@ -269,10 +265,6 @@ Journal::roll_journal_segment()
   auto old_segment_id = current_journal_segment ?
     current_journal_segment->get_segment_id() :
     NULL_SEG_ID;
-
-  logger().error(
-    "Journal::roll_journal_segment: old_segment_id {}",
-    old_segment_id);
 
   return (current_journal_segment ?
 	  current_journal_segment->close() :
@@ -367,11 +359,11 @@ Journal::find_replay_segments_fut Journal::find_replay_segments()
 	    if (generate_nonce(
 		  header.journal_segment_seq,
 		  segment_manager.get_meta()) != header.segment_nonce) {
-	      logger().error(
+	      logger().debug(
 		"find_replay_segments: nonce mismatch segment {} header {}",
 		i,
 		header);
-	      ceph_assert(0 == "impossible");
+	      assert(0 == "impossible");
 	      return find_replay_segments_ertr::now();
 	    }
 
@@ -440,7 +432,7 @@ Journal::find_replay_segments_fut Journal::find_replay_segments()
 		"find_replay_segments: journal_tail {} does not match {}",
 		journal_tail,
 		from->second);
-	      ceph_assert(0 == "invalid");
+	      assert(0 == "invalid");
 	    }
 	  } else {
 	    replay_from = paddr_t{from->first, (segment_off_t)block_size};
@@ -590,7 +582,7 @@ Journal::replay_segment(
 	  logger().error(
 	    "Journal::replay_segment unable to decode deltas for record {}",
 	    base);
-	  ceph_assert(deltas);
+	  assert(deltas);
 	}
 
 	return seastar::do_with(
@@ -676,7 +668,7 @@ Journal::scan_extents_ret Journal::scan_extents(
 	    logger().error(
 	      "Journal::scan_extents unable to decode extents for record {}",
 	      base);
-	    ceph_assert(infos);
+	    assert(infos);
 	  }
 
 	  paddr_t extent_offset = base.add_offset(header.mdlength);
