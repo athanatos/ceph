@@ -747,10 +747,14 @@ private:
     );
   }
 
-  void log_gc_state(const char *caller) const {
+  void log_gc_state(const char *caller, bool log_at_error=false) const {
     auto &logger = crimson::get_logger(ceph_subsys_filestore);
-    if (logger.is_enabled(seastar::log_level::debug)) {
-      logger.debug(
+    auto level = log_at_error ?
+      seastar::log_level::error:
+      seastar::log_level::debug;
+    if (logger.is_enabled(level)) {
+      logger.log(
+	level,
 	"SegmentCleaner::log_gc_state({}): "
 	"total {}, "
 	"available {}, "

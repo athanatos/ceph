@@ -244,6 +244,7 @@ SegmentCleaner::gc_cycle_ret SegmentCleaner::do_gc_cycle()
 {
   if (gc_should_trim_journal()) {
     logger().error("SegmentCleaner::do_gc_cycle(): gc_trim_journal cycle");
+    log_gc_state("SegmentCleaner::do_gc_cycle:journal", true);
     return gc_trim_journal(
     ).handle_error(
       crimson::ct_error::assert_all{
@@ -252,6 +253,7 @@ SegmentCleaner::gc_cycle_ret SegmentCleaner::do_gc_cycle()
     );
   } else if (gc_should_reclaim_space()) {
     logger().error("SegmentCleaner::do_gc_cycle(): gc_reclaim_space cycle");
+    log_gc_state("SegmentCleaner::do_gc_cycle:reclaim", true);
     return gc_reclaim_space(
     ).handle_error(
       crimson::ct_error::assert_all{
