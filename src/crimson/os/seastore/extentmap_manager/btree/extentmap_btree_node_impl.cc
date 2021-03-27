@@ -354,17 +354,13 @@ extmap_load_extent(ext_context_t ec, laddr_t laddr, depth_t depth)
 {
   ceph_assert(depth > 0);
   if (depth > 1) {
-    return ec.tm.read_extents<ExtMapInnerNode>(ec.t, laddr, EXTMAP_BLOCK_SIZE).safe_then(
-      [](auto&& extents) {
-      assert(extents.size() == 1);
-      [[maybe_unused]] auto [laddr, e] = extents.front();
+    return ec.tm.read_extent<ExtMapInnerNode>(ec.t, laddr, EXTMAP_BLOCK_SIZE).safe_then(
+      [](auto&& e) {
       return TransactionManager::read_extent_ertr::make_ready_future<ExtMapNodeRef>(std::move(e));
     });
   } else {
-    return ec.tm.read_extents<ExtMapLeafNode>(ec.t, laddr, EXTMAP_BLOCK_SIZE).safe_then(
-      [](auto&& extents) {
-      assert(extents.size() == 1);
-      [[maybe_unused]] auto [laddr, e] = extents.front();
+    return ec.tm.read_extent<ExtMapLeafNode>(ec.t, laddr, EXTMAP_BLOCK_SIZE).safe_then(
+      [](auto&& e) {
       return TransactionManager::read_extent_ertr::make_ready_future<ExtMapNodeRef>(std::move(e));
     });
   }
