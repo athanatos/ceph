@@ -65,6 +65,10 @@ public:
     retired_uncached.emplace_back(std::make_pair(addr, length));
   }
 
+  void add_moved_mapping(LBAPinRef ref) {
+    moved_mappings.emplace_back(std::move(ref));
+  }
+
   void add_to_read_set(CachedExtentRef ref) {
     if (is_weak()) return;
 
@@ -138,6 +142,7 @@ private:
   segment_id_t to_release = NULL_SEG_ID;
 
   std::vector<std::pair<paddr_t, extent_len_t>> retired_uncached;
+  std::vector<LBAPinRef> moved_mappings;
 
 public:
   Transaction(
