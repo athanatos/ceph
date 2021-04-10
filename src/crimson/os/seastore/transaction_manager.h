@@ -289,6 +289,40 @@ public:
       len);
   }
 
+  using move_mapping_ertr = alloc_extent_ertr;
+  using move_mapping_ret = move_mapping_ertr::future<>;
+  move_mapping_ret move_mapping(
+    Transaction &t,
+    LBAPinRef source,
+    laddr_t dest) {
+    LBAPin &source_ref = *source;
+    return lba_manager->alloc_extent(
+      t,
+      dest,
+      source->get_length()
+    ).safe_then([this, &source_ref, dest, &t](auto &&new_mapping) {
+      CachedExtentRef cached;
+      auto status = t.get_extent(source_ref.get_paddr(), &cached);
+      switch (status) {
+      case Transaction::get_extent_ret::PRESENT:
+	if (cached->is_pending()) {
+	  // replace
+	} else {
+	  t.add_moved_mapping(std::move(new_mapping));
+	}
+	break;
+      case Transaction::get_extent_ret::ABSENT:
+	t.add_moved_mapping(std::move(new_mapping));
+	break;
+      case Transaction::get_extent_ret::RETIRED:
+	break;
+      default:
+	__builtin_unreachable();
+	ceph_assert(0 == "impossible");
+      }
+    });
+  }
+
   /* alloc_extents
    *
    * allocates more than one new blocks of type T.
