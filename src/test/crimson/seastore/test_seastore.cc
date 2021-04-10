@@ -59,6 +59,7 @@ struct seastore_test_t :
     const ghobject_t oid;
 
     std::map<string, bufferlist> omap;
+    bufferlist contents;
 
     void set_omap(
       CTransaction &t,
@@ -82,6 +83,36 @@ struct seastore_test_t :
       seastore.do_transaction(
 	coll,
 	std::move(t)).get0();
+    }
+
+    void write(
+      CTransaction &t,
+      uint64_t offset,
+      bufferlist bl)  {
+      bufferlist new_contents;
+      new_contents.substr_of(
+	0,
+	offset,
+	std::min<size_t>(offset, contents.length())
+      );
+      new_contents.append_zero(offset - new_contents.length());
+      new_contents.append(bl);
+
+      bufferlist tail;
+      auto tail_offset = offset + bl.length();
+      tail.substr_of(
+	contents,
+	tail_offset,
+	contents.length() - tail_offset);
+      new_contents.append(tail);
+      contents.swap(new_contents);
+
+      t.write(
+	cid,
+	oid,
+	offset,
+	bl.length(),
+	bl);
     }
 
     void check_omap_key(
@@ -224,6 +255,26 @@ TEST_F(seastore_test_t, omap_test_simple)
 }
 
 TEST_F(seastore_test_t, omap_test_iterator)
+{
+  run_async([this] {
+    auto make_key = [](unsigned i) {
+      std::stringstream ss;
+      ss << "key" << i;
+      return ss.str();
+    };
+    auto &test_obj = get_object(make_oid(0));
+    for (unsigned i = 0; i < 20; ++i) {
+      test_obj.set_omap(
+	*seastore,
+	make_key(i),
+	make_bufferlist(128));
+    }
+    test_obj.check_omap(*seastore);
+  });
+}
+
+
+TEST_F(seastore_test_t, simple_extent_test)
 {
   run_async([this] {
     auto make_key = [](unsigned i) {
