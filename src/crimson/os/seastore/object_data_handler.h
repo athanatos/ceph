@@ -82,12 +82,12 @@ private:
     bufferlist &&bl,
     lba_pin_list_t &&pins);
 
-  write_ret prepare_data_reservation(
+  write_ret expand_data_reservation(
     context_t ctx,
     object_data_t &object_data,
     extent_len_t size);
 
-  clear_ret trim_data_reservation(
+  clear_ret shrink_data_reservation(
     context_t ctx,
     object_data_t &object_data,
     extent_len_t size);

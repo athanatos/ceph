@@ -8,15 +8,6 @@
 
 namespace crimson::os::seastore {
 
-/**
- * MAX_OBJECT_SIZE
- *
- * For now, we allocated a fixe region of laddr space of size MAX_OBJECT_SIZE
- * for any object.  In the future, once we have the ability to remap logical
- * mappings (necessary for clone), we'll add the ability to grow and shrink
- * these regions and remove this assumption.
- */
-static constexpr extent_len_t MAX_OBJECT_SIZE = 16<<20;
 #define assert_aligned(x) ceph_assert(((x)%ctx.tm.get_block_size()) == 0)
 
 using context_t = ObjectDataHandler::context_t;
@@ -197,35 +188,80 @@ auto with_object_data(
     });
 }
 
-ObjectDataHandler::write_ret ObjectDataHandler::prepare_data_reservation(
+ObjectDataHandler::write_ret ObjectDataHandler::expand_data_reservation(
   context_t ctx,
   object_data_t &object_data,
   extent_len_t size)
 {
-  ceph_assert(size <= MAX_OBJECT_SIZE);
-  if (!object_data.is_null()) {
-    ceph_assert(object_data.get_reserved_data_len() == MAX_OBJECT_SIZE);
+  if (!object_data.is_null() &&
+      object_data.get_reserved_data_len() >= size) {
     return write_ertr::now();
   } else {
-    return ctx.tm.reserve_region(
-      ctx.t,
-      0 /* TODO -- pass hint based on object hash */,
-      MAX_OBJECT_SIZE
-    ).safe_then([size, &object_data](auto pin) {
-      ceph_assert(pin->get_length() == MAX_OBJECT_SIZE);
-      object_data.update_reserved(
-	pin->get_laddr(),
-	pin->get_length());
-      return write_ertr::now();
-    });
+    return seastar::do_with(
+      extent_len_t(0),
+      lba_pin_list_t(),
+      [this, ctx, size, &object_data](auto &current, auto &to_relocate)
+      -> write_ret {
+	return ([this, ctx, size, &object_data, &to_relocate]() -> write_ret {
+	  if (object_data.is_null()) {
+	    return seastar::now();
+	  } else {
+	    return ctx.tm.get_pins(
+	      ctx.t,
+	      object_data.get_reserved_data_base(),
+	      object_data.get_reserved_data_len()
+	    ).safe_then([&to_relocate](auto pins) {
+	      to_relocate.swap(pins);
+	      return seastar::now();
+	    });
+	  }
+	})().safe_then([this, ctx, size] {
+	  return ctx.tm.find_hole(
+	    ctx.t,
+	    0 /* TODO */,
+	    size);
+	}).safe_then([this, ctx, size, &object_data, &to_relocate, &current](
+		       auto hole) -> write_ret {
+	  auto [new_base, new_len] = hole;
+	  if (to_relocate.size() &&
+	      (*(to_relocate.rbegin()))->get_paddr().is_zero()) {
+	    to_relocate.pop_back();
+	  }
+	  return crimson::do_for_each(
+	    to_relocate.begin(),
+	    to_relocate.end(),
+	    [this, ctx, new_base, &object_data, &current](auto &pin) {
+	      ceph_assert(
+		pin->get_laddr() >= object_data.get_reserved_data_base());
+	      auto offset = pin->get_laddr() -
+		object_data.get_reserved_data_base();
+	      ceph_assert(current == offset);
+	      current = offset + pin->get_length();
+	      return ctx.tm.move_mapping(
+		ctx.t,
+		std::move(pin),
+		new_base + offset);
+	    }).safe_then([this, ctx, new_base, new_len, &object_data, &current] {
+	      return ctx.tm.reserve_region(
+		ctx.t,
+		new_base + current,
+		new_len - current);
+	    }).safe_then([this, new_base, new_len, &object_data, &current](
+			   auto ret) {
+	      ceph_assert(ret->get_laddr() == (current + new_base));
+	      ceph_assert(ret->get_length() == (new_len - current));
+	      object_data.update_reserved(new_base, new_len);
+	      return write_ertr::now();
+	    });
+	});
+      });
   }
 }
 
-ObjectDataHandler::clear_ret ObjectDataHandler::trim_data_reservation(
+ObjectDataHandler::clear_ret ObjectDataHandler::shrink_data_reservation(
   context_t ctx, object_data_t &object_data, extent_len_t size)
 {
-  ceph_assert(!object_data.is_null());
-  ceph_assert(size <= object_data.get_reserved_data_len());
+  ceph_assert(size < object_data.get_reserved_data_len());
   return seastar::do_with(
     lba_pin_list_t(),
     extent_to_write_list_t(),
@@ -237,29 +273,12 @@ ObjectDataHandler::clear_ret ObjectDataHandler::trim_data_reservation(
       ).safe_then([ctx, size, &pins, &object_data](auto _pins) {
 	_pins.swap(pins);
 	ceph_assert(pins.size());
-	return get_left(
-	  ctx, pins.front(),
+	return get_right(
+	  ctx, pins.back(),
 	  object_data.get_reserved_data_base() + size);
       }).safe_then([ctx, size, &to_write, &object_data](auto p) {
 	if (p.first) {
-	  if (p.first->to_write) {
-	    // tail had data, fill remainder with zeros
-	    to_write.emplace_back(std::move(*p.first));
-	    to_write.emplace_back(
-	      extent_to_write_t{
-		object_data.get_reserved_data_base() + size,
-		object_data.get_reserved_data_len() - size
-	      });
-	  } else {
-	    // tail was zero, merge with remainder, fill with zeros
-	    to_write.emplace_back(
-	      extent_to_write_t{
-		p.first->addr,
-		object_data.get_reserved_data_len() -
-		static_cast<extent_len_t>(
-		  p.first->addr - object_data.get_reserved_data_base())
-	      });
-	  }
+	  to_write.emplace_back(std::move(*p.first));
 	  return do_insertions(ctx, to_write);
 	} else {
 	  return clear_ertr::now();
@@ -350,7 +369,7 @@ ObjectDataHandler::write_ret ObjectDataHandler::write(
   return with_object_data(
     ctx,
     [this, ctx, offset, &bl](auto &object_data) {
-      return prepare_data_reservation(
+      return expand_data_reservation(
 	ctx,
 	object_data,
 	p2roundup(offset + bl.length(), ctx.tm.get_block_size())
@@ -453,9 +472,9 @@ ObjectDataHandler::truncate_ret ObjectDataHandler::truncate(
     ctx,
     [this, ctx, offset](auto &object_data) {
       if (offset < object_data.get_reserved_data_len()) {
-	return trim_data_reservation(ctx, object_data, offset);
+	return shrink_data_reservation(ctx, object_data, offset);
       } else if (offset > object_data.get_reserved_data_len()) {
-	return prepare_data_reservation(
+	return expand_data_reservation(
 	  ctx,
 	  object_data,
 	  offset);
@@ -471,7 +490,7 @@ ObjectDataHandler::clear_ret ObjectDataHandler::clear(
   return with_object_data(
     ctx,
     [this, ctx](auto &object_data) {
-      return trim_data_reservation(ctx, object_data, 0);
+      return shrink_data_reservation(ctx, object_data, 0);
     });
 }
 
