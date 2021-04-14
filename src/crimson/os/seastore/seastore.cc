@@ -19,6 +19,7 @@
 #include "crimson/os/seastore/omap_manager/btree/btree_omap_manager.h"
 #include "crimson/os/seastore/segment_manager/ephemeral.h"
 #include "crimson/os/seastore/onode_manager.h"
+#include "crimson/os/seastore/object_data_handler.h"
 
 namespace {
   seastar::logger& logger() {
@@ -169,7 +170,19 @@ SeaStore::read_errorator::future<ceph::bufferlist> SeaStore::read(
   size_t len,
   uint32_t op_flags)
 {
-  return read_errorator::make_ready_future<ceph::bufferlist>();
+  return repeat_with_onode<ceph::bufferlist>(
+    ch,
+    oid,
+    [=](auto &t, auto &onode) {
+      return ObjectDataHandler().read(
+	ObjectDataHandler::context_t{
+	  *transaction_manager,
+	  t,
+	  onode,
+	},
+	offset,
+	len);
+    });
 }
 
 SeaStore::read_errorator::future<ceph::bufferlist> SeaStore::readv(
@@ -631,12 +644,23 @@ SeaStore::tm_ret SeaStore::_write(
   internal_context_t &ctx,
   OnodeRef &onode,
   uint64_t offset, size_t len,
-  ceph::bufferlist &&bl,
+  ceph::bufferlist &&_bl,
   uint32_t fadvise_flags)
 {
-  logger().debug("{}: {} {} ~ {}",
+  logger().debug("SeaStore::{}: {} {} ~ {}",
                 __func__, *onode, offset, len);
-  return tm_ertr::now();
+  return seastar::do_with(
+    std::move(_bl),
+    [=, &ctx, &onode](auto &bl) {
+      return ObjectDataHandler().write(
+	ObjectDataHandler::context_t{
+	  *transaction_manager,
+	  *ctx.transaction,
+	  *onode,
+	},
+	offset,
+	bl);
+    });
 }
 
 SeaStore::tm_ret SeaStore::_omap_set_values(
@@ -754,9 +778,16 @@ SeaStore::tm_ret SeaStore::_truncate(
   OnodeRef &onode,
   uint64_t size)
 {
-  logger().debug("{} onode={} size={}",
+  logger().debug("SeaStore::{} onode={} size={}",
                 __func__, *onode, size);
-  return tm_ertr::now();
+  onode->get_mutable_layout(*ctx.transaction).size = size;
+  return ObjectDataHandler().truncate(
+    ObjectDataHandler::context_t{
+      *transaction_manager,
+      *ctx.transaction,
+      *onode
+    },
+    size);
 }
 
 SeaStore::tm_ret SeaStore::_setattrs(
