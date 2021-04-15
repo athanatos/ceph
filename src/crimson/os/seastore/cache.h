@@ -94,7 +94,8 @@ public:
   TransactionRef create_transaction() {
     return std::make_unique<Transaction>(
       get_dummy_ordering_handle(),
-      false
+      false,
+      last_commit
     );
   }
 
@@ -102,7 +103,8 @@ public:
   TransactionRef create_weak_transaction() {
     return std::make_unique<Transaction>(
       get_dummy_ordering_handle(),
-      true
+      true,
+      last_commit
     );
   }
 
@@ -522,6 +524,8 @@ private:
   SegmentManager &segment_manager; ///< ref to segment_manager
   RootBlockRef root;               ///< ref to current root
   ExtentIndex extents;             ///< set of live extents
+
+  journal_seq_t last_commit = JOURNAL_SEQ_MIN;
 
   /**
    * dirty

@@ -138,11 +138,15 @@ private:
 
   std::vector<std::pair<paddr_t, extent_len_t>> retired_uncached;
 
+  journal_seq_t initiated_after;
+
 public:
   Transaction(
     OrderingHandle &&handle,
-    bool weak
-  ) : handle(std::move(handle)), weak(weak) {}
+    bool weak,
+    journal_seq_t initiated_after
+  ) : handle(std::move(handle)), weak(weak),
+      initiated_after(initiated_after) {}
 
   ~Transaction() {
     for (auto i = write_set.begin();
@@ -158,7 +162,8 @@ using TransactionRef = Transaction::Ref;
 inline TransactionRef make_test_transaction() {
   return std::make_unique<Transaction>(
     get_dummy_ordering_handle(),
-    false
+    false,
+    journal_seq_t{}
   );
 }
 

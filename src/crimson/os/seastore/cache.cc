@@ -341,6 +341,8 @@ void Cache::complete_commit(
   for (auto &i: t.mutated_block_list) {
     i->complete_io();
   }
+
+  last_commit = seq;
 }
 
 void Cache::init() {
