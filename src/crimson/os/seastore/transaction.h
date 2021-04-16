@@ -5,12 +5,16 @@
 
 #include <iostream>
 
+#include <boost/intrusive/list.hpp>
+
 #include "crimson/os/seastore/ordering_handle.h"
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/cached_extent.h"
 #include "crimson/os/seastore/root_block.h"
 
 namespace crimson::os::seastore {
+
+struct retired_extent_gate_t;
 
 /**
  * Transaction
@@ -140,6 +144,19 @@ private:
 
   journal_seq_t initiated_after;
 
+  /// hook for list of live transactions
+  boost::intrusive::list_member_hook<> registry_hook;
+  using registry_hook_options = boost::intrusive::member_hook<
+    Transaction,
+    boost::intrusive::list_member_hook<>,
+    &Transaction::registry_hook>;
+  using registry =  boost::intrusive::list<
+    Transaction,
+    registry_hook_options>;
+  friend class retired_extent_gate_t;
+
+  retired_extent_gate_t *parent_gate = nullptr;
+
 public:
   Transaction(
     OrderingHandle &&handle,
@@ -148,13 +165,7 @@ public:
   ) : handle(std::move(handle)), weak(weak),
       initiated_after(initiated_after) {}
 
-  ~Transaction() {
-    for (auto i = write_set.begin();
-	 i != write_set.end();) {
-      i->state = CachedExtent::extent_state_t::INVALID;
-      write_set.erase(*i++);
-    }
-  }
+  ~Transaction();
 };
 using TransactionRef = Transaction::Ref;
 
@@ -165,6 +176,45 @@ inline TransactionRef make_test_transaction() {
     false,
     journal_seq_t{}
   );
+}
+
+struct retired_extent_gate_t {
+  Transaction::registry live_transactions;
+  CachedExtent::list retired_extents;
+
+  void add_transaction(Transaction &t) {
+    t.parent_gate = this;
+    live_transactions.push_back(t);
+  }
+
+  void add_extent(CachedExtent &extent) {
+    intrusive_ptr_add_ref(&extent);
+    retired_extents.push_back(extent);
+  }
+
+  void prune() {
+    journal_seq_t prune_to = live_transactions.empty() ?
+      JOURNAL_SEQ_MAX : live_transactions.front().initiated_after;
+    while (!retired_extents.empty() &&
+	   prune_to > retired_extents.front().get_retired_at()) {
+      intrusive_ptr_release(&retired_extents.front());
+      retired_extents.pop_front();
+    }
+  }
+};
+
+inline Transaction::~Transaction() {
+  for (auto i = write_set.begin();
+       i != write_set.end();) {
+    i->state = CachedExtent::extent_state_t::INVALID;
+    write_set.erase(*i++);
+  }
+  if (parent_gate) {
+    parent_gate->live_transactions.erase(
+      parent_gate->live_transactions.s_iterator_to(*this));
+    parent_gate->prune();
+    parent_gate = nullptr;
+  }
 }
 
 }

@@ -48,6 +48,7 @@ class CachedExtent : public boost::intrusive_ref_counter<
                            //  during write, contents match disk, version == 0
     DIRTY,                 // Same as CLEAN, but contents do not match disk,
                            //  version > 0
+    RETIRED,               // In ExtentIndex while in retired_extent_gate
     INVALID                // Part of no ExtentIndex set
   } state = extent_state_t::INVALID;
   friend std::ostream &operator<<(std::ostream &, extent_state_t);
@@ -66,7 +67,7 @@ class CachedExtent : public boost::intrusive_ref_counter<
    * When dirty, indiciates the oldest journal entry which mutates
    * this extent.
    */
-  journal_seq_t dirty_from;
+  journal_seq_t dirty_from_or_retired_at;
 
 public:
   /**
@@ -137,7 +138,7 @@ public:
     out << "CachedExtent(addr=" << this
 	<< ", type=" << get_type()
 	<< ", version=" << version
-	<< ", dirty_from=" << dirty_from
+	<< ", dirty_from_or_retired_at=" << dirty_from_or_retired_at
 	<< ", paddr=" << get_paddr()
 	<< ", state=" << state
 	<< ", last_committed_crc=" << last_committed_crc
@@ -232,7 +233,12 @@ public:
 
   /// Returns true if extent has not been superceded or retired
   bool is_valid() const {
-    return state != extent_state_t::INVALID;
+    return state != extent_state_t::INVALID && state != extent_state_t::RETIRED;
+  }
+
+  /// True iff extent is in state RETIRED
+  bool is_retired() const {
+    return state == extent_state_t::RETIRED;
   }
 
   /// Returns true if extent or prior_instance has been invalidated
@@ -240,13 +246,17 @@ public:
     return !is_valid() || (prior_instance && !prior_instance->is_valid());
   }
 
-  /**
-   * get_dirty_from
-   *
-   * Return journal location of oldest relevant delta.
-   */
-  auto get_dirty_from() const { return dirty_from; }
+  /// Return journal location of oldest relevant delta, only valid while DIRTY
+  auto get_dirty_from() const {
+    ceph_assert(is_dirty());
+    return dirty_from_or_retired_at;
+  }
 
+  /// Return journal location of oldest relevant delta, only valid while RETIRED
+  auto get_retired_at() const {
+    ceph_assert(is_retired());
+    return dirty_from_or_retired_at;
+  }
 
   /**
    * get_paddr
@@ -316,6 +326,7 @@ private:
   using list = boost::intrusive::list<
     CachedExtent,
     primary_ref_list_member_options>;
+  friend class retired_extent_gate_t;
 
   /// Actual data contents
   ceph::bufferptr ptr;
@@ -351,7 +362,7 @@ protected:
   CachedExtent(ceph::bufferptr &&ptr) : ptr(std::move(ptr)) {}
   CachedExtent(const CachedExtent &other)
     : state(other.state),
-      dirty_from(other.dirty_from),
+      dirty_from_or_retired_at(other.dirty_from_or_retired_at),
       ptr(other.ptr.c_str(), other.ptr.length()),
       version(other.version),
       poffset(other.poffset) {}
@@ -359,7 +370,7 @@ protected:
   struct share_buffer_t {};
   CachedExtent(const CachedExtent &other, share_buffer_t) :
     state(other.state),
-    dirty_from(other.dirty_from),
+    dirty_from_or_retired_at(other.dirty_from_or_retired_at),
     ptr(other.ptr),
     version(other.version),
     poffset(other.poffset) {}

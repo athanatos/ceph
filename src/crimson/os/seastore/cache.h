@@ -90,22 +90,33 @@ public:
   Cache(SegmentManager &segment_manager);
   ~Cache();
 
+  /**
+   * transaction_registry
+   *
+   * List of live transactions ordered by Transaction::initiated_after
+   */
+  retired_extent_gate_t retired_extent_gate;
+
   /// Creates empty transaction
   TransactionRef create_transaction() {
-    return std::make_unique<Transaction>(
+    auto ret = std::make_unique<Transaction>(
       get_dummy_ordering_handle(),
       false,
       last_commit
     );
+    retired_extent_gate.add_transaction(*ret);
+    return ret;
   }
 
   /// Creates empty weak transaction
   TransactionRef create_weak_transaction() {
-    return std::make_unique<Transaction>(
+    auto ret = std::make_unique<Transaction>(
       get_dummy_ordering_handle(),
       true,
       last_commit
     );
+    retired_extent_gate.add_transaction(*ret);
+    return ret;
   }
 
   /**
@@ -498,7 +509,7 @@ public:
     return out;
   }
 
-  /// returns extents with dirty_from < seq
+  /// returns extents with get_dirty_from() < seq
   using get_next_dirty_extents_ertr = crimson::errorator<>;
   using get_next_dirty_extents_ret = get_next_dirty_extents_ertr::future<
     std::vector<CachedExtentRef>>;
@@ -506,12 +517,12 @@ public:
     journal_seq_t seq,
     size_t max_bytes);
 
-  /// returns std::nullopt if no dirty extents or dirty_from for oldest
+  /// returns std::nullopt if no dirty extents or get_dirty_from() for oldest
   std::optional<journal_seq_t> get_oldest_dirty_from() const {
     if (dirty.empty()) {
       return std::nullopt;
     } else {
-      auto oldest = dirty.begin()->dirty_from;
+      auto oldest = dirty.begin()->get_dirty_from();
       if (oldest == journal_seq_t()) {
 	return std::nullopt;
       } else {
@@ -530,7 +541,7 @@ private:
   /**
    * dirty
    *
-   * holds refs to dirty extents.  Ordered by CachedExtent::dirty_from.
+   * holds refs to dirty extents.  Ordered by CachedExtent::get_dirty_from().
    */
   CachedExtent::list dirty;
 
@@ -552,8 +563,14 @@ private:
   /// Add dirty extent to dirty list
   void add_to_dirty(CachedExtentRef ref);
 
+  /// Remove from dirty list
+  void remove_from_dirty(CachedExtentRef ref);
+
   /// Remove extent from extents handling dirty and refcounting
   void remove_extent(CachedExtentRef ref);
+
+  /// Retire extent, move reference to retired_extent_gate
+  void retire_extent(CachedExtentRef ref);
 
   /// Replace prev with next
   void replace_extent(CachedExtentRef next, CachedExtentRef prev);
