@@ -79,6 +79,29 @@ constexpr size_t PADDR_SIZE = sizeof(paddr_t);
 
 class SegmentManager {
 public:
+  using access_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error,
+    crimson::ct_error::permission_denied,
+    crimson::ct_error::enoent>;
+
+  struct mount_config_t {
+    std::string path;
+  };
+  using mount_ertr = access_ertr;
+  using mount_ret = access_ertr::future<>;
+  virtual mount_ret mount(const mount_config_t&) = 0;
+
+  struct mkfs_config_t {
+    std::string path;
+    size_t segment_size = 0;
+    size_t total_size = 0;
+    seastore_meta_t meta;
+  };
+  using mkfs_ertr = access_ertr;
+  using mkfs_ret = mkfs_ertr::future<>;
+  virtual mkfs_ret mkfs(mkfs_config_t) = 0;
+
+
   using open_ertr = crimson::errorator<
     crimson::ct_error::input_output_error,
     crimson::ct_error::invarg,

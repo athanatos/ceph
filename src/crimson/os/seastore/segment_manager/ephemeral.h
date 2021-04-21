@@ -75,6 +75,14 @@ public:
     crimson::ct_error::erange>;
   init_ertr::future<> init();
 
+  mount_ret mount(const mount_config_t&) {
+    return mount_ertr::now();
+  }
+
+  mkfs_ret mkfs(mkfs_config_t) {
+    return mkfs_ertr::now();
+  }
+
   open_ertr::future<SegmentRef> open(segment_id_t id) final;
 
   release_ertr::future<> release(segment_id_t id) final;

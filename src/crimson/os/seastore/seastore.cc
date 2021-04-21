@@ -52,8 +52,11 @@ seastar::future<> SeaStore::stop()
 
 seastar::future<> SeaStore::mount()
 {
-  return transaction_manager->mount(
-  ).handle_error(
+  return segment_manager->mount(
+    SegmentManager::mount_config_t{}
+  ).safe_then([this] {
+    return transaction_manager->mount();
+  }).handle_error(
     crimson::ct_error::assert_all{
       "Invalid error in SeaStore::mount"
     }
@@ -67,8 +70,11 @@ seastar::future<> SeaStore::umount()
 
 seastar::future<> SeaStore::mkfs(uuid_d new_osd_fsid)
 {
-  return transaction_manager->mkfs(
+  return segment_manager->mkfs(
+    SegmentManager::mkfs_config_t{}
   ).safe_then([this] {
+    return transaction_manager->mkfs();
+  }).safe_then([this] {
     return seastar::do_with(
       transaction_manager->create_transaction(),
       [this](auto &t) {
