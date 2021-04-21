@@ -93,16 +93,6 @@ auto get_transaction_manager(
 auto get_seastore(
   SegmentManagerRef sm
 ) {
-  auto segment_cleaner = std::make_unique<SegmentCleaner>(
-    SegmentCleaner::config_t::default_from_segment_manager(
-      *sm),
-    true);
-  auto journal = std::make_unique<Journal>(*sm);
-  auto cache = std::make_unique<Cache>(*sm);
-  auto lba_manager = lba_manager::create_lba_manager(*sm, *cache);
-
-  journal->set_segment_provider(&*segment_cleaner);
-
   auto tm = get_transaction_manager(*sm);
   auto cm = std::make_unique<collection_manager::FlatCollectionManager>(*tm);
   return std::make_unique<SeaStore>(
