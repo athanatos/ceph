@@ -154,7 +154,7 @@ class TestSegmentManagerWrapper : public SegmentManager {
 public:
   TestSegmentManagerWrapper(SegmentManager &sm) : sm(sm) {}
 
-  mount_ret mount(const mount_config_t&c) final {
+  mount_ret mount() final {
     return mount_ertr::now(); // we handle this above
   }
 

@@ -84,15 +84,11 @@ public:
     crimson::ct_error::permission_denied,
     crimson::ct_error::enoent>;
 
-  struct mount_config_t {
-    std::string path;
-  };
   using mount_ertr = access_ertr;
   using mount_ret = access_ertr::future<>;
-  virtual mount_ret mount(const mount_config_t&) = 0;
+  virtual mount_ret mount() = 0;
 
   struct mkfs_config_t {
-    std::string path;
     size_t segment_size = 0;
     size_t total_size = 0;
     seastore_meta_t meta;

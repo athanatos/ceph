@@ -57,7 +57,6 @@ seastar::future<> SeaStore::stop()
 seastar::future<> SeaStore::mount()
 {
   return segment_manager->mount(
-    SegmentManager::mount_config_t{}
   ).safe_then([this] {
     return transaction_manager->mount();
   }).handle_error(
@@ -906,7 +905,7 @@ std::unique_ptr<SeaStore> make_seastore(
 {
   auto sm = std::make_unique<
     segment_manager::block::BlockSegmentManager
-    >();
+    >(device);
   
   auto segment_cleaner = std::make_unique<SegmentCleaner>(
     SegmentCleaner::config_t::default_from_segment_manager(

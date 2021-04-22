@@ -75,7 +75,7 @@ public:
     crimson::ct_error::erange>;
   init_ertr::future<> init();
 
-  mount_ret mount(const mount_config_t&) {
+  mount_ret mount() {
     return mount_ertr::now();
   }
 

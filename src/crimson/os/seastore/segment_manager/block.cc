@@ -268,10 +268,10 @@ BlockSegmentManager::~BlockSegmentManager()
 {
 }
 
-BlockSegmentManager::mount_ret BlockSegmentManager::mount(const mount_config_t& config)
+BlockSegmentManager::mount_ret BlockSegmentManager::mount()
 {
   return open_device(
-    config.path, seastar::open_flags::rw | seastar::open_flags::dsync
+    device_path, seastar::open_flags::rw | seastar::open_flags::dsync
   ).safe_then([=](auto p) {
     device = std::move(p.first);
     auto sd = p.second;
@@ -304,7 +304,7 @@ BlockSegmentManager::mkfs_ret BlockSegmentManager::mkfs(mkfs_config_t config)
     std::unique_ptr<SegmentStateTracker>(),
     [=](auto &device, auto &stat, auto &sb, auto &tracker) {
       return open_device(
-	config.path, seastar::open_flags::rw
+	device_path, seastar::open_flags::rw
       ).safe_then([&, config](auto p) {
 	device = p.first;
 	stat = p.second;

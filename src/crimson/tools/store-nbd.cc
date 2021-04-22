@@ -663,16 +663,16 @@ public:
     assert(config.path);
     segment_manager = std::make_unique<
       segment_manager::block::BlockSegmentManager
-      >();
+      >(*config.path);
     logger().debug("mkfs");
     BlockSegmentManager::mkfs_config_t block_config{
-      *config.path, config.segment_size, config.total_device_size
+      config.segment_size, config.total_device_size
     };
     block_config.meta.seastore_id.generate_random();
     return segment_manager->mkfs(std::move(block_config)
     ).safe_then([this] {
       logger().debug("");
-      return segment_manager->mount({ *config.path });
+      return segment_manager->mount();
     }).safe_then([this] {
       init();
       logger().debug("tm mkfs");
@@ -699,8 +699,8 @@ public:
     ).then([this] {
       segment_manager = std::make_unique<
 	segment_manager::block::BlockSegmentManager
-	>();
-      return segment_manager->mount({ *config.path });
+	>(*config.path);
+      return segment_manager->mount();
     }).safe_then([this] {
       init();
       return tm->mount();

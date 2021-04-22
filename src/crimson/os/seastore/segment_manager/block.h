@@ -132,7 +132,7 @@ public:
  */
 class BlockSegmentManager final : public SegmentManager {
 public:
-  mount_ret mount(const mount_config_t&) final;
+  mount_ret mount() final;
 
   mkfs_ret mkfs(mkfs_config_t) final;
   
@@ -141,7 +141,7 @@ public:
     >;
   close_ertr::future<> close();
 
-  BlockSegmentManager() = default;
+  BlockSegmentManager(const std::string &path) : device_path(path) {}
   ~BlockSegmentManager();
 
   open_ertr::future<SegmentRef> open(segment_id_t id) final;
@@ -174,6 +174,7 @@ private:
   using segment_state_t = Segment::segment_state_t;
 
   
+  std::string device_path;
   std::unique_ptr<SegmentStateTracker> tracker;
   block_sm_superblock_t superblock;
   seastar::file device;
