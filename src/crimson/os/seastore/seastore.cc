@@ -76,7 +76,10 @@ seastar::future<> SeaStore::mkfs(uuid_d new_osd_fsid)
 {
   auto &config = local_conf();
   return segment_manager->mkfs(
-    SegmentManager::mkfs_config_t{}
+    SegmentManager::mkfs_config_t{
+      config.get_val<uint64_t>("crimson_seastore_segment_size"),
+      config.get_val<uint64_t>("crimson_seastore_device_size"),
+    }
   ).safe_then([this] {
     return transaction_manager->mkfs();
   }).safe_then([this] {
