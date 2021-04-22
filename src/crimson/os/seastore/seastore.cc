@@ -12,6 +12,7 @@
 #include "common/safe_io.h"
 #include "os/Transaction.h"
 
+#include "crimson/common/config_proxy.h"
 #include "crimson/common/buffer_io.h"
 
 #include "crimson/os/futurized_collection.h"
@@ -73,6 +74,7 @@ seastar::future<> SeaStore::umount()
 
 seastar::future<> SeaStore::mkfs(uuid_d new_osd_fsid)
 {
+  auto &config = local_conf();
   return segment_manager->mkfs(
     SegmentManager::mkfs_config_t{}
   ).safe_then([this] {
