@@ -158,7 +158,7 @@ public:
     return mount_ertr::now(); // we handle this above
   }
 
-  mkfs_ret mkfs(mkfs_config_t c) final {
+  mkfs_ret mkfs(seastore_meta_t c) final {
     return mkfs_ertr::now(); // we handle this above
   }
 

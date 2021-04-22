@@ -79,7 +79,7 @@ public:
     return mount_ertr::now();
   }
 
-  mkfs_ret mkfs(mkfs_config_t) {
+  mkfs_ret mkfs(seastore_meta_t) {
     return mkfs_ertr::now();
   }
 

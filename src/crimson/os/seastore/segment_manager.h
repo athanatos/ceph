@@ -88,15 +88,9 @@ public:
   using mount_ret = access_ertr::future<>;
   virtual mount_ret mount() = 0;
 
-  struct mkfs_config_t {
-    size_t segment_size = 0;
-    size_t total_size = 0;
-    seastore_meta_t meta;
-  };
   using mkfs_ertr = access_ertr;
   using mkfs_ret = mkfs_ertr::future<>;
-  virtual mkfs_ret mkfs(mkfs_config_t) = 0;
-
+  virtual mkfs_ret mkfs(seastore_meta_t meta) = 0;
 
   using open_ertr = crimson::errorator<
     crimson::ct_error::input_output_error,

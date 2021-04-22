@@ -134,7 +134,7 @@ class BlockSegmentManager final : public SegmentManager {
 public:
   mount_ret mount() final;
 
-  mkfs_ret mkfs(mkfs_config_t) final;
+  mkfs_ret mkfs(seastore_meta_t) final;
   
   using close_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
