@@ -6225,6 +6225,7 @@ options:
   - filestore
   - memstore
   - kstore
+  - seastore
   flags:
   - create
   with_legacy: true
