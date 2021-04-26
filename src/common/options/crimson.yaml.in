@@ -29,7 +29,14 @@ options:
   level: advanced
   default: 67108864
 - name: crimson_seastore_device_size
-  type: uint
-  desc: Total device size to use for SegmentManager (0 means auto-detect)
-  level: advanced
-  default: 0
+  type: size
+  desc: Total size to use for SegmentManager block file if created
+  level: dev
+  default: 100_G
+- name: crimson_seastore_block_create
+  type: bool
+  level: dev
+  desc: Create SegmentManager file if it doesn't exist
+  default: true
+  see_also:
+  - crimson_seastore_device_size
