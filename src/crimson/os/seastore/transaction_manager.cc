@@ -66,6 +66,7 @@ TransactionManager::mkfs_ertr::future<> TransactionManager::mkfs()
 TransactionManager::mount_ertr::future<> TransactionManager::mount()
 {
   cache->init();
+  segment_cleaner->mount(segment_manager);
   return journal->replay([this](auto seq, auto paddr, const auto &e) {
     return cache->replay_delta(seq, paddr, e);
   }).safe_then([this] {
