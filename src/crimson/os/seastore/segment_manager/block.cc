@@ -130,29 +130,69 @@ block_sm_superblock_t make_superblock(
   };
 }
 
+using check_create_device_ertr = BlockSegmentManager::access_ertr;
+using check_create_device_ret = check_create_device_ertr::future<>;
+static check_create_device_ret check_create_device(
+  const std::string &path,
+  size_t size)
+{
+  logger().error(
+    "block.cc:check_create_device path {}, size {}",
+    path,
+    size);
+  return seastar::open_file_dma(
+    path, seastar::open_flags::create | seastar::open_flags::exclusive
+  ).then([size](auto file) {
+    return seastar::do_with(
+      std::move(file),
+      [size](auto &f) -> seastar::future<> {
+	return f.truncate(
+	  size
+	).then([&f, size] {
+	  return f.allocate(0, size);
+	}).finally([&f] {
+	  return f.close();
+	});
+      });
+  }).handle_exception_type(
+    [](const std::system_error &e) {
+      if (e.code().value() == EEXIST) {
+	return seastar::now();
+      } else {
+	throw e;
+      }
+    }
+  ).then_wrapped([](auto f) -> check_create_device_ret {
+    if (f.failed()) {
+      return crimson::ct_error::input_output_error::make();
+    } else {
+      std::ignore = f.discard_result();
+      return check_create_device_ertr::now();
+    }
+  });
+}
+
 using open_device_ret = 
   BlockSegmentManager::access_ertr::future<
   std::pair<seastar::file, seastar::stat_data>
   >;
 static
-open_device_ret open_device(const std::string &in_path, seastar::open_flags mode)
+open_device_ret open_device(
+  const std::string &path,
+  seastar::open_flags mode)
 {
-  return seastar::do_with(
-    in_path,
-    [mode](auto &path) {
-      return seastar::file_stat(path, seastar::follow_symlink::yes
-      ).then([mode, &path](auto stat) mutable {
-	return seastar::open_file_dma(path, mode).then([=](auto file) {
-	  logger().debug("open_device: open successful");
-	  return std::make_pair(file, stat);
-	});
-      }).handle_exception([](auto e) -> open_device_ret {
-	logger().error(
-	  "open_device: got error {}",
-	  e);
-	return crimson::ct_error::input_output_error::make();
-      });
+  return seastar::file_stat(path, seastar::follow_symlink::yes
+  ).then([mode, &path](auto stat) mutable {
+    return seastar::open_file_dma(path, mode).then([=](auto file) {
+      logger().debug("open_device: open successful");
+      return std::make_pair(file, stat);
     });
+  }).handle_exception([](auto e) -> open_device_ret {
+    logger().error(
+      "open_device: got error {}",
+      e);
+    return crimson::ct_error::input_output_error::make();
+  });
 }
 
   
@@ -313,9 +353,18 @@ BlockSegmentManager::mkfs_ret BlockSegmentManager::mkfs(seastore_meta_t meta)
     block_sm_superblock_t{},
     std::unique_ptr<SegmentStateTracker>(),
     [=](auto &device, auto &stat, auto &sb, auto &tracker) {
-      return open_device(
-	device_path, seastar::open_flags::rw
-      ).safe_then([&, meta](auto p) {
+      logger().error("BlockSegmentManager::mkfs path {}", device_path);
+      using crimson::common::local_conf;
+      check_create_device_ret maybe_create = check_create_device_ertr::now();
+      if (local_conf().get_val<bool>("crimson_seastore_block_create")) {
+	using crimson::common::local_conf;
+	auto size = local_conf().get_val<size_t>("crimson_seastore_device_size");
+	maybe_create = check_create_device(device_path, size);
+      }
+      
+      return maybe_create.safe_then([this] {
+	return open_device(device_path, seastar::open_flags::rw);
+      }).safe_then([&, meta](auto p) {
 	device = p.first;
 	stat = p.second;
 	sb = make_superblock(meta, stat);
