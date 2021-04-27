@@ -965,9 +965,9 @@ std::unique_ptr<SeaStore> make_seastore(
     >(device + "/block");
   
   auto segment_cleaner = std::make_unique<SegmentCleaner>(
-    SegmentCleaner::config_t::default_from_segment_manager(
-      *sm),
-    true);
+    SegmentCleaner::config_t::get_default(),
+    false /* detailed */);
+
   auto journal = std::make_unique<Journal>(*sm);
   auto cache = std::make_unique<Cache>(*sm);
   auto lba_manager = lba_manager::create_lba_manager(*sm, *cache);
