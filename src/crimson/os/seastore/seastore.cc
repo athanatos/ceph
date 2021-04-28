@@ -170,10 +170,21 @@ SeaStore::read_errorator::future<ceph::bufferlist> SeaStore::read(
   size_t len,
   uint32_t op_flags)
 {
+  logger().debug("SeaStore::read: oid {} offset {} len {}", oid, offset, len);
   return repeat_with_onode<ceph::bufferlist>(
     ch,
     oid,
-    [=](auto &t, auto &onode) {
+    [=](auto &t, auto &onode) -> ObjectDataHandler::read_ret {
+      size_t size = onode.get_layout().size;
+
+      if (offset >= size) {
+	return seastar::make_ready_future<ceph::bufferlist>();
+      }
+
+      size_t corrected_len = (len == 0) ?
+	size - offset :
+	std::min(size - offset, len);
+
       return ObjectDataHandler().read(
 	ObjectDataHandler::context_t{
 	  *transaction_manager,
@@ -181,7 +192,7 @@ SeaStore::read_errorator::future<ceph::bufferlist> SeaStore::read(
 	  onode,
 	},
 	offset,
-	len);
+	corrected_len);
     });
 }
 
