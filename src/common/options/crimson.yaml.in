@@ -24,10 +24,10 @@ options:
   level: advanced
   desc: CPU cores on which alienstore threads will run
 - name: crimson_seastore_segment_size
-  type: uint
+  type: size
   desc: Segment size to use for SegmentManager
   level: advanced
-  default: 67108864
+  default: 64_M
 - name: crimson_seastore_device_size
   type: size
   desc: Total size to use for SegmentManager block file if created
