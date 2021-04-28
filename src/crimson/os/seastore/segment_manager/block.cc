@@ -98,7 +98,7 @@ block_sm_superblock_t make_superblock(
 {
   using crimson::common::local_conf;
 
-  auto config_size = local_conf().get_val<uint64_t>(
+  auto config_size = local_conf().get_val<Option::size_t>(
     "crimson_seastore_device_size");
 
   logger().debug(
@@ -111,7 +111,7 @@ block_sm_superblock_t make_superblock(
 
   size_t size = (data.size == 0) ? config_size : data.size;
 
-  auto config_segment_size = local_conf().get_val<uint64_t>(
+  auto config_segment_size = local_conf().get_val<Option::size_t>(
     "crimson_seastore_segment_size");
   size_t raw_segments = size / config_segment_size;
   size_t tracker_size = SegmentStateTracker::get_raw_size(
@@ -206,7 +206,10 @@ open_device_ret open_device(
   return seastar::file_stat(path, seastar::follow_symlink::yes
   ).then([mode, &path](auto stat) mutable {
     return seastar::open_file_dma(path, mode).then([=](auto file) {
-      logger().debug("open_device: open successful");
+      logger().error(
+	"open_device: open successful, size {}",
+	stat.size
+      );
       return std::make_pair(file, stat);
     });
   }).handle_exception([](auto e) -> open_device_ret {
