@@ -677,7 +677,8 @@ struct __attribute__((packed)) root_t {
     bufferlist bl;
     bl.append(ceph::buffer::create_static(MAX_META_LENGTH, meta));
     meta_t ret;
-    decode(ret, bl);
+    auto iter = bl.cbegin();
+    decode(ret, iter);
     return ret;
   }
 

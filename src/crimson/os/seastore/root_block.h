@@ -38,8 +38,6 @@ struct RootBlock : CachedExtent {
 
   root_t root;
 
-  std::map<std::string, std::string> meta;
-
   RootBlock() : CachedExtent(0) {}
 
   RootBlock(const RootBlock &rhs) = default;
