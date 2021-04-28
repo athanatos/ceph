@@ -349,12 +349,19 @@ seastar::future<> OSD::_preboot(version_t oldest, version_t newest)
   } else if (version_t n = local_conf()->osd_map_message_max;
              osdmap->get_epoch() >= oldest - 1 &&
              osdmap->get_epoch() + n > newest) {
+    logger().warn("OSD::_preboot: calling _send_boot()");
     return _send_boot();
   }
   // get all the latest maps
   if (osdmap->get_epoch() + 1 >= oldest) {
+    logger().warn(
+      "OSD::_preboot: calling subscribe from current {}",
+      osdmap->get_epoch() + 1);
     return shard_services.osdmap_subscribe(osdmap->get_epoch() + 1, false);
   } else {
+    logger().warn(
+      "OSD::_preboot: calling subscribe from mons oldest {}",
+      oldest - 1);
     return shard_services.osdmap_subscribe(oldest - 1, true);
   }
 }
