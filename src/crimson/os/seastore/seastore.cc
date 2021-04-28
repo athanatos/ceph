@@ -170,6 +170,7 @@ SeaStore::read_errorator::future<ceph::bufferlist> SeaStore::read(
   size_t len,
   uint32_t op_flags)
 {
+  logger().debug("SeaStore::read: oid {} offset {} len {}", oid, offset, len);
   return repeat_with_onode<ceph::bufferlist>(
     ch,
     oid,
@@ -181,7 +182,7 @@ SeaStore::read_errorator::future<ceph::bufferlist> SeaStore::read(
 	  onode,
 	},
 	offset,
-	len);
+	(len == 0) ? onode.get_layout().size : len);
     });
 }
 
