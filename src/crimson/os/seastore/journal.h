@@ -180,12 +180,12 @@ public:
     assert(write_pipeline);
     auto rsize = get_encoded_record_length(record);
     auto total = rsize.mdlength + rsize.dlength;
-    if (total > max_record_length) {
+    if (total > max_record_length()) {
       auto &logger = crimson::get_logger(ceph_subsys_filestore);
       logger.error(
 	"Journal::submit_record: record size {} exceeds max {}",
 	total,
-	max_record_length
+	max_record_length()
       );
       return crimson::ct_error::erange::make();
     }
@@ -244,9 +244,6 @@ public:
   }
 
 private:
-  const extent_len_t block_size;
-  const extent_len_t max_record_length;
-
   JournalSegmentProvider *segment_provider = nullptr;
   SegmentManager &segment_manager;
 
@@ -341,6 +338,7 @@ private:
     record_header_t header,
     const bufferlist &bl);
 
+
   /// attempts to decode extent infos from bl, return nullopt if unsuccessful
   std::optional<std::vector<extent_info_t>> try_decode_extent_infos(
     record_header_t header,
@@ -415,6 +413,7 @@ private:
     delta_handler_t &delta_handler   ///< [in] processes deltas in order
   );
 
+  extent_len_t max_record_length() const;
 };
 using JournalRef = std::unique_ptr<Journal>;
 
@@ -422,3 +421,13 @@ using JournalRef = std::unique_ptr<Journal>;
 WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::segment_header_t)
 WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::record_header_t)
 WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::extent_info_t)
+
+namespace crimson::os::seastore {
+
+inline extent_len_t Journal::max_record_length() const {
+  return segment_manager.get_segment_size() -
+    p2align(ceph::encoded_sizeof_bounded<segment_header_t>(),
+	    size_t(segment_manager.get_block_size()));
+}
+
+}
