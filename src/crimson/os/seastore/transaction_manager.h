@@ -382,14 +382,17 @@ public:
   read_root_meta_ret read_root_meta(
     Transaction &t,
     const std::string &key) {
-    auto root = cache->get_root_fast(t);
-    auto meta = root->root.get_meta();
-    auto iter = meta.find(key);
-    if (iter == meta.end()) {
-      return seastar::make_ready_future<read_root_meta_bare>(std::nullopt);
-    } else {
-      return seastar::make_ready_future<read_root_meta_bare>(iter->second);
-    }
+    return cache->get_root(
+      t
+    ).safe_then([this, &key](auto root) {
+      auto meta = root->root.get_meta();
+      auto iter = meta.find(key);
+      if (iter == meta.end()) {
+	return seastar::make_ready_future<read_root_meta_bare>(std::nullopt);
+      } else {
+	return seastar::make_ready_future<read_root_meta_bare>(iter->second);
+      }
+    });
   }
 
   /**
@@ -403,14 +406,17 @@ public:
     Transaction& t,
     const std::string& key,
     const std::string& value) {
-    auto root = cache->get_root_fast(t);
-    root = cache->duplicate_for_write(t, root)->cast<RootBlock>();
+    return cache->get_root(
+      t
+    ).safe_then([this, &t, &key, &value](RootBlockRef root) {
+      root = cache->duplicate_for_write(t, root)->cast<RootBlock>();
 
-    auto meta = root->root.get_meta();
-    meta[key] = value;
+      auto meta = root->root.get_meta();
+      meta[key] = value;
 
-    root->root.set_meta(meta);
-    return seastar::now();
+      root->root.set_meta(meta);
+      return seastar::now();
+    });
   }
 
   /**
