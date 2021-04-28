@@ -141,33 +141,55 @@ static check_create_device_ret check_create_device(
     path,
     size);
   return seastar::open_file_dma(
-    path, seastar::open_flags::create | seastar::open_flags::exclusive
+    path,
+    seastar::open_flags::exclusive |
+    seastar::open_flags::rw |
+    seastar::open_flags::create
   ).then([size](auto file) {
     return seastar::do_with(
-      std::move(file),
+      file,
       [size](auto &f) -> seastar::future<> {
+	logger().error(
+	  "block.cc:check_create_device: created device, truncating to {}",
+	  size);
+	ceph_assert(f);
 	return f.truncate(
 	  size
 	).then([&f, size] {
+	  logger().error(
+	    "block.cc:check_create_device: truncated");
 	  return f.allocate(0, size);
 	}).finally([&f] {
 	  return f.close();
 	});
       });
-  }).handle_exception_type(
-    [](const std::system_error &e) {
-      if (e.code().value() == EEXIST) {
-	return seastar::now();
-      } else {
-	throw e;
-      }
-    }
-  ).then_wrapped([](auto f) -> check_create_device_ret {
+  }).then_wrapped([&path](auto f) -> check_create_device_ret {
+    logger().error(
+      "block.cc:check_create_device: complete failed: {}",
+      f.failed());
     if (f.failed()) {
-      return crimson::ct_error::input_output_error::make();
+      try {
+	f.get();
+	return seastar::now();
+      } catch (const std::system_error &e) {
+	if (e.code().value() == EEXIST) {
+	  logger().error(
+	    "block.cc:check_create_device device {} exists",
+	    path);
+	  return seastar::now();
+	} else {
+	  logger().error(
+	    "block.cc:check_create_device device {} creation error {}",
+	    path,
+	    e);
+	  return crimson::ct_error::input_output_error::make();
+	}
+      } catch (...) {
+	return crimson::ct_error::input_output_error::make();
+      }
     } else {
       std::ignore = f.discard_result();
-      return check_create_device_ertr::now();
+      return seastar::now();
     }
   });
 }
@@ -358,7 +380,7 @@ BlockSegmentManager::mkfs_ret BlockSegmentManager::mkfs(seastore_meta_t meta)
       check_create_device_ret maybe_create = check_create_device_ertr::now();
       if (local_conf().get_val<bool>("crimson_seastore_block_create")) {
 	using crimson::common::local_conf;
-	auto size = local_conf().get_val<size_t>("crimson_seastore_device_size");
+	auto size = local_conf().get_val<Option::size_t>("crimson_seastore_device_size");
 	maybe_create = check_create_device(device_path, size);
       }
       
