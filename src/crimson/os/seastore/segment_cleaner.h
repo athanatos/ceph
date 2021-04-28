@@ -368,6 +368,12 @@ public:
       gc_process(*this) {}
 
   void mount(SegmentManager &sm) {
+    init_complete = false;
+    used_bytes = 0;
+    journal_tail_target = journal_seq_t{};
+    journal_tail_committed = journal_seq_t{};
+    journal_head = journal_seq_t{};
+
     num_segments = sm.get_num_segments();
     segment_size = static_cast<size_t>(sm.get_segment_size());
     block_size = static_cast<size_t>(sm.get_block_size());
@@ -381,6 +387,7 @@ public:
       (SpaceTrackerI*)new SpaceTrackerSimple(
 	num_segments));
 
+    segments.clear();
     segments.resize(num_segments);
     empty_segments = num_segments;
   }
