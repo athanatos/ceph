@@ -661,11 +661,34 @@ struct __attribute__((packed)) root_t {
   lba_root_t lba_root;
   laddr_le_t onode_root;
   coll_root_le_t collection_root;
+
   char meta[MAX_META_LENGTH];
-  bool have_meta = false;
+
+  root_t() {
+    set_meta(meta_t{});
+  }
 
   void adjust_addrs_from_base(paddr_t base) {
     lba_root.adjust_addrs_from_base(base);
+  }
+
+  using meta_t = std::map<std::string, std::string>;
+  meta_t get_meta() {
+    bufferlist bl;
+    bl.append(ceph::buffer::create_static(MAX_META_LENGTH, meta));
+    meta_t ret;
+    decode(ret, bl);
+    return ret;
+  }
+
+  void set_meta(const meta_t &m) {
+    ceph::bufferlist bl;
+    encode(m, bl);
+    ceph_assert(bl.length() < MAX_META_LENGTH);
+    bl.rebuild();
+    auto &bptr = bl.front();
+    ::memset(meta, 0, MAX_META_LENGTH);
+    ::memcpy(meta, bptr.c_str(), bl.length());
   }
 };
 

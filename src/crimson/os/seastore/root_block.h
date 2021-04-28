@@ -68,11 +68,6 @@ struct RootBlock : CachedExtent {
     ceph::bufferlist bl = _bl;
     bl.rebuild();
     root = *reinterpret_cast<const root_t*>(bl.front().c_str());
-    if (root.have_meta) {
-      ceph::bufferlist meta_bl;
-      meta_bl.rebuild(ceph::buffer::ptr_node::create(&root.meta[0], root_t::MAX_META_LENGTH));
-      decode(meta, meta_bl);
-    }
     root.adjust_addrs_from_base(base);
   }
 
