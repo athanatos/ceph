@@ -5,6 +5,7 @@
 #include "crimson/common/log.h"
 
 // included for get_extent_by_type
+#include "crimson/os/seastore/logging.h"
 #include "crimson/os/seastore/collection_manager/collection_flat_node.h"
 #include "crimson/os/seastore/lba_manager/btree/lba_btree_node_impl.h"
 #include "crimson/os/seastore/omap_manager/btree/omap_btree_node_impl.h"
@@ -12,12 +13,6 @@
 #include "crimson/os/seastore/collection_manager/collection_flat_node.h"
 #include "crimson/os/seastore/onode_manager/staged-fltree/node_extent_manager/seastore.h"
 #include "test/crimson/seastore/test_block.h"
-
-namespace {
-  seastar::logger& logger() {
-    return crimson::get_logger(ceph_subsys_filestore);
-  }
-}
 
 namespace crimson::os::seastore {
 
@@ -35,8 +30,9 @@ Cache::~Cache()
 Cache::retire_extent_ret Cache::retire_extent(
   Transaction &t, paddr_t addr, extent_len_t length)
 {
+  LOG_PREFIX(Cache::retire_extent);
   if (auto ext = t.write_set.find_offset(addr); ext != t.write_set.end()) {
-    logger().debug("{}: found {} in t.write_set", __func__, addr);
+    DEBUGT("found {} in t.write_set", t, addr);
     t.add_to_retired_set(CachedExtentRef(&*ext));
     return retire_extent_ertr::now();
   } else if (auto iter = extents.find_offset(addr);
@@ -54,6 +50,7 @@ Cache::retire_extent_ret Cache::retire_extent(
 
 void Cache::add_extent(CachedExtentRef ref)
 {
+  LOG_PREFIX(Cache::add_extent);
   assert(ref->is_valid());
   extents.insert(*ref);
 
@@ -62,11 +59,12 @@ void Cache::add_extent(CachedExtentRef ref)
   } else {
     ceph_assert(!ref->primary_ref_list_hook.is_linked());
   }
-  logger().debug("add_extent: {}", *ref);
+  DEBUG("extent {}", *ref);
 }
 
 void Cache::mark_dirty(CachedExtentRef ref)
 {
+  LOG_PREFIX(Cache::mark_dirty);
   if (ref->is_dirty()) {
     assert(ref->primary_ref_list_hook.is_linked());
     return;
@@ -75,7 +73,7 @@ void Cache::mark_dirty(CachedExtentRef ref)
   add_to_dirty(ref);
   ref->state = CachedExtent::extent_state_t::DIRTY;
 
-  logger().debug("mark_dirty: {}", *ref);
+  DEBUG("extent: {}", *ref);
 }
 
 void Cache::add_to_dirty(CachedExtentRef ref)
@@ -99,7 +97,8 @@ void Cache::remove_from_dirty(CachedExtentRef ref)
 
 void Cache::remove_extent(CachedExtentRef ref)
 {
-  logger().debug("remove_extent: {}", *ref);
+  LOG_PREFIX(Cache::remove_extent);
+  DEBUG("extent {}", *ref);
   assert(ref->is_valid());
   remove_from_dirty(ref);
   extents.erase(*ref);
@@ -107,7 +106,8 @@ void Cache::remove_extent(CachedExtentRef ref)
 
 void Cache::retire_extent(CachedExtentRef ref)
 {
-  logger().debug("retire_extent: {}", *ref);
+  LOG_PREFIX(Cache::retire_extent);
+  DEBUG("extent {}", *ref);
   assert(ref->is_valid());
 
   remove_from_dirty(ref);
@@ -118,6 +118,8 @@ void Cache::retire_extent(CachedExtentRef ref)
 
 void Cache::replace_extent(CachedExtentRef next, CachedExtentRef prev)
 {
+  LOG_PREFIX(Cache::retire_extent);
+  DEBUG("prev {}, next {}", *prev, *next);
   assert(next->get_paddr() == prev->get_paddr());
   assert(next->version == prev->version + 1);
   extents.replace(*next, *prev);
@@ -187,6 +189,7 @@ CachedExtentRef Cache::alloc_new_extent_by_type(
 CachedExtentRef Cache::duplicate_for_write(
   Transaction &t,
   CachedExtentRef i) {
+  LOG_PREFIX(Cache::duplicate_for_write);
   if (i->is_pending())
     return i;
 
@@ -201,7 +204,7 @@ CachedExtentRef Cache::duplicate_for_write(
 
   ret->version++;
   ret->state = CachedExtent::extent_state_t::MUTATION_PENDING;
-  logger().debug("Cache::duplicate_for_write: {} -> {}", *i, *ret);
+  DEBUGT("{} -> {}", t, *i, *ret);
   return ret;
 }
 
@@ -420,8 +423,9 @@ Cache::replay_delta(
   paddr_t record_base,
   const delta_info_t &delta)
 {
+  LOG_PREFIX(Cache::replay_delta);
   if (delta.type == extent_types_t::ROOT) {
-    logger().debug("replay_delta: found root delta");
+    DEBUG("found root delta");
     remove_extent(root);
     root->apply_delta_and_adjust_crc(record_base, delta.bl);
     root->dirty_from_or_retired_at = journal_seq;
