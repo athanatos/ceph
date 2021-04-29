@@ -70,7 +70,11 @@ seastar::future<> SeaStore::mkfs(uuid_d new_osd_fsid)
   return segment_manager->mkfs(
     seastore_meta_t{new_osd_fsid}
   ).safe_then([this] {
+    return segment_manager->mount();
+  }).safe_then([this] {
     return transaction_manager->mkfs();
+  }).safe_then([this] {
+    return transaction_manager->mount();
   }).safe_then([this] {
     return seastar::do_with(
       transaction_manager->create_transaction(),
@@ -86,6 +90,8 @@ seastar::future<> SeaStore::mkfs(uuid_d new_osd_fsid)
 	    std::move(t));
 	});
       });
+  }).safe_then([this] {
+    return stop();
   }).handle_error(
     crimson::ct_error::assert_all{
       "Invalid error in SeaStore::mkfs"
@@ -984,9 +990,9 @@ std::unique_ptr<SeaStore> make_seastore(
     >(device + "/block");
   
   auto segment_cleaner = std::make_unique<SegmentCleaner>(
-    SegmentCleaner::config_t::default_from_segment_manager(
-      *sm),
-    true);
+    SegmentCleaner::config_t::get_default(),
+    false /* detailed */);
+
   auto journal = std::make_unique<Journal>(*sm);
   auto cache = std::make_unique<Cache>(*sm);
   auto lba_manager = lba_manager::create_lba_manager(*sm, *cache);
