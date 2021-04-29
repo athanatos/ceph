@@ -452,6 +452,11 @@ public:
     paddr_t addr,
     extent_len_t len,
     bool init_scan = false) {
+    crimson::get_logger(ceph_subsys_filestore).debug(
+      "SegmentCleaner::mark_space_used: addr {}, len {}",
+      addr,
+      len);
+
     assert(addr.segment < segments.size());
 
     if (!init_scan && !init_complete)
