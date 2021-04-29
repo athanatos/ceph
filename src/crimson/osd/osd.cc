@@ -381,6 +381,7 @@ seastar::future<> OSD::_send_boot()
                                   cluster_msgr->get_myaddrs(),
                                   CEPH_FEATURES_ALL);
   collect_sys_info(&m->metadata, NULL);
+  logger().debug("collected metadata");
   return monc->send_message(m);
 }
 
