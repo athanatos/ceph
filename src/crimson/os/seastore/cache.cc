@@ -225,7 +225,7 @@ std::optional<record_t> Cache::try_construct_record(Transaction &t)
 
   // First, validate read set
   for (auto &i: t.read_set) {
-    if (i->state == CachedExtent::extent_state_t::INVALID) {
+    if (!i.ref->is_valid()) {
       return std::nullopt;
     }
   }
