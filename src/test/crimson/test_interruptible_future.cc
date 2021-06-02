@@ -167,3 +167,44 @@ TEST_F(seastar_test_suite_t, loops)
       }, [](std::exception_ptr) {}, false).get0();
   });
 }
+
+using base_ertr = errorator<ct_error::enoent>;
+using base_intr = interruptible::interruptor<TestInterruptCondition>;
+using base_iertr = interruptible::interruptible_errorator<
+  TestInterruptCondition, // Note, needs to be condition, not interruptor TODO
+  base_ertr>;
+
+using final_ertr = base_ertr::extend<
+  ct_error::eagain>;
+
+template <typename F>
+auto with_intr(F &&f) {
+  return base_intr::with_interruption_to_error<ct_error::eagain>(
+    std::forward<F>(f),
+    TestInterruptCondition(false));
+}
+
+TEST_F(seastar_test_suite_t, errorated)
+{
+  run_async([] {
+    final_ertr::future<> ret = with_intr(
+      []() {
+	return base_iertr::now();
+      }
+    );
+    ret.unsafe_get0();
+  });
+}
+
+TEST_F(seastar_test_suite_t, errorated_value)
+{
+  run_async([] {
+    final_ertr::future<int> ret = with_intr(
+      []() {
+	return base_iertr::make_ready_future<int>(
+	  1
+	);
+      });
+    EXPECT_EQ(ret.unsafe_get0(), 1);
+  });
+}
