@@ -54,7 +54,7 @@ namespace crimson::os::seastore {
  *    succcessful, the user may construct a record and submit the
  *    transaction to the journal.
  * 3) completion: once the transaction is durable, the user must call
- *    Cache::complete_transaction() with the block offset to complete
+ *    Cache::complete_commit() with the block offset to complete
  *    the transaction.
  *
  * Internally, in phase 1, the fields in Transaction are filled in.
@@ -140,19 +140,9 @@ public:
   }
 
   /// Declare paddr retired in t
-  using retire_extent_ertr = base_ertr;
-  using retire_extent_ret = retire_extent_ertr::future<>;
-  retire_extent_ret retire_extent(
-    Transaction &t, paddr_t addr, extent_len_t length) {
-    return with_trans_intr(
-      t,
-      [this, &t, addr, length] {
-	return retire_extent_inter(t, addr, length);
-      });
-  }
-  using retire_extent_inter_iertr = base_iertr;
-  using retire_extent_inter_ret = base_iertr::future<>;
-  retire_extent_inter_ret retire_extent_inter(
+  using retire_extent_iertr = base_iertr;
+  using retire_extent_ret = base_iertr::future<>;
+  retire_extent_ret retire_extent_addr(
     Transaction &t, paddr_t addr, extent_len_t length);
 
   /**
@@ -160,18 +150,9 @@ public:
    *
    * returns ref to current root or t.root if modified in t
    */
-  using get_root_ertr = base_ertr;
-  using get_root_ret = get_root_ertr::future<RootBlockRef>;
-  get_root_ret get_root(Transaction &t) {
-    return with_trans_intr(
-      t,
-      [this, &t] {
-	return get_root_inter(t);
-      });
-  }
-  using get_root_inter_iertr = base_iertr;
-  using get_root_inter_ret = get_root_inter_iertr::future<RootBlockRef>;
-  get_root_inter_ret get_root_inter(Transaction &t);
+  using get_root_iertr = base_iertr;
+  using get_root_ret = get_root_iertr::future<RootBlockRef>;
+  get_root_ret get_root(Transaction &t);
 
   /**
    * get_root_fast
@@ -245,22 +226,10 @@ public:
    *
    * Returns extent at offset if in cache
    */
-  using get_extent_if_cached_ertr = base_ertr;
-  using get_extent_if_cached_ret = get_extent_if_cached_ertr::future<
-    CachedExtentRef>;
+  using get_extent_if_cached_iertr = trans_iertr<base_ertr>;
+  using get_extent_if_cached_ret =
+    get_extent_if_cached_iertr::future<CachedExtentRef>;
   get_extent_if_cached_ret get_extent_if_cached(
-    Transaction &t,
-    paddr_t offset) {
-    return with_trans_intr(
-      t,
-      [this, &t, offset]() {
-	return get_extent_if_cached_inter(t, offset);
-      });
-  }
-  using get_extent_if_cached_inter_iertr = trans_iertr<base_ertr>;
-  using get_extent_if_cached_inter_ret =
-    get_extent_if_cached_inter_iertr::future<CachedExtentRef>;
-  get_extent_if_cached_inter_ret get_extent_if_cached_inter(
     Transaction &t,
     paddr_t offset) {
     return seastar::do_with(
@@ -287,25 +256,9 @@ public:
    *
    * t *must not* have retired offset
    */
+  using get_extent_iertr = trans_iertr<base_ertr>;
   template <typename T>
-  get_extent_ret<T> get_extent(
-    Transaction &t,       ///< [in,out] current transaction
-    paddr_t offset,       ///< [in] starting addr
-    segment_off_t length  ///< [in] length
-  ) {
-    return with_trans_intr(
-      t,
-      [this, &t, offset, length]() {
-	return get_extent_inter<T>(t, offset, length);
-      });
-  }
-  using get_extent_inter_iertr = trans_iertr<base_ertr>;
-  template <typename T>
-  using get_extent_inter_ret = get_extent_inter_iertr::future<
-    TCachedExtentRef<T>
-    >;
-  template <typename T>
-  get_extent_inter_ret<T> get_extent_inter(
+  get_extent_iertr::future<TCachedExtentRef<T>> get_extent(
     Transaction &t,
     paddr_t offset,
     segment_off_t length) {
@@ -341,22 +294,10 @@ public:
     segment_off_t length  ///< [in] length
   );
 
-  get_extent_ertr::future<CachedExtentRef> get_extent_by_type(
-    Transaction &t,
-    extent_types_t type,
-    paddr_t offset,
-    laddr_t laddr,
-    segment_off_t length) {
-    return with_trans_intr(
-      t,
-      [this, &t, type, offset, laddr, length]() {
-	return get_extent_by_type_inter(t, type, offset, laddr, length);
-      });
-  }
-  using get_extent_by_type_inter_iertr = trans_iertr<get_extent_ertr>;
-  using get_extent_by_type_inter_ret = get_extent_by_type_inter_iertr::future<
+  using get_extent_by_type_iertr = trans_iertr<get_extent_ertr>;
+  using get_extent_by_type_ret = get_extent_by_type_iertr::future<
     CachedExtentRef>;
-  get_extent_by_type_inter_ret get_extent_by_type_inter(
+  get_extent_by_type_ret get_extent_by_type(
     Transaction &t,
     extent_types_t type,
     paddr_t offset,
@@ -658,5 +599,88 @@ private:
 
 };
 using CacheRef = std::unique_ptr<Cache>;
+
+#define FORWARD(METHOD)					\
+  template <typename... Args>				\
+  auto METHOD(Args&&... args) const {			\
+    return cache.METHOD(std::forward<Args>(args)...);	\
+  }
+
+#define PARAM_FORWARD(METHOD)					\
+  template <typename T, typename... Args>			\
+  auto METHOD(Args&&... args) const {				\
+    return cache.METHOD<T>(std::forward<Args>(args)...);	\
+  }
+
+#define INT_FORWARD(METHOD)						\
+  template <typename... Args>						\
+  auto METHOD(Transaction &t, Args&&... args) const {			\
+    return with_trans_intr(						\
+      t,								\
+      [this](auto&&... args) {						\
+	return cache.METHOD(args...);					\
+      },								\
+      std::forward<Args>(args)...);					\
+  }
+
+#define PARAM_INT_FORWARD(METHOD)					\
+  template <typename T, typename... Args>				\
+  auto METHOD(Transaction &t, Args&&... args) const {			\
+    return with_trans_intr(						\
+      t,								\
+      [this](auto&&... args) {						\
+	return cache.METHOD<T>(args...);					\
+      },								\
+      std::forward<Args>(args)...);					\
+  }
+
+/// Temporary translator to non-interruptible futures
+class InterruptedCache {
+  Cache &cache;
+public:
+  InterruptedCache(Cache &cache) : cache(cache) {}
+  
+  FORWARD(init)
+  FORWARD(mkfs)
+  FORWARD(replay_delta)
+  FORWARD(init_cached_extents)
+  FORWARD(drop_from_cache)
+  FORWARD(create_transaction)
+  FORWARD(create_weak_transaction)
+  FORWARD(try_construct_record)
+  FORWARD(complete_commit)
+  FORWARD(close)
+  FORWARD(dump_contents)
+  FORWARD(get_next_dirty_extents)
+  FORWARD(update_extent_from_transaction)
+  INT_FORWARD(get_extent_if_cached)
+  FORWARD(get_oldest_dirty_from)
+  PARAM_FORWARD(alloc_new_extent)
+  FORWARD(alloc_new_extent_by_type)
+  INT_FORWARD(get_extent_by_type)
+  INT_FORWARD(retire_extent_addr)
+  FORWARD(retire_extent)
+  INT_FORWARD(get_root)
+  FORWARD(get_root_fast)
+  FORWARD(duplicate_for_write)
+  PARAM_INT_FORWARD(get_extent)
+};
+
+class InterruptedCacheRef {
+  std::unique_ptr<Cache> ref;
+  InterruptedCache icache;
+public:
+  template <typename... T>
+  InterruptedCacheRef(std::unique_ptr<Cache> cache)
+    : ref(std::move(cache)), icache(*ref) {}
+  
+  auto &operator*() {
+    return icache;
+  }
+
+  auto operator->() {
+    return &icache;
+  }
+};
 
 }
