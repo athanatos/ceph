@@ -27,14 +27,14 @@ Cache::~Cache()
   ceph_assert(extents.empty());
 }
 
-Cache::retire_extent_inter_ret Cache::retire_extent_inter(
+Cache::retire_extent_ret Cache::retire_extent_addr(
   Transaction &t, paddr_t addr, extent_len_t length)
 {
   LOG_PREFIX(Cache::retire_extent);
   if (auto ext = t.write_set.find_offset(addr); ext != t.write_set.end()) {
     DEBUGT("found {} in t.write_set", t, addr);
     t.add_to_retired_set(CachedExtentRef(&*ext));
-    return retire_extent_inter_iertr::now();
+    return retire_extent_iertr::now();
   } else if (auto iter = extents.find_offset(addr);
       iter != extents.end()) {
     auto ret = CachedExtentRef(&*iter);
@@ -42,11 +42,11 @@ Cache::retire_extent_inter_ret Cache::retire_extent_inter(
       ret->wait_io()
     ).then_interruptible([&t, ret=std::move(ret)]() mutable {
       t.add_to_retired_set(ret);
-      return retire_extent_inter_iertr::now();
+      return retire_extent_iertr::now();
     });
   } else {
     t.add_to_retired_uncached(addr, length);
-    return retire_extent_inter_iertr::now();
+    return retire_extent_iertr::now();
   }
 }
 
@@ -417,15 +417,19 @@ void Cache::init() {
 
 Cache::mkfs_ertr::future<> Cache::mkfs(Transaction &t)
 {
-  return get_root(t).safe_then([this, &t](auto croot) {
-    duplicate_for_write(t, croot);
-    return mkfs_ertr::now();
-  }).handle_error(
-    mkfs_ertr::pass_further{},
-    crimson::ct_error::assert_all{
-      "Invalid error in Cache::mkfs"
-    }
-  );
+  return with_trans_intr(
+    t,
+    [this](auto &t) {
+      return get_root(t).si_then([this, &t](auto croot) {
+	duplicate_for_write(t, croot);
+	return base_ertr::now();
+      });
+    }).handle_error(
+      mkfs_ertr::pass_further{},
+      crimson::ct_error::assert_all{
+	"Invalid error in Cache::mkfs"
+      }
+    );
 }
 
 Cache::close_ertr::future<> Cache::close()
@@ -542,12 +546,12 @@ Cache::get_next_dirty_extents_ret Cache::get_next_dirty_extents(
     });
 }
 
-Cache::get_root_inter_ret Cache::get_root_inter(Transaction &t)
+Cache::get_root_ret Cache::get_root(Transaction &t)
 {
   LOG_PREFIX(Cache::get_root);
   if (t.root) {
     DEBUGT("root already on transaction {}", t, *t.root);
-    return get_root_inter_iertr::make_ready_future<RootBlockRef>(
+    return get_root_iertr::make_ready_future<RootBlockRef>(
       t.root);
   } else {
     auto ret = root;
@@ -556,7 +560,7 @@ Cache::get_root_inter_ret Cache::get_root_inter(Transaction &t)
       DEBUGT("got root read {}", t, *ret);
       t.root = ret;
       t.add_to_read_set(ret);
-      return get_root_inter_iertr::make_ready_future<RootBlockRef>(
+      return get_root_iertr::make_ready_future<RootBlockRef>(
 	ret);
     });
   }
