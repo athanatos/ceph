@@ -1181,6 +1181,11 @@ public:
     }
   }
 
+  template <typename... Args>
+  static auto do_until(Args&&... args) {
+    return repeat(std::forward<Args>(args)...);
+  }
+
   class parallel_for_each_state final : private seastar::continuation_base<> {
     using future_t = interruptible_future_detail<InterruptCond, seastar::future<>>;
     std::vector<future_t> _incomplete;
