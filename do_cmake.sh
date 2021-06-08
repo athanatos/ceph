@@ -15,7 +15,7 @@ fi
 
 PYBUILD="3"
 ARGS="-GNinja"
-if [ -r /etc/os-release ]; then
+if true; then
   source /etc/os-release
   case "$ID" in
       fedora)
