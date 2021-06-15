@@ -95,7 +95,7 @@ BtreeLBAManager::get_mappings(
     l->begin(),
     l->end(),
     [this, &t, &ret](const auto &p) {
-      return _get_mappings(t, p.first, p.second).si_then(
+      return get_mappings(t, p.first, p.second).si_then(
 	[&ret](auto res) {
 	  ret.splice(ret.end(), res, res.begin(), res.end());
 	  return get_mappings_iertr::now();
