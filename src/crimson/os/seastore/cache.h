@@ -90,7 +90,7 @@ public:
     crimson::ct_error::eagain>;
 
   using base_iertr = trans_iertr<
-    base_ertr>;
+    crimson::errorator<crimson::ct_error::input_output_error>>;
 
   Cache(SegmentManager &segment_manager);
   ~Cache();

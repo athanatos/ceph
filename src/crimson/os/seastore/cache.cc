@@ -39,8 +39,8 @@ Cache::retire_extent_ret Cache::retire_extent_addr(
       iter != extents.end()) {
     auto ret = CachedExtentRef(&*iter);
     return trans_intr::make_interruptible(
-      base_ertr::future<>(ret->wait_io())
-    ).si_then([&t, ret=std::move(ret)]() mutable {
+      ret->wait_io()
+    ).then_interruptible([&t, ret=std::move(ret)]() mutable {
       t.add_to_retired_set(ret);
       return retire_extent_iertr::now();
     });
