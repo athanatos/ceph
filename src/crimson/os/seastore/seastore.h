@@ -227,7 +227,7 @@ private:
     OMapManager::omap_list_config_t config);
 
   SegmentManagerRef segment_manager;
-  TransactionManagerRef transaction_manager;
+  InterruptedTMRef transaction_manager;
   CollectionManagerRef collection_manager;
   OnodeManagerRef onode_manager;
 

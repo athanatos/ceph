@@ -51,7 +51,7 @@ public:
   using base_ertr = TransactionManager::base_ertr;
 
   struct context_t {
-    TransactionManager &tm;
+    InterruptedTransactionManager tm;
     Transaction &t;
     Onode &onode;
   };

@@ -85,6 +85,7 @@ auto repeat_eagain2(F &&f) {
 class TransactionManager : public SegmentCleaner::ExtentCallbackInterface {
 public:
   using base_ertr = Cache::base_ertr;
+  using base_iertr = Cache::base_iertr;
 
   TransactionManager(
     SegmentManager &segment_manager,
@@ -94,22 +95,22 @@ public:
     LBAManagerRef lba_manager);
 
   /// Writes initial metadata to disk
-  using mkfs_ertr = crimson::errorator<
+  using mkfs_iertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
-  mkfs_ertr::future<> mkfs();
+  mkfs_iertr::future<> mkfs();
 
   /// Reads initial metadata from disk
-  using mount_ertr = crimson::errorator<
+  using mount_iertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
-  mount_ertr::future<> mount();
+  mount_iertr::future<> mount();
 
   /// Closes transaction_manager
-  using close_ertr = crimson::errorator<
+  using close_iertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
-  close_ertr::future<> close();
+  close_iertr::future<> close();
 
   /// Creates empty transaction
   TransactionRef create_transaction() final {
@@ -127,7 +128,8 @@ public:
    * Get the logical pin at offset
    */
   using get_pin_ertr = LBAManager::get_mapping_ertr;
-  using get_pin_ret = LBAManager::get_mapping_ertr::future<LBAPinRef>;
+  using get_pin_iertr = LBAManager::get_mapping_iertr;
+  using get_pin_ret = LBAManager::get_mapping_iertr::future<LBAPinRef>;
   get_pin_ret get_pin(
     Transaction &t,
     laddr_t offset) {
@@ -139,8 +141,8 @@ public:
    *
    * Get logical pins overlapping offset~length
    */
-  using get_pins_ertr = LBAManager::get_mappings_ertr;
-  using get_pins_ret = get_pins_ertr::future<lba_pin_list_t>;
+  using get_pins_iertr = LBAManager::get_mappings_iertr;
+  using get_pins_ret = get_pins_iertr::future<lba_pin_list_t>;
   get_pins_ret get_pins(
     Transaction &t,
     laddr_t offset,
@@ -154,10 +156,10 @@ public:
    *
    * Get extent mapped at pin.
    */
-  using pin_to_extent_ertr = get_pin_ertr::extend_ertr<
+  using pin_to_extent_iertr = get_pin_iertr::extend_ertr<
     SegmentManager::read_ertr>;
   template <typename T>
-  using pin_to_extent_ret = pin_to_extent_ertr::future<
+  using pin_to_extent_ret = pin_to_extent_iertr::future<
     TCachedExtentRef<T>>;
   template <typename T>
   pin_to_extent_ret<T> pin_to_extent(
@@ -170,7 +172,7 @@ public:
       t,
       pin->get_paddr(),
       pin->get_length()
-    ).safe_then([this, FNAME, &t, pin=std::move(pin)](auto ref) mutable -> ret {
+    ).si_then([this, FNAME, &t, pin=std::move(pin)](auto ref) mutable -> ret {
       if (!ref->has_pin()) {
 	if (pin->has_been_invalidated() || ref->has_been_invalidated()) {
 	  return crimson::ct_error::eagain::make();
@@ -181,7 +183,7 @@ public:
       }
       DEBUGT("got extent {}", t, *ref);
       return pin_to_extent_ret<T>(
-	pin_to_extent_ertr::ready_future_marker{},
+	interruptible::ready_future_marker{},
 	std::move(ref));
     });
   }
@@ -193,8 +195,10 @@ public:
    */
   using read_extent_ertr = get_pin_ertr::extend_ertr<
     SegmentManager::read_ertr>;
+  using read_extent_iertr = get_pin_iertr::extend_ertr<
+    SegmentManager::read_ertr>;
   template <typename T>
-  using read_extent_ret = read_extent_ertr::future<
+  using read_extent_ret = read_extent_iertr::future<
     TCachedExtentRef<T>>;
   template <typename T>
   read_extent_ret<T> read_extent(
@@ -204,7 +208,7 @@ public:
     LOG_PREFIX(TransactionManager::read_extent);
     return get_pin(
       t, offset
-    ).safe_then([this, FNAME, &t, offset, length] (auto pin) {
+    ).si_then([this, FNAME, &t, offset, length] (auto pin) {
       if (length != pin->get_length() || !pin->get_paddr().is_real()) {
         ERRORT("offset {} len {} got wrong pin {}",
                t, offset, length, *pin);
@@ -241,8 +245,8 @@ public:
   }
 
 
-  using ref_ertr = LBAManager::ref_ertr;
-  using ref_ret = ref_ertr::future<unsigned>;
+  using ref_iertr = LBAManager::ref_iertr;
+  using ref_ret = ref_iertr::future<unsigned>;
 
   /// Add refcount for ref
   ref_ret inc_ref(
@@ -265,7 +269,7 @@ public:
     laddr_t offset);
 
   /// remove refcount for list of offset
-  using refs_ret = ref_ertr::future<std::vector<unsigned>>;
+  using refs_ret = ref_iertr::future<std::vector<unsigned>>;
   refs_ret dec_ref(
     Transaction &t,
     std::vector<laddr_t> offsets);
@@ -277,8 +281,9 @@ public:
    * greater than hint.
    */
   using alloc_extent_ertr = LBAManager::alloc_extent_ertr;
+  using alloc_extent_iertr = LBAManager::alloc_extent_iertr;
   template <typename T>
-  using alloc_extent_ret = alloc_extent_ertr::future<TCachedExtentRef<T>>;
+  using alloc_extent_ret = alloc_extent_iertr::future<TCachedExtentRef<T>>;
   template <typename T>
   alloc_extent_ret<T> alloc_extent(
     Transaction &t,
@@ -292,17 +297,17 @@ public:
       hint,
       len,
       ext->get_paddr()
-    ).safe_then([ext=std::move(ext), len, this](auto &&ref) mutable {
+    ).si_then([ext=std::move(ext), len, this](auto &&ref) mutable {
       ext->set_pin(std::move(ref));
       stats.extents_allocated_total++;
       stats.extents_allocated_bytes += len;
-      return alloc_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
+      return alloc_extent_iertr::make_ready_future<TCachedExtentRef<T>>(
 	std::move(ext));
     });
   }
 
-  using reserve_extent_ertr = alloc_extent_ertr;
-  using reserve_extent_ret = reserve_extent_ertr::future<LBAPinRef>;
+  using reserve_extent_iertr = alloc_extent_iertr;
+  using reserve_extent_ret = reserve_extent_iertr::future<LBAPinRef>;
   reserve_extent_ret reserve_region(
     Transaction &t,
     laddr_t hint,
@@ -314,8 +319,8 @@ public:
       zero_paddr());
   }
 
-  using find_hole_ertr = LBAManager::find_hole_ertr;
-  using find_hole_ret = LBAManager::find_hole_ertr::future<
+  using find_hole_iertr = LBAManager::find_hole_iertr;
+  using find_hole_ret = LBAManager::find_hole_iertr::future<
     std::pair<laddr_t, extent_len_t>
     >;
   find_hole_ret find_hole(
@@ -332,9 +337,9 @@ public:
    *
    * allocates more than one new blocks of type T.
    */
-   using alloc_extents_ertr = alloc_extent_ertr;
+   using alloc_extents_iertr = alloc_extent_iertr;
    template<class T>
-   alloc_extents_ertr::future<std::vector<TCachedExtentRef<T>>>
+   alloc_extents_iertr::future<std::vector<TCachedExtentRef<T>>>
    alloc_extents(
      Transaction &t,
      laddr_t hint,
@@ -346,12 +351,12 @@ public:
                        boost::make_counting_iterator(0),
                        boost::make_counting_iterator(num),
          [this, &t, len, hint, &extents] (auto i) {
-         return alloc_extent<T>(t, hint, len).safe_then(
+         return alloc_extent<T>(t, hint, len).si_then(
            [&extents](auto &&node) {
            extents.push_back(node);
          });
-       }).safe_then([&extents] {
-         return alloc_extents_ertr::make_ready_future
+       }).si_then([&extents] {
+         return alloc_extents_iertr::make_ready_future
                 <std::vector<TCachedExtentRef<T>>>(std::move(extents));
        });
      });
@@ -362,11 +367,11 @@ public:
    *
    * Atomically submits transaction to persistence
    */
-  using submit_transaction_ertr = crimson::errorator<
+  using submit_transaction_iertr = crimson::errorator<
     crimson::ct_error::eagain, // Caller should retry transaction from beginning
     crimson::ct_error::input_output_error // Media error
     >;
-  submit_transaction_ertr::future<> submit_transaction(TransactionRef);
+  submit_transaction_iertr::future<> submit_transaction(TransactionRef);
 
   /// SegmentCleaner::ExtentCallbackInterface
   using SegmentCleaner::ExtentCallbackInterface::submit_transaction_direct_ret;
@@ -415,16 +420,16 @@ public:
    *
    * Read root block meta entry for key.
    */
-  using read_root_meta_ertr = base_ertr;
+  using read_root_meta_iertr = base_iertr;
   using read_root_meta_bare = std::optional<std::string>;
-  using read_root_meta_ret = read_root_meta_ertr::future<
+  using read_root_meta_ret = read_root_meta_iertr::future<
     read_root_meta_bare>;
   read_root_meta_ret read_root_meta(
     Transaction &t,
     const std::string &key) {
     return cache->get_root(
       t
-    ).safe_then([&key](auto root) {
+    ).si_then([&key](auto root) {
       auto meta = root->root.get_meta();
       auto iter = meta.find(key);
       if (iter == meta.end()) {
@@ -440,15 +445,15 @@ public:
    *
    * Update root block meta entry for key to value.
    */
-  using update_root_meta_ertr = base_ertr;
-  using update_root_meta_ret = update_root_meta_ertr::future<>;
+  using update_root_meta_iertr = base_iertr;
+  using update_root_meta_ret = update_root_meta_iertr::future<>;
   update_root_meta_ret update_root_meta(
     Transaction& t,
     const std::string& key,
     const std::string& value) {
     return cache->get_root(
       t
-    ).safe_then([this, &t, &key, &value](RootBlockRef root) {
+    ).si_then([this, &t, &key, &value](RootBlockRef root) {
       root = cache->duplicate_for_write(t, root)->cast<RootBlock>();
 
       auto meta = root->root.get_meta();
@@ -464,10 +469,10 @@ public:
    *
    * Get onode-tree root logical address
    */
-  using read_onode_root_ertr = base_ertr;
-  using read_onode_root_ret = read_onode_root_ertr::future<laddr_t>;
+  using read_onode_root_iertr = base_iertr;
+  using read_onode_root_ret = read_onode_root_iertr::future<laddr_t>;
   read_onode_root_ret read_onode_root(Transaction &t) {
-    return cache->get_root(t).safe_then([](auto croot) {
+    return cache->get_root(t).si_then([](auto croot) {
       laddr_t ret = croot->get_root().onode_root;
       return ret;
     });
@@ -489,11 +494,11 @@ public:
    *
    * Get collection root addr
    */
-  using read_collection_root_ertr = base_ertr;
-  using read_collection_root_ret = read_collection_root_ertr::future<
+  using read_collection_root_iertr = base_iertr;
+  using read_collection_root_ret = read_collection_root_iertr::future<
     coll_root_t>;
   read_collection_root_ret read_collection_root(Transaction &t) {
-    return cache->get_root(t).safe_then([](auto croot) {
+    return cache->get_root(t).si_then([](auto croot) {
       return croot->get_root().collection_root.get();
     });
   }
@@ -524,7 +529,7 @@ private:
 
   SegmentManager &segment_manager;
   SegmentCleanerRef segment_cleaner;
-  InterruptedCacheRef cache;
+  CacheRef cache;
   LBAManagerRef lba_manager;
   JournalRef journal;
 
@@ -621,26 +626,26 @@ public:
   FORWARD(store_stat)
 };
 
-class InterruptedECI : public SegmentCleaner::ExtentCallbackInterface {
-  TransactionManager &tm;
-public:
-  InterruptedECI(TransactionManager &tm) : tm(tm) {}
-
-  INT_FORWARD(submit_transaction_direct)
-  INT_FORWARD(get_next_dirty_extents)
-  INT_FORWARD(rewrite_extent)
-  INT_FORWARD(get_extent_if_live)
-  INT_FORWARD(scan_extents)
-  INT_FORWARD(release_segment)
-};
-
 class InterruptedTMRef {
   std::unique_ptr<TransactionManager> ref;
   InterruptedTransactionManager itm;
 public:
   template <typename... T>
-  InterruptedCacheRef(std::unique_ptr<TransactionManager> tm)
+  InterruptedTMRef(T&&... args)
+    : ref(std::make_unique<TransactionManager>(std::forward(args)...)),
+      itm(*ref) {}
+
+  InterruptedTMRef(std::unique_ptr<TransactionManager> tm)
     : ref(std::move(tm)), itm(*ref) {}
+
+  InterruptedTMRef(InterruptedTMRef &&itmr)
+    : ref(std::move(itmr.ref)), itm(*ref) {}
+
+  InterruptedTMRef &operator=(std::unique_ptr<TransactionManager> tm) {
+    this->~InterruptedTMRef();
+    new (this) InterruptedTMRef(std::move(tm));
+    return *this;
+  }
   
   auto &operator*() {
     return itm;

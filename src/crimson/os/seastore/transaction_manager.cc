@@ -28,11 +28,11 @@ TransactionManager::TransactionManager(
   register_metrics();
 }
 
-TransactionManager::mkfs_ertr::future<> TransactionManager::mkfs()
+TransactionManager::mkfs_iertr::future<> TransactionManager::mkfs()
 {
   LOG_PREFIX(TransactionManager::mkfs);
   segment_cleaner->mount(segment_manager);
-  return journal->open_for_write().safe_then([this, FNAME](auto addr) {
+  return journal->open_for_write().si_then([this, FNAME](auto addr) {
     DEBUG("about to do_with");
     segment_cleaner->init_mkfs(addr);
     return seastar::do_with(
@@ -43,41 +43,41 @@ TransactionManager::mkfs_ertr::future<> TransactionManager::mkfs()
 	  *transaction);
 	cache->init();
 	return cache->mkfs(*transaction
-	).safe_then([this, &transaction] {
+	).si_then([this, &transaction] {
 	  return lba_manager->mkfs(*transaction);
-	}).safe_then([this, FNAME, &transaction] {
+	}).si_then([this, FNAME, &transaction] {
 	  DEBUGT("about to submit_transaction", *transaction);
 	  return submit_transaction_direct(std::move(transaction)).handle_error(
 	    crimson::ct_error::eagain::handle([] {
 	      ceph_assert(0 == "eagain impossible");
-	      return mkfs_ertr::now();
+	      return mkfs_iertr::now();
 	    }),
-	    mkfs_ertr::pass_further{}
+	    mkfs_iertr::pass_further{}
 	  );
 	});
       });
-  }).safe_then([this] {
+  }).si_then([this] {
     return close();
   });
 }
 
-TransactionManager::mount_ertr::future<> TransactionManager::mount()
+TransactionManager::mount_iertr::future<> TransactionManager::mount()
 {
   LOG_PREFIX(TransactionManager::mount);
   cache->init();
   segment_cleaner->mount(segment_manager);
   return journal->replay([this](auto seq, auto paddr, const auto &e) {
     return cache->replay_delta(seq, paddr, e);
-  }).safe_then([this] {
+  }).si_then([this] {
     return journal->open_for_write();
-  }).safe_then([this, FNAME](auto addr) {
+  }).si_then([this, FNAME](auto addr) {
     segment_cleaner->set_journal_head(addr);
     return seastar::do_with(
       create_weak_transaction(),
       [this, FNAME](auto &t) {
 	return cache->init_cached_extents(*t, [this](auto &t, auto &e) {
 	  return lba_manager->init_cached_extent(t, e);
-	}).safe_then([this, FNAME, &t] {
+	}).si_then([this, FNAME, &t] {
           assert(segment_cleaner->debug_check_space(
                    *segment_cleaner->get_empty_space_tracker()));
           return lba_manager->scan_mapped_space(
@@ -97,26 +97,26 @@ TransactionManager::mount_ertr::future<> TransactionManager::mount()
             });
         });
       });
-  }).safe_then([this] {
+  }).si_then([this] {
     segment_cleaner->complete_init();
   }).handle_error(
-    mount_ertr::pass_further{},
+    mount_iertr::pass_further{},
     crimson::ct_error::all_same_way([] {
       ceph_assert(0 == "unhandled error");
-      return mount_ertr::now();
+      return mount_iertr::now();
     }));
 }
 
-TransactionManager::close_ertr::future<> TransactionManager::close() {
+TransactionManager::close_iertr::future<> TransactionManager::close() {
   LOG_PREFIX(TransactionManager::close);
   DEBUG("enter");
   return segment_cleaner->stop(
   ).then([this] {
     return cache->close();
-  }).safe_then([this] {
+  }).si_then([this] {
     cache->dump_contents();
     return journal->close();
-  }).safe_then([FNAME] {
+  }).si_then([FNAME] {
     DEBUG("completed");
     return seastar::now();
   });
@@ -126,10 +126,10 @@ TransactionManager::ref_ret TransactionManager::inc_ref(
   Transaction &t,
   LogicalCachedExtentRef &ref)
 {
-  return lba_manager->incref_extent(t, ref->get_laddr()).safe_then([](auto r) {
+  return lba_manager->incref_extent(t, ref->get_laddr()).si_then([](auto r) {
     return r.refcount;
   }).handle_error(
-    ref_ertr::pass_further{},
+    ref_iertr::pass_further{},
     ct_error::all_same_way([](auto e) {
       ceph_assert(0 == "unhandled error, TODO");
     }));
@@ -139,7 +139,7 @@ TransactionManager::ref_ret TransactionManager::inc_ref(
   Transaction &t,
   laddr_t offset)
 {
-  return lba_manager->incref_extent(t, offset).safe_then([](auto result) {
+  return lba_manager->incref_extent(t, offset).si_then([](auto result) {
     return result.refcount;
   });
 }
@@ -150,7 +150,7 @@ TransactionManager::ref_ret TransactionManager::dec_ref(
 {
   LOG_PREFIX(TransactionManager::dec_ref);
   return lba_manager->decref_extent(t, ref->get_laddr()
-  ).safe_then([this, FNAME, &t, ref](auto ret) {
+  ).si_then([this, FNAME, &t, ref](auto ret) {
     if (ret.refcount == 0) {
       DEBUGT(
 	"extent {} refcount 0",
@@ -170,21 +170,21 @@ TransactionManager::ref_ret TransactionManager::dec_ref(
 {
   LOG_PREFIX(TransactionManager::dec_ref);
   return lba_manager->decref_extent(t, offset
-  ).safe_then([this, FNAME, offset, &t](auto result) -> ref_ret {
+  ).si_then([this, FNAME, offset, &t](auto result) -> ref_ret {
     if (result.refcount == 0 && !result.addr.is_zero()) {
       DEBUGT("offset {} refcount 0", t, offset);
       return cache->retire_extent_addr(
 	t, result.addr, result.length
-      ).safe_then([result, this] {
+      ).si_then([result, this] {
 	stats.extents_retired_total++;
 	stats.extents_retired_bytes += result.length;
 	return ref_ret(
-	  ref_ertr::ready_future_marker{},
+	  ref_iertr::ready_future_marker{},
 	  0);
       });
     } else {
       return ref_ret(
-	ref_ertr::ready_future_marker{},
+	ref_iertr::ready_future_marker{},
 	result.refcount);
     }
   });
@@ -198,17 +198,17 @@ TransactionManager::refs_ret TransactionManager::dec_ref(
       [this, &t] (auto &&offsets, auto &refcnt) {
       return crimson::do_for_each(offsets.begin(), offsets.end(),
         [this, &t, &refcnt] (auto &laddr) {
-        return this->dec_ref(t, laddr).safe_then([&refcnt] (auto ref) {
+        return this->dec_ref(t, laddr).si_then([&refcnt] (auto ref) {
           refcnt.push_back(ref);
-          return ref_ertr::now();
+          return ref_iertr::now();
         });
-      }).safe_then([&refcnt] {
-        return ref_ertr::make_ready_future<std::vector<unsigned>>(std::move(refcnt));
+      }).si_then([&refcnt] {
+        return ref_iertr::make_ready_future<std::vector<unsigned>>(std::move(refcnt));
       });
     });
 }
 
-TransactionManager::submit_transaction_ertr::future<>
+TransactionManager::submit_transaction_iertr::future<>
 TransactionManager::submit_transaction(
   TransactionRef t)
 {
@@ -232,7 +232,7 @@ TransactionManager::submit_transaction_direct(
   auto &tref = *t;
   return tref.handle.enter(write_pipeline.prepare
   ).then([this, FNAME, &tref]() mutable
-	 -> submit_transaction_ertr::future<> {
+	 -> submit_transaction_iertr::future<> {
     auto record = cache->try_construct_record(tref);
     if (!record) {
       DEBUGT("conflict detected, returning eagain.", tref);
@@ -242,7 +242,7 @@ TransactionManager::submit_transaction_direct(
     DEBUGT("about to submit to journal", tref);
 
     return journal->submit_record(std::move(*record), tref.handle
-    ).safe_then([this, FNAME, &tref](auto p) mutable {
+    ).si_then([this, FNAME, &tref](auto p) mutable {
       auto [addr, journal_seq] = p;
       DEBUGT("journal commit to {} seq {}", tref, addr, journal_seq);
       segment_cleaner->set_journal_head(journal_seq);
@@ -253,16 +253,16 @@ TransactionManager::submit_transaction_direct(
       auto to_release = tref.get_segment_to_release();
       if (to_release != NULL_SEG_ID) {
 	return segment_manager.release(to_release
-	).safe_then([this, to_release] {
+	).si_then([this, to_release] {
 	  segment_cleaner->mark_segment_released(to_release);
 	});
       } else {
-	return SegmentManager::release_ertr::now();
+	return SegmentManager::release_iertr::now();
       }
-    }).safe_then([&tref] {
+    }).si_then([&tref] {
       return tref.handle.complete();
     }).handle_error(
-      submit_transaction_ertr::pass_further{},
+      submit_transaction_iertr::pass_further{},
       crimson::ct_error::all_same_way([](auto e) {
 	ceph_assert(0 == "Hit error submitting to journal");
       }));
@@ -288,7 +288,7 @@ TransactionManager::rewrite_extent_ret TransactionManager::rewrite_extent(
     auto updated = cache->update_extent_from_transaction(t, extent);
     if (!updated) {
       DEBUGT("{} is already retired, skipping", t, *extent);
-      return rewrite_extent_ertr::now();
+      return rewrite_extent_iertr::now();
     }
     extent = updated;
   }
@@ -296,7 +296,7 @@ TransactionManager::rewrite_extent_ret TransactionManager::rewrite_extent(
   if (extent->get_type() == extent_types_t::ROOT) {
     DEBUGT("marking root {} for rewrite", t, *extent);
     cache->duplicate_for_write(t, extent);
-    return rewrite_extent_ertr::now();
+    return rewrite_extent_iertr::now();
   }
   return lba_manager->rewrite_extent(t, extent);
 }
@@ -312,18 +312,18 @@ TransactionManager::get_extent_if_live_ret TransactionManager::get_extent_if_liv
   DEBUGT("type {}, addr {}, laddr {}, len {}", t, type, addr, laddr, len);
 
   return cache->get_extent_if_cached(t, addr
-  ).safe_then([this, FNAME, &t, type, addr, laddr, len](auto extent)
+  ).si_then([this, FNAME, &t, type, addr, laddr, len](auto extent)
 	 -> get_extent_if_live_ret {
     if (extent) {
       return get_extent_if_live_ret(
-	get_extent_if_live_ertr::ready_future_marker{},
+	get_extent_if_live_iertr::ready_future_marker{},
 	extent);
     }
 
     if (is_logical_type(type)) {
       return lba_manager->get_mapping(
 	t,
-	laddr).safe_then([=, &t] (LBAPinRef pin) {
+	laddr).si_then([=, &t] (LBAPinRef pin) {
 	  ceph_assert(pin->get_laddr() == laddr);
 	  ceph_assert(pin->get_length() == (extent_len_t)len);
 	  if (pin->get_paddr() == addr) {
@@ -332,7 +332,7 @@ TransactionManager::get_extent_if_live_ret TransactionManager::get_extent_if_liv
 	      type,
 	      addr,
 	      laddr,
-	      len).safe_then(
+	      len).si_then(
 		[this, pin=std::move(pin)](CachedExtentRef ret) mutable
 		-> get_extent_if_live_ret {
 		  auto lref = ret->cast<LogicalCachedExtent>();
@@ -346,17 +346,17 @@ TransactionManager::get_extent_if_live_ret TransactionManager::get_extent_if_liv
 		    }
 		  }
 		  return get_extent_if_live_ret(
-		    get_extent_if_live_ertr::ready_future_marker{},
+		    get_extent_if_live_iertr::ready_future_marker{},
 		    ret);
 		});
 	  } else {
 	    return get_extent_if_live_ret(
-	      get_extent_if_live_ertr::ready_future_marker{},
+	      get_extent_if_live_iertr::ready_future_marker{},
 	      CachedExtentRef());
 	  }
 	}).handle_error(crimson::ct_error::enoent::handle([] {
 	  return get_extent_if_live_ret(
-	    get_extent_if_live_ertr::ready_future_marker{},
+	    get_extent_if_live_iertr::ready_future_marker{},
 	    CachedExtentRef());
 	}), crimson::ct_error::pass_further_all{});
     } else {
