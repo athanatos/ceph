@@ -28,11 +28,11 @@ TransactionManager::TransactionManager(
   register_metrics();
 }
 
-TransactionManager::mkfs_iertr::future<> TransactionManager::mkfs()
+TransactionManager::mkfs_ertr::future<> TransactionManager::mkfs()
 {
   LOG_PREFIX(TransactionManager::mkfs);
   segment_cleaner->mount(segment_manager);
-  return journal->open_for_write().si_then([this, FNAME](auto addr) {
+  return journal->open_for_write().safe_then([this, FNAME](auto addr) {
     DEBUG("about to do_with");
     segment_cleaner->init_mkfs(addr);
     return seastar::do_with(
@@ -43,41 +43,46 @@ TransactionManager::mkfs_iertr::future<> TransactionManager::mkfs()
 	  *transaction);
 	cache->init();
 	return cache->mkfs(*transaction
-	).si_then([this, &transaction] {
+	).safe_then([this, &transaction] {
 	  return lba_manager->mkfs(*transaction);
-	}).si_then([this, FNAME, &transaction] {
+	}).safe_then([this, FNAME, &transaction] {
 	  DEBUGT("about to submit_transaction", *transaction);
-	  return submit_transaction_direct(std::move(transaction)).handle_error(
+	  return with_trans_intr(
+	    *transaction,
+	    [this, FNAME, &transaction](auto&) {
+	      return submit_transaction_direct(std::move(transaction));
+	    }
+	  ).handle_error(
 	    crimson::ct_error::eagain::handle([] {
 	      ceph_assert(0 == "eagain impossible");
-	      return mkfs_iertr::now();
+	      return mkfs_ertr::now();
 	    }),
-	    mkfs_iertr::pass_further{}
+	    mkfs_ertr::pass_further{}
 	  );
 	});
       });
-  }).si_then([this] {
+  }).safe_then([this] {
     return close();
   });
 }
 
-TransactionManager::mount_iertr::future<> TransactionManager::mount()
+TransactionManager::mount_ertr::future<> TransactionManager::mount()
 {
   LOG_PREFIX(TransactionManager::mount);
   cache->init();
   segment_cleaner->mount(segment_manager);
   return journal->replay([this](auto seq, auto paddr, const auto &e) {
     return cache->replay_delta(seq, paddr, e);
-  }).si_then([this] {
+  }).safe_then([this] {
     return journal->open_for_write();
-  }).si_then([this, FNAME](auto addr) {
+  }).safe_then([this, FNAME](auto addr) {
     segment_cleaner->set_journal_head(addr);
     return seastar::do_with(
       create_weak_transaction(),
       [this, FNAME](auto &t) {
 	return cache->init_cached_extents(*t, [this](auto &t, auto &e) {
 	  return lba_manager->init_cached_extent(t, e);
-	}).si_then([this, FNAME, &t] {
+	}).safe_then([this, FNAME, &t] {
           assert(segment_cleaner->debug_check_space(
                    *segment_cleaner->get_empty_space_tracker()));
           return lba_manager->scan_mapped_space(
@@ -97,7 +102,7 @@ TransactionManager::mount_iertr::future<> TransactionManager::mount()
             });
         });
       });
-  }).si_then([this] {
+  }).safe_then([this] {
     segment_cleaner->complete_init();
   }).handle_error(
     mount_iertr::pass_further{},
@@ -107,16 +112,16 @@ TransactionManager::mount_iertr::future<> TransactionManager::mount()
     }));
 }
 
-TransactionManager::close_iertr::future<> TransactionManager::close() {
+TransactionManager::close_ertr::future<> TransactionManager::close() {
   LOG_PREFIX(TransactionManager::close);
   DEBUG("enter");
   return segment_cleaner->stop(
   ).then([this] {
     return cache->close();
-  }).si_then([this] {
+  }).safe_then([this] {
     cache->dump_contents();
     return journal->close();
-  }).si_then([FNAME] {
+  }).safe_then([FNAME] {
     DEBUG("completed");
     return seastar::now();
   });

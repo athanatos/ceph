@@ -23,7 +23,7 @@ namespace crimson::os::seastore::omap_manager {
  */
 
 class BtreeOMapManager : public OMapManager {
-  TransactionManager &tm;
+  InterruptedTransactionManager tm;
 
   omap_context_t get_omap_context(
     Transaction &t) {

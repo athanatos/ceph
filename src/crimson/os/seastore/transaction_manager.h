@@ -95,22 +95,22 @@ public:
     LBAManagerRef lba_manager);
 
   /// Writes initial metadata to disk
-  using mkfs_iertr = crimson::errorator<
+  using mkfs_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
-  mkfs_iertr::future<> mkfs();
+  mkfs_ertr::future<> mkfs();
 
   /// Reads initial metadata from disk
-  using mount_iertr = crimson::errorator<
+  using mount_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
-  mount_iertr::future<> mount();
+  mount_ertr::future<> mount();
 
   /// Closes transaction_manager
-  using close_iertr = crimson::errorator<
+  using close_ertr = crimson::errorator<
     crimson::ct_error::input_output_error
     >;
-  close_iertr::future<> close();
+  close_ertr::future<> close();
 
   /// Creates empty transaction
   TransactionRef create_transaction() final {
@@ -587,7 +587,7 @@ using TransactionManagerRef = std::unique_ptr<TransactionManager>;
     return with_trans_intr(						\
       t,								\
       [this](auto&&... args) {						\
-	return tm.METHOD<T>(args...);					\
+	return tm.METHOD<T>(std::forward<decltype(args)>(args)...);	\
       },								\
       std::forward<Args>(args)...);					\
   }

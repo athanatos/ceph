@@ -330,9 +330,10 @@ public:
      *
      * Submits transaction without any space throttling.
      */
-    using submit_transaction_direct_iertr = crimson::errorator<
-      crimson::ct_error::eagain,
-      crimson::ct_error::input_output_error
+    using submit_transaction_direct_iertr = trans_iertr<
+      crimson::errorator<
+        crimson::ct_error::eagain,
+        crimson::ct_error::input_output_error>
       >;
     using submit_transaction_direct_ret =
       submit_transaction_direct_iertr::future<>;
