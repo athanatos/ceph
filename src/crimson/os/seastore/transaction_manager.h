@@ -553,4 +553,104 @@ public:
 };
 using TransactionManagerRef = std::unique_ptr<TransactionManager>;
 
+#define FORWARD(METHOD)					\
+  template <typename... Args>				\
+  auto METHOD(Args&&... args) const {			\
+    return tm.METHOD(std::forward<Args>(args)...);	\
+  }
+
+#define PARAM_FORWARD(METHOD)					\
+  template <typename T, typename... Args>			\
+  auto METHOD(Args&&... args) const {				\
+    return tm.METHOD<T>(std::forward<Args>(args)...);	\
+  }
+
+#define INT_FORWARD(METHOD)						\
+  template <typename... Args>						\
+  auto METHOD(Transaction &t, Args&&... args) const {			\
+    return with_trans_intr(						\
+      t,								\
+      [this](auto&&... args) {						\
+	return tm.METHOD(args...);					\
+      },								\
+      std::forward<Args>(args)...);					\
+  }
+
+#define PARAM_INT_FORWARD(METHOD)					\
+  template <typename T, typename... Args>				\
+  auto METHOD(Transaction &t, Args&&... args) const {			\
+    return with_trans_intr(						\
+      t,								\
+      [this](auto&&... args) {						\
+	return tm.METHOD<T>(args...);					\
+      },								\
+      std::forward<Args>(args)...);					\
+  }
+
+/// Temporary translator to non-interruptible futures
+class InterruptedTransactionManager {
+  TransactionManager &tm;
+public:
+  InterruptedTransactionManager(TransactionManager &tm) : tm(tm) {}
+  
+  FORWARD(mkfs)
+  FORWARD(mount)
+  FORWARD(close)
+  FORWARD(create_transaction)
+  FORWARD(create_weak_transaction)
+  INT_FORWARD(get_pin)
+  INT_FORWARD(get_pins)
+  PARAM_INT_FORWARD(pin_to_extent)
+  PARAM_INT_FORWARD(read_extent)
+  FORWARD(get_mutable_extent)
+  INT_FORWARD(inc_ref)
+  INT_FORWARD(dec_ref)
+  PARAM_INT_FORWARD(alloc_extent)
+  INT_FORWARD(reserve_region)
+  INT_FORWARD(find_hole)
+  PARAM_INT_FORWARD(alloc_extents)
+  INT_FORWARD(submit_transaction)
+
+  INT_FORWARD(read_root_meta)
+  INT_FORWARD(update_root_meta)
+  INT_FORWARD(read_onode_root)
+  INT_FORWARD(write_onode_root)
+  INT_FORWARD(read_collection_root)
+  INT_FORWARD(write_collection_root)
+  FORWARD(get_block_size)
+  FORWARD(store_stat)
+};
+
+class InterruptedECI : public SegmentCleaner::ExtentCallbackInterface {
+  TransactionManager &tm;
+public:
+  InterruptedECI(TransactionManager &tm) : tm(tm) {}
+
+  INT_FORWARD(submit_transaction_direct)
+  INT_FORWARD(get_next_dirty_extents)
+  INT_FORWARD(rewrite_extent)
+  INT_FORWARD(get_extent_if_live)
+  INT_FORWARD(scan_extents)
+  INT_FORWARD(release_segment)
+};
+
+class InterruptedTMRef {
+  std::unique_ptr<TransactionManager> ref;
+  InterruptedTransactionManager itm;
+public:
+  template <typename... T>
+  InterruptedCacheRef(std::unique_ptr<TransactionManager> tm)
+    : ref(std::move(tm)), itm(*ref) {}
+  
+  auto &operator*() {
+    return itm;
+  }
+
+  auto operator->() {
+    return &itm;
+  }
+};
+
+
+
 }
