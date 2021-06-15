@@ -725,9 +725,7 @@ get_lba_node_ret get_lba_btree_extent(
 	  ceph_assert(meta.begin <= ret->begin()->get_key());
 	  ceph_assert(meta.end > (ret->end() - 1)->get_key());
 	}
-	if (parent->has_been_invalidated() || ret->has_been_invalidated()) {
-	  return crimson::ct_error::eagain::make();
-	}
+	assert(!(parent->has_been_invalidated() || ret->has_been_invalidated()));
 	if (!ret->is_pending() && !ret->pin.is_linked()) {
 	  ret->pin.set_range(meta);
 	  c.pins.add_pin(ret->pin);
@@ -756,9 +754,7 @@ get_lba_node_ret get_lba_btree_extent(
 	  ceph_assert(meta.begin <= ret->begin()->get_key());
 	  ceph_assert(meta.end > (ret->end() - 1)->get_key());
 	}
-	if (parent->has_been_invalidated() || ret->has_been_invalidated()) {
-	  return crimson::ct_error::eagain::make();
-	}
+	assert(!(parent->has_been_invalidated() || ret->has_been_invalidated()));
 	if (!ret->is_pending() && !ret->pin.is_linked()) {
 	  ret->pin.set_range(meta);
 	  c.pins.add_pin(ret->pin);
