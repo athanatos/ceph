@@ -368,7 +368,6 @@ public:
    * Atomically submits transaction to persistence
    */
   using submit_transaction_iertr = crimson::errorator<
-    crimson::ct_error::eagain, // Caller should retry transaction from beginning
     crimson::ct_error::input_output_error // Media error
     >;
   submit_transaction_iertr::future<> submit_transaction(TransactionRef);
@@ -619,9 +618,9 @@ public:
   INT_FORWARD(read_root_meta)
   INT_FORWARD(update_root_meta)
   INT_FORWARD(read_onode_root)
-  INT_FORWARD(write_onode_root)
+  FORWARD(write_onode_root)
   INT_FORWARD(read_collection_root)
-  INT_FORWARD(write_collection_root)
+  FORWARD(write_collection_root)
   FORWARD(get_block_size)
   FORWARD(store_stat)
 };

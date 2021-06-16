@@ -36,7 +36,7 @@ class SeastoreSuper final: public Super {
   }
  private:
   laddr_t root_addr;
-  TransactionManager& tm;
+  InterruptedTransactionManager tm;
 };
 
 class SeastoreNodeExtent final: public NodeExtent {
@@ -71,7 +71,7 @@ class SeastoreNodeExtent final: public NodeExtent {
 class TransactionManagerHandle : public NodeExtentManager {
  public:
   TransactionManagerHandle(TransactionManager& tm) : tm{tm} {}
-  TransactionManager& tm;
+  InterruptedTransactionManager tm;
 };
 
 template <bool INJECT_EAGAIN=false>

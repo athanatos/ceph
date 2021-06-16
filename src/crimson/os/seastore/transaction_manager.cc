@@ -105,10 +105,10 @@ TransactionManager::mount_ertr::future<> TransactionManager::mount()
   }).safe_then([this] {
     segment_cleaner->complete_init();
   }).handle_error(
-    mount_iertr::pass_further{},
+    mount_ertr::pass_further{},
     crimson::ct_error::all_same_way([] {
       ceph_assert(0 == "unhandled error");
-      return mount_iertr::now();
+      return mount_ertr::now();
     }));
 }
 
@@ -133,7 +133,7 @@ TransactionManager::ref_ret TransactionManager::inc_ref(
 {
   return lba_manager->incref_extent(t, ref->get_laddr()).si_then([](auto r) {
     return r.refcount;
-  }).handle_error(
+  }).handle_error_interruptible(
     ref_iertr::pass_further{},
     ct_error::all_same_way([](auto e) {
       ceph_assert(0 == "unhandled error, TODO");
@@ -184,12 +184,12 @@ TransactionManager::ref_ret TransactionManager::dec_ref(
 	stats.extents_retired_total++;
 	stats.extents_retired_bytes += result.length;
 	return ref_ret(
-	  ref_iertr::ready_future_marker{},
+	  interruptible::ready_future_marker{},
 	  0);
       });
     } else {
       return ref_ret(
-	ref_iertr::ready_future_marker{},
+	interruptible::ready_future_marker{},
 	result.refcount);
     }
   });
@@ -201,7 +201,7 @@ TransactionManager::refs_ret TransactionManager::dec_ref(
 {
   return seastar::do_with(std::move(offsets), std::vector<unsigned>(),
       [this, &t] (auto &&offsets, auto &refcnt) {
-      return crimson::do_for_each(offsets.begin(), offsets.end(),
+      return trans_intr::do_for_each(offsets.begin(), offsets.end(),
         [this, &t, &refcnt] (auto &laddr) {
         return this->dec_ref(t, laddr).si_then([&refcnt] (auto ref) {
           refcnt.push_back(ref);
@@ -224,7 +224,8 @@ TransactionManager::submit_transaction(
   ).then([this] {
     return segment_cleaner->await_hard_limits();
   }).then([this, t=std::move(t)]() mutable {
-    return submit_transaction_direct(std::move(t));
+    return seastar::now();
+    //return submit_transaction_direct(std::move(t));
   });
 }
 
@@ -239,15 +240,12 @@ TransactionManager::submit_transaction_direct(
   ).then([this, FNAME, &tref]() mutable
 	 -> submit_transaction_iertr::future<> {
     auto record = cache->try_construct_record(tref);
-    if (!record) {
-      DEBUGT("conflict detected, returning eagain.", tref);
-      return crimson::ct_error::eagain::make();
-    }
+    assert(record); // interruptible future would have already failed
 
     DEBUGT("about to submit to journal", tref);
 
     return journal->submit_record(std::move(*record), tref.handle
-    ).si_then([this, FNAME, &tref](auto p) mutable {
+    ).safe_then([this, FNAME, &tref](auto p) mutable {
       auto [addr, journal_seq] = p;
       DEBUGT("journal commit to {} seq {}", tref, addr, journal_seq);
       segment_cleaner->set_journal_head(journal_seq);
@@ -258,13 +256,13 @@ TransactionManager::submit_transaction_direct(
       auto to_release = tref.get_segment_to_release();
       if (to_release != NULL_SEG_ID) {
 	return segment_manager.release(to_release
-	).si_then([this, to_release] {
+	).safe_then([this, to_release] {
 	  segment_cleaner->mark_segment_released(to_release);
 	});
       } else {
-	return SegmentManager::release_iertr::now();
+	return SegmentManager::release_ertr::now();
       }
-    }).si_then([&tref] {
+    }).safe_then([&tref] {
       return tref.handle.complete();
     }).handle_error(
       submit_transaction_iertr::pass_further{},
@@ -321,7 +319,7 @@ TransactionManager::get_extent_if_live_ret TransactionManager::get_extent_if_liv
 	 -> get_extent_if_live_ret {
     if (extent) {
       return get_extent_if_live_ret(
-	get_extent_if_live_iertr::ready_future_marker{},
+	interruptible::ready_future_marker{},
 	extent);
     }
 
@@ -351,17 +349,17 @@ TransactionManager::get_extent_if_live_ret TransactionManager::get_extent_if_liv
 		    }
 		  }
 		  return get_extent_if_live_ret(
-		    get_extent_if_live_iertr::ready_future_marker{},
+		    interruptible::ready_future_marker{},
 		    ret);
 		});
 	  } else {
 	    return get_extent_if_live_ret(
-	      get_extent_if_live_iertr::ready_future_marker{},
+	      interruptible::ready_future_marker{},
 	      CachedExtentRef());
 	  }
 	}).handle_error(crimson::ct_error::enoent::handle([] {
 	  return get_extent_if_live_ret(
-	    get_extent_if_live_iertr::ready_future_marker{},
+	    interruptible::ready_future_marker{},
 	    CachedExtentRef());
 	}), crimson::ct_error::pass_further_all{});
     } else {
