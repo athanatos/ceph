@@ -228,8 +228,7 @@ TransactionManager::submit_transaction(
   ).then([this] {
     return segment_cleaner->await_hard_limits();
   }).then([this, t=std::move(t)]() mutable {
-    return seastar::now();
-    //return submit_transaction_direct(std::move(t));
+    return submit_transaction_direct(std::move(t));
   });
 }
 
@@ -320,17 +319,18 @@ TransactionManager::get_extent_if_live_ret TransactionManager::get_extent_if_liv
 
   return cache->get_extent_if_cached(t, addr
   ).si_then([this, FNAME, &t, type, addr, laddr, len](auto extent)
-	 -> get_extent_if_live_ret {
+	    -> get_extent_if_live_ret {
     if (extent) {
-      return get_extent_if_live_ret(
+      return get_extent_if_live_ret (
 	interruptible::ready_future_marker{},
 	extent);
     }
 
     if (is_logical_type(type)) {
+      using inner_ret = LBAManager::get_mapping_iertr::future<CachedExtentRef>;
       return lba_manager->get_mapping(
 	t,
-	laddr).si_then([=, &t] (LBAPinRef pin) {
+	laddr).si_then([=, &t] (LBAPinRef pin) -> inner_ret {
 	  ceph_assert(pin->get_laddr() == laddr);
 	  ceph_assert(pin->get_length() == (extent_len_t)len);
 	  if (pin->get_paddr() == addr) {
@@ -340,31 +340,25 @@ TransactionManager::get_extent_if_live_ret TransactionManager::get_extent_if_liv
 	      addr,
 	      laddr,
 	      len).si_then(
-		[this, pin=std::move(pin)](CachedExtentRef ret) mutable
-		-> get_extent_if_live_ret {
+		[this, pin=std::move(pin)](CachedExtentRef ret) mutable {
 		  auto lref = ret->cast<LogicalCachedExtent>();
 		  if (!lref->has_pin()) {
-		    if (pin->has_been_invalidated() ||
-			lref->has_been_invalidated()) {
-		      return crimson::ct_error::eagain::make();
-		    } else {
-		      lref->set_pin(std::move(pin));
-		      lba_manager->add_pin(lref->get_pin());
-		    }
+		    assert(!(pin->has_been_invalidated() ||
+			     lref->has_been_invalidated()));
+		    lref->set_pin(std::move(pin));
+		    lba_manager->add_pin(lref->get_pin());
 		  }
-		  return get_extent_if_live_ret(
+		  return inner_ret(
 		    interruptible::ready_future_marker{},
 		    ret);
 		});
 	  } else {
-	    return get_extent_if_live_ret(
+	    return inner_ret(
 	      interruptible::ready_future_marker{},
 	      CachedExtentRef());
 	  }
-	}).handle_error(crimson::ct_error::enoent::handle([] {
-	  return get_extent_if_live_ret(
-	    interruptible::ready_future_marker{},
-	    CachedExtentRef());
+	}).handle_error_interruptible(crimson::ct_error::enoent::handle([] {
+	  return CachedExtentRef();
 	}), crimson::ct_error::pass_further_all{});
     } else {
       DEBUGT("non-logical extent {}", t, addr);

@@ -181,13 +181,10 @@ public:
       auto ret = TCachedExtentRef<T>(static_cast<T*>(&*iter));
       return ret->wait_io(
       ).then([ret=std::move(ret)]() mutable -> get_extent_ret<T> {
-	if (!ret->is_retired()) {
-	  return get_extent_ret<T>(
-	    get_extent_ertr::ready_future_marker{},
-	    std::move(ret));
-	} else {
-	  return crimson::ct_error::eagain::make();
-	}
+	assert(!ret->is_retired());
+	return get_extent_ret<T>(
+	  get_extent_ertr::ready_future_marker{},
+	  std::move(ret));
       });
     } else {
       auto ref = CachedExtent::make_cached_extent_ref<T>(

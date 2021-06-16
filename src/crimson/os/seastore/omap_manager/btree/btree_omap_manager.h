@@ -63,6 +63,7 @@ class BtreeOMapManager : public OMapManager {
     OMapNode:: mutation_result_t mresult);
 
 public:
+  explicit BtreeOMapManager(InterruptedTransactionManager tm);
   explicit BtreeOMapManager(TransactionManager &tm);
 
   initialize_omap_ret initialize_omap(Transaction &t) final;

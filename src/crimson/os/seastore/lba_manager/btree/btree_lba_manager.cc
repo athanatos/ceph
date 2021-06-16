@@ -379,13 +379,7 @@ BtreeLBAManager::rewrite_extent_ret BtreeLBAManager::rewrite_extent(
   Transaction &t,
   CachedExtentRef extent)
 {
-  if (extent->has_been_invalidated()) {
-    logger().debug(
-      "BTreeLBAManager::rewrite_extent: {} is invalid, returning eagain",
-      *extent
-    );
-    return crimson::ct_error::eagain::make();
-  }
+  assert(!extent->has_been_invalidated());
 
   logger().debug(
     "{}: rewriting {}", 

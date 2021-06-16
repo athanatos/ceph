@@ -332,7 +332,6 @@ public:
      */
     using submit_transaction_direct_iertr = trans_iertr<
       crimson::errorator<
-        crimson::ct_error::eagain,
         crimson::ct_error::input_output_error>
       >;
     using submit_transaction_direct_ret =

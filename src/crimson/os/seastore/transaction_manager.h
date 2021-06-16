@@ -335,7 +335,7 @@ public:
      int num) {
      return seastar::do_with(std::vector<TCachedExtentRef<T>>(),
        [this, &t, hint, len, num] (auto &extents) {
-       return crimson::do_for_each(
+       return trans_intr::do_for_each(
                        boost::make_counting_iterator(0),
                        boost::make_counting_iterator(num),
          [this, &t, len, hint, &extents] (auto i) {
@@ -355,9 +355,7 @@ public:
    *
    * Atomically submits transaction to persistence
    */
-  using submit_transaction_iertr = crimson::errorator<
-    crimson::ct_error::input_output_error // Media error
-    >;
+  using submit_transaction_iertr = base_iertr;
   submit_transaction_iertr::future<> submit_transaction(TransactionRef);
 
   /// SegmentCleaner::ExtentCallbackInterface
@@ -563,7 +561,7 @@ using TransactionManagerRef = std::unique_ptr<TransactionManager>;
     return with_trans_intr(						\
       t,								\
       [this](auto&&... args) {						\
-	return tm.METHOD(args...);					\
+	return tm.METHOD(std::forward<decltype(args)>(args)...);	\
       },								\
       std::forward<Args>(args)...);					\
   }
@@ -601,7 +599,15 @@ public:
   INT_FORWARD(reserve_region)
   INT_FORWARD(find_hole)
   PARAM_INT_FORWARD(alloc_extents)
-  INT_FORWARD(submit_transaction)
+
+  
+  auto submit_transaction(TransactionRef t) const {
+    return with_trans_intr(
+      *t,
+      [this, t=std::move(t)](auto &) mutable {
+	return tm.submit_transaction(std::move(t));
+      });
+  }
 
   INT_FORWARD(read_root_meta)
   INT_FORWARD(update_root_meta)
@@ -611,12 +617,17 @@ public:
   FORWARD(write_collection_root)
   FORWARD(get_block_size)
   FORWARD(store_stat)
+
+  FORWARD(get_segment_cleaner)
+  FORWARD(get_lba_manager)
 };
 
 class InterruptedTMRef {
   std::unique_ptr<TransactionManager> ref;
-  InterruptedTransactionManager itm;
+  std::optional<InterruptedTransactionManager> itm;
 public:
+  InterruptedTMRef() {}
+
   template <typename... T>
   InterruptedTMRef(T&&... args)
     : ref(std::make_unique<TransactionManager>(std::forward(args)...)),
@@ -633,13 +644,18 @@ public:
     new (this) InterruptedTMRef(std::move(tm));
     return *this;
   }
+
+  void reset() {
+    itm = std::nullopt;
+    ref.reset();
+  }
   
-  auto &operator*() {
-    return itm;
+  auto &operator*() const {
+    return *itm;
   }
 
-  auto operator->() {
-    return &itm;
+  auto operator->() const {
+    return &*itm;
   }
 };
 
