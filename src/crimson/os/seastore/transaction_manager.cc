@@ -79,27 +79,31 @@ TransactionManager::mount_ertr::future<> TransactionManager::mount()
     segment_cleaner->set_journal_head(addr);
     return seastar::do_with(
       create_weak_transaction(),
-      [this, FNAME](auto &t) {
-	return cache->init_cached_extents(*t, [this](auto &t, auto &e) {
-	  return lba_manager->init_cached_extent(t, e);
-	}).safe_then([this, FNAME, &t] {
+      [this, FNAME](auto &tref) {
+	return with_trans_intr(
+	  *tref,
+	  [this, FNAME](auto &t) {
+	    return cache->init_cached_extents(t, [this](auto &t, auto &e) {
+	      return lba_manager->init_cached_extent(t, e);
+	    }).safe_then([this, FNAME, &t] {
           assert(segment_cleaner->debug_check_space(
                    *segment_cleaner->get_empty_space_tracker()));
-          return lba_manager->scan_mapped_space(
-            *t,
-            [this, FNAME, &t](paddr_t addr, extent_len_t len) {
-              TRACET(
-		"marking {}~{} used",
+	      return lba_manager->scan_mapped_space(
 		t,
-		addr,
-		len);
-	      if (addr.is_real()) {
-		segment_cleaner->mark_space_used(
-		  addr,
-		  len ,
-		  /* init_scan = */ true);
-	      }
-            });
+		[this, FNAME, &t](paddr_t addr, extent_len_t len) {
+		  TRACET(
+		    "marking {}~{} used",
+		    t,
+		    addr,
+		    len);
+		  if (addr.is_real()) {
+		    segment_cleaner->mark_space_used(
+		      addr,
+		      len ,
+		      /* init_scan = */ true);
+		  }
+		});
+	    });
         });
       });
   }).safe_then([this] {
