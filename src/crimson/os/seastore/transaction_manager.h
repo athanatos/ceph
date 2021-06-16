@@ -95,21 +95,15 @@ public:
     LBAManagerRef lba_manager);
 
   /// Writes initial metadata to disk
-  using mkfs_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error
-    >;
+  using mkfs_ertr = base_ertr;
   mkfs_ertr::future<> mkfs();
 
   /// Reads initial metadata from disk
-  using mount_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error
-    >;
+  using mount_ertr = base_ertr;
   mount_ertr::future<> mount();
 
   /// Closes transaction_manager
-  using close_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error
-    >;
+  using close_ertr = base_ertr;
   close_ertr::future<> close();
 
   /// Creates empty transaction
@@ -174,12 +168,9 @@ public:
       pin->get_length()
     ).si_then([this, FNAME, &t, pin=std::move(pin)](auto ref) mutable -> ret {
       if (!ref->has_pin()) {
-	if (pin->has_been_invalidated() || ref->has_been_invalidated()) {
-	  return crimson::ct_error::eagain::make();
-	} else {
-	  ref->set_pin(std::move(pin));
-	  lba_manager->add_pin(ref->get_pin());
-	}
+	assert(!(pin->has_been_invalidated() || ref->has_been_invalidated()));
+	ref->set_pin(std::move(pin));
+	lba_manager->add_pin(ref->get_pin());
       }
       DEBUGT("got extent {}", t, *ref);
       return pin_to_extent_ret<T>(
@@ -193,8 +184,6 @@ public:
    *
    * Read extent of type T at offset~length
    */
-  using read_extent_ertr = get_pin_ertr::extend_ertr<
-    SegmentManager::read_ertr>;
   using read_extent_iertr = get_pin_iertr::extend_ertr<
     SegmentManager::read_ertr>;
   template <typename T>
@@ -280,7 +269,6 @@ public:
    * Allocates a new block of type T with the minimum lba range of size len
    * greater than hint.
    */
-  using alloc_extent_ertr = LBAManager::alloc_extent_ertr;
   using alloc_extent_iertr = LBAManager::alloc_extent_iertr;
   template <typename T>
   using alloc_extent_ret = alloc_extent_iertr::future<TCachedExtentRef<T>>;

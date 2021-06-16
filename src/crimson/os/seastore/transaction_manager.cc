@@ -85,9 +85,9 @@ TransactionManager::mount_ertr::future<> TransactionManager::mount()
 	  [this, FNAME](auto &t) {
 	    return cache->init_cached_extents(t, [this](auto &t, auto &e) {
 	      return lba_manager->init_cached_extent(t, e);
-	    }).safe_then([this, FNAME, &t] {
-          assert(segment_cleaner->debug_check_space(
-                   *segment_cleaner->get_empty_space_tracker()));
+	    }).si_then([this, FNAME, &t] {
+	      assert(segment_cleaner->debug_check_space(
+		       *segment_cleaner->get_empty_space_tracker()));
 	      return lba_manager->scan_mapped_space(
 		t,
 		[this, FNAME, &t](paddr_t addr, extent_len_t len) {
@@ -104,7 +104,7 @@ TransactionManager::mount_ertr::future<> TransactionManager::mount()
 		  }
 		});
 	    });
-        });
+	  });
       });
   }).safe_then([this] {
     segment_cleaner->complete_init();

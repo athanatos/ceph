@@ -28,8 +28,8 @@ namespace crimson::os::seastore {
  */
 class LBAManager {
 public:
-  using base_ertr = Cache::get_extent_ertr;
-  using base_iertr = trans_iertr<Cache::get_extent_ertr>;
+  using base_ertr = Cache::base_ertr;
+  using base_iertr = Cache::base_iertr;
 
   using mkfs_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
@@ -43,7 +43,6 @@ public:
    *
    * Future will not resolve until all pins have resolved (set_paddr called)
    */
-  using get_mappings_ertr = base_ertr;
   using get_mappings_iertr = trans_iertr<base_ertr>;
   using get_mappings_ret = get_mappings_iertr::future<lba_pin_list_t>;
   virtual get_mappings_ret get_mappings(

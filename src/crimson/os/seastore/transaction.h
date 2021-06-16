@@ -238,4 +238,7 @@ auto with_trans_intr(Transaction &t, F &&f, Args&&... args) {
     std::forward<Args>(args)...);
 }
 
+template <typename T>
+using with_trans_ertr = typename T::base_ertr::extend<crimson::ct_error::eagain>;
+
 }

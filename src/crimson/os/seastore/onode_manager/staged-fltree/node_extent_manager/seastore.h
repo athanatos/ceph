@@ -21,7 +21,7 @@ namespace crimson::os::seastore::onode {
 class SeastoreSuper final: public Super {
  public:
   SeastoreSuper(Transaction& t, RootNodeTracker& tracker,
-                laddr_t root_addr, TransactionManager& tm)
+                laddr_t root_addr, InterruptedTransactionManager& tm)
     : Super(t, tracker), root_addr{root_addr}, tm{tm} {}
   ~SeastoreSuper() override = default;
  protected:

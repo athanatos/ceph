@@ -86,11 +86,8 @@ namespace crimson::os::seastore {
 class Cache {
 public:
   using base_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error,
-    crimson::ct_error::eagain>;
-
-  using base_iertr = trans_iertr<
-    crimson::errorator<crimson::ct_error::input_output_error>>;
+    crimson::ct_error::input_output_error>;
+  using base_iertr = trans_iertr<base_ertr>;
 
   Cache(SegmentManager &segment_manager);
   ~Cache();
@@ -226,7 +223,7 @@ public:
    *
    * Returns extent at offset if in cache
    */
-  using get_extent_if_cached_iertr = trans_iertr<base_ertr>;
+  using get_extent_if_cached_iertr = base_iertr;
   using get_extent_if_cached_ret =
     get_extent_if_cached_iertr::future<CachedExtentRef>;
   get_extent_if_cached_ret get_extent_if_cached(
@@ -256,7 +253,7 @@ public:
    *
    * t *must not* have retired offset
    */
-  using get_extent_iertr = trans_iertr<base_ertr>;
+  using get_extent_iertr = base_iertr;
   template <typename T>
   get_extent_iertr::future<TCachedExtentRef<T>> get_extent(
     Transaction &t,
@@ -274,7 +271,7 @@ public:
       ).si_then(
 	[&t](auto ref) mutable {
 	  t.add_to_read_set(ref);
-	  return get_extent_ertr::make_ready_future<TCachedExtentRef<T>>(
+	  return get_extent_iertr::make_ready_future<TCachedExtentRef<T>>(
 	    std::move(ref));
 	});
     }
@@ -294,7 +291,7 @@ public:
     segment_off_t length  ///< [in] length
   );
 
-  using get_extent_by_type_iertr = trans_iertr<get_extent_ertr>;
+  using get_extent_by_type_iertr = get_extent_iertr;
   using get_extent_by_type_ret = get_extent_by_type_iertr::future<
     CachedExtentRef>;
   get_extent_by_type_ret get_extent_by_type(
@@ -437,9 +434,8 @@ public:
    * after replay to allow lba_manager (or w/e) to read in any ancestor
    * blocks.
    */
-  using init_cached_extents_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error>;
-  using init_cached_extents_ret = replay_delta_ertr::future<>;
+  using init_cached_extents_iertr = base_iertr;
+  using init_cached_extents_ret = init_cached_extents_iertr::future<>;
   template <typename F>
   init_cached_extents_ret init_cached_extents(
     Transaction &t,
@@ -453,11 +449,11 @@ public:
       std::forward<F>(f),
       std::move(dirty),
       [&t](auto &f, auto &refs) mutable {
-	return crimson::do_for_each(
+	return trans_intr::do_for_each(
 	  refs,
 	  [&t, &f](auto &e) { return f(t, e); });
-      }).handle_error(
-	init_cached_extents_ertr::pass_further{},
+      }).handle_error_interruptible(
+	init_cached_extents_iertr::pass_further{},
 	crimson::ct_error::assert_all{
 	  "Invalid error in Cache::init_cached_extents"
 	}

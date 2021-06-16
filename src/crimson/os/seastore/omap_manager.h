@@ -27,7 +27,7 @@ class OMapManager {
   * until these functions future resolved.
   */
 public:
-  using base_ertr = TransactionManager::base_ertr;
+  using base_ertr = with_trans_ertr<TransactionManager::base_iertr>;
 
   /**
    * allocate omap tree root node
