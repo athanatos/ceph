@@ -50,7 +50,7 @@ TransactionManager::mkfs_ertr::future<> TransactionManager::mkfs()
 	  return with_trans_intr(
 	    *transaction,
 	    [this, FNAME, &transaction](auto&) {
-	      return submit_transaction_direct(std::move(transaction));
+	      return submit_transaction_direct(*transaction);
 	    }
 	  ).handle_error(
 	    crimson::ct_error::eagain::handle([] {
@@ -219,29 +219,29 @@ TransactionManager::refs_ret TransactionManager::dec_ref(
 
 TransactionManager::submit_transaction_iertr::future<>
 TransactionManager::submit_transaction(
-  TransactionRef t)
+  Transaction &t)
 {
   LOG_PREFIX(TransactionManager::submit_transaction);
-  DEBUGT("about to await throttle", *t);
-  auto &tref = *t;
-  return tref.handle.enter(write_pipeline.wait_throttle
-  ).then([this] {
-    return segment_cleaner->await_hard_limits();
-  }).then([this, t=std::move(t)]() mutable {
-    return submit_transaction_direct(std::move(t));
+  DEBUGT("about to await throttle", t);
+  return trans_intr::make_interruptible(
+    t.handle.enter(write_pipeline.wait_throttle)
+  ).then_interruptible([this] {
+    return trans_intr::make_interruptible(segment_cleaner->await_hard_limits());
+  }).then_interruptible([this, &t]() {
+    return submit_transaction_direct(t);
   });
 }
 
 TransactionManager::submit_transaction_direct_ret
 TransactionManager::submit_transaction_direct(
-  TransactionRef t)
+  Transaction &tref)
 {
   LOG_PREFIX(TransactionManager::submit_transaction_direct);
-  DEBUGT("about to prepare", *t);
-  auto &tref = *t;
-  return tref.handle.enter(write_pipeline.prepare
-  ).then([this, FNAME, &tref]() mutable
-	 -> submit_transaction_iertr::future<> {
+  DEBUGT("about to prepare", tref);
+  return trans_intr::make_interruptible(
+    tref.handle.enter(write_pipeline.prepare)
+  ).then_interruptible([this, FNAME, &tref]() mutable
+		       -> submit_transaction_iertr::future<> {
     auto record = cache->try_construct_record(tref);
     assert(record); // interruptible future would have already failed
 
@@ -272,8 +272,8 @@ TransactionManager::submit_transaction_direct(
       crimson::ct_error::all_same_way([](auto e) {
 	ceph_assert(0 == "Hit error submitting to journal");
       }));
-    }).finally([t=std::move(t)]() mutable {
-      t->handle.exit();
+    }).finally([&tref]() {
+      tref.handle.exit();
     });
 }
 
