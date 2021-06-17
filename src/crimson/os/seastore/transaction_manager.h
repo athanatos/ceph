@@ -581,6 +581,8 @@ using TransactionManagerRef = std::unique_ptr<TransactionManager>;
 class InterruptedTransactionManager {
   TransactionManager &tm;
 public:
+  InterruptedTransactionManager(const InterruptedTransactionManager &) = default;
+  InterruptedTransactionManager(InterruptedTransactionManager &&) = default;
   InterruptedTransactionManager(TransactionManager &tm) : tm(tm) {}
   
   FORWARD(mkfs)
@@ -630,7 +632,7 @@ public:
 
   template <typename... T>
   InterruptedTMRef(T&&... args)
-    : ref(std::make_unique<TransactionManager>(std::forward(args)...)),
+    : ref(std::make_unique<TransactionManager>(std::forward<T>(args)...)),
       itm(*ref) {}
 
   InterruptedTMRef(std::unique_ptr<TransactionManager> tm)
@@ -642,6 +644,12 @@ public:
   InterruptedTMRef &operator=(std::unique_ptr<TransactionManager> tm) {
     this->~InterruptedTMRef();
     new (this) InterruptedTMRef(std::move(tm));
+    return *this;
+  }
+
+  InterruptedTMRef &operator=(InterruptedTMRef &&rhs) {
+    this->~InterruptedTMRef();
+    new (this) InterruptedTMRef(std::move(rhs));
     return *this;
   }
 

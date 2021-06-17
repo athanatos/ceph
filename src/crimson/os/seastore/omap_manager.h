@@ -170,7 +170,7 @@ using OMapManagerRef = std::unique_ptr<OMapManager>;
 namespace omap_manager {
 
 OMapManagerRef create_omap_manager (
-  TransactionManager &trans_manager);
+  InterruptedTransactionManager trans_manager);
 }
 
 }

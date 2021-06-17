@@ -79,7 +79,7 @@ using CollectionManagerRef = std::unique_ptr<CollectionManager>;
 namespace collection_manager {
 /* creat CollectionMapManager for Collection  */
 CollectionManagerRef create_coll_manager(
-  TransactionManager &trans_manager);
+  InterruptedTransactionManager trans_manager);
 
 }
 

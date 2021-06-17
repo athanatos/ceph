@@ -24,7 +24,7 @@ class FlatCollectionManager : public CollectionManager {
   get_root_ret get_coll_root(const coll_root_t &coll_root, Transaction &t);
 
 public:
-  explicit FlatCollectionManager(TransactionManager &tm);
+  explicit FlatCollectionManager(InterruptedTransactionManager tm);
 
   mkfs_ret mkfs(Transaction &t) final;
 
