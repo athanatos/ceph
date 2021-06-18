@@ -210,8 +210,8 @@ public:
     std::is_same_v<T, transaction_conflict>;
 
 
-  bool is_interruption(std::exception_ptr& eptr) {
-    return (*eptr.__cxa_exception_type() == typeid(transaction_conflict));
+  static bool is_interruption(std::exception_ptr& eptr) {
+    return *eptr.__cxa_exception_type() == typeid(transaction_conflict);
   }
 
 private:
