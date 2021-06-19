@@ -39,8 +39,8 @@ namespace crimson::os::seastore {
  */
 class LBAManager {
 public:
-  using base_ertr = Cache::get_extent_ertr;
-  using base_iertr = trans_iertr<Cache::get_extent_ertr>;
+  using base_ertr = Cache::base_ertr;
+  using base_iertr = Cache::base_iertr;
 
   using mkfs_ertr = crimson::errorator<
     crimson::ct_error::input_output_error>;
