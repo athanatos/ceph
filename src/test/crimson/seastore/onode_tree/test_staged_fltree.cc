@@ -1531,7 +1531,7 @@ TEST_F(d_seastore_tm_test_t, 6_random_tree_insert_erase)
     {
       auto t = tm->create_transaction();
       tree->bootstrap(*t).unsafe_get();
-      tm->submit_transaction(std::move(t)).unsafe_get();
+      submit_transaction(std::move(t));
       segment_cleaner->run_until_halt().get0();
     }
 
@@ -1539,7 +1539,7 @@ TEST_F(d_seastore_tm_test_t, 6_random_tree_insert_erase)
     {
       auto t = tm->create_transaction();
       tree->insert(*t).unsafe_get();
-      tm->submit_transaction(std::move(t)).unsafe_get();
+      submit_transaction(std::move(t));
       segment_cleaner->run_until_halt().get0();
     }
     {
@@ -1562,7 +1562,7 @@ TEST_F(d_seastore_tm_test_t, 6_random_tree_insert_erase)
     {
       auto t = tm->create_transaction();
       tree->erase(*t, kvs.size() / 4 * 3).unsafe_get();
-      tm->submit_transaction(std::move(t)).unsafe_get();
+      submit_transaction(std::move(t));
       segment_cleaner->run_until_halt().get0();
     }
     {
@@ -1584,7 +1584,7 @@ TEST_F(d_seastore_tm_test_t, 6_random_tree_insert_erase)
     {
       auto t = tm->create_transaction();
       tree->erase(*t, kvs.size()).unsafe_get();
-      tm->submit_transaction(std::move(t)).unsafe_get();
+      submit_transaction(std::move(t));
       segment_cleaner->run_until_halt().get0();
     }
     {
@@ -1635,7 +1635,7 @@ TEST_F(d_seastore_tm_test_t, 7_tree_insert_erase_eagain)
       auto t = tm->create_transaction();
       return tree->bootstrap(*t
       ).safe_then([this, t = std::move(t)] () mutable {
-        return tm->submit_transaction(std::move(t));
+        return tm->submit_transaction(*t);
       });
     }).unsafe_get0();
     segment_cleaner->run_until_halt().get0();
@@ -1652,7 +1652,7 @@ TEST_F(d_seastore_tm_test_t, 7_tree_insert_erase_eagain)
           return tree->insert_one(*t, iter
           ).safe_then([this, t = std::move(t)] (auto cursor) mutable {
             cursor.invalidate();
-            return tm->submit_transaction(std::move(t));
+            return tm->submit_transaction(*t);
           });
         }).unsafe_get0();
         segment_cleaner->run_until_halt().get0();
@@ -1695,7 +1695,7 @@ TEST_F(d_seastore_tm_test_t, 7_tree_insert_erase_eagain)
           auto t = tm->create_transaction();
           return tree->erase_one(*t, iter
           ).safe_then([this, t = std::move(t)] () mutable {
-            return tm->submit_transaction(std::move(t));
+            return tm->submit_transaction(*t);
           });
         }).unsafe_get0();
         segment_cleaner->run_until_halt().get0();
