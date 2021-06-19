@@ -64,7 +64,7 @@ BtreeLBAManager::get_root(Transaction &t)
 }
 
 BtreeLBAManager::get_mappings_ret
-BtreeLBAManager::_get_mappings(
+BtreeLBAManager::get_mappings(
   Transaction &t,
   laddr_t offset, extent_len_t length)
 {
@@ -83,7 +83,7 @@ BtreeLBAManager::_get_mappings(
 
 
 BtreeLBAManager::get_mappings_ret
-BtreeLBAManager::_get_mappings(
+BtreeLBAManager::get_mappings(
   Transaction &t,
   laddr_list_t &&list)
 {
@@ -95,7 +95,7 @@ BtreeLBAManager::_get_mappings(
     l->begin(),
     l->end(),
     [this, &t, &ret](const auto &p) {
-      return _get_mappings(t, p.first, p.second).si_then(
+      return get_mappings(t, p.first, p.second).si_then(
 	[&ret](auto res) {
 	  ret.splice(ret.end(), res, res.begin(), res.end());
 	  return get_mappings_iertr::now();
@@ -106,7 +106,7 @@ BtreeLBAManager::_get_mappings(
 }
 
 BtreeLBAManager::get_mapping_ret
-BtreeLBAManager::_get_mapping(
+BtreeLBAManager::get_mapping(
   Transaction &t,
   laddr_t offset)
 {
@@ -121,7 +121,7 @@ BtreeLBAManager::_get_mapping(
 }
 
 BtreeLBAManager::find_hole_ret
-BtreeLBAManager::_find_hole(
+BtreeLBAManager::find_hole(
   Transaction &t,
   laddr_t hint,
   extent_len_t len)
@@ -139,7 +139,7 @@ BtreeLBAManager::_find_hole(
 }
 
 BtreeLBAManager::alloc_extent_ret
-BtreeLBAManager::_alloc_extent(
+BtreeLBAManager::alloc_extent(
   Transaction &t,
   laddr_t hint,
   extent_len_t len,
@@ -178,7 +178,7 @@ BtreeLBAManager::_alloc_extent(
 }
 
 BtreeLBAManager::set_extent_ret
-BtreeLBAManager::_set_extent(
+BtreeLBAManager::set_extent(
   Transaction &t,
   laddr_t off, extent_len_t len, paddr_t addr)
 {
@@ -232,7 +232,7 @@ static depth_t get_depth(const CachedExtent &e)
 }
 
 BtreeLBAManager::complete_transaction_ret
-BtreeLBAManager::_complete_transaction(
+BtreeLBAManager::complete_transaction(
   Transaction &t)
 {
   std::vector<CachedExtentRef> to_clear;
@@ -276,7 +276,7 @@ BtreeLBAManager::_complete_transaction(
   return complete_transaction_iertr::now();
 }
 
-BtreeLBAManager::init_cached_extent_ret BtreeLBAManager::_init_cached_extent(
+BtreeLBAManager::init_cached_extent_ret BtreeLBAManager::init_cached_extent(
   Transaction &t,
   CachedExtentRef e)
 {
@@ -335,7 +335,7 @@ BtreeLBAManager::init_cached_extent_ret BtreeLBAManager::_init_cached_extent(
     });
 }
 
-BtreeLBAManager::scan_mappings_ret BtreeLBAManager::_scan_mappings(
+BtreeLBAManager::scan_mappings_ret BtreeLBAManager::scan_mappings(
   Transaction &t,
   laddr_t begin,
   laddr_t end,
@@ -357,7 +357,7 @@ BtreeLBAManager::scan_mappings_ret BtreeLBAManager::_scan_mappings(
     });
 }
 
-BtreeLBAManager::scan_mapped_space_ret BtreeLBAManager::_scan_mapped_space(
+BtreeLBAManager::scan_mapped_space_ret BtreeLBAManager::scan_mapped_space(
     Transaction &t,
     scan_mapped_space_func_t &&f)
 {
@@ -375,17 +375,11 @@ BtreeLBAManager::scan_mapped_space_ret BtreeLBAManager::_scan_mapped_space(
     });
 }
 
-BtreeLBAManager::rewrite_extent_ret BtreeLBAManager::_rewrite_extent(
+BtreeLBAManager::rewrite_extent_ret BtreeLBAManager::rewrite_extent(
   Transaction &t,
   CachedExtentRef extent)
 {
-  if (extent->has_been_invalidated()) {
-    logger().debug(
-      "BTreeLBAManager::rewrite_extent: {} is invalid, returning eagain",
-      *extent
-    );
-    return crimson::ct_error::eagain::make();
-  }
+  assert(!extent->has_been_invalidated());
 
   logger().debug(
     "{}: rewriting {}", 
@@ -476,7 +470,7 @@ BtreeLBAManager::rewrite_extent_ret BtreeLBAManager::_rewrite_extent(
 }
 
 BtreeLBAManager::get_physical_extent_if_live_ret
-BtreeLBAManager::_get_physical_extent_if_live(
+BtreeLBAManager::get_physical_extent_if_live(
   Transaction &t,
   extent_types_t type,
   paddr_t addr,
