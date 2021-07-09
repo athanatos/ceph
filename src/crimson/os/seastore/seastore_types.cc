@@ -97,6 +97,20 @@ std::ostream &operator<<(std::ostream &out, const paddr_list_t &rhs)
   return out << ']';
 }
 
+device_id_t get_device_id(segment_id_t id) {
+  return (device_id_t)((id & SM_ID_MASK) >>
+      (std::numeric_limits<segment_id_t>::digits - device_id_len));
+}
+
+segment_id_t add_device_id(segment_id_t id, device_id_t sm_id) {
+  return id + (sm_id <<
+      (std::numeric_limits<segment_id_t>::digits - device_id_len));
+}
+
+segment_id_t strip_device_id(segment_id_t id) {
+  return id & (~SM_ID_MASK);
+}
+
 std::ostream &operator<<(std::ostream &lhs, const delta_info_t &rhs)
 {
   return lhs << "delta_info_t("

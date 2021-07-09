@@ -141,7 +141,12 @@ public:
     >;
   close_ertr::future<> close();
 
-  BlockSegmentManager(const std::string &path) : device_path(path) {}
+  BlockSegmentManager(
+    const std::string &path,
+    device_id_t device_id = 0)
+    : device_path(path),
+      device_id(device_id)
+  {}
   ~BlockSegmentManager();
 
   open_ertr::future<SegmentRef> open(segment_id_t id) final;
@@ -163,6 +168,10 @@ public:
     return superblock.segment_size;
   }
 
+  device_id_t get_device_id() const final {
+    return device_id;
+  }
+
   // public so tests can bypass segment interface when simpler
   Segment::write_ertr::future<> segment_write(
     paddr_t addr,
@@ -172,12 +181,13 @@ public:
 private:
   friend class BlockSegment;
   using segment_state_t = Segment::segment_state_t;
-
   
   std::string device_path;
   std::unique_ptr<SegmentStateTracker> tracker;
   block_sm_superblock_t superblock;
   seastar::file device;
+
+  device_id_t device_id = 0;
 
   size_t get_offset(paddr_t addr) {
     return superblock.first_segment_offset +

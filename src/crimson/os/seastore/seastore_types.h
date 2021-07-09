@@ -49,6 +49,15 @@ constexpr segment_id_t BLOCK_REL_SEG_ID =
 // for tests which generate fake paddrs
 constexpr segment_id_t FAKE_SEG_ID =
   std::numeric_limits<segment_id_t>::max() - 4;
+using device_id_t = uint8_t;
+constexpr uint16_t device_id_len = 8;
+// mask for segment manager id
+constexpr segment_id_t SM_ID_MASK =
+  0xFF << (std::numeric_limits<segment_id_t>::digits - device_id_len);
+
+device_id_t get_device_id(segment_id_t id);
+segment_id_t add_device_id(segment_id_t id, device_id_t sm_id);
+segment_id_t strip_device_id(segment_id_t id);
 
 /* Used to denote references to notional zero filled segment, mainly
  * in denoting reserved laddr ranges for unallocated object data.

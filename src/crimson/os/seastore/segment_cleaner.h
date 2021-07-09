@@ -374,6 +374,9 @@ private:
   size_t num_segments = 0;
   size_t segment_size = 0;
   size_t block_size = 0;
+  /// one segment provider for each segment manager
+  device_id_t device_id = 0;
+
 
   SpaceTrackerIRef space_tracker;
   std::vector<segment_info_t> segments;
@@ -402,7 +405,10 @@ private:
   std::optional<seastar::promise<>> blocked_io_wake;
 
 public:
-  SegmentCleaner(config_t config, bool detailed = false);
+  SegmentCleaner(
+    config_t config,
+    bool detailed = false,
+    device_id_t device_id = 0);
 
   void mount(SegmentManager &sm) {
     init_complete = false;
