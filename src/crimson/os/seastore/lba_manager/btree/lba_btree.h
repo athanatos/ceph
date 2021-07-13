@@ -9,13 +9,19 @@
 
 #include "crimson/common/log.h"
 
+#include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/lba_manager/btree/lba_btree_node_impl.h"
 
-class LBABtree {
-  constexpr size_t MAX_DEPTH = 16;
+namespace crimson::os::seastore::lba_manager::btree {
 
+
+class LBABtree {
+  static constexpr size_t MAX_DEPTH = 16;
   lba_root_t root;
+
 public:
+  using base_iertr = LBAManager::base_iertr;
+
   template <bool is_const>
   class iter_t {
     template <typename NodeType>
@@ -48,12 +54,21 @@ public:
     const laddr_t &get_key();
     const lba_map_val_t &get_val();
   };
+
+  LBABtree(lba_root_t root) : root(root) {}
+
   using iterator = iter_t<false>;
   using const_iterator = iter_t<true>;
 
   using lower_bound_iertr = base_iertr;
   template <bool is_const>
   using lower_bound_ret = base_iertr::future<iter_t<is_const>>;
+  lower_bound_ret<true> lower_bound(
+    op_context_t c,
+    laddr_t addr) const;
+  lower_bound_ret<false> lower_bound(
+    op_context_t c,
+    laddr_t addr);
 
   using insert_iertr = base_iertr;
   using insert_ret = insert_iertr::future<>;
@@ -62,9 +77,6 @@ public:
     iterator iter,
     laddr_t laddr,
     lba_map_val_t val);
-
-  using insert_iertr = base_iertr;
-  using insert_ret = insert_iertr::future<>;
   insert_ret insert(
     op_context_t c,
     laddr_t laddr,
@@ -78,6 +90,4 @@ public:
   using update_ret = update_iertr::future<>;
 };
 
-
-  LBABtree(lba_root_t root) : root(root) {}
-};
+}
