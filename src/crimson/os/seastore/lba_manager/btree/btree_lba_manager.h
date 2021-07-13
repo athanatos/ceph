@@ -21,6 +21,7 @@
 #include "crimson/os/seastore/segment_manager.h"
 
 #include "crimson/os/seastore/lba_manager/btree/lba_btree_node.h"
+#include "crimson/os/seastore/lba_manager/btree/lba_btree.h"
 
 namespace crimson::os::seastore::lba_manager::btree {
 
