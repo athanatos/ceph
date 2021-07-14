@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <boost/container/static_vector.hpp>
 #include <sys/mman.h>
 #include <memory>
 #include <string.h>
@@ -24,20 +25,23 @@ public:
 
   template <bool is_const>
   class iter_t {
+    friend class LBABtree;
     template <typename NodeType>
     struct node_position_t {
       typename NodeType::Ref node;
       typename NodeType::template iter_t<is_const> position;
     };
-    std::array<node_position_t<LBAInternalNode>, MAX_DEPTH> internal;
+    boost::container::static_vector<
+      node_position_t<LBAInternalNode>, MAX_DEPTH> internal;
     node_position_t<LBALeafNode> leaf;
     
-    iter_t(const std::enable_if<is_const, iter_t<!is_const>> &other)
+    iter_t() = default;
+    iter_t(const std::enable_if<is_const, iter_t<!is_const>> &other) noexcept
       : internal(other.internal), leaf(other.leaf) {}
 
   public:
-    iter_t(const iter_t &) = default;
-    iter_t(iter_t &&) = default;
+    iter_t(const iter_t &) noexcept = default;
+    iter_t(iter_t &&) noexcept = default;
     iter_t &operator=(const iter_t &) = default;
     iter_t &operator=(iter_t &&) = default;
 
@@ -68,32 +72,51 @@ public:
 
   using iterator = iter_t<false>;
   using const_iterator = iter_t<true>;
+  using iterator_fut = base_iertr::future<iterator>;
+  using const_iterator_fut = base_iertr::future<const_iterator>;
 
-  using bound_iertr = base_iertr;
-  template <bool is_const>
-  using bound_ret = base_iertr::future<iter_t<is_const>>;
-  bound_ret<true> lower_bound(
+  /// mkfs
+  using mkfs_ret = lba_root_t;
+  static mkfs_ret mkfs(op_context_t c);
+
+  /**
+   * lower_bound
+   *
+   * @param c [in] context
+   * @param addr [in] ddr
+   * @return least iterator >= key
+   */
+  const_iterator_fut lower_bound(
     op_context_t c,
     laddr_t addr) const;
-  bound_ret<false> lower_bound(
+  iterator_fut lower_bound(
     op_context_t c,
     laddr_t addr);
-  bound_ret<true> upper_bound(
+
+  /**
+   * upper_bound
+   *
+   * @param c [in] context
+   * @param addr [in] ddr
+   * @return least iterator > key
+   */
+  const_iterator_fut upper_bound(
     op_context_t c,
-    laddr_t addr) const {
+    laddr_t addr
+  ) const {
     return lower_bound(
       c, addr
     ).si_then([this, addr](auto iter) {
       if (!iter->is_end() && iter->get_key() == addr) {
 	return iter.next();
       } else {
-	return bound_ret<true>(
+	return const_iterator_fut(
 	  interruptible::ready_future_marker{},
 	  iter);
       }
     });
   }
-  bound_ret<false> upper_bound(
+  iterator_fut upper_bound(
     op_context_t c,
     laddr_t addr) {
     return lower_bound(
@@ -102,26 +125,43 @@ public:
       if (!iter->is_end() && iter->get_key() == addr) {
 	return iter.next();
       } else {
-	return bound_ret<false>(
+	return iterator_fut(
 	  interruptible::ready_future_marker{},
 	  iter);
       }
     });
   }
+  iterator_fut begin(op_context_t c) {
+    return lower_bound(c, 0);
+  }
+  const_iterator_fut begin(op_context_t c) const {
+    return lower_bound(c, 0);
+  }
+  iterator_fut end(op_context_t c) {
+    return upper_bound(c, L_ADDR_MAX);
+  }
+  const_iterator_fut end(op_context_t c) const {
+    return upper_bound(c, L_ADDR_MAX);
+  }
 
   /**
    * insert
+   *
+   * Inserts val at laddr with iter as a hint.  If element at laddr already
+   * exists returns iterator to that element and does nothing.
    *
    * @param c [in] op context
    * @param iter [in] hint, insertion constant if immediately prior to iter
    * @param laddr [in] addr at which to insert
    * @param val [in] val to insert
+   * @return pair<iter, bool> where iter points to element at addr, bool true
+   *         iff element at laddr did not exist.
    */
   using insert_iertr = base_iertr;
-  using insert_ret = insert_iertr::future<>;
+  using insert_ret = insert_iertr::future<std::pair<iterator, bool>>;
   insert_ret insert(
-    op_context_t c,   ///< [in] op context
-    iterator iter,    ///< [in] hint, insertion constant time if immediately after iter
+    op_context_t c,
+    iterator iter,
     laddr_t laddr,
     lba_map_val_t val
   );
@@ -129,19 +169,38 @@ public:
     op_context_t c,
     laddr_t laddr,
     lba_map_val_t val) {
-    return upper_bound(
+    return lower_bound(
       c, laddr
     ).si_then([this, c, laddr, val](auto iter) {
       return insert(c, iter, laddr, val);
     });
   }
 
-
-  using remove_iertr = base_iertr;
-  using remove_ret = remove_iertr::future<>;
-
+  /**
+   * update
+   *
+   * @param c [in] op context
+   * @param iter [in] iterator to element to update, must not be end
+   * @param val [in] val with which to update
+   */
   using update_iertr = base_iertr;
   using update_ret = update_iertr::future<>;
+  update_ret update(
+    op_context_t c,
+    iterator iter,
+    lba_map_val_t val);
+
+  /**
+   * remove
+   *
+   * @param c [in] op context
+   * @param iter [in] iterator to element to remove, must not be end
+   */
+  using remove_iertr = base_iertr;
+  using remove_ret = remove_iertr::future<>;
+  update_ret remove(
+    op_context_t c,
+    iterator iter);
 };
 
 }

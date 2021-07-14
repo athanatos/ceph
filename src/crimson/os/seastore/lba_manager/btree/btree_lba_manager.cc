@@ -9,6 +9,7 @@
 #include "include/buffer.h"
 #include "crimson/os/seastore/lba_manager/btree/btree_lba_manager.h"
 #include "crimson/os/seastore/lba_manager/btree/lba_btree_node_impl.h"
+#include "crimson/os/seastore/lba_manager/btree/lba_btree.h"
 
 
 namespace {
@@ -27,15 +28,7 @@ BtreeLBAManager::mkfs_ret BtreeLBAManager::mkfs(
     t,
     [this](auto &t) {
       return cache.get_root(t).si_then([this, &t](auto croot) {
-	auto root_leaf = cache.alloc_new_extent<LBALeafNode>(
-	  t,
-	  LBA_BLOCK_SIZE);
-	root_leaf->set_size(0);
-	lba_node_meta_t meta{0, L_ADDR_MAX, 1};
-	root_leaf->set_meta(meta);
-	root_leaf->pin.set_range(meta);
-	croot->get_root().lba_root =
-	  lba_root_t{root_leaf->get_paddr(), 1u};
+	croot->get_root().lba_root = LBABtree::mkfs(get_context(t));
 	return mkfs_ertr::now();
       });
     }).handle_error(
