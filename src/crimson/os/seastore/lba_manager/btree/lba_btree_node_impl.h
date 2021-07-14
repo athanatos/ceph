@@ -72,6 +72,7 @@ struct LBAInternalNode
       lba_node_meta_t, lba_node_meta_le_t,
       laddr_t, laddr_le_t,
       paddr_t, paddr_le_t> {
+  using Ref = TCachedExtentRef<LBAInternalNode>;
   using internal_iterator_t = const_iterator;
   template <typename... T>
   LBAInternalNode(T&&... t) :
@@ -346,6 +347,7 @@ struct LBALeafNode
       lba_node_meta_t, lba_node_meta_le_t,
       laddr_t, laddr_le_t,
       lba_map_val_t, lba_map_val_le_t> {
+  using Ref = TCachedExtentRef<LBALeafNode>;
   using internal_iterator_t = const_iterator;
   template <typename... T>
   LBALeafNode(T&&... t) :
