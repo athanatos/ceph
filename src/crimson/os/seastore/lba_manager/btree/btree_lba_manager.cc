@@ -72,7 +72,33 @@ BtreeLBAManager::get_mappings(
       return with_btree(
 	get_context(t),
 	[&t, &ret, this, offset, length](auto &btree) {
-	  return get_mappings_iertr::now();
+	  return btree.upper_bound_right(
+	    get_context(t), offset
+	  ).si_then([&t, &ret, this, offset, length](auto iter) {
+	    return seastar::do_with(
+	      iter,
+	      [&t, &ret, this, offset, length](auto &pos) {
+		using repeat_ret = get_mappings_iertr::future<
+		  seastar::stop_iteration>;
+		return trans_intr::repeat(
+		  [&t, &ret, &pos, this, offset, length] {
+		    if (pos.is_end() || pos.get_key() >= (offset + length)) {
+		      return repeat_ret(
+			interruptible::ready_future_marker{},
+			seastar::stop_iteration::yes);
+		    }
+		    ceph_assert((pos.get_key() + pos.get_val().len) > offset);
+		    ret.push_back(pos.get_pin());
+		    return pos.next(
+		    ).si_then([&pos](auto iter) {
+		      pos = iter;
+		      return repeat_ret(
+			interruptible::ready_future_marker{},
+			seastar::stop_iteration::no);
+		    });
+		  });
+	      });
+	  });
 	}
       ).si_then([&ret] {
 	return get_mappings_ret(
