@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "crimson/common/log.h"
+#include "crimson/os/seastore/logging.h"
 
 #include "include/buffer.h"
 #include "crimson/os/seastore/lba_manager/btree/btree_lba_manager.h"
@@ -23,7 +24,8 @@ namespace crimson::os::seastore::lba_manager::btree {
 BtreeLBAManager::mkfs_ret BtreeLBAManager::mkfs(
   Transaction &t)
 {
-  logger().debug("BtreeLBAManager::mkfs");
+  LOG_PREFIX(BtreeLBAManager::mkfs);
+  DEBUGT("", t);
   return with_trans_intr(
     t,
     [this](auto &t) {
@@ -39,6 +41,7 @@ BtreeLBAManager::mkfs_ret BtreeLBAManager::mkfs(
     );
 }
 
+// REMOVE
 BtreeLBAManager::get_root_ret
 BtreeLBAManager::get_root(Transaction &t)
 {
@@ -61,17 +64,23 @@ BtreeLBAManager::get_mappings(
   Transaction &t,
   laddr_t offset, extent_len_t length)
 {
-  logger().debug("BtreeLBAManager::get_mappings: {}, {}", offset, length);
-  return get_root(
-    t).si_then([this, &t, offset, length](auto extent) {
-      return extent->lookup_range(
+  LOG_PREFIX(BtreeLBAManager::get_mappings);
+  DEBUGT("offset: {}, length{}", t, offset, length);
+  return seastar::do_with(
+    lba_pin_list_t{},
+    [&t, this, offset, length](auto &ret) {
+      return with_btree(
 	get_context(t),
-	offset, length
-      ).si_then([](auto &&e) {
-        logger().debug("BtreeLBAManager::get_mappings: got mappings {}", e);
-        return std::move(e);
+	[&t, &ret, this, offset, length](auto &btree) {
+	  // TODO
+	  return get_mappings_iertr::now();
+	}
+      ).si_then([&ret] {
+	return get_mappings_ret(
+	  interruptible::ready_future_marker{},
+	  std::move(ret));
       });
-  });
+    });
 }
 
 

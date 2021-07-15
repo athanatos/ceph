@@ -19,6 +19,7 @@ namespace crimson::os::seastore::lba_manager::btree {
 class LBABtree {
   static constexpr size_t MAX_DEPTH = 16;
   lba_root_t root;
+  bool root_dirty = false;
 
 public:
   using base_iertr = LBAManager::base_iertr;
@@ -74,6 +75,15 @@ public:
   using const_iterator = iter_t<true>;
   using iterator_fut = base_iertr::future<iterator>;
   using const_iterator_fut = base_iertr::future<const_iterator>;
+
+  bool is_root_dirty() const {
+    return root_dirty;
+  }
+  lba_root_t get_root_undirty() {
+    ceph_assert(root_dirty);
+    root_dirty = false;
+    return root;
+  }
 
   /// mkfs
   using mkfs_ret = lba_root_t;
