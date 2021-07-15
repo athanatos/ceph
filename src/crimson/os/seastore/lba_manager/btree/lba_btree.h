@@ -46,15 +46,31 @@ public:
 
     using advance_iertr = base_iertr;
     using advance_ret = base_iertr::future<iterator>;
-    advance_ret next() {
+    advance_ret next() const {
       return advance_ret(
 	interruptible::ready_future_marker{},
 	*this);
     }
 
-    const laddr_t &get_key();
-    const lba_map_val_t &get_val();
-    bool is_end() const { return false; /* TODO */ }
+    laddr_t get_key() const {
+      assert(!is_end());
+      return leaf.node->iter_idx(leaf.pos).get_key();
+    }
+    lba_map_val_t get_val() const {
+      assert(!is_end());
+      return leaf.node->iter_idx(leaf.pos).get_val();
+    }
+    bool is_end() const {
+      return leaf.pos == node_position_t::MAX;
+    }
+
+    LBAPinRef get_pin() const {
+      assert(!is_end());
+      return std::make_unique<BtreeLBAPin>(
+	leaf.node,
+	get_val().paddr /* probably needs to be adjusted TODO */,
+	lba_node_meta_t{ get_key(), get_key() + get_val().len, 0 });
+    }
   };
 
   LBABtree(lba_root_t root) : root(root) {}
