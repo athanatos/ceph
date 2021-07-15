@@ -26,9 +26,9 @@ public:
 
   class iterator {
     friend class LBABtree;
+    static constexpr uint16_t MAX = std::numeric_limits<uint16_t>::max();
     template <typename NodeType>
     struct node_position_t {
-      static constexpr uint16_t MAX = std::numeric_limits<uint16_t>::max();
       typename NodeType::Ref node;
       uint16_t pos = MAX;
     };
@@ -61,7 +61,7 @@ public:
       return leaf.node->iter_idx(leaf.pos).get_val();
     }
     bool is_end() const {
-      return leaf.pos == node_position_t::MAX;
+      return leaf.pos == MAX;
     }
 
     LBAPinRef get_pin() const {
@@ -141,6 +141,41 @@ public:
   }
   iterator_fut end(op_context_t c) const {
     return upper_bound(c, L_ADDR_MAX);
+  }
+
+  template <typename F>
+  auto iterate_repeat(iterator_fut iter, F &&f) {
+    return seastar::do_with(
+      iter,
+      [f=std::move(f)](auto &pos) {
+	using repeat_ret = base_iertr::future<
+	  seastar::stop_iteration>;
+	return trans_intr::repeat(
+	  [&f, &pos] {
+	    if (pos.is_end()) {
+	      return repeat_ret(
+		interruptible::ready_future_marker{},
+		seastar::stop_iteration::yes);
+	    }
+	    return f(
+	      pos
+	    ).si_then([&pos](auto done) {
+	      if (done == seastar::stop_iteration::yes) {
+		return repeat_ret(
+		  interruptible::ready_future_marker{},
+		  seastar::stop_iteration::yes);
+	      } else {
+		return pos->next(
+		).si_then([&pos](auto next) {
+		  pos = next;
+		  return repeat_ret(
+		    interruptible::ready_future_marker{},
+		    seastar::stop_iteration::no);
+		});
+	      }
+	    });
+	  });
+      });
   }
 
   /**
