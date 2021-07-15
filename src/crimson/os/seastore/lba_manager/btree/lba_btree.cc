@@ -26,21 +26,21 @@ LBABtree::mkfs_ret LBABtree::mkfs(op_context_t c)
   return lba_root_t{root_leaf->get_paddr(), 1u};
 }
 
-LBABtree::const_iterator_fut LBABtree::lower_bound(
+LBABtree::iterator_fut LBABtree::lower_bound(
   op_context_t c,
   laddr_t addr) const
 {
   LOG_PREFIX(lower_bound);
-  return const_iterator_fut(
+  return iterator_fut(
     interruptible::ready_future_marker{},
-    const_iterator{});
+    iterator{});
 }
 
-LBABtree::iterator_fut LBABtree::lower_bound(
+LBABtree::iterator_fut LBABtree::upper_bound_right(
   op_context_t c,
-  laddr_t addr)
+  laddr_t addr) const
 {
-  LOG_PREFIX(lower_bound);
+  LOG_PREFIX(upper_bound_right);
   return iterator_fut(
     interruptible::ready_future_marker{},
     iterator{});
@@ -64,7 +64,9 @@ LBABtree::update_ret LBABtree::update(
   lba_map_val_t val)
 {
   LOG_PREFIX(update);
-  return seastar::now();
+  return update_ret(
+    interruptible::ready_future_marker{},
+    iterator{});
 }
 
 LBABtree::remove_ret LBABtree::remove(
@@ -72,7 +74,9 @@ LBABtree::remove_ret LBABtree::remove(
   iterator iter)
 {
   LOG_PREFIX(remove);
-  return seastar::now();
+  return remove_ret(
+    interruptible::ready_future_marker{},
+    iterator{});
 }
 
 }

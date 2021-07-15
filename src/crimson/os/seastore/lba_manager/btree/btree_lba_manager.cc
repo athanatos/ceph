@@ -72,7 +72,6 @@ BtreeLBAManager::get_mappings(
       return with_btree(
 	get_context(t),
 	[&t, &ret, this, offset, length](auto &btree) {
-	  // TODO
 	  return get_mappings_iertr::now();
 	}
       ).si_then([&ret] {
