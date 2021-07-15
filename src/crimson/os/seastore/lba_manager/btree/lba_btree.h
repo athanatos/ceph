@@ -24,45 +24,33 @@ class LBABtree {
 public:
   using base_iertr = LBAManager::base_iertr;
 
-  template <bool is_const>
-  class iter_t {
+  class iterator {
     friend class LBABtree;
     template <typename NodeType>
     struct node_position_t {
+      static constexpr uint16_t MAX = std::numeric_limits<uint16_t>::max();
       typename NodeType::Ref node;
-      typename NodeType::template iter_t<is_const> position;
+      uint16_t pos = MAX;
     };
     boost::container::static_vector<
       node_position_t<LBAInternalNode>, MAX_DEPTH> internal;
     node_position_t<LBALeafNode> leaf;
     
-    iter_t() = default;
-    iter_t(const std::enable_if<is_const, iter_t<!is_const>> &other) noexcept
-      : internal(other.internal), leaf(other.leaf) {}
+    iterator() = default;
 
   public:
-    iter_t(const iter_t &) noexcept = default;
-    iter_t(iter_t &&) noexcept = default;
-    iter_t &operator=(const iter_t &) = default;
-    iter_t &operator=(iter_t &&) = default;
-
-    operator iter_t<!is_const>() const {
-      static_assert(is_const);
-      return iter_t<!is_const>(*this);
-    }
+    iterator(const iterator &) noexcept = default;
+    iterator(iterator &&) noexcept = default;
+    iterator &operator=(const iterator &) = default;
+    iterator &operator=(iterator &&) = default;
 
     using advance_iertr = base_iertr;
-    using advance_ret = base_iertr::future<iter_t>;
+    using advance_ret = base_iertr::future<iterator>;
     advance_ret next() {
       return advance_ret(
 	interruptible::ready_future_marker{},
 	*this);
     }
-
-    // Work nicely with for loops without requiring a nested type.
-    using reference = iter_t&;
-    iter_t &operator*() { return *this; }
-    iter_t *operator->() { return this; }
 
     const laddr_t &get_key();
     const lba_map_val_t &get_val();
@@ -70,11 +58,6 @@ public:
   };
 
   LBABtree(lba_root_t root) : root(root) {}
-
-  using iterator = iter_t<false>;
-  using const_iterator = iter_t<true>;
-  using iterator_fut = base_iertr::future<iterator>;
-  using const_iterator_fut = base_iertr::future<const_iterator>;
 
   bool is_root_dirty() const {
     return root_dirty;
@@ -89,6 +72,8 @@ public:
   using mkfs_ret = lba_root_t;
   static mkfs_ret mkfs(op_context_t c);
 
+  using iterator_fut = base_iertr::future<iterator>;
+
   /**
    * lower_bound
    *
@@ -96,12 +81,9 @@ public:
    * @param addr [in] ddr
    * @return least iterator >= key
    */
-  const_iterator_fut lower_bound(
-    op_context_t c,
-    laddr_t addr) const;
   iterator_fut lower_bound(
     op_context_t c,
-    laddr_t addr);
+    laddr_t addr) const;
 
   /**
    * upper_bound
@@ -110,29 +92,14 @@ public:
    * @param addr [in] ddr
    * @return least iterator > key
    */
-  const_iterator_fut upper_bound(
+  iterator_fut upper_bound(
     op_context_t c,
     laddr_t addr
   ) const {
     return lower_bound(
       c, addr
     ).si_then([this, addr](auto iter) {
-      if (!iter->is_end() && iter->get_key() == addr) {
-	return iter.next();
-      } else {
-	return const_iterator_fut(
-	  interruptible::ready_future_marker{},
-	  iter);
-      }
-    });
-  }
-  iterator_fut upper_bound(
-    op_context_t c,
-    laddr_t addr) {
-    return lower_bound(
-      c, addr
-    ).si_then([this, addr](auto iter) {
-      if (!iter->is_end() && iter->get_key() == addr) {
+      if (!iter.is_end() && iter.get_key() == addr) {
 	return iter.next();
       } else {
 	return iterator_fut(
@@ -141,16 +108,22 @@ public:
       }
     });
   }
-  iterator_fut begin(op_context_t c) {
+
+  /**
+   * upper_bound_right
+   *
+   * @param c [in] context
+   * @param addr [in] addr
+   * @return least iterator i s.t. i.get_key() + i.get_val().len > key
+   */
+  iterator_fut upper_bound_right(
+    op_context_t c,
+    laddr_t addr) const;
+
+  iterator_fut begin(op_context_t c) const {
     return lower_bound(c, 0);
   }
-  const_iterator_fut begin(op_context_t c) const {
-    return lower_bound(c, 0);
-  }
-  iterator_fut end(op_context_t c) {
-    return upper_bound(c, L_ADDR_MAX);
-  }
-  const_iterator_fut end(op_context_t c) const {
+  iterator_fut end(op_context_t c) const {
     return upper_bound(c, L_ADDR_MAX);
   }
 
@@ -158,7 +131,9 @@ public:
    * insert
    *
    * Inserts val at laddr with iter as a hint.  If element at laddr already
-   * exists returns iterator to that element and does nothing.
+   * exists returns iterator to that element unchanged and returns false.
+   *
+   * Invalidates all outstanding iterators for this tree on this transaction.
    *
    * @param c [in] op context
    * @param iter [in] hint, insertion constant if immediately prior to iter
@@ -189,12 +164,15 @@ public:
   /**
    * update
    *
+   * Invalidates all outstanding iterators for this tree on this transaction.
+   *
    * @param c [in] op context
    * @param iter [in] iterator to element to update, must not be end
    * @param val [in] val with which to update
+   * @return iterator to newly updated element
    */
   using update_iertr = base_iertr;
-  using update_ret = update_iertr::future<>;
+  using update_ret = update_iertr::future<iterator>;
   update_ret update(
     op_context_t c,
     iterator iter,
@@ -203,11 +181,14 @@ public:
   /**
    * remove
    *
+   * Invalidates all outstanding iterators for this tree on this transaction.
+   *
    * @param c [in] op context
    * @param iter [in] iterator to element to remove, must not be end
+   * @return iterator to position after removed element
    */
   using remove_iertr = base_iertr;
-  using remove_ret = remove_iertr::future<>;
+  using remove_ret = remove_iertr::future<iterator>;
   update_ret remove(
     op_context_t c,
     iterator iter);
