@@ -15,6 +15,7 @@
 #include "common/interval_map.h"
 #include "crimson/osd/exceptions.h"
 
+#include "crimson/os/seastore/logging.h"
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/lba_manager.h"
 #include "crimson/os/seastore/cache.h"
@@ -133,7 +134,7 @@ private:
   static btree_range_pin_t &get_pin(CachedExtent &e);
 
 
-  /**
+  /** (REMOVE)
    * get_root
    *
    * Get a reference to the root LBANode.
@@ -141,6 +142,31 @@ private:
   using get_root_iertr = base_iertr;
   using get_root_ret = get_root_iertr::future<LBANodeRef>;
   get_root_ret get_root(Transaction &);
+
+  template <typename F>
+  auto with_btree(
+    op_context_t c,
+    F &&f) {
+    return cache.get_root(
+      c.trans
+    ).si_then([this, c, f=std::forward<F>(f)](RootBlockRef croot) mutable {
+      return seastar::do_with(
+	LBABtree(croot->get_root().lba_root),
+	[this, c, croot, f=std::move(f)](auto &btree) mutable {
+	  return f(
+	    btree
+	  ).si_then([this, c, croot, &btree] {
+	    if (btree.is_root_dirty()) {
+	      auto mut_croot = cache.duplicate_for_write(
+		c.trans, croot
+	      )->cast<RootBlock>();
+	      mut_croot->get_root().lba_root = btree.get_root_undirty();
+	    }
+	    return base_iertr::now();
+	  });
+	});
+    });
+  }
 
   /**
    * insert_mapping
