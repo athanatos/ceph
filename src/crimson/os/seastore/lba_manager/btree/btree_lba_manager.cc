@@ -66,30 +66,22 @@ BtreeLBAManager::get_mappings(
 {
   LOG_PREFIX(BtreeLBAManager::get_mappings);
   DEBUGT("offset: {}, length{}", t, offset, length);
-  return seastar::do_with(
-    lba_pin_list_t{},
-    [&t, this, offset, length](auto &ret) {
-      return with_btree(
-	get_context(t),
-	[&t, &ret, this, offset, length](auto &btree) {
-	  return LBABtree::iterate_repeat(
-	    btree.upper_bound_right(get_context(t), offset),
-	    [&ret, this, offset, length](auto &pos) {
-	      if (pos.is_end() || pos.get_key() >= (offset + length)) {
-		return LBABtree::iterate_repeat_ret(
-		  interruptible::ready_future_marker{},
-		  seastar::stop_iteration::yes);
-	      }
-	      ceph_assert((pos.get_key() + pos.get_val().len) > offset);
-	      ret.push_back(pos.get_pin());
-	      return LBABtree::iterate_repeat_ret(
-		interruptible::ready_future_marker{},
-		seastar::stop_iteration::no);
-	    });
-	}).si_then([&ret] {
-	  return get_mappings_ret(
+  return with_btree_ret<lba_pin_list_t>(
+    get_context(t),
+    [this, &t, offset, length](auto &btree, auto &ret) {
+      return LBABtree::iterate_repeat(
+	btree.upper_bound_right(get_context(t), offset),
+	[&ret, offset, length](auto &pos) {
+	  if (pos.is_end() || pos.get_key() >= (offset + length)) {
+	    return LBABtree::iterate_repeat_ret(
+	      interruptible::ready_future_marker{},
+	      seastar::stop_iteration::yes);
+	  }
+	  ceph_assert((pos.get_key() + pos.get_val().len) > offset);
+	  ret.push_back(pos.get_pin());
+	  return LBABtree::iterate_repeat_ret(
 	    interruptible::ready_future_marker{},
-	    std::move(ret));
+	    seastar::stop_iteration::no);
 	});
     });
 }

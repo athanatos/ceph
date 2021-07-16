@@ -168,6 +168,21 @@ private:
     });
   }
 
+  template <typename Ret, typename F>
+  auto with_btree_ret(
+    op_context_t c,
+    F &&f) {
+    return seastar::do_with(
+      Ret{},
+      [this, c, f=std::forward<F>(f)](auto &ret) mutable {
+	return with_btree(c, [&ret, c, f=std::move(f)](auto &btree) {
+	  return f(btree, ret);
+	}).si_then([&ret] {
+	  return seastar::make_ready_future<Ret>(std::move(ret));
+	});
+      });
+  }
+
   /**
    * insert_mapping
    *
