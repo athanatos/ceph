@@ -141,6 +141,7 @@ BtreeLBAManager::alloc_extent(
   extent_len_t len,
   paddr_t addr)
 {
+#if 0
   struct state_t {
     find_hole_ret_bare ret = {0, 0};
     laddr_t last_end;
@@ -173,10 +174,8 @@ BtreeLBAManager::alloc_extent(
     }).si_then([](auto state) {
       return state.ret;
     });
+#endif 
 
-
-
-  
   // TODO: we can certainly combine the lookup and the insert.
   return get_root(
     t).si_then([this, &t, hint, len](auto extent) {
