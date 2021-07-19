@@ -66,13 +66,14 @@ BtreeLBAManager::get_mappings(
 {
   LOG_PREFIX(BtreeLBAManager::get_mappings);
   DEBUGT("offset: {}, length{}", t, offset, length);
-  return with_btree_ret<lba_pin_list_t>(
+  return with_btree_state<lba_pin_list_t>(
     get_context(t),
     [this, &t, offset, length](auto &btree, auto &ret) {
       return LBABtree::iterate_repeat(
 	btree.upper_bound_right(get_context(t), offset),
 	[&ret, offset, length](auto &pos) {
-	  if (pos.is_end() || pos.get_key() >= (offset + length)) {
+	  ceph_assert(!pos.is_end());
+	  if (pos.get_key() >= (offset + length)) {
 	    return LBABtree::iterate_repeat_ret(
 	      interruptible::ready_future_marker{},
 	      seastar::stop_iteration::yes);
@@ -92,7 +93,8 @@ BtreeLBAManager::get_mappings(
   Transaction &t,
   laddr_list_t &&list)
 {
-  logger().debug("BtreeLBAManager::get_mappings: {}", list);
+  LOG_PREFIX(BtreeLBAManager::get_mappings);
+  DEBUGT("{}", t, list);
   auto l = std::make_unique<laddr_list_t>(std::move(list));
   auto retptr = std::make_unique<lba_pin_list_t>();
   auto &ret = *retptr;
@@ -115,14 +117,21 @@ BtreeLBAManager::get_mapping(
   Transaction &t,
   laddr_t offset)
 {
-  logger().debug("BtreeLBAManager::get_mapping: {}", offset);
-  return get_root(t
-  ).si_then([this, &t, offset] (auto extent) {
-    return extent->lookup_pin(get_context(t), offset);
-  }).si_then([] (auto &&e) {
-    logger().debug("BtreeLBAManager::get_mapping: got mapping {}", *e);
-    return std::move(e);
-  });
+  LOG_PREFIX(BtreeLBAManager::get_mapping);
+  DEBUGT(": {}", t, offset);
+  auto c = get_context(t);
+  return with_btree_ret<LBAPinRef>(
+    c,
+    [&t, FNAME, this, c, offset](auto &btree) {
+      return btree.lower_bound(
+	c, offset
+      ).si_then([&t, FNAME](auto iter) {
+	ceph_assert(!iter.is_end());
+	auto e = iter.get_pin();
+	DEBUGT("got mapping {}", t, *e);
+	return e;
+      });
+    });
 }
 
 BtreeLBAManager::alloc_extent_ret
@@ -132,6 +141,42 @@ BtreeLBAManager::alloc_extent(
   extent_len_t len,
   paddr_t addr)
 {
+  struct state_t {
+    find_hole_ret_bare ret = {0, 0};
+    laddr_t last_end;
+
+    state_t(laddr_t hint) : last_end(hint) {}
+  };
+
+  LOG_PREFIX(BtreeLBAManager::find_hole);
+  DEBUGT("offset: {}, length{}", t, hint, len);
+  return with_btree_state<state_t>(
+    get_context(t),
+    hint,
+    [this, &t, hint, len](auto &btree, auto &state) {
+      return LBABtree::iterate_repeat(
+	btree.lower_bound(get_context(t), hint),
+	[&state, hint, len](auto &pos) {
+	  ceph_assert(!pos.is_end());
+	  if (pos.get_key() >= (state.last_end + len)) {
+	    state.ret = std::make_pair(state.last_end, len);
+	    return LBABtree::iterate_repeat_ret(
+	      interruptible::ready_future_marker{},
+	      seastar::stop_iteration::yes);
+	  } else {
+	    state.last_end = pos.get_key() + pos.get_val().len;
+	    return LBABtree::iterate_repeat_ret(
+	      interruptible::ready_future_marker{},
+	      seastar::stop_iteration::no);
+	  }
+	});
+    }).si_then([](auto state) {
+      return state.ret;
+    });
+
+
+
+  
   // TODO: we can certainly combine the lookup and the insert.
   return get_root(
     t).si_then([this, &t, hint, len](auto extent) {

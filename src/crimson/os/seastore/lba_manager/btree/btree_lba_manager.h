@@ -143,7 +143,7 @@ private:
   using get_root_ret = get_root_iertr::future<LBANodeRef>;
   get_root_ret get_root(Transaction &);
 
-  template <typename F>
+  template <typename F, typename... Args>
   auto with_btree(
     op_context_t c,
     F &&f) {
@@ -168,17 +168,40 @@ private:
     });
   }
 
+  template <typename State, typename F>
+  auto with_btree_state(
+    op_context_t c,
+    State &&init,
+    F &&f) {
+    return seastar::do_with(
+      std::forward<State>(init),
+      [this, c, f=std::forward<F>(f)](auto &state) mutable {
+	return with_btree(c, [&state, c, f=std::move(f)](auto &btree) {
+	  return f(btree, state);
+	}).si_then([&state] {
+	  return seastar::make_ready_future<State>(std::move(state));
+	});
+      });
+  }
+
+  template <typename State, typename F>
+  auto with_btree_state(
+    op_context_t c,
+    F &&f) {
+    return with_btree_state<State, F>(c, State{}, std::forward<F>(f));
+  }
+
   template <typename Ret, typename F>
   auto with_btree_ret(
     op_context_t c,
     F &&f) {
-    return seastar::do_with(
-      Ret{},
-      [this, c, f=std::forward<F>(f)](auto &ret) mutable {
-	return with_btree(c, [&ret, c, f=std::move(f)](auto &btree) {
-	  return f(btree, ret);
-	}).si_then([&ret] {
-	  return seastar::make_ready_future<Ret>(std::move(ret));
+    return with_btree_state<Ret>(
+      c,
+      [c, f=std::forward<F>(f)](auto &btree, auto &ret) {
+	return f(
+	  btree
+	).si_then([&ret](auto &&_ret) {
+	  ret = std::move(_ret);
 	});
       });
   }
