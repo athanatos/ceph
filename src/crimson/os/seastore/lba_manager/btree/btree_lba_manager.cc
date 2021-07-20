@@ -141,26 +141,28 @@ BtreeLBAManager::alloc_extent(
   extent_len_t len,
   paddr_t addr)
 {
-#if 0
   struct state_t {
-    find_hole_ret_bare ret = {0, 0};
     laddr_t last_end;
+
+    std::optional<LBABtree::iterator> insert_iter;
+    std::optional<LBABtree::iterator> ret;
 
     state_t(laddr_t hint) : last_end(hint) {}
   };
 
   LOG_PREFIX(BtreeLBAManager::find_hole);
   DEBUGT("offset: {}, length{}", t, hint, len);
+  auto c = get_context(t);
   return with_btree_state<state_t>(
-    get_context(t),
+    c,
     hint,
-    [this, &t, hint, len](auto &btree, auto &state) {
+    [this, c, hint, len, addr](auto &btree, auto &state) {
       return LBABtree::iterate_repeat(
-	btree.lower_bound(get_context(t), hint),
+	btree.lower_bound(c, hint),
 	[&state, hint, len](auto &pos) {
 	  ceph_assert(!pos.is_end());
 	  if (pos.get_key() >= (state.last_end + len)) {
-	    state.ret = std::make_pair(state.last_end, len);
+	    state.insert_iter = pos;
 	    return LBABtree::iterate_repeat_ret(
 	      interruptible::ready_future_marker{},
 	      seastar::stop_iteration::yes);
@@ -170,41 +172,20 @@ BtreeLBAManager::alloc_extent(
 	      interruptible::ready_future_marker{},
 	      seastar::stop_iteration::no);
 	  }
+	}).si_then([this, c, addr, len, &btree, &state] {
+	  return btree.insert(
+	    c,
+	    *state.insert_iter,
+	    state.last_end,
+	    lba_map_val_t{len, addr, 1, 0}
+	  ).si_then([&state](auto &&p) {
+	    auto [iter, inserted] = std::move(p);
+	    ceph_assert(inserted);
+	    state.ret = iter;
+	  });
 	});
-    }).si_then([](auto state) {
-      return state.ret;
-    });
-#endif 
-
-  // TODO: we can certainly combine the lookup and the insert.
-  return get_root(
-    t).si_then([this, &t, hint, len](auto extent) {
-      logger().debug(
-	"BtreeLBAManager::alloc_extent: beginning search at {}",
-	*extent);
-      return extent->find_hole(
-	get_context(t),
-	hint,
-	L_ADDR_MAX,
-	len).si_then([extent](auto ret) {
-	  return std::make_pair(ret, extent);
-	});
-    }).si_then([this, &t, len, addr](auto allocation_pair) {
-      auto &[laddr, extent] = allocation_pair;
-      ceph_assert(laddr != L_ADDR_MAX);
-      return insert_mapping(
-	t,
-	extent,
-	laddr,
-	{ len, addr, 1, 0 }
-      ).si_then([laddr=laddr, addr, len](auto pin) {
-	logger().debug(
-	  "BtreeLBAManager::alloc_extent: alloc {}~{} for {}",
-	  laddr,
-	  len,
-	  addr);
-	return LBAPinRef(pin.release());
-      });
+    }).si_then([](auto &&state) {
+      return state.ret->get_pin();
     });
 }
 
