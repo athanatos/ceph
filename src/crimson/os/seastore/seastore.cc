@@ -1167,27 +1167,16 @@ std::unique_ptr<SeaStore> make_seastore(
 
   auto journal = std::make_unique<Journal>(*sm, scannerref);
   auto cache = std::make_unique<Cache>(*sm);
-  auto epm = std::make_unique<ExtentPlacementManager<uint64_t>>(
+  auto epm = std::make_unique<ExtentPlacementManager>(
     *cache,
-    [](auto, auto& epm) {
-    assert(epm.get_num_allocators());
-    return std::rand() % epm.get_num_allocators();
-  });
+    std::make_unique<SegmentedAllocator>(
+      *segment_cleaner,
+      *sm,
+      *cache));
 
-  auto allocator_ref = std::make_unique<SegmentedAllocator<uint64_t>>(
-    *segment_cleaner,
-    *sm,
-    *cache,
-    [](auto) {
-    using crimson::common::get_conf;
-    return std::rand() % get_conf<uint64_t>(
-        "seastore_init_rewrite_segments_num_per_device");
-  });
-  epm->add_allocator(0, std::move(allocator_ref));
   auto lba_manager = lba_manager::create_lba_manager(*sm, *cache);
 
   journal->set_segment_provider(&*segment_cleaner);
-
   auto tm = std::make_unique<TransactionManager>(
     *sm,
     std::move(segment_cleaner),

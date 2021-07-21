@@ -73,10 +73,26 @@ private:
 };
 
 /**
+ * ExtentAllocator
+ *
+ * Handles allocating ool extents from a specific family of targets.
+ */
+class ExtentAllocator {
+public:
+  virtual CachedExtentRef alloc_ool_extent(
+    Transaction& t,
+    extent_types_t type,
+    segment_off_t length,
+    ool_placement_hint_t hint = ool_placement_hint_t::NONE) = 0;
+
+  virtual ~ExtentAllocator() {};
+};
+using ExtentAllocatorRef = std::unique_ptr<ExtentAllocator>;
+
+/**
  * ExtentOolWriter
  *
- * Handles tracking a single OOL write target.  Written extents are assumed
- * to have similar lifetime/heat characteristics.
+ * Interface through which final write to ool segment is performed.
  */
 class ExtentOolWriter {
 public:
@@ -92,102 +108,68 @@ public:
 };
 
 /**
- * SegmentedOolWriter
+ * SegmentedAllocator
  *
  * Handles out-of-line writes to a SegmentManager device (such as a ZNS device
  * or conventional flash device where sequential writes are heavily preferred).
  *
- * Makes use of SegmentProvider to obtain a new segment for writes as needed.
+ * Creates <seastore_init_rewrite_segments_per_device> Writer instances
+ * internally to round-robin writes.  Later work will partition allocations
+ * based on hint (age, presumably) among the created Writers.
+
+ * Each Writer makes use of SegmentProvider to obtain a new segment for writes
+ * as needed.
  */
-class SegmentedOolWriter : public ExtentOolWriter,
-                          public boost::intrusive_ref_counter<
-  SegmentedOolWriter, boost::thread_unsafe_counter>{
+class SegmentedAllocator : public ExtentAllocator {
+  class Writer : public ExtentOolWriter {
+  public:
+    Writer(SegmentProvider& sp, SegmentManager& sm)
+      : segment_provider(sp), segment_manager(sm) {}
+    Writer(Writer &&) = default;
+
+    write_iertr::future<> write(std::list<LogicalCachedExtentRef>& extent) final;
+  private:
+    bool _needs_roll(segment_off_t length) const;
+
+    using roll_segment_ertr = crimson::errorator<
+      crimson::ct_error::input_output_error>;
+    roll_segment_ertr::future<> roll_segment();
+
+    using init_segment_ertr = crimson::errorator<
+      crimson::ct_error::input_output_error>;
+    init_segment_ertr::future<> init_segment(Segment& segment);
+
+    using extents_to_write_t = std::vector<LogicalCachedExtentRef>;
+    void add_extent_to_write(
+      ool_record_t&,
+      LogicalCachedExtentRef& extent);
+
+    SegmentProvider& segment_provider;
+    SegmentManager& segment_manager;
+    SegmentRef current_segment;
+    std::vector<SegmentRef> open_segments;
+    segment_off_t allocated_to = 0;
+  };
 public:
-  SegmentedOolWriter(SegmentProvider& sp, SegmentManager& sm)
-    : segment_provider(sp), segment_manager(sm) {}
-  write_iertr::future<> write(std::list<LogicalCachedExtentRef>& extent) final;
+  SegmentedAllocator(SegmentProvider& sp, SegmentManager& sm, Cache& cache);
 
-private:
-  bool _needs_roll(segment_off_t length) const;
-
-  using roll_segment_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error>;
-  roll_segment_ertr::future<> roll_segment();
-
-  using init_segment_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error>;
-  init_segment_ertr::future<> init_segment(Segment& segment);
-
-  using extents_to_write_t = std::vector<LogicalCachedExtentRef>;
-  void add_extent_to_write(
-    ool_record_t&,
-    LogicalCachedExtentRef& extent);
-
-  SegmentProvider& segment_provider;
-  SegmentManager& segment_manager;
-  SegmentRef current_segment;
-  std::vector<SegmentRef> open_segments;
-  segment_off_t allocated_to = 0;
-};
-using SegmentedOolWriterRef = std::unique_ptr<SegmentedOolWriter>;
-
-/**
- * ExtentAllocator
- *
- * Handles allocating ool extents from a specific family of targets.
- */
-template <typename HintT = empty_hint_t>
-class ExtentAllocator {
-public:
-  virtual CachedExtentRef alloc_ool_extent(
-    Transaction& t,
-    extent_types_t type,
-    const HintT hint,
-    segment_off_t length) = 0;
-
-  virtual ~ExtentAllocator() {};
-};
-template <typename HintT = empty_hint_t>
-using ExtentAllocatorRef = std::unique_ptr<ExtentAllocator<HintT>>;
-
-template <typename IndexT, typename HintT = empty_hint_t>
-class SegmentedAllocator : public ExtentAllocator<HintT> {
-public:
-  using calc_target_func_t = typename std::function<IndexT (HintT)>;
-
-  SegmentedAllocator(
-    SegmentProvider& sp,
-    SegmentManager& sm,
-    Cache& cache,
-    calc_target_func_t&& calc_target_func)
-    : segment_provider(sp),
-      segment_manager(sm),
-      cache(cache),
-      calc_target_func(std::move(calc_target_func))
-  {}
+  Writer &get_writer(ool_placement_hint_t hint) {
+    return writers[std::rand() % writers.size()];
+  }
 
   CachedExtentRef alloc_ool_extent(
     Transaction& t,
     extent_types_t type,
-    const HintT hint,
-    segment_off_t length) final {
-    auto index = calc_target_func(hint);
-    auto iter = writers.find(index);
-    if (iter == writers.end()) {
-      iter = writers.emplace(
-        index,
-        std::make_unique<SegmentedOolWriter>(
-          segment_provider,
-          segment_manager)).first;
-    }
-    auto& writer = iter->second;
+    segment_off_t length,
+    ool_placement_hint_t hint) final {
+    auto& writer = get_writer(hint);
 
     auto nextent = cache.alloc_new_extent_by_type(
       t, type, length, paddr_t{ZERO_SEG_ID, fake_paddr_off});
     fake_paddr_off += length;
-    nextent->extent_writer = writer.get();
-    return nextent;
 
+    nextent->extent_writer = &writer;
+    return nextent;
   }
 
 private:
@@ -195,49 +177,39 @@ private:
 
   SegmentProvider& segment_provider;
   SegmentManager& segment_manager;
-  std::map<IndexT, SegmentedOolWriterRef> writers;
+  std::vector<Writer> writers;
   Cache& cache;
-  calc_target_func_t calc_target_func;
 };
 
-template <typename IndexT, typename HintT = empty_hint_t>
 class ExtentPlacementManager {
 public:
-  using calc_target_func_t =
-    typename std::function<
-      IndexT (HintT, ExtentPlacementManager<IndexT, HintT>&)>;
-
-  ExtentPlacementManager(Cache& cache, calc_target_func_t&& calc_target_func)
-    : cache(cache), calc_target_func(std::move(calc_target_func)) {}
+  ExtentPlacementManager(
+    Cache& cache,
+    ExtentAllocatorRef &&allocator
+  )
+    : cache(cache), default_allocator(std::move(allocator)) {}
 
   CachedExtentRef alloc_new_extent_by_type(
     Transaction& t,
     extent_types_t type,
-    const HintT& hint,
-    segment_off_t length) {
-    auto h = calc_target_func(hint, *this);
-    auto iter = extent_allocators.find(h);
-    auto& allocator = iter->second;
-
-    return allocator->alloc_ool_extent(t, type, hint, length);
-  }
-
-  void add_allocator(IndexT hl, ExtentAllocatorRef<HintT>&& allocator) {
-    auto [it, inserted] = extent_allocators.emplace(hl, std::move(allocator));
-    assert(inserted);
-  }
-
-  uint64_t get_num_allocators() {
-    return extent_allocators.size();
+    segment_off_t length,
+    ool_placement_hint_t hint = ool_placement_hint_t::NONE) {
+    return default_allocator->alloc_ool_extent(t, type, length, hint);
   }
 
 private:
-  std::map<IndexT, ExtentAllocatorRef<HintT>> extent_allocators;
   Cache& cache;
-  calc_target_func_t calc_target_func;
-};
 
-template <typename IndexT, typename HintT = empty_hint_t>
-using ExtentPlacementManagerRef = std::unique_ptr<ExtentPlacementManager<IndexT, HintT>>;
+  /**
+   * default_allocator
+   *
+   * Currently, we only allow a single allocator.  Later, once we other classes
+   * of allocator we'll want a way to register multiple allocators with
+   * associated hints.  We'll also need a way to deal with different allocators
+   * being full, etc.
+   */
+  ExtentAllocatorRef default_allocator;
+};
+using ExtentPlacementManagerRef = std::unique_ptr<ExtentPlacementManager>;
 
 }

@@ -17,7 +17,23 @@ namespace {
 
 namespace crimson::os::seastore {
 
-void SegmentedOolWriter::add_extent_to_write(
+SegmentedAllocator::SegmentedAllocator(
+  SegmentProvider& sp,
+  SegmentManager& sm,
+  Cache& cache)
+  : segment_provider(sp),
+    segment_manager(sm),
+    cache(cache)
+{
+  for (unsigned i = 0;
+       i < crimson::common::get_conf<uint64_t>(
+	 "seastore_init_rewrite_segments_num_per_device");
+       ++i) {
+    writers.emplace_back(Writer{segment_provider, segment_manager});
+  }
+}
+
+void SegmentedAllocator::Writer::add_extent_to_write(
   ool_record_t& record,
   LogicalCachedExtentRef& extent) {
   extent->prepare_write();
@@ -28,8 +44,8 @@ void SegmentedOolWriter::add_extent_to_write(
   record.add_extent(extent);
 }
 
-SegmentedOolWriter::write_iertr::future<>
-SegmentedOolWriter::write(std::list<LogicalCachedExtentRef>& extents) {
+SegmentedAllocator::Writer::write_iertr::future<>
+SegmentedAllocator::Writer::write(std::list<LogicalCachedExtentRef>& extents) {
   logger().debug("{}", __func__);
   auto fut = roll_segment_ertr::now();
   if (!current_segment) {
@@ -46,7 +62,7 @@ SegmentedOolWriter::write(std::list<LogicalCachedExtentRef>& extents) {
         // before iterating through all extents, write them now.
         if (_needs_roll(record.get_wouldbe_encoded_record_length(extent))) {
           logger().debug(
-            "SegmentedOolWriter::write: end of segment, writing {} extents to segment {} at {}",
+            "SegmentedAllocator::Writer::write: end of segment, writing {} extents to segment {} at {}",
             record.get_num_extents(),
             current_segment->get_segment_id(),
             allocated_to);
@@ -73,7 +89,7 @@ SegmentedOolWriter::write(std::list<LogicalCachedExtentRef>& extents) {
         }
 
         logger().debug(
-          "SegmentedOolWriter::write: writing {} extents to segment {} at {}",
+          "SegmentedAllocator::Writer::write: writing {} extents to segment {} at {}",
           record.get_num_extents(),
           current_segment->get_segment_id(),
           allocated_to);
@@ -82,7 +98,7 @@ SegmentedOolWriter::write(std::list<LogicalCachedExtentRef>& extents) {
         return current_segment->write(allocated_to, bl).safe_then(
           [this, len=bl.length(), &record] {
           logger().debug(
-            "SegmentedOolWriter::write: written {} extents,"
+            "SegmentedAllocator::Writer::write: written {} extents,"
             " {} bytes to segment {} at {}",
             record.get_num_extents(),
             len,
@@ -97,13 +113,13 @@ SegmentedOolWriter::write(std::list<LogicalCachedExtentRef>& extents) {
   });
 }
 
-bool SegmentedOolWriter::_needs_roll(segment_off_t length) const {
+bool SegmentedAllocator::Writer::_needs_roll(segment_off_t length) const {
   return allocated_to + length > current_segment->get_write_capacity();
 }
 
-SegmentedOolWriter::init_segment_ertr::future<>
-SegmentedOolWriter::init_segment(Segment& segment) {
-  logger().debug("SegmentedOolWriter::init_segment: initting {}", segment.get_segment_id());
+SegmentedAllocator::Writer::init_segment_ertr::future<>
+SegmentedAllocator::Writer::init_segment(Segment& segment) {
+  logger().debug("SegmentedAllocator::Writer::init_segment: initting {}", segment.get_segment_id());
   bufferptr bp(
     ceph::buffer::create_page_aligned(
       segment_manager.get_block_size()));
@@ -123,8 +139,8 @@ SegmentedOolWriter::init_segment(Segment& segment) {
   );
 }
 
-SegmentedOolWriter::roll_segment_ertr::future<>
-SegmentedOolWriter::roll_segment() {
+SegmentedAllocator::Writer::roll_segment_ertr::future<>
+SegmentedAllocator::Writer::roll_segment() {
   return segment_provider.get_segment().safe_then([this](auto segment) {
     return segment_manager.open(segment);
   }).safe_then([this](auto segref) {
@@ -137,8 +153,5 @@ SegmentedOolWriter::roll_segment() {
     crimson::ct_error::all_same_way([] { ceph_assert(0 == "TODO"); })
   );
 }
-
-template class SegmentedAllocator<uint64_t>;
-template class ExtentPlacementManager<uint64_t, empty_hint_t>;
 
 }

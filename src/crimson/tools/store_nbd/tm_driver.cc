@@ -147,16 +147,12 @@ void TMDriver::init()
     scannerref
   );
   auto cache = std::make_unique<Cache>(*segment_manager);
-  auto epm = std::make_unique<ExtentPlacementManager<uint64_t>>(
+  auto epm = std::make_unique<ExtentPlacementManager>(
     *cache,
-    [](auto, auto&) { return 0; });
-  epm->add_allocator(
-    0,
-    std::make_unique<SegmentedAllocator<uint64_t>>(
+    std::make_unique<SegmentedAllocator>(
       *segment_cleaner,
       *segment_manager,
-      *cache,
-      [](auto) { return 0; }));
+      *cache));
   auto lba_manager = lba_manager::create_lba_manager(*segment_manager, *cache);
 
   journal->set_segment_provider(&*segment_cleaner);

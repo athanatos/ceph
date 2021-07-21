@@ -95,7 +95,7 @@ public:
     CacheRef cache,
     LBAManagerRef lba_manager,
     Scanner& scanner,
-    ExtentPlacementManagerRef<uint64_t>&& epm);
+    ExtentPlacementManagerRef&& epm);
 
   /// Writes initial metadata to disk
   using mkfs_ertr = base_ertr;
@@ -543,7 +543,7 @@ private:
   JournalRef journal;
 
   Scanner& scanner;
-  ExtentPlacementManagerRef<uint64_t> epm;
+  ExtentPlacementManagerRef epm;
   WritePipeline write_pipeline;
 
   struct {

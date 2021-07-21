@@ -37,7 +37,6 @@ void intrusive_ptr_release(CachedExtent *);
 class ool_record_t;
 class ExtentOolWriter;
 class SegmentedOolWriter;
-template <typename, typename>
 class SegmentedAllocator;
 
 template <typename T>
@@ -332,7 +331,7 @@ public:
   virtual ~CachedExtent();
 
   /// facility for persisting the extent
-  ExtentOolWriter* extent_writer;
+  ExtentOolWriter* extent_writer = nullptr;
 
   void set_rewriting_paddr(paddr_t offset) { rewriting_offset = offset; }
 
@@ -422,7 +421,6 @@ private:
   read_set_item_t<Transaction>::list transactions;
 
   friend class SegmentedOolWriter;
-  template <typename, typename>
   friend class SegmentedAllocator;
   friend class TransactionManager;
 protected:
@@ -851,7 +849,6 @@ private:
   LBAPinRef pin;
 
   friend class crimson::os::seastore::SegmentedOolWriter;
-  template <typename, typename>
   friend class crimson::os::seastore::SegmentedAllocator;
   friend class crimson::os::seastore::lba_manager::btree::BtreeLBAManager;
   friend class Cache;

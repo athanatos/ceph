@@ -19,7 +19,7 @@ TransactionManager::TransactionManager(
   CacheRef _cache,
   LBAManagerRef _lba_manager,
   Scanner& scanner,
-  ExtentPlacementManagerRef<uint64_t>&& epm)
+  ExtentPlacementManagerRef&& epm)
   : segment_manager(_segment_manager),
     segment_cleaner(std::move(_segment_cleaner)),
     cache(std::move(_cache)),
@@ -342,7 +342,6 @@ LogicalCachedExtentRef TransactionManager::prepare_logical_extent_rewrite(
   auto nextent = epm->alloc_new_extent_by_type(
     t,
     lextent->get_type(),
-    {},
     lextent->get_length());
   auto nlextent = nextent->cast<LogicalCachedExtent>();
   lextent->get_bptr().copy_out(
