@@ -12,6 +12,16 @@ namespace crimson::os::seastore {
 class Transaction;
 struct empty_hint_t {};
 
+/**
+ * ool_record_t
+ *
+ * Encapsulates logic for building and encoding an ool record destined for
+ * an ool segment.
+ *
+ * Uses a metadata header to enable scanning the ool segment for gc purposes.
+ * Introducing a seperate physical->logical mapping would enable removing the
+ * metadata block overhead.
+ */
 class ool_record_t {
 public:
   ool_record_t(size_t block_size) : block_size(block_size) {}
@@ -62,6 +72,12 @@ private:
   segment_off_t extent_buf_len = 0;
 };
 
+/**
+ * ExtentOolWriter
+ *
+ * Handles tracking a single OOL write target.  Written extents are assumed
+ * to have similar lifetime/heat characteristics.
+ */
 class ExtentOolWriter {
 public:
   using write_iertr = trans_iertr<crimson::errorator<
@@ -75,6 +91,14 @@ public:
   virtual ~ExtentOolWriter() {}
 };
 
+/**
+ * SegmentedOolWriter
+ *
+ * Handles out-of-line writes to a SegmentManager device (such as a ZNS device
+ * or conventional flash device where sequential writes are heavily preferred).
+ *
+ * Makes use of SegmentProvider to obtain a new segment for writes as needed.
+ */
 class SegmentedOolWriter : public ExtentOolWriter,
                           public boost::intrusive_ref_counter<
   SegmentedOolWriter, boost::thread_unsafe_counter>{
@@ -108,6 +132,11 @@ private:
 
 using SegmentedOolWriterRef = std::unique_ptr<SegmentedOolWriter>;
 
+/**
+ * ExtentAllocator
+ *
+ * Handles allocating ool extents from a specific family of targets.
+ */
 class scan_valid_records_cursor;
 
 template <typename HintT = empty_hint_t>
