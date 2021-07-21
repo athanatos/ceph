@@ -103,19 +103,19 @@ class SegmentedOolWriter : public ExtentOolWriter,
                           public boost::intrusive_ref_counter<
   SegmentedOolWriter, boost::thread_unsafe_counter>{
 public:
-  using roll_segment_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error>;
-  using alloc_extent_ertr = roll_segment_ertr;
-  using init_segment_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error>;
-
   SegmentedOolWriter(SegmentProvider& sp, SegmentManager& sm)
     : segment_provider(sp), segment_manager(sm) {}
   write_iertr::future<> write(std::list<LogicalCachedExtentRef>& extent) final;
 
 private:
   bool _needs_roll(segment_off_t length) const;
+
+  using roll_segment_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
   roll_segment_ertr::future<> roll_segment();
+
+  using init_segment_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
   init_segment_ertr::future<> init_segment(Segment& segment);
 
   using extents_to_write_t = std::vector<LogicalCachedExtentRef>;
@@ -129,7 +129,6 @@ private:
   std::vector<SegmentRef> open_segments;
   segment_off_t allocated_to = 0;
 };
-
 using SegmentedOolWriterRef = std::unique_ptr<SegmentedOolWriter>;
 
 /**
@@ -137,13 +136,9 @@ using SegmentedOolWriterRef = std::unique_ptr<SegmentedOolWriter>;
  *
  * Handles allocating ool extents from a specific family of targets.
  */
-class scan_valid_records_cursor;
-
 template <typename HintT = empty_hint_t>
 class ExtentAllocator {
 public:
-  using scan_device_ertr = crimson::errorator<
-    crimson::ct_error::input_output_error>;
   virtual CachedExtentRef alloc_ool_extent(
     Transaction& t,
     extent_types_t type,
@@ -152,7 +147,6 @@ public:
 
   virtual ~ExtentAllocator() {};
 };
-
 template <typename HintT = empty_hint_t>
 using ExtentAllocatorRef = std::unique_ptr<ExtentAllocator<HintT>>;
 
@@ -160,7 +154,7 @@ template <typename IndexT, typename HintT = empty_hint_t>
 class SegmentedAllocator : public ExtentAllocator<HintT> {
 public:
   using calc_target_func_t = typename std::function<IndexT (HintT)>;
-  using alloc_extent_ertr = SegmentedOolWriter::alloc_extent_ertr;
+
   SegmentedAllocator(
     SegmentProvider& sp,
     SegmentManager& sm,
@@ -196,15 +190,6 @@ public:
 
   }
 
-  using read_segment_header_ertr = crimson::errorator<
-    crimson::ct_error::enoent,
-    crimson::ct_error::enodata,
-    crimson::ct_error::input_output_error
-    >;
-  using read_segment_header_ret = read_segment_header_ertr::future<
-    segment_header_t>;
-  read_segment_header_ret read_segment_header(segment_id_t segment);
-
 private:
   segment_off_t fake_paddr_off = 0;
 
@@ -221,7 +206,6 @@ public:
   using calc_target_func_t =
     typename std::function<
       IndexT (HintT, ExtentPlacementManager<IndexT, HintT>&)>;
-  using alloc_extent_ertr = SegmentedOolWriter::alloc_extent_ertr;
 
   ExtentPlacementManager(Cache& cache, calc_target_func_t&& calc_target_func)
     : cache(cache), calc_target_func(std::move(calc_target_func)) {}
