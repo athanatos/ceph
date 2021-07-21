@@ -132,20 +132,32 @@ seastar::future<bufferlist> TMDriver::read(
 
 void TMDriver::init()
 {
+  auto scanner = std::make_unique<
+    crimson::os::seastore::Scanner>(*segment_manager);
+
+  auto scannerref = *scanner;
   auto segment_cleaner = std::make_unique<SegmentCleaner>(
     SegmentCleaner::config_t::get_default(),
+    std::move(scanner),
     false /* detailed */);
+
   segment_cleaner->mount(*segment_manager);
-  auto journal = std::make_unique<Journal>(*segment_manager);
+  auto journal = std::make_unique<Journal>(
+    *segment_manager,
+    scannerref
+  );
   auto cache = std::make_unique<Cache>(*segment_manager);
-  auto epm = std::make_unique<ExtentPlacementManager>(*cache);
+  auto epm = std::make_unique<ExtentPlacementManager<uint64_t>>(
+    *cache,
+    [](auto, auto&) { return 0; });
   epm->add_allocator(
     0,
-    std::make_unique<SegmentedAllocator>(
+    std::make_unique<SegmentedAllocator<uint64_t>>(
       *segment_cleaner,
       *segment_manager,
-      *cache));
-  auto lba_manager = lba_manager::create_lba_manager(*segment_manager, *cache, std::move(epm));
+      *cache,
+      [](auto) { return 0; }));
+  auto lba_manager = lba_manager::create_lba_manager(*segment_manager, *cache);
 
   journal->set_segment_provider(&*segment_cleaner);
 
@@ -154,7 +166,10 @@ void TMDriver::init()
     std::move(segment_cleaner),
     std::move(journal),
     std::move(cache),
-    std::move(lba_manager));
+    std::move(lba_manager),
+    scannerref,
+    std::move(epm)
+  );
 }
 
 void TMDriver::clear()
