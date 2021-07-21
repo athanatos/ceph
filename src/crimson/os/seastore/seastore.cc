@@ -15,9 +15,11 @@
 #include "os/Transaction.h"
 
 #include "crimson/common/buffer_io.h"
+#include "crimson/common/config_proxy.h"
 
 #include "crimson/os/futurized_collection.h"
 
+#include "crimson/os/seastore/extent_placement_manager.h"
 #include "crimson/os/seastore/segment_cleaner.h"
 #include "crimson/os/seastore/segment_manager/block.h"
 #include "crimson/os/seastore/collection_manager/flat_collection_manager.h"
@@ -1154,12 +1156,34 @@ std::unique_ptr<SeaStore> make_seastore(
     segment_manager::block::BlockSegmentManager
     >(device + "/block");
 
+  auto scanner = std::make_unique<
+    crimson::os::seastore::Scanner>(*sm);
+
+  auto pscanner = scanner.get();
   auto segment_cleaner = std::make_unique<SegmentCleaner>(
     SegmentCleaner::config_t::get_default(),
+    std::move(scanner),
     false /* detailed */);
 
-  auto journal = std::make_unique<Journal>(*sm);
+  auto journal = std::make_unique<Journal>(*sm, *pscanner);
   auto cache = std::make_unique<Cache>(*sm);
+  auto epm = std::make_unique<ExtentPlacementManager<uint64_t>>(
+    *cache,
+    [](auto, auto& epm) {
+    assert(epm.get_num_allocators());
+    return std::rand() % epm.get_num_allocators();
+  });
+
+  auto allocator_ref = std::make_unique<SegmentedAllocator<uint64_t>>(
+    *segment_cleaner,
+    *sm,
+    *cache,
+    [](auto) {
+    using crimson::common::get_conf;
+    return std::rand() % get_conf<uint64_t>(
+        "seastore_init_rewrite_segments_num_per_device");
+  });
+  epm->add_allocator(0, std::move(allocator_ref));
   auto lba_manager = lba_manager::create_lba_manager(*sm, *cache);
 
   journal->set_segment_provider(&*segment_cleaner);
@@ -1169,7 +1193,9 @@ std::unique_ptr<SeaStore> make_seastore(
     std::move(segment_cleaner),
     std::move(journal),
     std::move(cache),
-    std::move(lba_manager));
+    std::move(lba_manager),
+    *pscanner,
+    std::move(epm));
 
   auto cm = std::make_unique<collection_manager::FlatCollectionManager>(*tm);
   return std::make_unique<SeaStore>(

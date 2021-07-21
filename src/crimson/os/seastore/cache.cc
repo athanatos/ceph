@@ -366,7 +366,8 @@ void Cache::invalidate(CachedExtent &extent) {
 CachedExtentRef Cache::alloc_new_extent_by_type(
   Transaction &t,       ///< [in, out] current transaction
   extent_types_t type,  ///< [in] type tag
-  segment_off_t length  ///< [in] length
+  segment_off_t length, ///< [in] length
+  std::optional<paddr_t> zero_paddr ///< [in] the zero paddr to be set
 )
 {
   switch (type) {
@@ -374,26 +375,44 @@ CachedExtentRef Cache::alloc_new_extent_by_type(
     assert(0 == "ROOT is never directly alloc'd");
     return CachedExtentRef();
   case extent_types_t::LADDR_INTERNAL:
-    return alloc_new_extent<lba_manager::btree::LBAInternalNode>(t, length);
+    return alloc_new_extent<
+      lba_manager::btree::LBAInternalNode>(
+	t, length, std::move(zero_paddr));
   case extent_types_t::LADDR_LEAF:
-    return alloc_new_extent<lba_manager::btree::LBALeafNode>(t, length);
+    return alloc_new_extent<
+      lba_manager::btree::LBALeafNode>(
+	t, length, std::move(zero_paddr));
   case extent_types_t::ONODE_BLOCK_STAGED:
-    return alloc_new_extent<onode::SeastoreNodeExtent>(t, length);
+    return alloc_new_extent<
+      onode::SeastoreNodeExtent>(
+	t, length, std::move(zero_paddr));
   case extent_types_t::OMAP_INNER:
-    return alloc_new_extent<omap_manager::OMapInnerNode>(t, length);
+    return alloc_new_extent<
+      omap_manager::OMapInnerNode>(
+	t, length, std::move(zero_paddr));
   case extent_types_t::OMAP_LEAF:
-    return alloc_new_extent<omap_manager::OMapLeafNode>(t, length);
+    return alloc_new_extent<
+      omap_manager::OMapLeafNode>(
+	t, length, std::move(zero_paddr));
   case extent_types_t::COLL_BLOCK:
-    return alloc_new_extent<collection_manager::CollectionNode>(t, length);
+    return alloc_new_extent<
+      collection_manager::CollectionNode>(
+	t, length, std::move(zero_paddr));
   case extent_types_t::OBJECT_DATA_BLOCK:
-    return alloc_new_extent<ObjectDataBlock>(t, length);
+    return alloc_new_extent<
+      ObjectDataBlock>(
+	t, length, std::move(zero_paddr));
   case extent_types_t::RETIRED_PLACEHOLDER:
     ceph_assert(0 == "impossible");
     return CachedExtentRef();
   case extent_types_t::TEST_BLOCK:
-    return alloc_new_extent<TestBlock>(t, length);
+    return alloc_new_extent<
+      TestBlock>(
+	t, length, std::move(zero_paddr));
   case extent_types_t::TEST_BLOCK_PHYSICAL:
-    return alloc_new_extent<TestBlockPhysical>(t, length);
+    return alloc_new_extent<
+      TestBlockPhysical>(
+	t, length, std::move(zero_paddr));
   case extent_types_t::NONE: {
     ceph_assert(0 == "NONE is an invalid extent type");
     return CachedExtentRef();
@@ -505,6 +524,9 @@ record_t Cache::prepare_record(Transaction &t)
   record.extents.reserve(t.fresh_block_list.size());
   for (auto &i: t.fresh_block_list) {
     DEBUGT("fresh block {}", t, *i);
+    if (i->is_rewriting()) {
+      continue;
+    }
     bufferlist bl;
     i->prepare_write();
     bl.append(i->get_bptr());
@@ -535,7 +557,15 @@ void Cache::complete_commit(
   DEBUGT("enter", t);
 
   for (auto &i: t.fresh_block_list) {
-    i->set_paddr(final_block_start.add_relative(i->get_paddr()));
+    LogicalCachedExtentRef lextent;
+    if (i->is_logical()) {
+      lextent = i->cast<LogicalCachedExtent>();
+    }
+    if (lextent && lextent->is_rewriting()) {
+      lextent->rewrite_paddr();
+    } else {
+      i->set_paddr(final_block_start.add_relative(i->get_paddr()));
+    }
     i->last_committed_crc = i->get_crc32c();
     i->on_initial_write();
 

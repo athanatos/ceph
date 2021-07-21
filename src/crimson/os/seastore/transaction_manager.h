@@ -20,6 +20,7 @@
 
 #include "crimson/osd/exceptions.h"
 
+#include "crimson/os/seastore/extent_placement_manager.h"
 #include "crimson/os/seastore/logging.h"
 #include "crimson/os/seastore/segment_cleaner.h"
 #include "crimson/os/seastore/seastore_types.h"
@@ -92,7 +93,9 @@ public:
     SegmentCleanerRef segment_cleaner,
     JournalRef journal,
     CacheRef cache,
-    LBAManagerRef lba_manager);
+    LBAManagerRef lba_manager,
+    Scanner& scanner,
+    ExtentPlacementManagerRef<uint64_t>&& epm);
 
   /// Writes initial metadata to disk
   using mkfs_ertr = base_ertr;
@@ -397,11 +400,6 @@ public:
     journal_seq_t seq,
     size_t max_bytes) final;
 
-  using SegmentCleaner::ExtentCallbackInterface::rewrite_extent_ret;
-  rewrite_extent_ret rewrite_extent(
-    Transaction &t,
-    CachedExtentRef extent) final;
-
   using SegmentCleaner::ExtentCallbackInterface::get_extent_if_live_ret;
   get_extent_if_live_ret get_extent_if_live(
     Transaction &t,
@@ -409,18 +407,15 @@ public:
     paddr_t addr,
     laddr_t laddr,
     segment_off_t len) final;
+  using rewrite_extent_iertr = base_iertr;
+  using rewrite_extent_ret = rewrite_extent_iertr::future<>;
+  rewrite_extent_ret rewrite_physical_extent(
+    Transaction &t,
+    CachedExtentRef extent) final;
 
-  using scan_extents_cursor =
-    SegmentCleaner::ExtentCallbackInterface::scan_extents_cursor;
-  using scan_extents_ertr =
-    SegmentCleaner::ExtentCallbackInterface::scan_extents_ertr;
-  using scan_extents_ret =
-    SegmentCleaner::ExtentCallbackInterface::scan_extents_ret;
-  scan_extents_ret scan_extents(
-    scan_extents_cursor &cursor,
-    extent_len_t bytes_to_read) final {
-    return journal->scan_extents(cursor, bytes_to_read);
-  }
+  rewrite_extent_ret rewrite_extents(
+    Transaction &t,
+    std::vector<CachedExtentRef>& extents) final;
 
   using release_segment_ret =
     SegmentCleaner::ExtentCallbackInterface::release_segment_ret;
@@ -547,6 +542,8 @@ private:
   LBAManagerRef lba_manager;
   JournalRef journal;
 
+  Scanner& scanner;
+  ExtentPlacementManagerRef<uint64_t> epm;
   WritePipeline write_pipeline;
 
   struct {
@@ -559,6 +556,22 @@ private:
   } stats;
   seastar::metrics::metric_group metrics;
   void register_metrics();
+
+  using scan_segments_ertr = crimson::errorator<
+    crimson::ct_error::input_output_error>;
+  using scan_segments_ret_bare =
+    std::vector<std::pair<segment_id_t, segment_header_t>>;
+  using scan_segments_ret = scan_segments_ertr::future<scan_segments_ret_bare>;
+  scan_segments_ret scan_segments();
+
+  LogicalCachedExtentRef prepare_logical_extent_rewrite(
+    Transaction &t,
+    LogicalCachedExtentRef& lextent);
+
+  rewrite_extent_ret remap_logical_extent(
+    Transaction &t,
+    LogicalCachedExtentRef lextent,
+    LogicalCachedExtentRef nextent);
 
 public:
   // Testing interfaces

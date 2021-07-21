@@ -182,17 +182,18 @@ public:
     Transaction &t,
     scan_mapped_space_func_t &&f) = 0;
 
-  /**
-   * rewrite_extent
-   *
-   * rewrite extent into passed transaction
-   */
-  using rewrite_extent_iertr = base_iertr;
-  using rewrite_extent_ret = rewrite_extent_iertr::future<>;
-  virtual rewrite_extent_ret rewrite_extent(
-    Transaction &t,
-    CachedExtentRef extent) = 0;
+  using update_le_mapping_iertr = base_iertr;
+  using update_le_mapping_ret = base_iertr::future<>;
+  virtual update_le_mapping_ret update_logical_extent_mapping(
+    Transaction& t,
+    LogicalCachedExtentRef& lextent,
+    LogicalCachedExtentRef& nlextent) = 0;
 
+  using rewrite_extent_iertr = base_iertr;
+  using rewrite_extent_ret = base_iertr::future<>;
+  virtual rewrite_extent_ret rewrite_physical_extent(
+    Transaction &t,
+    CachedExtentRef& extent) = 0;
   /**
    * get_physical_extent_if_live
    *

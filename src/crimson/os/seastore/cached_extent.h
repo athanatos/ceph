@@ -14,6 +14,11 @@
 #include "include/buffer.h"
 #include "crimson/common/errorator.h"
 #include "crimson/os/seastore/seastore_types.h"
+#include "crimson/os/seastore/segment_manager.h"
+
+namespace crimson::os::seastore::lba_manager::btree {
+class BtreeLBAManager;
+}
 
 namespace crimson::os::seastore {
 
@@ -28,6 +33,12 @@ void intrusive_ptr_add_ref(CachedExtent *);
 void intrusive_ptr_release(CachedExtent *);
 
 #endif
+
+class ool_record_t;
+class ExtentOolWriter;
+class SegmentedOolWriter;
+template <typename, typename>
+class SegmentedAllocator;
 
 template <typename T>
 using TCachedExtentRef = boost::intrusive_ptr<T>;
@@ -320,6 +331,21 @@ public:
 
   virtual ~CachedExtent();
 
+  /// facility for persisting the extent
+  ExtentOolWriter* extent_writer;
+
+  void set_rewriting_paddr(paddr_t offset) { rewriting_offset = offset; }
+
+  void rewrite_paddr() {
+    set_paddr(rewriting_offset);
+    rewriting_offset = {NULL_SEG_ID, NULL_SEG_OFF};
+  }
+
+  paddr_t get_rewriting_paddr() const { return rewriting_offset; }
+
+  bool is_rewriting() const {
+    return !rewriting_offset.is_null();
+  }
 private:
   template <typename T>
   friend class read_set_item_t;
@@ -369,6 +395,10 @@ private:
   /// address of original block -- relative iff is_pending() and is_clean()
   paddr_t poffset;
 
+  // absolute address for the extent rewrite, poffset will be updated to
+  // this value, after the transaction for rewriting the extent completed
+  paddr_t rewriting_offset;
+
   /// used to wait while in-progress commit completes
   std::optional<seastar::shared_promise<>> io_wait_promise;
   void set_io_wait() {
@@ -391,6 +421,10 @@ private:
 
   read_set_item_t<Transaction>::list transactions;
 
+  friend class SegmentedOolWriter;
+  template <typename, typename>
+  friend class SegmentedAllocator;
+  friend class TransactionManager;
 protected:
   CachedExtent(CachedExtent &&other) = delete;
   CachedExtent(ceph::bufferptr &&ptr) : ptr(std::move(ptr)) {}
@@ -457,6 +491,7 @@ protected:
     }
   }
 
+  friend class crimson::os::seastore::ool_record_t;
 };
 
 std::ostream &operator<<(std::ostream &, CachedExtent::extent_state_t);
@@ -745,6 +780,8 @@ public:
   }
 };
 
+class LogicalCachedExtent;
+using LogicalCachedExtentRef = TCachedExtentRef<LogicalCachedExtent>;
 /**
  * LogicalCachedExtent
  *
@@ -794,6 +831,7 @@ public:
   }
 
   std::ostream &print_detail(std::ostream &out) const final;
+
 protected:
   virtual void apply_delta(const ceph::bufferlist &bl) = 0;
   virtual std::ostream &print_detail_l(std::ostream &out) const {
@@ -811,9 +849,14 @@ protected:
 private:
   laddr_t laddr = L_ADDR_NULL;
   LBAPinRef pin;
+
+  friend class crimson::os::seastore::SegmentedOolWriter;
+  template <typename, typename>
+  friend class crimson::os::seastore::SegmentedAllocator;
+  friend class crimson::os::seastore::lba_manager::btree::BtreeLBAManager;
+  friend class Cache;
 };
 
-using LogicalCachedExtentRef = TCachedExtentRef<LogicalCachedExtent>;
 struct ref_laddr_cmp {
   using is_transparent = laddr_t;
   bool operator()(const LogicalCachedExtentRef &lhs,

@@ -12,6 +12,7 @@
 #include "crimson/common/log.h"
 #include "crimson/os/seastore/cached_extent.h"
 #include "crimson/os/seastore/journal.h"
+#include "crimson/os/seastore/scanner.h"
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/segment_manager.h"
 #include "crimson/os/seastore/transaction.h"
@@ -65,7 +66,13 @@ public:
   virtual void init_mark_segment_closed(
     segment_id_t segment, segment_seq_t seq) {}
 
+  virtual void init_mark_segment_closed(segment_id_t) {}
+
   virtual segment_seq_t get_seq(segment_id_t id) { return 0; }
+
+  virtual Segment::segment_state_t get_segment_state(segment_id_t id) {
+    return Segment::segment_state_t::EMPTY;
+  }
 
   virtual ~SegmentProvider() {}
 };
@@ -307,9 +314,13 @@ public:
      */
     using rewrite_extent_iertr = extent_mapping_iertr;
     using rewrite_extent_ret = rewrite_extent_iertr::future<>;
-    virtual rewrite_extent_ret rewrite_extent(
+    virtual rewrite_extent_ret rewrite_physical_extent(
       Transaction &t,
       CachedExtentRef extent) = 0;
+
+    virtual rewrite_extent_ret rewrite_extents(
+      Transaction &t,
+      std::vector<CachedExtentRef>& extents) = 0;
 
     /**
      * get_extent_if_live
@@ -329,18 +340,6 @@ public:
       paddr_t addr,
       laddr_t laddr,
       segment_off_t len) = 0;
-
-    /**
-     * scan_extents
-     *
-     * Interface shim for Journal::scan_extents
-     */
-    using scan_extents_cursor = Journal::scan_valid_records_cursor;
-    using scan_extents_ertr = Journal::scan_extents_ertr;
-    using scan_extents_ret = Journal::scan_extents_ret;
-    virtual scan_extents_ret scan_extents(
-      scan_extents_cursor &cursor,
-      extent_len_t bytes_to_read) = 0;
 
     /**
      * release_segment
@@ -377,6 +376,7 @@ private:
   /// one segment provider for each segment manager
   device_id_t device_id = 0;
 
+  ScannerRef scanner;
 
   SpaceTrackerIRef space_tracker;
   std::vector<segment_info_t> segments;
@@ -407,6 +407,7 @@ private:
 public:
   SegmentCleaner(
     config_t config,
+    ScannerRef&& scanner,
     bool detailed = false,
     device_id_t device_id = 0);
 
@@ -483,8 +484,19 @@ public:
     segments[segment].journal_segment_seq = seq;
   }
 
+  void init_mark_segment_closed(segment_id_t segment) final {
+    crimson::get_logger(ceph_subsys_seastore).debug(
+      "SegmentCleaner::init_mark_segment_closed: segment {}",
+      segment);
+    mark_closed(segment);
+  }
+
   segment_seq_t get_seq(segment_id_t id) final {
     return segments[id].journal_segment_seq;
+  }
+
+  Segment::segment_state_t get_segment_state(segment_id_t id) final {
+    return segments[id].state;
   }
 
   void mark_segment_released(segment_id_t segment) {
@@ -623,9 +635,7 @@ private:
   }
 
   // GC status helpers
-  std::unique_ptr<
-    ExtentCallbackInterface::scan_extents_cursor
-    > scan_cursor;
+  std::unique_ptr<scan_valid_records_cursor> scan_cursor;
 
   /**
    * GCProcess
@@ -702,7 +712,7 @@ private:
   } gc_process;
 
   using gc_ertr = work_ertr::extend_ertr<
-    ExtentCallbackInterface::scan_extents_ertr
+    Scanner::scan_extents_ertr
     >;
 
   gc_cycle_ret do_gc_cycle();

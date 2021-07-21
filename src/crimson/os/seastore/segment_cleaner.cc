@@ -3,6 +3,8 @@
 
 #include "crimson/common/log.h"
 
+#include "crimson/common/errorator.h"
+#include "crimson/os/seastore/extent_placement_manager.h"
 #include "crimson/os/seastore/segment_cleaner.h"
 #include "crimson/os/seastore/transaction_manager.h"
 
@@ -145,11 +147,13 @@ void SpaceTrackerDetailed::dump_usage(segment_id_t id) const
 
 SegmentCleaner::SegmentCleaner(
   config_t config,
+  ScannerRef&& scanner,
   bool detailed,
   device_id_t device_id)
   : detailed(detailed),
     config(config),
     device_id(device_id),
+    scanner(std::move(scanner)),
     gc_process(*this)
 {
   register_metrics();
@@ -232,14 +236,7 @@ SegmentCleaner::rewrite_dirty_ret SegmentCleaner::rewrite_dirty(
     return seastar::do_with(
       std::move(dirty_list),
       [this, &t](auto &dirty_list) {
-	return trans_intr::do_for_each(
-	  dirty_list,
-	  [this, &t](auto &e) {
-	    logger().debug(
-	      "SegmentCleaner::rewrite_dirty cleaning {}",
-	      *e);
-	    return ecb->rewrite_extent(t, e);
-	  });
+	return ecb->rewrite_extents(t, dirty_list);
       });
   });
 }
@@ -313,7 +310,7 @@ SegmentCleaner::gc_reclaim_space_ret SegmentCleaner::gc_reclaim_space()
     }
     next.offset = 0;
     scan_cursor =
-      std::make_unique<ExtentCallbackInterface::scan_extents_cursor>(
+      std::make_unique<scan_valid_records_cursor>(
 	next);
     logger().debug(
       "SegmentCleaner::do_gc: starting gc on segment {}",
@@ -322,7 +319,7 @@ SegmentCleaner::gc_reclaim_space_ret SegmentCleaner::gc_reclaim_space()
     ceph_assert(!scan_cursor->is_complete());
   }
 
-  return ecb->scan_extents(
+  return scanner->scan_extents(
     *scan_cursor,
     config.reclaim_bytes_stride
   ).safe_then([this](auto &&_extents) {
@@ -335,11 +332,14 @@ SegmentCleaner::gc_reclaim_space_ret SegmentCleaner::gc_reclaim_space()
 	    extents.size());
 	  return seastar::do_with(
 	    ecb->create_transaction(Transaction::src_t::CLEANER),
-	    [this, &extents](auto &tref) mutable {
-	      return with_trans_intr(*tref, [this, &extents](auto &t) {
+	    std::vector<crimson::os::seastore::CachedExtentRef>(),
+	    [this, &extents](auto &tref, auto& realextents) mutable {
+	      return with_trans_intr(
+		*tref,
+		[this, &extents, &realextents](auto &t) {
 		return trans_intr::do_for_each(
 		  extents,
-		  [this, &t](auto &extent) {
+		  [this, &realextents, &t](auto& extent) {
 		    auto &[addr, info] = extent;
 		    logger().debug(
 		      "SegmentCleaner::gc_reclaim_space: checking extent {}",
@@ -350,7 +350,7 @@ SegmentCleaner::gc_reclaim_space_ret SegmentCleaner::gc_reclaim_space()
 		      addr,
 		      info.addr,
 		      info.len
-		    ).si_then([addr=addr, &t, this](CachedExtentRef ext) {
+		    ).si_then([addr=addr, &t, this, &realextents](CachedExtentRef ext) {
 		      if (!ext) {
 			logger().debug(
 			  "SegmentCleaner::gc_reclaim_space: addr {} dead, skipping",
@@ -361,13 +361,14 @@ SegmentCleaner::gc_reclaim_space_ret SegmentCleaner::gc_reclaim_space()
 			  "SegmentCleaner::gc_reclaim_space: addr {} alive, gc'ing {}",
 			  addr,
 			  *ext);
-			return ecb->rewrite_extent(
-			  t,
-			  ext);
 		      }
+
+		      realextents.emplace_back(ext);
+		      return ExtentCallbackInterface::rewrite_extent_iertr::now();
 		    });
-		  }
-		).si_then([this, &t] {
+		}).si_then([&realextents, &t, this] {
+		  return ecb->rewrite_extents(t, realextents);
+		}).si_then([this, &t] {
 		  if (scan_cursor->is_complete()) {
 		    t.mark_segment_to_release(scan_cursor->get_offset().segment);
 		  }

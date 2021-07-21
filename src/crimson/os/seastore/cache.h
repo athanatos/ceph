@@ -374,11 +374,13 @@ public:
   template <typename T>
   TCachedExtentRef<T> alloc_new_extent(
     Transaction &t,      ///< [in, out] current transaction
-    segment_off_t length ///< [in] length
+    segment_off_t length,///< [in] length
+    std::optional<paddr_t> zero_paddr = std::nullopt ///< [in] the zero 
+						     ///<      paddr to be set
   ) {
     auto ret = CachedExtent::make_cached_extent_ref<T>(
       alloc_cache_buf(length));
-    t.add_fresh_extent(ret);
+    t.add_fresh_extent(ret, std::move(zero_paddr));
     ret->state = CachedExtent::extent_state_t::INITIAL_WRITE_PENDING;
     return ret;
   }
@@ -391,7 +393,8 @@ public:
   CachedExtentRef alloc_new_extent_by_type(
     Transaction &t,       ///< [in, out] current transaction
     extent_types_t type,  ///< [in] type tag
-    segment_off_t length  ///< [in] length
+    segment_off_t length, ///< [in] length
+    std::optional<paddr_t> zero_paddr = std::nullopt ///< [in] the zero paddr to be set
     );
 
   /**

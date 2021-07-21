@@ -7,6 +7,7 @@
 
 #include "crimson/os/seastore/segment_cleaner.h"
 #include "crimson/os/seastore/cache.h"
+#include "crimson/os/seastore/extent_placement_manager.h"
 #include "crimson/os/seastore/transaction_manager.h"
 #include "crimson/os/seastore/segment_manager/ephemeral.h"
 #include "crimson/os/seastore/seastore.h"
@@ -70,11 +71,31 @@ protected:
 
 auto get_transaction_manager(
   SegmentManager &segment_manager) {
+  auto scanner = std::make_unique<
+    crimson::os::seastore::Scanner>(segment_manager);
+  auto pscanner = scanner.get();
   auto segment_cleaner = std::make_unique<SegmentCleaner>(
     SegmentCleaner::config_t::get_default(),
+    std::move(scanner),
     true);
-  auto journal = std::make_unique<Journal>(segment_manager);
+  auto journal = std::make_unique<Journal>(segment_manager, *pscanner);
   auto cache = std::make_unique<Cache>(segment_manager);
+  auto epm = std::make_unique<ExtentPlacementManager<uint64_t>>(
+    *cache,
+    [](auto hint, auto& epm) {
+    assert(epm.get_num_allocators());
+    return std::rand() % epm.get_num_allocators();
+  });
+  auto allocator = std::make_unique<SegmentedAllocator<uint64_t>>(
+    *segment_cleaner,
+    segment_manager,
+    *cache,
+    [](auto) {
+    using crimson::common::get_conf;
+    return std::rand() % get_conf<uint64_t>(
+        "seastore_init_rewrite_segments_num_per_device");
+  });
+  epm->add_allocator(0, std::move(allocator));
   auto lba_manager = lba_manager::create_lba_manager(segment_manager, *cache);
 
   journal->set_segment_provider(&*segment_cleaner);
@@ -84,7 +105,9 @@ auto get_transaction_manager(
     std::move(segment_cleaner),
     std::move(journal),
     std::move(cache),
-    std::move(lba_manager));
+    std::move(lba_manager),
+    *pscanner,
+    std::move(epm));
 }
 
 auto get_seastore(SegmentManagerRef sm) {
@@ -176,8 +199,18 @@ protected:
 
 class TestSegmentManagerWrapper final : public SegmentManager {
   SegmentManager &sm;
+  device_id_t device_id = 0;
 public:
-  TestSegmentManagerWrapper(SegmentManager &sm) : sm(sm) {}
+  TestSegmentManagerWrapper(
+    SegmentManager &sm,
+    device_id_t device_id = 0)
+    : sm(sm),
+      device_id(device_id)
+  {}
+
+  device_id_t get_device_id() const final {
+    return device_id;
+  }
 
   mount_ret mount() final {
     return mount_ertr::now(); // we handle this above

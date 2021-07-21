@@ -97,6 +97,12 @@ std::ostream &operator<<(std::ostream &out, const paddr_list_t &rhs)
   return out << ']';
 }
 
+bool is_lba_node(extent_types_t type)
+{
+  return type == extent_types_t::LADDR_INTERNAL ||
+    type == extent_types_t::LADDR_LEAF;
+}
+
 device_id_t get_device_id(segment_id_t id) {
   return (device_id_t)((id & SM_ID_MASK) >>
       (std::numeric_limits<segment_id_t>::digits - device_id_len));

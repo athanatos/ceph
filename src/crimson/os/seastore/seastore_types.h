@@ -356,6 +356,8 @@ enum class extent_types_t : uint8_t {
   NONE = 0xFF
 };
 
+bool is_lba_node(extent_types_t type);
+
 inline bool is_logical_type(extent_types_t type) {
   switch (type) {
   case extent_types_t::ROOT:
@@ -794,6 +796,39 @@ struct record_header_t {
 };
 
 std::ostream &operator<<(std::ostream &out, const extent_info_t &header);
+
+/// scan segment for end incrementally
+struct scan_valid_records_cursor {
+  bool out_of_line = false;
+  bool last_valid_header_found = false;
+  paddr_t offset;
+  paddr_t last_committed;
+
+  struct found_record_t {
+    paddr_t offset;
+    record_header_t header;
+    bufferlist mdbuffer;
+
+    found_record_t(
+      paddr_t offset,
+      const record_header_t &header,
+      const bufferlist &mdbuffer)
+      : offset(offset), header(header), mdbuffer(mdbuffer) {}
+  };
+  std::deque<found_record_t> pending_records;
+
+  bool is_complete() const {
+    return last_valid_header_found && pending_records.empty();
+  }
+
+  paddr_t get_offset() const {
+    return offset;
+  }
+
+  scan_valid_records_cursor(
+    paddr_t offset)
+    : offset(offset) {}
+};
 
 struct record_size_t {
   extent_len_t mdlength = 0;

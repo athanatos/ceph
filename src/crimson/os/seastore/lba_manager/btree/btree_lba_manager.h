@@ -18,6 +18,7 @@
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/lba_manager.h"
 #include "crimson/os/seastore/cache.h"
+#include "crimson/os/seastore/extent_placement_manager.h"
 #include "crimson/os/seastore/segment_manager.h"
 
 #include "crimson/os/seastore/lba_manager/btree/lba_btree_node.h"
@@ -106,10 +107,6 @@ public:
     Transaction &t,
     scan_mapped_space_func_t &&f) final;
 
-  rewrite_extent_ret rewrite_extent(
-    Transaction &t,
-    CachedExtentRef extent) final;
-
   get_physical_extent_if_live_ret get_physical_extent_if_live(
     Transaction &t,
     extent_types_t type,
@@ -122,6 +119,15 @@ public:
     pin_set.add_pin(bpin->pin);
     bpin->parent = nullptr;
   }
+
+  update_le_mapping_ret update_logical_extent_mapping(
+    Transaction& t,
+    LogicalCachedExtentRef& lextent,
+    LogicalCachedExtentRef& nlextent) final;
+  
+  rewrite_extent_ret rewrite_physical_extent(
+    Transaction &t,
+    CachedExtentRef& extent) final;
 
   ~BtreeLBAManager();
 private:

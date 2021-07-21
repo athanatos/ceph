@@ -7,6 +7,7 @@
 
 #include <boost/intrusive/list.hpp>
 
+#include "crimson/common/log.h"
 #include "crimson/os/seastore/ordering_handle.h"
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/cached_extent.h"
@@ -17,6 +18,8 @@ namespace crimson::os::seastore {
 struct retired_extent_gate_t;
 class SeaStore;
 class Transaction;
+
+class ExtentOolWriter;
 
 /**
  * Transaction
@@ -83,11 +86,16 @@ public:
     ceph_assert(inserted);
   }
 
-  void add_fresh_extent(CachedExtentRef ref) {
+  void add_fresh_extent(CachedExtentRef ref,
+			std::optional<paddr_t> zero_paddr = std::nullopt) {
     ceph_assert(!is_weak());
     fresh_block_list.push_back(ref);
-    ref->set_paddr(make_record_relative_paddr(offset));
-    offset += ref->get_length();
+    if (zero_paddr) {
+      ref->set_paddr(*zero_paddr);
+    } else {
+      ref->set_paddr(make_record_relative_paddr(offset));
+      offset += ref->get_length();
+    }
     write_set.insert(*ref);
   }
 
