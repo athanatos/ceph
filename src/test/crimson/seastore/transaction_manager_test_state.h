@@ -73,12 +73,13 @@ auto get_transaction_manager(
   SegmentManager &segment_manager) {
   auto scanner = std::make_unique<
     crimson::os::seastore::Scanner>(segment_manager);
-  auto pscanner = scanner.get();
+
+  auto scannerref = *scanner.get();
   auto segment_cleaner = std::make_unique<SegmentCleaner>(
     SegmentCleaner::config_t::get_default(),
     std::move(scanner),
     true);
-  auto journal = std::make_unique<Journal>(segment_manager, *pscanner);
+  auto journal = std::make_unique<Journal>(segment_manager, scannerref);
   auto cache = std::make_unique<Cache>(segment_manager);
   auto epm = std::make_unique<ExtentPlacementManager<uint64_t>>(
     *cache,
@@ -106,7 +107,7 @@ auto get_transaction_manager(
     std::move(journal),
     std::move(cache),
     std::move(lba_manager),
-    *pscanner,
+    scannerref,
     std::move(epm));
 }
 
