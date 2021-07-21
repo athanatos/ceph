@@ -97,63 +97,6 @@ Journal::initialize_segment(Segment &segment)
     });
 }
 
-ceph::bufferlist Journal::encode_record(
-  record_size_t rsize,
-  record_t &&record)
-{
-  bufferlist data_bl;
-  for (auto &i: record.extents) {
-    data_bl.append(i.bl);
-  }
-
-  bufferlist bl;
-  record_header_t header{
-    rsize.mdlength,
-    rsize.dlength,
-    (uint32_t)record.deltas.size(),
-    (uint32_t)record.extents.size(),
-    current_segment_nonce,
-    committed_to,
-    data_bl.crc32c(-1)
-  };
-  encode(header, bl);
-
-  auto metadata_crc_filler = bl.append_hole(sizeof(uint32_t));
-
-  for (const auto &i: record.extents) {
-    encode(extent_info_t(i), bl);
-  }
-  for (const auto &i: record.deltas) {
-    encode(i, bl);
-  }
-  auto block_size = segment_manager.get_block_size();
-  if (bl.length() % block_size != 0) {
-    bl.append_zero(
-      block_size - (bl.length() % block_size));
-  }
-  ceph_assert(bl.length() == rsize.mdlength);
-
-
-  auto bliter = bl.cbegin();
-  auto metadata_crc = bliter.crc32c(
-    ceph::encoded_sizeof_bounded<record_header_t>(),
-    -1);
-  bliter += sizeof(checksum_t); /* crc hole again */
-  metadata_crc = bliter.crc32c(
-    bliter.get_remaining(),
-    metadata_crc);
-  ceph_le32 metadata_crc_le;
-  metadata_crc_le = metadata_crc;
-  metadata_crc_filler.copy_in(
-    sizeof(checksum_t),
-    reinterpret_cast<const char *>(&metadata_crc_le));
-
-  bl.claim_append(data_bl);
-  ceph_assert(bl.length() == (rsize.dlength + rsize.mdlength));
-
-  return bl;
-}
-
 bool Journal::validate_metadata(const bufferlist &bl)
 {
   auto bliter = bl.cbegin();
@@ -189,7 +132,8 @@ Journal::write_record_ret Journal::write_record(
   OrderingHandle &handle)
 {
   ceph::bufferlist to_write = encode_record(
-    rsize, std::move(record));
+    rsize, std::move(record), segment_manager.get_block_size(),
+    committed_to, current_segment_nonce);
   auto target = written_to;
   assert((to_write.length() % segment_manager.get_block_size()) == 0);
   written_to += to_write.length();
@@ -230,24 +174,6 @@ Journal::write_record_ret Journal::write_record(
 	segment_id,
 	target});
   });
-}
-
-Journal::record_size_t Journal::get_encoded_record_length(
-  const record_t &record) const {
-  extent_len_t metadata =
-    (extent_len_t)ceph::encoded_sizeof_bounded<record_header_t>();
-  metadata += sizeof(checksum_t) /* crc */;
-  metadata += record.extents.size() *
-    ceph::encoded_sizeof_bounded<extent_info_t>();
-  extent_len_t data = 0;
-  for (const auto &i: record.deltas) {
-    metadata += ceph::encoded_sizeof(i);
-  }
-  for (const auto &i: record.extents) {
-    data += i.bl.length();
-  }
-  metadata = p2roundup(metadata, (extent_len_t)segment_manager.get_block_size());
-  return record_size_t{metadata, data};
 }
 
 bool Journal::needs_roll(segment_off_t length) const
