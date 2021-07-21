@@ -1159,13 +1159,13 @@ std::unique_ptr<SeaStore> make_seastore(
   auto scanner = std::make_unique<
     crimson::os::seastore::Scanner>(*sm);
 
-  auto pscanner = scanner.get();
+  auto &scannerref = *scanner;
   auto segment_cleaner = std::make_unique<SegmentCleaner>(
     SegmentCleaner::config_t::get_default(),
     std::move(scanner),
     false /* detailed */);
 
-  auto journal = std::make_unique<Journal>(*sm, *pscanner);
+  auto journal = std::make_unique<Journal>(*sm, scannerref);
   auto cache = std::make_unique<Cache>(*sm);
   auto epm = std::make_unique<ExtentPlacementManager<uint64_t>>(
     *cache,
@@ -1194,7 +1194,7 @@ std::unique_ptr<SeaStore> make_seastore(
     std::move(journal),
     std::move(cache),
     std::move(lba_manager),
-    *pscanner,
+    scannerref,
     std::move(epm));
 
   auto cm = std::make_unique<collection_manager::FlatCollectionManager>(*tm);
