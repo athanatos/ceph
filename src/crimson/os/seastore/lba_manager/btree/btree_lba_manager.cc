@@ -249,6 +249,7 @@ static depth_t get_depth(const CachedExtent &e)
   }
 }
 
+// TODOSAM move to lba_btree
 void BtreeLBAManager::complete_transaction(
   Transaction &t)
 {
@@ -292,6 +293,7 @@ void BtreeLBAManager::complete_transaction(
   }
 }
 
+// TODOSAM move to lba_btree
 BtreeLBAManager::init_cached_extent_ret BtreeLBAManager::init_cached_extent(
   Transaction &t,
   CachedExtentRef e)
@@ -408,6 +410,7 @@ BtreeLBAManager::scan_mapped_space_ret BtreeLBAManager::scan_mapped_space(
     });
 }
 
+// TODOSAM move to lba_btree
 BtreeLBAManager::rewrite_extent_ret BtreeLBAManager::rewrite_extent(
   Transaction &t,
   CachedExtentRef extent)
@@ -502,6 +505,7 @@ BtreeLBAManager::rewrite_extent_ret BtreeLBAManager::rewrite_extent(
   }
 }
 
+// TODOSAM move to lba_btree
 BtreeLBAManager::get_physical_extent_if_live_ret
 BtreeLBAManager::get_physical_extent_if_live(
   Transaction &t,
@@ -604,6 +608,8 @@ BtreeLBAManager::update_mapping_ret BtreeLBAManager::update_mapping(
     });
 }
 
+
+// TODOSAM move to lba_btree
 BtreeLBAManager::update_internal_mapping_ret
 BtreeLBAManager::update_internal_mapping(
   Transaction &t,
