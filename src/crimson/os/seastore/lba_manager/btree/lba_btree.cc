@@ -36,16 +36,6 @@ LBABtree::iterator_fut LBABtree::lower_bound(
     iterator{});
 }
 
-LBABtree::iterator_fut LBABtree::upper_bound_right(
-  op_context_t c,
-  laddr_t addr) const
-{
-  LOG_PREFIX(upper_bound_right);
-  return iterator_fut(
-    interruptible::ready_future_marker{},
-    iterator{});
-}
-
 LBABtree::insert_ret LBABtree::insert(
   op_context_t c,
   iterator iter,

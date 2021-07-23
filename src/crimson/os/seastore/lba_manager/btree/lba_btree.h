@@ -44,10 +44,20 @@ public:
     iterator &operator=(const iterator &) = default;
     iterator &operator=(iterator &&) = default;
 
-    using advance_iertr = base_iertr;
-    using advance_ret = base_iertr::future<iterator>;
-    advance_ret next() const {
-      return advance_ret(
+    using next_iertr = base_iertr;
+    using next_ret = base_iertr::future<iterator>;
+    next_ret next() const {
+      // TODOSAM
+      return next_ret(
+	interruptible::ready_future_marker{},
+	*this);
+    }
+
+    using prev_iertr = base_iertr;
+    using prev_ret = base_iertr::future<iterator>;
+    prev_ret prev() const {
+      // TODOSAM
+      return prev_ret(
 	interruptible::ready_future_marker{},
 	*this);
     }
@@ -60,7 +70,16 @@ public:
       assert(!is_end());
       return leaf.node->iter_idx(leaf.pos).get_val();
     }
+
     bool is_end() const {
+      return leaf.pos == MAX;
+    }
+
+    bool is_begin() const {
+      for (auto &i: internal) {
+	if (i.pos != 0)
+	  return false;
+      }
       return leaf.pos == MAX;
     }
 
@@ -134,7 +153,31 @@ public:
    */
   iterator_fut upper_bound_right(
     op_context_t c,
-    laddr_t addr) const;
+    laddr_t addr) const
+  {
+    return lower_bound(
+      c, addr
+    ).si_then([this, addr](auto iter) {
+      if (iter.is_begin()) {
+	return iterator_fut(
+	  interruptible::ready_future_marker{},
+	  iter);
+      } else {
+	return iter.prev(
+	).si_then([iter, addr](auto prev) {
+	  if ((prev.get_key() + prev.get_val().len) > addr) {
+	    return iterator_fut(
+	      interruptible::ready_future_marker{},
+	      prev);
+	  } else {
+	    return iterator_fut(
+	      interruptible::ready_future_marker{},
+	      iter);
+	  }
+	});
+      }
+    });
+  }
 
   iterator_fut begin(op_context_t c) const {
     return lower_bound(c, 0);
