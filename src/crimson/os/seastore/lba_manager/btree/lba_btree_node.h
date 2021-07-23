@@ -32,6 +32,7 @@ struct lba_map_val_t {
   uint32_t refcount = 0; ///< refcount
   uint32_t checksum = 0; ///< checksum of original block written at paddr (TODO)
 
+  lba_map_val_t() = default;
   lba_map_val_t(
     extent_len_t len,
     paddr_t paddr,

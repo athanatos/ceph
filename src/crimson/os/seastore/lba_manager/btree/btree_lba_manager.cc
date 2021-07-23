@@ -194,17 +194,23 @@ BtreeLBAManager::set_extent(
   Transaction &t,
   laddr_t off, extent_len_t len, paddr_t addr)
 {
-  return get_root(
-    t).si_then([this, &t, off, len, addr](auto root) {
-      return insert_mapping(
-	t,
-	root,
-	off,
-	{ len, addr, 1, 0 });
-    }).si_then([](auto ret) {
-      return set_extent_ret(
-	interruptible::ready_future_marker{},
-	LBAPinRef(ret.release()));
+  LOG_PREFIX(BtreeLBAManager::set_extent);
+  auto c = get_context(t);
+  return with_btree_ret<LBAPinRef>(
+    c,
+    [&t, c, this, off, len, addr](auto &btree) {
+      return btree.lower_bound(
+	c, off
+      ).si_then([&t, &btree, c, this, off, len, addr](auto iter) {
+	ceph_assert(!iter.is_end());
+	ceph_assert(iter.get_key() == off);
+	return btree.update(
+	  c,
+	  iter,
+	  lba_map_val_t{len, addr, 1, 0});
+      }).si_then([](auto iter) {
+	return iter.get_pin();
+      });
     });
 }
 
@@ -522,50 +528,6 @@ BtreeLBAManager::BtreeLBAManager(
   : segment_manager(segment_manager),
     cache(cache) {}
 
-BtreeLBAManager::insert_mapping_ret BtreeLBAManager::insert_mapping(
-  Transaction &t,
-  LBANodeRef root,
-  laddr_t laddr,
-  lba_map_val_t val)
-{
-  auto split = insert_mapping_iertr::future<LBANodeRef>(
-    interruptible::ready_future_marker{},
-    root);
-  if (root->at_max_capacity()) {
-    split = cache.get_root(t).si_then(
-      [this, root, laddr, &t](RootBlockRef croot) {
-	logger().debug(
-	  "BtreeLBAManager::insert_mapping: splitting root {}",
-	  *croot);
-	{
-	  auto mut_croot = cache.duplicate_for_write(t, croot);
-	  croot = mut_croot->cast<RootBlock>();
-	}
-	auto nroot = cache.alloc_new_extent<LBAInternalNode>(t, LBA_BLOCK_SIZE);
-	lba_node_meta_t meta{0, L_ADDR_MAX, root->get_node_meta().depth + 1};
-	nroot->set_meta(meta);
-	nroot->pin.set_range(meta);
-	nroot->journal_insert(
-	  nroot->begin(),
-	  L_ADDR_MIN,
-	  root->get_paddr(),
-	  nullptr);
-	croot->get_root().lba_root = lba_root_t{
-	  nroot->get_paddr(),
-	  root->get_node_meta().depth + 1
-	};
-	return nroot->split_entry(
-	  get_context(t),
-	  laddr, nroot->begin(), root);
-      });
-  }
-  return split.si_then([this, &t, laddr, val](LBANodeRef node) {
-    return node->insert(
-      get_context(t),
-      laddr, val);
-  });
-}
-
 BtreeLBAManager::update_refcount_ret BtreeLBAManager::update_refcount(
   Transaction &t,
   laddr_t addr,
@@ -593,13 +555,36 @@ BtreeLBAManager::update_mapping_ret BtreeLBAManager::update_mapping(
   laddr_t addr,
   update_func_t &&f)
 {
-  return get_root(t
-  ).si_then([this, f=std::move(f), &t, addr](LBANodeRef root) mutable {
-    return root->mutate_mapping(
-      get_context(t),
-      addr,
-      std::move(f));
-  });
+  LOG_PREFIX(BtreeLBAManager::update_mapping);
+  auto c = get_context(t);
+  return with_btree_ret<lba_map_val_t>(
+    c,
+    [&t, f=std::move(f), c, this, addr](auto &btree) mutable {
+      return btree.lower_bound(
+	c, addr
+      ).si_then([&t, &btree, f=std::move(f), c, this, addr](auto iter) {
+	ceph_assert(!iter.is_end());
+	ceph_assert(iter.get_key() == addr);
+
+	auto ret = f(iter.get_val());
+	if (ret.refcount > 0) {
+	  return btree.remove(
+	    c,
+	    iter
+	  ).si_then([ret](auto) {
+	    return ret;
+	  });
+	} else {
+	  return btree.update(
+	    c,
+	    iter,
+	    ret
+	  ).si_then([ret](auto) {
+	    return ret;
+	  });
+	}
+      });
+    });
 }
 
 BtreeLBAManager::update_internal_mapping_ret

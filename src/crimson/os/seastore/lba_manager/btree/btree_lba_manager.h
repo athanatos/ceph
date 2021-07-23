@@ -176,7 +176,7 @@ private:
     return seastar::do_with(
       std::forward<State>(init),
       [this, c, f=std::forward<F>(f)](auto &state) mutable {
-	return with_btree(c, [&state, c, f=std::move(f)](auto &btree) {
+	return with_btree(c, [&state, c, f=std::move(f)](auto &btree) mutable {
 	  return f(btree, state);
 	}).si_then([&state] {
 	  return seastar::make_ready_future<State>(std::move(state));
@@ -197,7 +197,7 @@ private:
     F &&f) {
     return with_btree_state<Ret>(
       c,
-      [c, f=std::forward<F>(f)](auto &btree, auto &ret) {
+      [c, f=std::forward<F>(f)](auto &btree, auto &ret) mutable {
 	return f(
 	  btree
 	).si_then([&ret](auto &&_ret) {
