@@ -153,11 +153,6 @@ public:
 	[f=std::move(f)](auto &pos) {
 	  return trans_intr::repeat(
 	    [&f, &pos] {
-	      if (pos.is_end()) {
-		return iterate_repeat_ret(
-		  interruptible::ready_future_marker{},
-		  seastar::stop_iteration::yes);
-	      }
 	      return f(
 		pos
 	      ).si_then([&pos](auto done) {
@@ -166,6 +161,7 @@ public:
 		    interruptible::ready_future_marker{},
 		    seastar::stop_iteration::yes);
 		} else {
+		  ceph_assert(!pos.is_end());
 		  return pos.next(
 		  ).si_then([&pos](auto next) {
 		    pos = next;

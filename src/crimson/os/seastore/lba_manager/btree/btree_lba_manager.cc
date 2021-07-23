@@ -73,7 +73,7 @@ BtreeLBAManager::get_mappings(
 	btree.upper_bound_right(get_context(t), offset),
 	[&ret, offset, length](auto &pos) {
 	  ceph_assert(!pos.is_end());
-	  if (pos.get_key() >= (offset + length)) {
+	  if (pos.is_end() || pos.get_key() >= (offset + length)) {
 	    return LBABtree::iterate_repeat_ret(
 	      interruptible::ready_future_marker{},
 	      seastar::stop_iteration::yes);
@@ -161,7 +161,7 @@ BtreeLBAManager::alloc_extent(
 	btree.lower_bound(c, hint),
 	[&state, hint, len](auto &pos) {
 	  ceph_assert(!pos.is_end());
-	  if (pos.get_key() >= (state.last_end + len)) {
+	  if (pos.is_end() || pos.get_key() >= (state.last_end + len)) {
 	    state.insert_iter = pos;
 	    return LBABtree::iterate_repeat_ret(
 	      interruptible::ready_future_marker{},
@@ -357,18 +357,27 @@ BtreeLBAManager::scan_mappings_ret BtreeLBAManager::scan_mappings(
   laddr_t end,
   scan_mappings_func_t &&f)
 {
-  return seastar::do_with(
-    std::move(f),
-    LBANodeRef(),
-    [=, &t](auto &f, auto &lbarootref) {
-      return get_root(t).si_then(
-	[=, &t, &f](LBANodeRef lbaroot) mutable {
-	  lbarootref = lbaroot;
-	  return lbaroot->scan_mappings(
-	    get_context(t),
-	    begin,
-	    end,
-	    f);
+  LOG_PREFIX(BtreeLBAManager::scan_mappings);
+  DEBUGT("begin: {}, end: {}", t, begin, end);
+
+  auto c = get_context(t);
+  return with_btree(
+    c,
+    [this, c, &t, f=std::move(f), begin, end](auto &btree) mutable {
+      return LBABtree::iterate_repeat(
+	btree.upper_bound_right(c, begin),
+	[f=std::move(f), begin, end](auto &pos) {
+	  ceph_assert(!pos.is_end());
+	  if (pos.is_end() || pos.get_key() >= end) {
+	    return LBABtree::iterate_repeat_ret(
+	      interruptible::ready_future_marker{},
+	      seastar::stop_iteration::yes);
+	  }
+	  ceph_assert((pos.get_key() + pos.get_val().len) > begin);
+	  f(pos.get_key(), pos.get_val().paddr, pos.get_val().len);
+	  return LBABtree::iterate_repeat_ret(
+	    interruptible::ready_future_marker{},
+	    seastar::stop_iteration::no);
 	});
     });
 }
@@ -377,16 +386,24 @@ BtreeLBAManager::scan_mapped_space_ret BtreeLBAManager::scan_mapped_space(
     Transaction &t,
     scan_mapped_space_func_t &&f)
 {
-  return seastar::do_with(
-    std::move(f),
-    LBANodeRef(),
-    [=, &t](auto &f, auto &lbarootref) {
-      return get_root(t).si_then(
-	[=, &t, &f](LBANodeRef lbaroot) mutable {
-	  lbarootref = lbaroot;
-	  return lbaroot->scan_mapped_space(
-	    get_context(t),
-	    f);
+  LOG_PREFIX(BtreeLBAManager::scan_mapped_space);
+  auto c = get_context(t);
+  return with_btree(
+    c,
+    [this, c, &t, f=std::move(f)](auto &btree) mutable {
+      return LBABtree::iterate_repeat(
+	btree.begin(c),
+	[f=std::move(f)](auto &pos) {
+	  ceph_assert(!pos.is_end());
+	  if (pos.is_end()) {
+	    return LBABtree::iterate_repeat_ret(
+	      interruptible::ready_future_marker{},
+	      seastar::stop_iteration::yes);
+	  }
+	  f(pos.get_val().paddr, pos.get_val().len);
+	  return LBABtree::iterate_repeat_ret(
+	    interruptible::ready_future_marker{},
+	    seastar::stop_iteration::no);
 	});
     });
 }
