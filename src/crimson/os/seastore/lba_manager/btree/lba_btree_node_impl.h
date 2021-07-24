@@ -296,6 +296,7 @@ struct LBAInternalNode
   /// returns iterator for subtree containing laddr
   internal_iterator_t get_containing_child(laddr_t laddr);
 };
+using LBAInternalNodeRef = LBAInternalNode::Ref;
 
 /**
  * LBALeafNode

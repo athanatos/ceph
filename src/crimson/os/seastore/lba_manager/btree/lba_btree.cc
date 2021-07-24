@@ -69,4 +69,15 @@ LBABtree::remove_ret LBABtree::remove(
     iterator{});
 }
 
+LBABtree::get_internal_node_ret LBABtree::get_internal_node(
+  op_context_t c,
+  LBAInternalNodeRef parent,
+  depth_t depth,
+  paddr_t offset,
+  paddr_t base) {
+  return get_internal_node_ret(
+    interruptible::ready_future_marker{},
+    LBAInternalNodeRef());
+}
+
 }

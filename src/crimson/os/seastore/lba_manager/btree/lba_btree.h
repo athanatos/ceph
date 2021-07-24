@@ -18,9 +18,6 @@ namespace crimson::os::seastore::lba_manager::btree {
 
 class LBABtree {
   static constexpr size_t MAX_DEPTH = 16;
-  lba_root_t root;
-  bool root_dirty = false;
-
 public:
   using base_iertr = LBAManager::base_iertr;
 
@@ -284,6 +281,42 @@ public:
   update_ret remove(
     op_context_t c,
     iterator iter);
+
+private:
+  lba_root_t root;
+  bool root_dirty = false;
+
+  using get_internal_node_iertr = base_iertr;
+  using get_internal_node_ret = get_internal_node_iertr::future<LBAInternalNodeRef>;
+  get_internal_node_ret get_internal_node(
+    op_context_t c,
+    LBAInternalNodeRef parent,
+    depth_t depth,
+    paddr_t offset,
+    paddr_t base);
+
+  using lookup_internal_level_iertr = base_iertr;
+  using lookup_internal_level_ret = lookup_internal_level_iertr::future<>;
+  template <typename F>
+  static lookup_internal_level_ret lookup_internal_level(
+    op_context_t c,
+    depth_t depth,
+    iterator &iter,
+    F &&f) {
+    assert(iter.internal.size() > depth);
+    assert(iter.internal[depth].node);
+    auto parent = iter.internal[depth].node;
+    auto node_iter = f(*parent);
+    return get_internal_node_ret(
+      c,
+      parent,
+      depth,
+      node_iter->get_val().paddr,
+      parent->get_paddr()
+    ).si_then([c, depth, &iter](LBAInternalNodeRef node) {
+      return seastar::now();
+    });
+  }
 };
 
 }
