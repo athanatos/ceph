@@ -71,13 +71,21 @@ LBABtree::remove_ret LBABtree::remove(
 
 LBABtree::get_internal_node_ret LBABtree::get_internal_node(
   op_context_t c,
-  LBAInternalNodeRef parent,
   depth_t depth,
-  paddr_t offset,
-  paddr_t base) {
+  paddr_t offset)
+{
   return get_internal_node_ret(
     interruptible::ready_future_marker{},
     LBAInternalNodeRef());
+}
+
+LBABtree::get_leaf_node_ret LBABtree::get_leaf_node(
+  op_context_t c,
+  paddr_t offset)
+{
+  return get_leaf_node_ret(
+    interruptible::ready_future_marker{},
+    LBALeafNodeRef());
 }
 
 }

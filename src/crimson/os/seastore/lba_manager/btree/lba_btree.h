@@ -59,6 +59,12 @@ public:
 	*this);
     }
 
+    auto &get_internal(depth_t depth) {
+      assert(depth > 1);
+      assert((depth - 2) < internal.size());
+      return internal[depth - 2];
+    }
+
     laddr_t get_key() const {
       assert(!is_end());
       return leaf.node->iter_idx(leaf.pos).get_key();
@@ -290,10 +296,14 @@ private:
   using get_internal_node_ret = get_internal_node_iertr::future<LBAInternalNodeRef>;
   get_internal_node_ret get_internal_node(
     op_context_t c,
-    LBAInternalNodeRef parent,
     depth_t depth,
-    paddr_t offset,
-    paddr_t base);
+    paddr_t offset);
+
+  using get_leaf_node_iertr = base_iertr;
+  using get_leaf_node_ret = get_leaf_node_iertr::future<LBALeafNodeRef>;
+  get_leaf_node_ret get_leaf_node(
+    op_context_t c,
+    paddr_t offset);
 
   using lookup_internal_level_iertr = base_iertr;
   using lookup_internal_level_ret = lookup_internal_level_iertr::future<>;
@@ -303,17 +313,42 @@ private:
     depth_t depth,
     iterator &iter,
     F &&f) {
-    assert(iter.internal.size() > depth);
-    assert(iter.internal[depth].node);
-    auto parent = iter.internal[depth].node;
+    auto &parent_entry = iter.get_internal(depth + 1);
+    auto parent = parent_entry.node;
+    assert(parent);
     auto node_iter = f(*parent);
+    parent_entry.pos = node_iter.get_offset();
     return get_internal_node_ret(
       c,
-      parent,
       depth,
-      node_iter->get_val().paddr,
-      parent->get_paddr()
+      node_iter->get_val().paddr.maybe_relative_to(parent->get_paddr())
     ).si_then([c, depth, &iter](LBAInternalNodeRef node) {
+      auto &parent_entry = iter.get_internal(depth + 1);
+      auto &entry = iter.get_internal(depth);
+      entry.node = node;
+      return seastar::now();
+    });
+  }
+
+  using lookup_leaf_iertr = base_iertr;
+  using lookup_leaf_ret = lookup_leaf_iertr::future<>;
+  template <typename F>
+  static lookup_internal_level_ret lookup_leaf(
+    op_context_t c,
+    iterator &iter,
+    F &&f
+  ) {
+    auto &parent_entry = iter.get_internal(2);
+    auto parent = parent_entry.node;
+    assert(parent);
+    auto node_iter = f(*parent);
+    parent_entry.pos = node_iter.get_offset();
+    return get_leaf_node_ret(
+      c,
+      node_iter->get_val().paddr.maybe_relative_to(parent->get_paddr())
+    ).si_then([c, &iter](LBALeafNodeRef node) {
+      auto &parent_entry = iter.get_internal(2);
+      iter.leaf.node = node;
       return seastar::now();
     });
   }
