@@ -84,7 +84,12 @@ LBABtree::get_internal_node_ret LBABtree::get_internal_node(
       c.trans,
       offset,
       LBA_BLOCK_SIZE
-    ).si_then([c](LBAInternalNodeRef ret) {
+    ).si_then([FNAME, c, offset](LBAInternalNodeRef ret) {
+      DEBUGT(
+	"read internal at offset {} {}",
+	c.trans,
+	offset,
+	*ret);
       auto meta = ret->get_meta();
       if (ret->get_size()) {
 	ceph_assert(meta.begin <= ret->begin()->get_key());
@@ -104,9 +109,34 @@ LBABtree::get_leaf_node_ret LBABtree::get_leaf_node(
   op_context_t c,
   paddr_t offset)
 {
-  return get_leaf_node_ret(
-    interruptible::ready_future_marker{},
-    LBALeafNodeRef());
+  LOG_PREFIX(LBATree::get_leaf_node);
+  DEBUGT(
+    "reading leaf at offset {}",
+    c.trans,
+    offset);
+  return c.cache.get_extent<LBALeafNode>(
+    c.trans,
+    offset,
+    LBA_BLOCK_SIZE
+  ).si_then([FNAME, c, offset](LBALeafNodeRef ret) {
+    DEBUGT(
+      "read leaf at offset {} {}",
+      c.trans,
+      offset,
+      *ret);
+    auto meta = ret->get_meta();
+    if (ret->get_size()) {
+      ceph_assert(meta.begin <= ret->begin()->get_key());
+      ceph_assert(meta.end > (ret->end() - 1)->get_key());
+    }
+    if (!ret->is_pending() && !ret->pin.is_linked()) {
+      ret->pin.set_range(meta);
+      c.pins.add_pin(ret->pin);
+    }
+    return get_leaf_node_ret(
+      interruptible::ready_future_marker{},
+      ret);
+  });
 }
 
 }
