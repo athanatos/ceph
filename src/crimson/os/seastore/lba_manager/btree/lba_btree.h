@@ -294,16 +294,39 @@ private:
 
   using get_internal_node_iertr = base_iertr;
   using get_internal_node_ret = get_internal_node_iertr::future<LBAInternalNodeRef>;
-  get_internal_node_ret get_internal_node(
+  static get_internal_node_ret get_internal_node(
     op_context_t c,
     depth_t depth,
     paddr_t offset);
 
   using get_leaf_node_iertr = base_iertr;
   using get_leaf_node_ret = get_leaf_node_iertr::future<LBALeafNodeRef>;
-  get_leaf_node_ret get_leaf_node(
+  static get_leaf_node_ret get_leaf_node(
     op_context_t c,
     paddr_t offset);
+
+  using lookup_root_iertr = base_iertr;
+  using lookup_root_ret = lookup_root_iertr::future<>;
+  lookup_root_ret lookup_root(op_context_t c, iterator &iter) {
+    if (root.get_depth() > 1) {
+      return get_internal_node(
+	c,
+	root.get_depth(),
+	root.get_location()
+      ).si_then([this, &iter](LBAInternalNodeRef root_node) {
+	iter.get_internal(root.get_depth()).node = root_node;
+	return lookup_root_iertr::now();
+      });
+    } else {
+      return get_leaf_node(
+	c,
+	root.get_location()
+      ).si_then([this, &iter](LBALeafNodeRef root_node) {
+	iter.leaf.node = root_node;
+	return lookup_root_iertr::now();
+      });
+    }
+  }
 
   using lookup_internal_level_iertr = base_iertr;
   using lookup_internal_level_ret = lookup_internal_level_iertr::future<>;
@@ -312,7 +335,8 @@ private:
     op_context_t c,
     depth_t depth,
     iterator &iter,
-    F &&f) {
+    F &f) {
+    assert(depth > 1);
     auto &parent_entry = iter.get_internal(depth + 1);
     auto parent = parent_entry.node;
     assert(parent);
@@ -336,7 +360,7 @@ private:
   static lookup_internal_level_ret lookup_leaf(
     op_context_t c,
     iterator &iter,
-    F &&f
+    F &f
   ) {
     auto &parent_entry = iter.get_internal(2);
     auto parent = parent_entry.node;
@@ -351,6 +375,42 @@ private:
       iter.leaf.node = node;
       return seastar::now();
     });
+  }
+
+  using lookup_to_depth_iertr = base_iertr;
+  using lookup_to_depth_ret = lookup_to_depth_iertr::future<iterator>;
+  template <typename F>
+  lookup_to_depth_ret lookup_to_depth(
+    op_context_t c,
+    depth_t target_depth,
+    F &&f) {
+    return seastar::do_with(
+      std::forward<F>(f),
+      iterator{},
+      [this, c, target_depth](auto &iterator, auto &f) {
+	return lookup_root(
+	  c, iterator
+	).si_then([this, c, target_depth, &iterator, &f] {
+	  return trans_intr::do_for_each(
+	    boost::reverse_iterator(boost::counting_iterator(root.depth - 1)),
+	    boost::reverse_iterator(boost::counting_iterator(target_depth)),
+	    [this, c, target_depth, &iterator, &f](auto d) {
+	      if (d > 1) {
+		return lookup_internal_level(
+		  c,
+		  d,
+		  iterator,
+		  f);
+	      } else if (d == 1) {
+		return lookup_to_depth_iertr::now();
+	      } else {
+		return lookup_to_depth_iertr::now();
+	      }
+	    }).si_then([&iterator] {
+	      return std::move(iterator);
+	    });
+	});
+      });
   }
 };
 
