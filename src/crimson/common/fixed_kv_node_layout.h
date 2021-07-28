@@ -92,6 +92,19 @@ public:
       return *this;
     }
 
+    iter_t operator--(int) {
+      assert(offset > 0);
+      auto ret = *this;
+      --offset;
+      return ret;
+    }
+
+    iter_t &operator--() {
+      assert(offset > 0);
+      --offset;
+      return *this;
+    }
+
     uint16_t operator-(const iter_t &rhs) const {
       assert(rhs.node == node);
       return offset - rhs.offset;

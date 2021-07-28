@@ -31,9 +31,19 @@ LBABtree::iterator_fut LBABtree::lower_bound(
   laddr_t addr) const
 {
   LOG_PREFIX(LBATree::lower_bound);
-  return iterator_fut(
-    interruptible::ready_future_marker{},
-    iterator{});
+  return lookup(
+    c,
+    [addr](const LBAInternalNode &internal) {
+      assert(internal.get_size() > 0);
+      auto iter = internal.upper_bound(addr);
+      assert(iter != internal.begin());
+      --iter;
+      return iter;
+    },
+    [addr](const LBALeafNode &leaf) {
+      assert(leaf.get_size() > 0);
+      return leaf.lower_bound(addr);
+    });
 }
 
 LBABtree::insert_ret LBABtree::insert(

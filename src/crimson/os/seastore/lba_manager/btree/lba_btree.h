@@ -307,7 +307,7 @@ private:
 
   using lookup_root_iertr = base_iertr;
   using lookup_root_ret = lookup_root_iertr::future<>;
-  lookup_root_ret lookup_root(op_context_t c, iterator &iter) {
+  lookup_root_ret lookup_root(op_context_t c, iterator &iter) const {
     if (root.get_depth() > 1) {
       return get_internal_node(
 	c,
@@ -342,12 +342,11 @@ private:
     assert(parent);
     auto node_iter = f(*parent);
     parent_entry.pos = node_iter.get_offset();
-    return get_internal_node_ret(
+    return get_internal_node(
       c,
       depth,
-      node_iter->get_val().paddr.maybe_relative_to(parent->get_paddr())
+      node_iter->get_val().maybe_relative_to(parent->get_paddr())
     ).si_then([c, depth, &iter](LBAInternalNodeRef node) {
-      auto &parent_entry = iter.get_internal(depth + 1);
       auto &entry = iter.get_internal(depth);
       entry.node = node;
       return seastar::now();
@@ -367,48 +366,73 @@ private:
     assert(parent);
     auto node_iter = f(*parent);
     parent_entry.pos = node_iter.get_offset();
-    return get_leaf_node_ret(
+    return get_leaf_node(
       c,
-      node_iter->get_val().paddr.maybe_relative_to(parent->get_paddr())
+      node_iter->get_val().maybe_relative_to(parent->get_paddr())
     ).si_then([c, &iter](LBALeafNodeRef node) {
-      auto &parent_entry = iter.get_internal(2);
       iter.leaf.node = node;
       return seastar::now();
     });
   }
 
-  using lookup_to_depth_iertr = base_iertr;
-  using lookup_to_depth_ret = lookup_to_depth_iertr::future<iterator>;
+  using lookup_depth_range_iertr = base_iertr;
+  using lookup_depth_range_ret = lookup_depth_range_iertr::future<>;
   template <typename F>
-  lookup_to_depth_ret lookup_to_depth(
+  static lookup_depth_range_ret lookup_depth_range(
+    op_context_t c, ///< [in] context
+    iterator &iter, ///< [in,out] iterator to populate
+    depth_t from,   ///< [in] from inclusive
+    depth_t to,     ///< [in] to exclusive, (to <= from, to == from is a noop)
+    F &f            ///< [in] lookup selector
+  ) {
+    return trans_intr::do_for_each(
+      boost::reverse_iterator(boost::counting_iterator(from)),
+      boost::reverse_iterator(boost::counting_iterator(to)),
+      [c, &iter, &f](auto d) {
+	if (d > 1) {
+	  return lookup_internal_level(
+	    c,
+	    d,
+	    iter,
+	    f);
+	} else if (d == 1) {
+	  return lookup_leaf(
+	    c,
+	    iter,
+	    f);
+	} else {
+	  assert(0 == "impossible");
+	}
+      });
+  }
+
+  using lookup_iertr = base_iertr;
+  using lookup_ret = lookup_iertr::future<iterator>;
+  template <typename LI, typename LL>
+  lookup_ret lookup(
     op_context_t c,
-    depth_t target_depth,
-    F &&f) {
+    LI &&lookup_internal,
+    LL &&lookup_leaf) const {
     return seastar::do_with(
-      std::forward<F>(f),
       iterator{},
-      [this, c, target_depth](auto &iterator, auto &f) {
+      std::forward<LI>(lookup_internal),
+      std::forward<LL>(lookup_leaf),
+      [this, c](auto &iter, auto &li, auto &ll) {
 	return lookup_root(
-	  c, iterator
-	).si_then([this, c, target_depth, &iterator, &f] {
-	  return trans_intr::do_for_each(
-	    boost::reverse_iterator(boost::counting_iterator(root.depth - 1)),
-	    boost::reverse_iterator(boost::counting_iterator(target_depth)),
-	    [this, c, target_depth, &iterator, &f](auto d) {
-	      if (d > 1) {
-		return lookup_internal_level(
-		  c,
-		  d,
-		  iterator,
-		  f);
-	      } else if (d == 1) {
-		return lookup_to_depth_iertr::now();
-	      } else {
-		return lookup_to_depth_iertr::now();
-	      }
-	    }).si_then([&iterator] {
-	      return std::move(iterator);
-	    });
+	  c, iter
+	).si_then([this, c, &iter, &li] {
+	  return lookup_depth_range(
+	    c,
+	    iter,
+	    root.get_depth() - 1,
+	    0,
+	    li);
+	}).si_then([c, &iter, &ll] {
+	  assert(iter.leaf.node);
+	  auto liter = ll(*iter.leaf.node);
+	  if (liter != iter.leaf.node->end())
+	    iter.leaf.pos = liter.get_offset();
+	  return std::move(iter);
 	});
       });
   }
