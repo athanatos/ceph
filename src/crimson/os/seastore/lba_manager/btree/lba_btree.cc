@@ -37,13 +37,46 @@ LBABtree::iterator_fut LBABtree::iterator::next(op_context_t c) const
     return iterator_fut(
       interruptible::ready_future_marker{},
       ret);
-  } else {
-    
   }
 
-  return iterator_fut(
-    interruptible::ready_future_marker{},
-    *this);
+  depth_t depth_with_space = 2;
+  for (; depth_with_space <= get_depth(); ++depth_with_space) {
+    if ((get_internal(depth_with_space).pos + 1) <
+	get_internal(depth_with_space).node->get_size()) {
+      break;
+    }
+  }
+
+  if (depth_with_space < get_depth()) {
+    return seastar::do_with(
+      *this,
+      [](const LBAInternalNode &internal) { return internal.begin(); },
+      [](const LBALeafNode &leaf) { return leaf.begin(); },
+      [c, depth_with_space](auto &ret, auto &li, auto &ll) {
+	for (depth_t depth = 2; depth < depth_with_space; ++depth) {
+	  ret.get_internal(depth).reset();
+	}
+	ret.leaf.reset();
+	ret.get_internal(depth_with_space).pos++;
+	return lookup_depth_range(
+	  c,
+	  ret,
+	  depth_with_space - 1,
+	  0,
+	  li,
+	  ll
+	).si_then([&ret] {
+	  return std::move(ret);
+	});
+      });
+  } else {
+    // end
+    auto ret = *this;
+    ret.leaf.pos = MAX;
+    return iterator_fut(
+      interruptible::ready_future_marker{},
+      ret);
+  }
 }
 
 LBABtree::iterator_fut LBABtree::iterator::prev(op_context_t c) const

@@ -44,7 +44,17 @@ public:
       }
     }
 
+    depth_t get_depth() const {
+      return internal.size() + 1;
+    }
+
     auto &get_internal(depth_t depth) {
+      assert(depth > 1);
+      assert((depth - 2) < internal.size());
+      return internal[depth - 2];
+    }
+
+    const auto &get_internal(depth_t depth) const {
       assert(depth > 1);
       assert((depth - 2) < internal.size());
       return internal[depth - 2];
@@ -87,6 +97,10 @@ public:
     struct node_position_t {
       typename NodeType::Ref node;
       uint16_t pos = MAX;
+
+      void reset() {
+	*this = node_position_t{};
+      }
     };
     boost::container::static_vector<
       node_position_t<LBAInternalNode>, MAX_DEPTH> internal;
@@ -337,16 +351,17 @@ private:
     assert(depth > 1);
     auto &parent_entry = iter.get_internal(depth + 1);
     auto parent = parent_entry.node;
-    assert(parent);
-    auto node_iter = f(*parent);
-    parent_entry.pos = node_iter.get_offset();
+    auto node_iter = parent->iter_idx(parent_entry.pos);
     return get_internal_node(
       c,
       depth,
       node_iter->get_val().maybe_relative_to(parent->get_paddr())
-    ).si_then([c, depth, &iter](LBAInternalNodeRef node) {
+    ).si_then([c, depth, &iter, &f](LBAInternalNodeRef node) {
       auto &entry = iter.get_internal(depth);
       entry.node = node;
+      auto node_iter = f(*node);
+      assert(node_iter != node->end());
+      entry.pos = node_iter->get_offset();
       return seastar::now();
     });
   }
@@ -362,42 +377,47 @@ private:
     auto &parent_entry = iter.get_internal(2);
     auto parent = parent_entry.node;
     assert(parent);
-    auto node_iter = f(*parent);
-    parent_entry.pos = node_iter.get_offset();
+    auto node_iter = parent->iter_idx(parent_entry.pos);
+
     return get_leaf_node(
       c,
       node_iter->get_val().maybe_relative_to(parent->get_paddr())
-    ).si_then([c, &iter](LBALeafNodeRef node) {
+    ).si_then([c, &iter, &f](LBALeafNodeRef node) {
       iter.leaf.node = node;
+      auto node_iter = f(*node);
+      iter.leaf.pos = node_iter == node->end()
+	? iterator::MAX
+	: node_iter->get_offset();
       return seastar::now();
     });
   }
 
   using lookup_depth_range_iertr = base_iertr;
   using lookup_depth_range_ret = lookup_depth_range_iertr::future<>;
-  template <typename F>
+  template <typename LI, typename LL>
   static lookup_depth_range_ret lookup_depth_range(
     op_context_t c, ///< [in] context
     iterator &iter, ///< [in,out] iterator to populate
     depth_t from,   ///< [in] from inclusive
     depth_t to,     ///< [in] to exclusive, (to <= from, to == from is a noop)
-    F &f            ///< [in] lookup selector
+    LI &li,         ///< [in] internal->iterator
+    LL &ll          ///< [in] leaf->iterator
   ) {
     return trans_intr::do_for_each(
       boost::reverse_iterator(boost::counting_iterator(from)),
       boost::reverse_iterator(boost::counting_iterator(to)),
-      [c, &iter, &f](auto d) {
+      [c, &iter, &li, &ll](auto d) {
 	if (d > 1) {
 	  return lookup_internal_level(
 	    c,
 	    d,
 	    iter,
-	    f);
+	    li);
 	} else if (d == 1) {
 	  return lookup_leaf(
 	    c,
 	    iter,
-	    f);
+	    ll);
 	} else {
 	  assert(0 == "impossible");
 	}
@@ -418,18 +438,22 @@ private:
       [this, c](auto &iter, auto &li, auto &ll) {
 	return lookup_root(
 	  c, iter
-	).si_then([this, c, &iter, &li] {
+	).si_then([this, c, &iter, &li, &ll] {
+	  if (iter.get_depth() > 1) {
+	    auto &root_entry = *(iter.internal.rbegin());
+	    root_entry.pos = li(*(root_entry.node)).get_offset();
+	  } else {
+	    auto &root_entry = iter.leaf;
+	    root_entry.pos = ll(*(root_entry.node)).get_offset();
+	  }
 	  return lookup_depth_range(
 	    c,
 	    iter,
 	    root.get_depth() - 1,
 	    0,
-	    li);
-	}).si_then([c, &iter, &ll] {
-	  assert(iter.leaf.node);
-	  auto liter = ll(*iter.leaf.node);
-	  if (liter != iter.leaf.node->end())
-	    iter.leaf.pos = liter.get_offset();
+	    li,
+	    ll);
+	}).si_then([c, &iter] {
 	  return std::move(iter);
 	});
       });
