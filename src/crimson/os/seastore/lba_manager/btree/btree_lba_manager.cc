@@ -66,11 +66,13 @@ BtreeLBAManager::get_mappings(
 {
   LOG_PREFIX(BtreeLBAManager::get_mappings);
   DEBUGT("offset: {}, length{}", t, offset, length);
+  auto c = get_context(t);
   return with_btree_state<lba_pin_list_t>(
-    get_context(t),
-    [this, &t, offset, length](auto &btree, auto &ret) {
+    c,
+    [this, c, &t, offset, length](auto &btree, auto &ret) {
       return LBABtree::iterate_repeat(
-	btree.upper_bound_right(get_context(t), offset),
+	c,
+	btree.upper_bound_right(c, offset),
 	[&ret, offset, length](auto &pos) {
 	  ceph_assert(!pos.is_end());
 	  if (pos.is_end() || pos.get_key() >= (offset + length)) {
@@ -158,6 +160,7 @@ BtreeLBAManager::alloc_extent(
     hint,
     [this, c, hint, len, addr](auto &btree, auto &state) {
       return LBABtree::iterate_repeat(
+	c,
 	btree.lower_bound(c, hint),
 	[&state, hint, len](auto &pos) {
 	  ceph_assert(!pos.is_end());
@@ -367,6 +370,7 @@ BtreeLBAManager::scan_mappings_ret BtreeLBAManager::scan_mappings(
     c,
     [this, c, &t, f=std::move(f), begin, end](auto &btree) mutable {
       return LBABtree::iterate_repeat(
+	c,
 	btree.upper_bound_right(c, begin),
 	[f=std::move(f), begin, end](auto &pos) {
 	  ceph_assert(!pos.is_end());
@@ -394,6 +398,7 @@ BtreeLBAManager::scan_mapped_space_ret BtreeLBAManager::scan_mapped_space(
     c,
     [this, c, &t, f=std::move(f)](auto &btree) mutable {
       return LBABtree::iterate_repeat(
+	c,
 	btree.begin(c),
 	[f=std::move(f)](auto &pos) {
 	  ceph_assert(!pos.is_end());

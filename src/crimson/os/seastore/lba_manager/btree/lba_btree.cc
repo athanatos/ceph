@@ -26,6 +26,36 @@ LBABtree::mkfs_ret LBABtree::mkfs(op_context_t c)
   return lba_root_t{root_leaf->get_paddr(), 1u};
 }
 
+LBABtree::iterator_fut LBABtree::iterator::next(op_context_t c) const
+{
+  assert_valid();
+  assert(!is_end());
+
+  if ((leaf.pos + 1) < leaf.node->get_size()) {
+    auto ret = *this;
+    ret.leaf.pos++;
+    return iterator_fut(
+      interruptible::ready_future_marker{},
+      ret);
+  } else {
+    
+  }
+
+  return iterator_fut(
+    interruptible::ready_future_marker{},
+    *this);
+}
+
+LBABtree::iterator_fut LBABtree::iterator::prev(op_context_t c) const
+{
+  assert_valid();
+  assert(0 == "TODO");
+  // TODOSAM
+  return iterator_fut(
+    interruptible::ready_future_marker{},
+    *this);
+}
+
 LBABtree::iterator_fut LBABtree::lower_bound(
   op_context_t c,
   laddr_t addr) const
@@ -43,6 +73,9 @@ LBABtree::iterator_fut LBABtree::lower_bound(
     [addr](const LBALeafNode &leaf) {
       assert(leaf.get_size() > 0);
       return leaf.lower_bound(addr);
+    }).si_then([](auto &&ret) {
+      ret.assert_valid();
+      return std::move(ret);
     });
 }
 

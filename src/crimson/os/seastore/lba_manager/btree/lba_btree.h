@@ -21,42 +21,27 @@ class LBABtree {
 public:
   using base_iertr = LBAManager::base_iertr;
 
-  class iterator {
-    friend class LBABtree;
-    static constexpr uint16_t MAX = std::numeric_limits<uint16_t>::max();
-    template <typename NodeType>
-    struct node_position_t {
-      typename NodeType::Ref node;
-      uint16_t pos = MAX;
-    };
-    boost::container::static_vector<
-      node_position_t<LBAInternalNode>, MAX_DEPTH> internal;
-    node_position_t<LBALeafNode> leaf;
-    
-    iterator() = default;
+  class iterator;
+  using iterator_fut = base_iertr::future<iterator>;
 
+  class iterator {
   public:
     iterator(const iterator &) noexcept = default;
     iterator(iterator &&) noexcept = default;
     iterator &operator=(const iterator &) = default;
     iterator &operator=(iterator &&) = default;
 
-    using next_iertr = base_iertr;
-    using next_ret = base_iertr::future<iterator>;
-    next_ret next() const {
-      // TODOSAM
-      return next_ret(
-	interruptible::ready_future_marker{},
-	*this);
-    }
+    iterator_fut next(op_context_t c) const;
+    iterator_fut prev(op_context_t c) const;
 
-    using prev_iertr = base_iertr;
-    using prev_ret = base_iertr::future<iterator>;
-    prev_ret prev() const {
-      // TODOSAM
-      return prev_ret(
-	interruptible::ready_future_marker{},
-	*this);
+    void assert_valid() const {
+      assert(leaf.node);
+      assert(leaf.pos == MAX || (leaf.pos < leaf.node->get_size()));
+
+      for (auto &i: internal) {
+	assert(i.node);
+	assert(i.pos < leaf.node->get_size());
+      }
     }
 
     auto &get_internal(depth_t depth) {
@@ -93,6 +78,19 @@ public:
 	get_val().paddr /* probably needs to be adjusted TODO */,
 	lba_node_meta_t{ get_key(), get_key() + get_val().len, 0 });
     }
+  private:
+    iterator() = default;
+
+    friend class LBABtree;
+    static constexpr uint16_t MAX = std::numeric_limits<uint16_t>::max();
+    template <typename NodeType>
+    struct node_position_t {
+      typename NodeType::Ref node;
+      uint16_t pos = MAX;
+    };
+    boost::container::static_vector<
+      node_position_t<LBAInternalNode>, MAX_DEPTH> internal;
+    node_position_t<LBALeafNode> leaf;
   };
 
   LBABtree(lba_root_t root) : root(root) {}
@@ -109,8 +107,6 @@ public:
   /// mkfs
   using mkfs_ret = lba_root_t;
   static mkfs_ret mkfs(op_context_t c);
-
-  using iterator_fut = base_iertr::future<iterator>;
 
   /**
    * lower_bound
@@ -136,9 +132,9 @@ public:
   ) const {
     return lower_bound(
       c, addr
-    ).si_then([this, addr](auto iter) {
+    ).si_then([this, c, addr](auto iter) {
       if (!iter.is_end() && iter.get_key() == addr) {
-	return iter.next();
+	return iter.next(c);
       } else {
 	return iterator_fut(
 	  interruptible::ready_future_marker{},
@@ -160,13 +156,14 @@ public:
   {
     return lower_bound(
       c, addr
-    ).si_then([this, addr](auto iter) {
+    ).si_then([this, c, addr](auto iter) {
       if (iter.is_begin()) {
 	return iterator_fut(
 	  interruptible::ready_future_marker{},
 	  iter);
       } else {
 	return iter.prev(
+	  c
 	).si_then([iter, addr](auto prev) {
 	  if ((prev.get_key() + prev.get_val().len) > addr) {
 	    return iterator_fut(
@@ -192,16 +189,16 @@ public:
   using iterate_repeat_ret = base_iertr::future<
     seastar::stop_iteration>;
   template <typename F>
-  static auto iterate_repeat(iterator_fut &&iter_fut, F &&f) {
-    return std::move(iter_fut).si_then([f=std::forward<F>(f)](auto iter) {
+  static auto iterate_repeat(op_context_t c, iterator_fut &&iter_fut, F &&f) {
+    return std::move(iter_fut).si_then([c, f=std::forward<F>(f)](auto iter) {
       return seastar::do_with(
 	iter,
-	[f=std::move(f)](auto &pos) {
+	[c, f=std::move(f)](auto &pos) {
 	  return trans_intr::repeat(
-	    [&f, &pos] {
+	    [c, &f, &pos] {
 	      return f(
 		pos
-	      ).si_then([&pos](auto done) {
+	      ).si_then([c, &pos](auto done) {
 		if (done == seastar::stop_iteration::yes) {
 		  return iterate_repeat_ret(
 		    interruptible::ready_future_marker{},
@@ -209,6 +206,7 @@ public:
 		} else {
 		  ceph_assert(!pos.is_end());
 		  return pos.next(
+		    c
 		  ).si_then([&pos](auto next) {
 		    pos = next;
 		    return iterate_repeat_ret(
