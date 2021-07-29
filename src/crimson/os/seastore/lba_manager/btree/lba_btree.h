@@ -495,6 +495,12 @@ private:
     op_context_t c,
     iterator &iter);
   
+  using handle_merge_iertr = base_iertr;
+  using handle_merge_ret = handle_merge_iertr::future<>;
+  handle_merge_ret handle_merge(
+    op_context_t c,
+    iterator &iter);
+  
 };
 
 }

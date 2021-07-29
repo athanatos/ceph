@@ -175,13 +175,22 @@ LBABtree::insert_ret LBABtree::insert(
 
 LBABtree::update_ret LBABtree::update(
   op_context_t c,
-  iterator iter,
+  iterator ret,
   lba_map_val_t val)
 {
   LOG_PREFIX(LBATree::update);
+  if (!ret.leaf.node->is_pending()) {
+    CachedExtentRef mut = c.cache.duplicate_for_write(
+      c.trans, ret.leaf.node
+    );
+    ret.leaf.node = mut->cast<LBALeafNode>();
+  }
+  // ret.leaf.node->update(
+  //   ret.leaf.node->iter_idx(ret.leaf.pos),
+  //   val);
   return update_ret(
     interruptible::ready_future_marker{},
-    iterator{});
+    ret);
 }
 
 LBABtree::remove_ret LBABtree::remove(
@@ -189,9 +198,25 @@ LBABtree::remove_ret LBABtree::remove(
   iterator iter)
 {
   LOG_PREFIX(LBATree::remove);
-  return remove_ret(
-    interruptible::ready_future_marker{},
-    iterator{});
+  assert(!iter.is_end());
+  return seastar::do_with(
+    iter,
+    [this, c](auto &ret) {
+      return handle_merge(
+	c, ret
+      ).si_then([c, &ret] {
+	if (!ret.leaf.node->is_pending()) {
+	  CachedExtentRef mut = c.cache.duplicate_for_write(
+	    c.trans, ret.leaf.node
+	  );
+	  ret.leaf.node = mut->cast<LBALeafNode>();
+	}
+	// ret.leaf.pos = ret.leaf.node->remove(
+	//   c, ret.leaf.node->iter_idx(ret.leaf.pos)
+	// );
+	return ret.next(c);
+      });
+    });
 }
 
 LBABtree::get_internal_node_ret LBABtree::get_internal_node(
@@ -273,6 +298,13 @@ LBABtree::find_insertion_ret LBABtree::find_insertion(
 }
 
 LBABtree::handle_split_ret LBABtree::handle_split(
+  op_context_t c,
+  iterator &iter)
+{
+  return seastar::now();
+}
+
+LBABtree::handle_merge_ret LBABtree::handle_merge(
   op_context_t c,
   iterator &iter)
 {
