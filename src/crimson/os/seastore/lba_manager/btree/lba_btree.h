@@ -88,6 +88,7 @@ public:
 	get_val().paddr /* probably needs to be adjusted TODO */,
 	lba_node_meta_t{ get_key(), get_key() + get_val().len, 0 });
     }
+
   private:
     iterator() = default;
 
@@ -105,6 +106,28 @@ public:
     boost::container::static_vector<
       node_position_t<LBAInternalNode>, MAX_DEPTH> internal;
     node_position_t<LBALeafNode> leaf;
+
+    depth_t check_split() const {
+      if (!leaf.node->at_max_capacity()) {
+	return 0;
+      }
+      for (depth_t split_from = 1; split_from < get_depth(); ++split_from) {
+	if (!get_internal(split_from + 1).node->at_max_capacity())
+	  return split_from;
+      }
+      return get_depth();
+    }
+
+    depth_t check_merge() const {
+      if (!leaf.node->at_min_capacity()) {
+	return 0;
+      }
+      for (depth_t merge_from = 1; merge_from < get_depth(); ++merge_from) {
+	if (!get_internal(merge_from + 1).node->at_min_capacity())
+	  return merge_from;
+      }
+      return get_depth();
+    }
   };
 
   LBABtree(lba_root_t root) : root(root) {}
@@ -458,6 +481,20 @@ private:
 	});
       });
   }
+
+  using find_insertion_iertr = base_iertr;
+  using find_insertion_ret = find_insertion_iertr::future<>;
+  static find_insertion_ret find_insertion(
+    op_context_t c,
+    laddr_t laddr,
+    iterator &iter);
+
+  using handle_split_iertr = base_iertr;
+  using handle_split_ret = handle_split_iertr::future<>;
+  handle_split_ret handle_split(
+    op_context_t c,
+    iterator &iter);
+  
 };
 
 }

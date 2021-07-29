@@ -143,9 +143,34 @@ LBABtree::insert_ret LBABtree::insert(
   lba_map_val_t val)
 {
   LOG_PREFIX(LBATree::insert);
-  return insert_ret(
-    interruptible::ready_future_marker{},
-    std::make_pair(iterator{}, true));
+  return seastar::do_with(
+    iter,
+    [this, c, laddr, val](auto &ret) {
+      return find_insertion(
+	c, laddr, ret
+      ).si_then([this, c, laddr, val, &ret] {
+	if (ret.leaf.pos != iterator::MAX && ret.get_key() == laddr) {
+	  return insert_ret(
+	    interruptible::ready_future_marker{},
+	    std::make_pair(ret, false));
+	} else {
+	  return handle_split(
+	    c, ret
+	  ).si_then([c, laddr, val, &ret] {
+	    if (!ret.leaf.node->is_pending()) {
+	      CachedExtentRef mut = c.cache.duplicate_for_write(
+		c.trans, ret.leaf.node
+	      );
+	      ret.leaf.node = mut->cast<LBALeafNode>();
+	    }
+	    // ret.leaf.pos = ret.leaf.node->insert(c, laddr, val);
+	    return insert_ret(
+	      interruptible::ready_future_marker{},
+	      std::make_pair(ret, true));
+	  });
+	}
+      });
+    });
 }
 
 LBABtree::update_ret LBABtree::update(
@@ -237,6 +262,21 @@ LBABtree::get_leaf_node_ret LBABtree::get_leaf_node(
       interruptible::ready_future_marker{},
       ret);
   });
+}
+
+LBABtree::find_insertion_ret LBABtree::find_insertion(
+  op_context_t c,
+  laddr_t laddr,
+  iterator &iter)
+{
+  return seastar::now();
+}
+
+LBABtree::handle_split_ret LBABtree::handle_split(
+  op_context_t c,
+  iterator &iter)
+{
+  return seastar::now();
 }
 
 }
