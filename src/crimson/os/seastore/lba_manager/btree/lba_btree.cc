@@ -163,7 +163,7 @@ LBABtree::insert_ret LBABtree::insert(
 	      );
 	      ret.leaf.node = mut->cast<LBALeafNode>();
 	    }
-	    // ret.leaf.pos = ret.leaf.node->insert(c, laddr, val);
+	    // ret.leaf.pos = ret.leaf.node->insert(c, laddr, val).get_offset();
 	    return insert_ret(
 	      interruptible::ready_future_marker{},
 	      std::make_pair(ret, true));
@@ -294,13 +294,57 @@ LBABtree::find_insertion_ret LBABtree::find_insertion(
   laddr_t laddr,
   iterator &iter)
 {
-  return seastar::now();
+  assert(iter.get_key() >= laddr);
+  if (iter.get_key() == laddr) {
+    return seastar::now();
+  } else if (iter.leaf.node->get_node_meta().begin <= laddr) {
+    auto p = iter;
+    if (p.leaf.pos > 0) {
+      --p.leaf.pos;
+      assert(p.get_key() < laddr);
+    }
+    return seastar::now();
+  } else {
+    assert(iter.leaf.pos == 0);
+    return iter.prev(
+      c
+    ).si_then([laddr, &iter](auto p) {
+      assert(p.leaf.node->get_node_meta().begin <= laddr);
+      assert(p.get_key() < laddr);
+      // Note, this is specifically allowed to violate the iterator
+      // invariant that pos is a valid index for the node in the event
+      // that the insertion point is at the end of a node.
+      p.leaf.pos++;
+      iter = p;
+      return seastar::now();
+    });
+  }
 }
 
 LBABtree::handle_split_ret LBABtree::handle_split(
   op_context_t c,
   iterator &iter)
 {
+
+  auto split_from = iter.check_split();
+  if (split_from == iter.get_depth()) {
+    auto nroot = c.cache.alloc_new_extent<LBAInternalNode>(
+      c.trans, LBA_BLOCK_SIZE);
+    lba_node_meta_t meta{0, L_ADDR_MAX, iter.get_depth() + 1};
+    nroot->set_meta(meta);
+    nroot->pin.set_range(meta);
+    nroot->journal_insert(
+      nroot->begin(),
+      L_ADDR_MIN,
+      iter.internal.rbegin()->node->get_paddr(),
+      nullptr);
+    iter.internal.push_back({nroot, 0});
+
+    root.set_location(nroot->get_paddr());
+    root.set_depth(iter.get_depth());
+    root_dirty = true;
+  }
+
   return seastar::now();
 }
 
