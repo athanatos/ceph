@@ -346,16 +346,10 @@ LBABtree::handle_split_ret LBABtree::handle_split(
     root_dirty = true;
   }
 
-  for (; split_from > 1; --split_from) {
-    auto &parent_pos = iter.get_internal(split_from);
-    auto &pos = iter.get_internal(split_from);
+  /* pos may be either node_position_t<LBALeafNode> or
+   * node_position_t<LBAInternalNode> */
+  auto split_level = [&](auto &parent_pos, auto &pos) {
     auto [left, right, pivot] = pos.node->make_split_children(c);
-
-    if (!parent_pos.node->is_pending()) {
-      parent_pos.node = c.cache.duplicate_for_write(
-	c.trans, parent_pos.node
-      )->cast<LBAInternalNode>();
-    }
 
     auto parent_node = parent_pos.node;
     auto parent_iter = parent_pos.get_iter();
@@ -370,11 +364,30 @@ LBABtree::handle_split_ret LBABtree::handle_split(
 
     c.cache.retire_extent(c.trans, pos.node);
 
-    if (parent_pos.pos < left->get_size()) {
+    if (pos.pos < left->get_size()) {
       pos.node = left;
     } else {
       pos.node = right;
-      parent_pos.pos -= left->get_size();
+      pos.pos -= left->get_size();
+
+      parent_pos.pos += 1;
+    }
+  };
+
+  for (; split_from > 0; --split_from) {
+    auto &parent_pos = iter.get_internal(split_from + 1);
+    if (!parent_pos.node->is_pending()) {
+      parent_pos.node = c.cache.duplicate_for_write(
+	c.trans, parent_pos.node
+      )->cast<LBAInternalNode>();
+    }
+
+    if (split_from > 1) {
+      auto &pos = iter.get_internal(split_from);
+      split_level(parent_pos, pos);
+    } else {
+      auto &pos = iter.leaf;
+      split_level(parent_pos, pos);
     }
   }
 
@@ -385,6 +398,61 @@ LBABtree::handle_merge_ret LBABtree::handle_merge(
   op_context_t c,
   iterator &iter)
 {
+  if (!iter.leaf.node->at_min_capacity() ||
+      iter.get_depth() == 1) {
+    return seastar::now();
+  }
+
+  /* pos may be either node_position_t<LBALeafNode> or
+   * node_position_t<LBAInternalNode> */
+  auto merge_level = [&](auto &parent_pos, auto &pos) {
+    return handle_merge_iertr::now();
+  }
+
+
+  return seastar::do_with(
+    depth_t{1},
+    [c, &iter](auto &to_merge) {
+      return trans_intr::repeat(
+	[c, &iter, &to_merge] {
+	  if (to_merge == iter.get_depth()) {
+	  }
+
+	  if (to_merge == 1) {
+	    if (!iter.leaf.node->at_min_capacity() ||
+		iter.get_depth() == 1) {
+	      return handle_merge_ret(
+		interruptible::ready_future_marker{},
+		seastar::stop_iteration::yes);
+	    }
+	  } else {
+	    if (!iter.get_internal(.node->at_min_capacity() ||
+		iter.get_depth() == 1) {
+	  }
+
+	});
+    });
+
+
+
+  depth_t to_merge = 1;
+  while (true) {
+    auto &parent_pos = iter.get_internal(to_merge + 1);
+    if (!parent_pos.node->is_pending()) {
+      parent_pos.node = c.cache.duplicate_for_write(
+	c.trans, parent_pos.node
+      )->cast<LBAInternalNode>();
+    }
+
+    if (to_merge > 1) {
+      auto &pos = internal.leaf;
+      merge_level(parent_pos, pos);
+    } else {
+      auto &pos = internal.get_internal(to_merge);
+      merge_level(parent_pos, pos);
+    }
+  }
+
   return seastar::now();
 }
 
