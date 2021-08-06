@@ -394,18 +394,37 @@ LBABtree::handle_split_ret LBABtree::handle_split(
   return seastar::now();
 }
 
-template <typename P>
+template <typename NodeType>
 LBABtree::handle_merge_ret merge_level(
   op_context_t c,
+  depth_t depth,
   LBABtree::node_position_t<LBAInternalNode> &parent_pos,
-  P &pos)
+  LBABtree::node_position_t<NodeType> &pos)
 {
   if (!parent_pos.node->is_pending()) {
     parent_pos.node = c.cache.duplicate_for_write(
       c.trans, parent_pos.node
     )->cast<LBAInternalNode>();
   }
+
+  auto parent_iterator = parent_pos.get_iter();
+  paddr_t to_read;
+  bool merge_with_right = ((parent_pos.pos + 1) < parent_pos.node->get_size());
+  if (merge_with_right) {
+    to_read = (parent_iterator + 1).get_val().maybe_relative_to(
+      parent_pos.node->get_paddr());
+  } else {
+    --parent_iterator;
+    to_read = parent_iterator.get_val().maybe_relative_to(
+      parent_pos.node->get_paddr());
+  }
   return seastar::now();
+#if 0
+  return get_internal_node(c, depth, to_read
+  ).si_then([c, &parent_pos, &pos](LBAInternalNode node) {
+    LBAInternal
+  };
+#endif
 }
 
 LBABtree::handle_merge_ret LBABtree::handle_merge(
@@ -426,10 +445,10 @@ LBABtree::handle_merge_ret LBABtree::handle_merge(
 	  auto merge_fut = handle_merge_iertr::now();
 	  if (to_merge > 1) {
 	    auto &pos = iter.leaf;
-	    merge_fut = merge_level(c, parent_pos, pos);
+	    merge_fut = merge_level(c, to_merge, parent_pos, pos);
 	  } else {
 	    auto &pos = iter.get_internal(to_merge);
-	    merge_fut = merge_level(c, parent_pos, pos);
+	    merge_fut = merge_level(c, to_merge, parent_pos, pos);
 	  }
 
 	  return merge_fut.si_then([this, c, &iter, &to_merge] {

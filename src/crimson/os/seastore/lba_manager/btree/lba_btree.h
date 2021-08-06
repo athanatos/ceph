@@ -510,11 +510,12 @@ private:
   template <typename T>
   using node_position_t = iterator::node_position_t<T>;
 
-  template <typename P>
+  template <typename NodeType>
   friend handle_merge_ret merge_level(
     op_context_t c,
+    depth_t depth,
     node_position_t<LBAInternalNode> &parent_pos,
-    P &pos);
+    node_position_t<NodeType> &pos);
 };
 
 }
