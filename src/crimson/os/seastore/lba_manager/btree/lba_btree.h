@@ -500,13 +500,21 @@ private:
   handle_split_ret handle_split(
     op_context_t c,
     iterator &iter);
-  
+
   using handle_merge_iertr = base_iertr;
   using handle_merge_ret = handle_merge_iertr::future<>;
   handle_merge_ret handle_merge(
     op_context_t c,
     iterator &iter);
-  
+
+  template <typename T>
+  using node_position_t = iterator::node_position_t<T>;
+
+  template <typename P>
+  friend handle_merge_ret merge_level(
+    op_context_t c,
+    node_position_t<LBAInternalNode> &parent_pos,
+    P &pos);
 };
 
 }
