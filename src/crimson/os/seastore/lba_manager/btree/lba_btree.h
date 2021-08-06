@@ -511,6 +511,12 @@ private:
   using node_position_t = iterator::node_position_t<T>;
 
   template <typename NodeType>
+  friend base_iertr::future<typename NodeType::Ref> get_node(
+    op_context_t c,
+    depth_t depth,
+    paddr_t addr);
+
+  template <typename NodeType>
   friend handle_merge_ret merge_level(
     op_context_t c,
     depth_t depth,

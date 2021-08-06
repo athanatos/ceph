@@ -395,6 +395,29 @@ LBABtree::handle_split_ret LBABtree::handle_split(
 }
 
 template <typename NodeType>
+LBABtree::base_iertr::future<typename NodeType::Ref> get_node(
+  op_context_t c,
+  depth_t depth,
+  paddr_t addr);
+
+template <>
+LBABtree::base_iertr::future<LBALeafNodeRef> get_node<LBALeafNode>(
+  op_context_t c,
+  depth_t depth,
+  paddr_t addr) {
+  assert(depth == 1);
+  return LBABtree::get_leaf_node(c, addr);
+}
+
+template <>
+LBABtree::base_iertr::future<LBAInternalNodeRef> get_node<LBAInternalNode>(
+  op_context_t c,
+  depth_t depth,
+  paddr_t addr) {
+  return LBABtree::get_internal_node(c, depth, addr);
+}
+
+template <typename NodeType>
 LBABtree::handle_merge_ret merge_level(
   op_context_t c,
   depth_t depth,
@@ -418,13 +441,12 @@ LBABtree::handle_merge_ret merge_level(
     to_read = parent_iterator.get_val().maybe_relative_to(
       parent_pos.node->get_paddr());
   }
+
+  return get_node<NodeType>(c, depth, paddr_t{}
+  ).si_then([c, &parent_pos, &pos](typename NodeType::Ref node) {
+    return seastar::now();
+  });
   return seastar::now();
-#if 0
-  return get_internal_node(c, depth, to_read
-  ).si_then([c, &parent_pos, &pos](LBAInternalNode node) {
-    LBAInternal
-  };
-#endif
 }
 
 LBABtree::handle_merge_ret LBABtree::handle_merge(
