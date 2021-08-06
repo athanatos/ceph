@@ -342,7 +342,10 @@ LBAInternalNode::split_entry(
   }
 
   ceph_assert(!at_max_capacity());
-  auto [left, right, pivot] = entry->make_split_children(c);
+  //auto [left, right, pivot] = entry->make_split_children(c);
+  LBANodeRef left;
+  LBANodeRef right;
+  laddr_t pivot = 0;
 
   journal_update(
     iter,
@@ -400,9 +403,11 @@ LBAInternalNode::merge_entry(
     auto [liter, riter] = donor_is_left ?
       std::make_pair(donor_iter, iter) : std::make_pair(iter, donor_iter);
     if (donor->at_min_capacity()) {
-      auto replacement = l->make_full_merge(
+      LBANodeRef replacement;// = l->make_full_merge(
+/*
 	c,
 	r);
+	*/
 
       journal_update(
 	liter,
@@ -438,6 +443,7 @@ LBAInternalNode::merge_entry(
 	"LBAInternalEntry::merge_entry balanced l {} r {}",
 	*l,
 	*r);
+#if 0
       auto [replacement_l, replacement_r, pivot] =
 	l->make_balanced(
 	  c,
@@ -459,6 +465,8 @@ LBAInternalNode::merge_entry(
       return merge_iertr::make_ready_future<LBANodeRef>(
 	addr >= pivot ? replacement_r : replacement_l
       );
+#endif
+      return merge_iertr::make_ready_future<LBANodeRef>(this);
     }
   });
 }

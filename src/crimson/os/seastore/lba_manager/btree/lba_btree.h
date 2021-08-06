@@ -102,6 +102,12 @@ public:
       void reset() {
 	*this = node_position_t{};
       }
+
+      auto get_iter() {
+	assert(pos != MAX);
+	assert(pos < node->get_size());
+	return node->iter_idx(pos);
+      }
     };
     boost::container::static_vector<
       node_position_t<LBAInternalNode>, MAX_DEPTH> internal;

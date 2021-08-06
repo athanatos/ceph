@@ -194,47 +194,6 @@ struct LBANode : CachedExtent {
     laddr_t laddr,
     paddr_t paddr) = 0;
 
-  /**
-   * make_split_children
-   *
-   * Generates appropriately typed left and right nodes formed from the
-   * contents of *this.
-   *
-   * Returns <left, right, pivot> where pivot is the first value of right.
-   */
-  virtual std::tuple<
-    LBANodeRef,
-    LBANodeRef,
-    laddr_t>
-  make_split_children(
-    op_context_t c) = 0;
-
-  /**
-   * make_full_merge
-   *
-   * Returns a single node formed from merging *this and right.
-   * Precondition: at_min_capacity() && right.at_min_capacity()
-   */
-  virtual LBANodeRef make_full_merge(
-    op_context_t c,
-    LBANodeRef &right) = 0;
-
-  /**
-   * make_balanced
-   *
-   * Returns nodes formed by balancing the contents of *this and right.
-   *
-   * Returns <left, right, pivot> where pivot is the first value of right.
-   */
-  virtual std::tuple<
-    LBANodeRef,
-    LBANodeRef,
-    laddr_t>
-  make_balanced(
-    op_context_t c,
-    LBANodeRef &right,
-    bool prefer_left) = 0;
-
   virtual bool at_max_capacity() const = 0;
   virtual bool at_min_capacity() const = 0;
 

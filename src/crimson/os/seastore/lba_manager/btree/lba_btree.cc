@@ -326,7 +326,8 @@ LBABtree::handle_split_ret LBABtree::handle_split(
   iterator &iter)
 {
 
-  auto split_from = iter.check_split();
+  depth_t split_from = iter.check_split();
+
   if (split_from == iter.get_depth()) {
     auto nroot = c.cache.alloc_new_extent<LBAInternalNode>(
       c.trans, LBA_BLOCK_SIZE);
@@ -336,13 +337,45 @@ LBABtree::handle_split_ret LBABtree::handle_split(
     nroot->journal_insert(
       nroot->begin(),
       L_ADDR_MIN,
-      iter.internal.rbegin()->node->get_paddr(),
+      root.get_location(),
       nullptr);
     iter.internal.push_back({nroot, 0});
 
     root.set_location(nroot->get_paddr());
     root.set_depth(iter.get_depth());
     root_dirty = true;
+  }
+
+  for (; split_from > 1; --split_from) {
+    auto &parent_pos = iter.get_internal(split_from);
+    auto &pos = iter.get_internal(split_from);
+    auto [left, right, pivot] = pos.node->make_split_children(c);
+
+    if (!parent_pos.node->is_pending()) {
+      parent_pos.node = c.cache.duplicate_for_write(
+	c.trans, parent_pos.node
+      )->cast<LBAInternalNode>();
+    }
+
+    auto parent_node = parent_pos.node;
+    auto parent_iter = parent_pos.get_iter();
+
+    parent_node->update(
+      parent_iter,
+      left->get_paddr());
+    parent_node->insert(
+      parent_iter + 1,
+      pivot,
+      right->get_paddr());
+
+    c.cache.retire_extent(c.trans, pos.node);
+
+    if (parent_pos.pos < left->get_size()) {
+      pos.node = left;
+    } else {
+      pos.node = right;
+      parent_pos.pos -= left->get_size();
+    }
   }
 
   return seastar::now();

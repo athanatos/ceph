@@ -141,8 +141,28 @@ struct LBAInternalNode
     op_context_t c,
     scan_mapped_space_func_t &f) final;
 
-  std::tuple<LBANodeRef, LBANodeRef, laddr_t>
-  make_split_children(op_context_t c) final {
+  void update(
+    const_iterator iter,
+    paddr_t addr) {
+    return journal_update(
+      iter,
+      maybe_generate_relative(addr),
+      maybe_get_delta_buffer());
+  }
+
+  void insert(
+    const_iterator iter,
+    laddr_t pivot,
+    paddr_t addr) {
+    return journal_insert(
+      iter,
+      pivot,
+      maybe_generate_relative(addr),
+      maybe_get_delta_buffer());
+  }
+
+  std::tuple<Ref, Ref, laddr_t>
+  make_split_children(op_context_t c) {
     auto left = c.cache.alloc_new_extent<LBAInternalNode>(
       c.trans, LBA_BLOCK_SIZE);
     auto right = c.cache.alloc_new_extent<LBAInternalNode>(
@@ -156,9 +176,9 @@ struct LBAInternalNode
       pivot);
   }
 
-  LBANodeRef make_full_merge(
+  Ref make_full_merge(
     op_context_t c,
-    LBANodeRef &right) final {
+    LBANodeRef &right) {
     auto replacement = c.cache.alloc_new_extent<LBAInternalNode>(
       c.trans, LBA_BLOCK_SIZE);
     replacement->merge_from(*this, *right->cast<LBAInternalNode>());
@@ -166,11 +186,11 @@ struct LBAInternalNode
     return replacement;
   }
 
-  std::tuple<LBANodeRef, LBANodeRef, laddr_t>
+  std::tuple<Ref, Ref, laddr_t>
   make_balanced(
     op_context_t c,
     LBANodeRef &_right,
-    bool prefer_left) final {
+    bool prefer_left) {
     ceph_assert(_right->get_type() == type);
     auto &right = *_right->cast<LBAInternalNode>();
     auto replacement_left = c.cache.alloc_new_extent<LBAInternalNode>(
@@ -422,8 +442,8 @@ struct LBALeafNode
     op_context_t c,
     scan_mapped_space_func_t &f) final;
 
-  std::tuple<LBANodeRef, LBANodeRef, laddr_t>
-  make_split_children(op_context_t c) final {
+  std::tuple<Ref, Ref, laddr_t>
+  make_split_children(op_context_t c) {
     auto left = c.cache.alloc_new_extent<LBALeafNode>(
       c.trans, LBA_BLOCK_SIZE);
     auto right = c.cache.alloc_new_extent<LBALeafNode>(
@@ -437,9 +457,9 @@ struct LBALeafNode
       pivot);
   }
 
-  LBANodeRef make_full_merge(
+  Ref make_full_merge(
     op_context_t c,
-    LBANodeRef &right) final {
+    LBANodeRef &right) {
     auto replacement = c.cache.alloc_new_extent<LBALeafNode>(
       c.trans, LBA_BLOCK_SIZE);
     replacement->merge_from(*this, *right->cast<LBALeafNode>());
@@ -447,11 +467,11 @@ struct LBALeafNode
     return replacement;
   }
 
-  std::tuple<LBANodeRef, LBANodeRef, laddr_t>
+  std::tuple<Ref, Ref, laddr_t>
   make_balanced(
     op_context_t c,
     LBANodeRef &_right,
-    bool prefer_left) final {
+    bool prefer_left) {
     ceph_assert(_right->get_type() == type);
     auto &right = *_right->cast<LBALeafNode>();
     auto replacement_left = c.cache.alloc_new_extent<LBALeafNode>(
