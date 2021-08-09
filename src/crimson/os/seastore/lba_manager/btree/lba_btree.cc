@@ -430,23 +430,45 @@ LBABtree::handle_merge_ret merge_level(
     )->cast<LBAInternalNode>();
   }
 
-  auto parent_iterator = parent_pos.get_iter();
-  paddr_t to_read;
-  bool merge_with_right = ((parent_pos.pos + 1) < parent_pos.node->get_size());
-  if (merge_with_right) {
-    to_read = (parent_iterator + 1).get_val().maybe_relative_to(
-      parent_pos.node->get_paddr());
-  } else {
-    --parent_iterator;
-    to_read = parent_iterator.get_val().maybe_relative_to(
-      parent_pos.node->get_paddr());
-  }
+  auto iter = parent_pos.get_iter();
+  bool donor_is_left = ((iter.get_offset() + 1) < parent_pos.node->get_size());
+  auto donor_iter = donor_is_left ? (iter - 1) : (iter + 1);
 
-  return get_node<NodeType>(c, depth, paddr_t{}
-  ).si_then([c, &parent_pos, &pos](typename NodeType::Ref node) {
+  return get_node<NodeType>(
+    c,
+    depth,
+    donor_iter.get_val().maybe_relative_to(parent_pos.node->get_paddr())
+  ).si_then([c, iter, donor_iter, donor_is_left, &parent_pos, &pos](
+	      typename NodeType::Ref donor) {
+    auto [l, r] = donor_is_left ?
+      std::make_pair(donor, pos.node) : std::make_pair(pos.node, donor);
+
+    auto [liter, riter] = donor_is_left ?
+      std::make_pair(donor_iter, iter) : std::make_pair(iter, donor_iter);
+#if 0
+    if (donor->at_min_capacity()) {
+      LBANodeRef replacement;// = l->make_full_merge(
+/*
+	c,
+	r);
+	*/
+
+      journal_update(
+	liter,
+	maybe_generate_relative(replacement->get_paddr()),
+	maybe_get_delta_buffer());
+      journal_remove(riter, maybe_get_delta_buffer());
+
+      c.cache.retire_extent(c.trans, l);
+      c.cache.retire_extent(c.trans, r);
+
+ 
+    auto [left, right] = donor_is_left ?
+      std::make_pair(node, pos.node) :
+      std::make_pair(pos.node, node);
+#endif
     return seastar::now();
   });
-  return seastar::now();
 }
 
 LBABtree::handle_merge_ret LBABtree::handle_merge(
