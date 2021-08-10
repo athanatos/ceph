@@ -579,13 +579,18 @@ LBABtree::handle_merge_ret LBABtree::handle_merge(
 	      return seastar::stop_iteration::yes;
 	    } else if (pos.node->at_min_capacity()) {
 	      DEBUGT(
-		"continuing, next node depth {} at min",
+		"continuing, next node {} depth {} at min",
 		c.trans,
+		*pos.node,
+		to_merge);
+	      return seastar::stop_iteration::yes;
+	    } else {
+	      DEBUGT(
+		"complete, next node {} depth {} not min",
+		c.trans,
+		*pos.node,
 		to_merge);
 	      return seastar::stop_iteration::no;
-	    } else {
-	      DEBUGT("complete, next node depth {} not min", c.trans, to_merge);
-	      return seastar::stop_iteration::yes;
 	    }
 	  });
 	});
