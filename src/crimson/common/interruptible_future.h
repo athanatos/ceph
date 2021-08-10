@@ -1115,7 +1115,7 @@ public:
 	    return call_with_interruption(
 		      interrupt_condition,
 		      std::move(action),
-		      std::forward<decltype(*begin)>(x)).to_future();
+		      x).to_future();
 	  })
       );
     }

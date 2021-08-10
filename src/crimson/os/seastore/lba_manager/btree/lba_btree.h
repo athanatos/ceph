@@ -31,12 +31,14 @@ public:
     iterator &operator=(const iterator &) = default;
     iterator &operator=(iterator &&) = default;
 
+    iterator(depth_t depth) : internal(depth - 1) {}
+
     iterator_fut next(op_context_t c) const;
     iterator_fut prev(op_context_t c) const;
 
     void assert_valid() const {
       assert(leaf.node);
-      assert(leaf.pos == MAX || (leaf.pos < leaf.node->get_size()));
+      assert(leaf.pos <= leaf.node->get_size());
 
       for (auto &i: internal) {
 	assert(i.node);
@@ -70,7 +72,8 @@ public:
     }
 
     bool is_end() const {
-      return leaf.pos == MAX;
+      assert(leaf.pos <= leaf.node->get_size());
+      return leaf.pos == leaf.node->get_size();
     }
 
     bool is_begin() const {
@@ -78,7 +81,7 @@ public:
 	if (i.pos != 0)
 	  return false;
       }
-      return leaf.pos == MAX;
+      return leaf.pos == 0;
     }
 
     LBAPinRef get_pin() const {
@@ -93,18 +96,18 @@ public:
     iterator() = default;
 
     friend class LBABtree;
-    static constexpr uint16_t MAX = std::numeric_limits<uint16_t>::max();
+    static constexpr uint16_t INVALID = std::numeric_limits<uint16_t>::max();
     template <typename NodeType>
     struct node_position_t {
       typename NodeType::Ref node;
-      uint16_t pos = MAX;
+      uint16_t pos = INVALID;
 
       void reset() {
 	*this = node_position_t{};
       }
 
       auto get_iter() {
-	assert(pos != MAX);
+	assert(pos != INVALID);
 	assert(pos < node->get_size());
 	return node->iter_idx(pos);
       }
@@ -236,7 +239,8 @@ public:
     return std::move(iter_fut).si_then([c, f=std::forward<F>(f)](auto iter) {
       return seastar::do_with(
 	iter,
-	[c, f=std::move(f)](auto &pos) {
+	std::move(f),
+	[c](auto &pos, auto &f) {
 	  return trans_intr::repeat(
 	    [c, &f, &pos] {
 	      return f(
@@ -321,11 +325,10 @@ public:
    *
    * @param c [in] op context
    * @param iter [in] iterator to element to remove, must not be end
-   * @return iterator to position after removed element
    */
   using remove_iertr = base_iertr;
-  using remove_ret = remove_iertr::future<iterator>;
-  update_ret remove(
+  using remove_ret = remove_iertr::future<>;
+  remove_ret remove(
     op_context_t c,
     iterator iter);
 
@@ -414,9 +417,7 @@ private:
     ).si_then([c, &iter, &f](LBALeafNodeRef node) {
       iter.leaf.node = node;
       auto node_iter = f(*node);
-      iter.leaf.pos = node_iter == node->end()
-	? iterator::MAX
-	: node_iter->get_offset();
+      iter.leaf.pos = node_iter->get_offset();
       return seastar::now();
     });
   }
@@ -432,10 +433,48 @@ private:
     LI &li,         ///< [in] internal->iterator
     LL &ll          ///< [in] leaf->iterator
   ) {
+    LOG_PREFIX(LBATree::lookup_depth_range);
+    DEBUGT("{} -> {}", c.trans, from, to);
+    return seastar::do_with(
+      from,
+      [FNAME, c, to, &iter, &li, &ll](auto &d) {
+	return trans_intr::repeat(
+	  [FNAME, c, to, &iter, &li, &ll, &d] {
+	    if (d > to) {
+	      return [&] {
+		if (d > 1) {
+		  return lookup_internal_level(
+		    c,
+		    d,
+		    iter,
+		    li);
+		} else {
+		  assert(d == 1);
+		  return lookup_leaf(
+		    c,
+		    iter,
+		    ll);
+		}
+	      }().si_then([&d] {
+		--d;
+		return lookup_depth_range_iertr::make_ready_future<
+		  seastar::stop_iteration
+		  >(seastar::stop_iteration::no);
+	      });
+	    } else {
+	      return lookup_depth_range_iertr::make_ready_future<
+		seastar::stop_iteration
+		>(seastar::stop_iteration::yes);
+	    }
+	  });
+      });
+#if 0
+    // Causing mysterious crash, probably a bug in do_for_each itself TODO
     return trans_intr::do_for_each(
       boost::reverse_iterator(boost::counting_iterator(from)),
       boost::reverse_iterator(boost::counting_iterator(to)),
-      [c, &iter, &li, &ll](auto d) {
+      [FNAME, c, &iter, &li, &ll](auto d) {
+	DEBUGT("depth {}", c.trans, d);
 	if (d > 1) {
 	  return lookup_internal_level(
 	    c,
@@ -451,6 +490,7 @@ private:
 	  assert(0 == "impossible");
 	}
       });
+#endif
   }
 
   using lookup_iertr = base_iertr;
@@ -460,21 +500,24 @@ private:
     op_context_t c,
     LI &&lookup_internal,
     LL &&lookup_leaf) const {
+    LOG_PREFIX(LBATree::lookup);
     return seastar::do_with(
-      iterator{},
+      iterator{root.get_depth()},
       std::forward<LI>(lookup_internal),
       std::forward<LL>(lookup_leaf),
-      [this, c](auto &iter, auto &li, auto &ll) {
+      [FNAME, this, c](auto &iter, auto &li, auto &ll) {
 	return lookup_root(
 	  c, iter
-	).si_then([this, c, &iter, &li, &ll] {
+	).si_then([FNAME, this, c, &iter, &li, &ll] {
 	  if (iter.get_depth() > 1) {
 	    auto &root_entry = *(iter.internal.rbegin());
 	    root_entry.pos = li(*(root_entry.node)).get_offset();
 	  } else {
 	    auto &root_entry = iter.leaf;
-	    root_entry.pos = ll(*(root_entry.node)).get_offset();
+	    auto riter = ll(*(root_entry.node));
+	    root_entry.pos = riter->get_offset();
 	  }
+	  DEBUGT("got root, depth {}", c.trans, root.get_depth());
 	  return lookup_depth_range(
 	    c,
 	    iter,

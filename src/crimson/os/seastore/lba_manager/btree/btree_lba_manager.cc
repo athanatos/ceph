@@ -74,7 +74,6 @@ BtreeLBAManager::get_mappings(
 	c,
 	btree.upper_bound_right(c, offset),
 	[&ret, offset, length](auto &pos) {
-	  ceph_assert(!pos.is_end());
 	  if (pos.is_end() || pos.get_key() >= (offset + length)) {
 	    return LBABtree::iterate_repeat_ret(
 	      interruptible::ready_future_marker{},
@@ -152,18 +151,17 @@ BtreeLBAManager::alloc_extent(
     state_t(laddr_t hint) : last_end(hint) {}
   };
 
-  LOG_PREFIX(BtreeLBAManager::find_hole);
-  DEBUGT("offset: {}, length{}", t, hint, len);
+  LOG_PREFIX(BtreeLBAManager::alloc_extent);
+  DEBUGT("hint: {}, length: {}", t, hint, len);
   auto c = get_context(t);
   return with_btree_state<state_t>(
     c,
     hint,
-    [this, c, hint, len, addr](auto &btree, auto &state) {
+    [FNAME, this, c, hint, len, addr](auto &btree, auto &state) {
       return LBABtree::iterate_repeat(
 	c,
-	btree.lower_bound(c, hint),
+	btree.upper_bound_right(c, hint),
 	[&state, hint, len](auto &pos) {
-	  ceph_assert(!pos.is_end());
 	  if (pos.is_end() || pos.get_key() >= (state.last_end + len)) {
 	    state.insert_iter = pos;
 	    return LBABtree::iterate_repeat_ret(
@@ -175,7 +173,8 @@ BtreeLBAManager::alloc_extent(
 	      interruptible::ready_future_marker{},
 	      seastar::stop_iteration::no);
 	  }
-	}).si_then([this, c, addr, len, &btree, &state] {
+	}).si_then([FNAME, this, c, addr, len, &btree, &state] {
+	  DEBUGT("about to insert at addr {}~{}", c.trans, state.last_end, len);
 	  return btree.insert(
 	    c,
 	    *state.insert_iter,
@@ -198,6 +197,7 @@ BtreeLBAManager::set_extent(
   laddr_t off, extent_len_t len, paddr_t addr)
 {
   LOG_PREFIX(BtreeLBAManager::set_extent);
+  DEBUGT(": off {}, len {}, addr {}", t, off, len, addr);
   auto c = get_context(t);
   return with_btree_ret<LBAPinRef>(
     c,
@@ -373,7 +373,6 @@ BtreeLBAManager::scan_mappings_ret BtreeLBAManager::scan_mappings(
 	c,
 	btree.upper_bound_right(c, begin),
 	[f=std::move(f), begin, end](auto &pos) {
-	  ceph_assert(!pos.is_end());
 	  if (pos.is_end() || pos.get_key() >= end) {
 	    return LBABtree::iterate_repeat_ret(
 	      interruptible::ready_future_marker{},
@@ -393,6 +392,7 @@ BtreeLBAManager::scan_mapped_space_ret BtreeLBAManager::scan_mapped_space(
     scan_mapped_space_func_t &&f)
 {
   LOG_PREFIX(BtreeLBAManager::scan_mapped_space);
+  DEBUGT("", t);
   auto c = get_context(t);
   return with_btree(
     c,
@@ -559,6 +559,8 @@ BtreeLBAManager::update_refcount_ret BtreeLBAManager::update_refcount(
   laddr_t addr,
   int delta)
 {
+  LOG_PREFIX(BtreeLBAManager::update_refcount);
+  DEBUGT("addr {}, delta {}", t, addr, delta);
   return update_mapping(
     t,
     addr,
@@ -582,6 +584,7 @@ BtreeLBAManager::update_mapping_ret BtreeLBAManager::update_mapping(
   update_func_t &&f)
 {
   LOG_PREFIX(BtreeLBAManager::update_mapping);
+  DEBUGT("addr {}", t, addr);
   auto c = get_context(t);
   return with_btree_ret<lba_map_val_t>(
     c,
@@ -593,11 +596,11 @@ BtreeLBAManager::update_mapping_ret BtreeLBAManager::update_mapping(
 	ceph_assert(iter.get_key() == addr);
 
 	auto ret = f(iter.get_val());
-	if (ret.refcount > 0) {
+	if (ret.refcount == 0) {
 	  return btree.remove(
 	    c,
 	    iter
-	  ).si_then([ret](auto) {
+	  ).si_then([ret] {
 	    return ret;
 	  });
 	} else {

@@ -47,7 +47,7 @@ LBABtree::iterator_fut LBABtree::iterator::next(op_context_t c) const
     }
   }
 
-  if (depth_with_space < get_depth()) {
+  if (depth_with_space <= get_depth()) {
     return seastar::do_with(
       *this,
       [](const LBAInternalNode &internal) { return internal.begin(); },
@@ -67,7 +67,7 @@ LBABtree::iterator_fut LBABtree::iterator::next(op_context_t c) const
   } else {
     // end
     auto ret = *this;
-    ret.leaf.pos = MAX;
+    ret.leaf.pos = ret.leaf.node->get_size();
     return iterator_fut(
       interruptible::ready_future_marker{},
       ret);
@@ -79,8 +79,13 @@ LBABtree::iterator_fut LBABtree::iterator::prev(op_context_t c) const
   assert_valid();
   assert(!is_begin());
 
-  if (leaf.pos > 0) {
-    auto ret = *this;
+  auto ret = *this;
+
+  if (is_end()) {
+    ret.leaf.pos = ret.leaf.node->get_size();
+  }
+
+  if (ret.leaf.pos > 0) {
     ret.leaf.pos--;
     return iterator_fut(
       interruptible::ready_future_marker{},
@@ -89,14 +94,14 @@ LBABtree::iterator_fut LBABtree::iterator::prev(op_context_t c) const
 
   depth_t depth_with_space = 2;
   for (; depth_with_space <= get_depth(); ++depth_with_space) {
-    if (get_internal(depth_with_space).pos > 0) {
+    if (ret.get_internal(depth_with_space).pos > 0) {
       break;
     }
   }
 
-  assert(depth_with_space < get_depth()); // must not be begin()
+  assert(depth_with_space <= ret.get_depth()); // must not be begin()
   return seastar::do_with(
-    *this,
+    std::move(ret),
     [](const LBAInternalNode &internal) { return --internal.end(); },
     [](const LBALeafNode &leaf) { return --leaf.end(); },
     [c, depth_with_space](auto &ret, auto &li, auto &ll) {
@@ -127,10 +132,21 @@ LBABtree::iterator_fut LBABtree::lower_bound(
       --iter;
       return iter;
     },
-    [addr](const LBALeafNode &leaf) {
-      assert(leaf.get_size() > 0);
-      return leaf.lower_bound(addr);
-    }).si_then([](auto &&ret) {
+    [FNAME, c, addr](const LBALeafNode &leaf) {
+      auto ret = leaf.lower_bound(addr);
+      DEBUGT(
+	"leaf addr {}, got ret offset {}, size {}, end {}",
+	c.trans,
+	addr,
+	ret.get_offset(),
+	leaf.get_size(),
+	ret == leaf.end());
+      return ret;
+    }).si_then([FNAME, c](auto &&ret) {
+      DEBUGT(
+	"ret.leaf.pos {}",
+	c.trans,
+	ret.leaf.pos);
       ret.assert_valid();
       return std::move(ret);
     });
@@ -149,7 +165,7 @@ LBABtree::insert_ret LBABtree::insert(
       return find_insertion(
 	c, laddr, ret
       ).si_then([this, c, laddr, val, &ret] {
-	if (ret.leaf.pos != iterator::MAX && ret.get_key() == laddr) {
+	if (!ret.is_end() && ret.get_key() == laddr) {
 	  return insert_ret(
 	    interruptible::ready_future_marker{},
 	    std::make_pair(ret, false));
@@ -163,10 +179,18 @@ LBABtree::insert_ret LBABtree::insert(
 	      );
 	      ret.leaf.node = mut->cast<LBALeafNode>();
 	    }
-	    // ret.leaf.pos = ret.leaf.node->insert(c, laddr, val).get_offset();
-	    return insert_ret(
-	      interruptible::ready_future_marker{},
-	      std::make_pair(ret, true));
+	    auto iter = ret.leaf.node->lower_bound(laddr);
+	    if (iter != ret.leaf.node->end() && iter->get_key() == laddr) {
+	      return insert_ret(
+		interruptible::ready_future_marker{},
+		std::make_pair(ret, false));
+	    } else {
+	      ret.leaf.pos = iter->get_offset();
+	      ret.leaf.node->insert(iter, laddr, val);
+	      return insert_ret(
+		interruptible::ready_future_marker{},
+		std::make_pair(ret, true));
+	    }
 	  });
 	}
       });
@@ -185,9 +209,9 @@ LBABtree::update_ret LBABtree::update(
     );
     ret.leaf.node = mut->cast<LBALeafNode>();
   }
-  // ret.leaf.node->update(
-  //   ret.leaf.node->iter_idx(ret.leaf.pos),
-  //   val);
+  ret.leaf.node->update(
+    ret.leaf.node->iter_idx(ret.leaf.pos),
+    val);
   return update_ret(
     interruptible::ready_future_marker{},
     ret);
@@ -202,20 +226,18 @@ LBABtree::remove_ret LBABtree::remove(
   return seastar::do_with(
     iter,
     [this, c](auto &ret) {
+      if (!ret.leaf.node->is_pending()) {
+	CachedExtentRef mut = c.cache.duplicate_for_write(
+	  c.trans, ret.leaf.node
+	);
+	ret.leaf.node = mut->cast<LBALeafNode>();
+      }
+      ret.leaf.node->remove(
+	ret.leaf.node->iter_idx(ret.leaf.pos));
+
       return handle_merge(
 	c, ret
-      ).si_then([c, &ret] {
-	if (!ret.leaf.node->is_pending()) {
-	  CachedExtentRef mut = c.cache.duplicate_for_write(
-	    c.trans, ret.leaf.node
-	  );
-	  ret.leaf.node = mut->cast<LBALeafNode>();
-	}
-	// ret.leaf.pos = ret.leaf.node->remove(
-	//   c, ret.leaf.node->iter_idx(ret.leaf.pos)
-	// );
-	return ret.next(c);
-      });
+      );
     });
 }
 
@@ -294,8 +316,8 @@ LBABtree::find_insertion_ret LBABtree::find_insertion(
   laddr_t laddr,
   iterator &iter)
 {
-  assert(iter.get_key() >= laddr);
-  if (iter.get_key() == laddr) {
+  assert(iter.is_end() || iter.get_key() >= laddr);
+  if (!iter.is_end() && iter.get_key() == laddr) {
     return seastar::now();
   } else if (iter.leaf.node->get_node_meta().begin <= laddr) {
     auto p = iter;
@@ -431,7 +453,8 @@ LBABtree::handle_merge_ret merge_level(
   }
 
   auto iter = parent_pos.get_iter();
-  bool donor_is_left = ((iter.get_offset() + 1) < parent_pos.node->get_size());
+  assert(iter.get_offset() < parent_pos.node->get_size());
+  bool donor_is_left = ((iter.get_offset() + 1) == parent_pos.node->get_size());
   auto donor_iter = donor_is_left ? (iter - 1) : (iter + 1);
 
   return get_node<NodeType>(
@@ -445,28 +468,59 @@ LBABtree::handle_merge_ret merge_level(
 
     auto [liter, riter] = donor_is_left ?
       std::make_pair(donor_iter, iter) : std::make_pair(iter, donor_iter);
-#if 0
-    if (donor->at_min_capacity()) {
-      LBANodeRef replacement;// = l->make_full_merge(
-/*
-	c,
-	r);
-	*/
 
-      journal_update(
+    if (donor->at_min_capacity()) {
+      auto replacement = l->make_full_merge(c, r);
+
+      parent_pos.node->update(
 	liter,
-	maybe_generate_relative(replacement->get_paddr()),
-	maybe_get_delta_buffer());
-      journal_remove(riter, maybe_get_delta_buffer());
+	replacement->get_paddr());
+      parent_pos.node->remove(riter);
+
+      pos.node = replacement;
+      if (donor_is_left) {
+	pos.pos += r->get_size();
+	parent_pos.pos--;
+      }
 
       c.cache.retire_extent(c.trans, l);
       c.cache.retire_extent(c.trans, r);
+    } else {
+      auto [replacement_l, replacement_r, pivot] =
+	l->make_balanced(
+	  c,
+	  r,
+	  !donor_is_left);
 
- 
-    auto [left, right] = donor_is_left ?
-      std::make_pair(node, pos.node) :
-      std::make_pair(pos.node, node);
-#endif
+      parent_pos.node->update(
+	liter,
+	replacement_l->get_paddr());
+      parent_pos.node->replace(
+	riter,
+	pivot,
+	replacement_r->get_paddr());
+
+      if (donor_is_left) {
+	assert(parent_pos.pos > 0);
+	parent_pos.pos--;
+      }
+
+      auto orig_position = donor_is_left ?
+	l->get_size() + pos.pos :
+	pos.pos;
+      if (orig_position < replacement_l->get_size()) {
+	pos.node = replacement_l;
+	pos.pos = orig_position;
+      } else {
+	parent_pos.pos++;
+	pos.node = replacement_r;
+	pos.pos = orig_position - replacement_l->get_size();
+      }
+
+      c.cache.retire_extent(c.trans, l);
+      c.cache.retire_extent(c.trans, r);
+    }
+
     return seastar::now();
   });
 }
@@ -475,31 +529,42 @@ LBABtree::handle_merge_ret LBABtree::handle_merge(
   op_context_t c,
   iterator &iter)
 {
+  LOG_PREFIX(LBATree::handle_merge);
   if (!iter.leaf.node->at_min_capacity() ||
       iter.get_depth() == 1) {
+    DEBUGT(
+      "no need to merge leaf, leaf size {}, depth {}",
+      c.trans,
+      iter.leaf.node->get_size(),
+      iter.get_depth());
     return seastar::now();
   }
 
   return seastar::do_with(
     depth_t{1},
-    [this, c, &iter](auto &to_merge) {
+    [FNAME, this, c, &iter](auto &to_merge) {
       return trans_intr::repeat(
-	[this, c, &iter, &to_merge] {
+	[FNAME, this, c, &iter, &to_merge] {
+	  DEBUGT(
+	    "merging depth {}",
+	    c.trans,
+	    to_merge);
 	  auto &parent_pos = iter.get_internal(to_merge + 1);
 	  auto merge_fut = handle_merge_iertr::now();
 	  if (to_merge > 1) {
-	    auto &pos = iter.leaf;
+	    auto &pos = iter.get_internal(to_merge);
 	    merge_fut = merge_level(c, to_merge, parent_pos, pos);
 	  } else {
-	    auto &pos = iter.get_internal(to_merge);
+	    auto &pos = iter.leaf;
 	    merge_fut = merge_level(c, to_merge, parent_pos, pos);
 	  }
 
-	  return merge_fut.si_then([this, c, &iter, &to_merge] {
+	  return merge_fut.si_then([FNAME, this, c, &iter, &to_merge] {
 	    ++to_merge;
 	    auto &pos = iter.get_internal(to_merge);
 	    if (to_merge == iter.get_depth()) {
 	      if (pos.node->get_size() == 1) {
+		DEBUGT("collapsing root", c.trans);
 		c.cache.retire_extent(c.trans, pos.node);
 		assert(pos.pos == 0);
 		auto node_iter = pos.get_iter();
@@ -507,12 +572,20 @@ LBABtree::handle_merge_ret LBABtree::handle_merge(
 		  node_iter->get_val().maybe_relative_to(pos.node->get_paddr()));
 		iter.internal.pop_back();
 		root.set_depth(iter.get_depth());
+		root_dirty = true;
+	      } else {
+		DEBUGT("no need to collapse root", c.trans);
 	      }
-	      return seastar::stop_iteration::no;
-	    } else if (!pos.node->at_min_capacity()) {
 	      return seastar::stop_iteration::yes;
-	    } else {
+	    } else if (pos.node->at_min_capacity()) {
+	      DEBUGT(
+		"continuing, next node depth {} at min",
+		c.trans,
+		to_merge);
 	      return seastar::stop_iteration::no;
+	    } else {
+	      DEBUGT("complete, next node depth {} not min", c.trans, to_merge);
+	      return seastar::stop_iteration::yes;
 	    }
 	  });
 	});
