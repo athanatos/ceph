@@ -42,7 +42,7 @@ public:
 
       for (auto &i: internal) {
 	assert(i.node);
-	assert(i.pos < leaf.node->get_size());
+	assert(i.pos < i.node->get_size());
       }
     }
 
