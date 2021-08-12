@@ -301,58 +301,13 @@ BtreeLBAManager::init_cached_extent_ret BtreeLBAManager::init_cached_extent(
   Transaction &t,
   CachedExtentRef e)
 {
-  logger().debug("{}: {}", __func__, *e);
-  return get_root(t).si_then(
-    [this, &t, e=std::move(e)](LBANodeRef root) mutable {
-      if (is_lba_node(*e)) {
-	auto lban = e->cast<LBANode>();
-	logger().debug("init_cached_extent: lba node, getting root");
-	return root->lookup(
-	  op_context_t{cache, pin_set, t},
-	  lban->get_node_meta().begin,
-	  lban->get_node_meta().depth
-	).si_then([this, e=std::move(e)](LBANodeRef c) {
-	  if (c->get_paddr() == e->get_paddr()) {
-	    assert(&*c == &*e);
-	    logger().debug("init_cached_extent: {} initialized", *e);
-	  } else {
-	    // e is obsolete
-	    logger().debug("init_cached_extent: {} obsolete", *e);
-	    cache.drop_from_cache(e);
-	  }
-	  return init_cached_extent_iertr::now();
-	});
-      } else if (e->is_logical()) {
-	auto logn = e->cast<LogicalCachedExtent>();
-	return root->lookup_range(
-	  op_context_t{cache, pin_set, t},
-	  logn->get_laddr(),
-	  logn->get_length()).si_then(
-	    [this, logn=std::move(logn)](auto pins) {
-	      if (pins.size() == 1) {
-		auto pin = std::move(pins.front());
-		pins.pop_front();
-		if (pin->get_paddr() == logn->get_paddr()) {
-		  logn->set_pin(std::move(pin));
-		  pin_set.add_pin(
-		    static_cast<BtreeLBAPin&>(logn->get_pin()).pin);
-		  logger().debug("init_cached_extent: {} initialized", *logn);
-		} else {
-		  // paddr doesn't match, remapped, obsolete
-		  logger().debug("init_cached_extent: {} obsolete", *logn);
-		  cache.drop_from_cache(logn);
-		}
-	      } else {
-		// set of extents changed, obsolete
-		logger().debug("init_cached_extent: {} obsolete", *logn);
-		cache.drop_from_cache(logn);
-	      }
-	      return init_cached_extent_iertr::now();
-	    });
-      } else {
-	logger().debug("init_cached_extent: {} skipped", *e);
-	return init_cached_extent_iertr::now();
-      }
+  LOG_PREFIX(BtreeLBAManager::init_cached_extent);
+  DEBUGT(": extent {}", t, *e);
+  auto c = get_context(t);
+  return with_btree(
+    c,
+    [FNAME, c, e](auto &btree) {
+      return btree.init_cached_extent(c, e);
     });
 }
 

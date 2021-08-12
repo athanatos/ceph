@@ -332,6 +332,15 @@ public:
     op_context_t c,
     iterator iter);
 
+  /**
+   * init_cached_extent
+   *
+   * Checks whether e is live (reachable from lba tree) and drops or initializes
+   * accordingly.
+   */
+  using init_cached_extent_iertr = base_iertr;
+  using init_cached_extent_ret = init_cached_extent_iertr::future<>;
+  init_cached_extent_ret init_cached_extent(op_context_t c, CachedExtentRef e);
 private:
   lba_root_t root;
   bool root_dirty = false;

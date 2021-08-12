@@ -241,6 +241,71 @@ LBABtree::remove_ret LBABtree::remove(
     });
 }
 
+LBABtree::init_cached_extent_ret LBABtree::init_cached_extent(
+  op_context_t c,
+  CachedExtentRef e)
+{
+  LOG_PREFIX(LBATree::init_cached_extent);
+  DEBUGT(": extent {}", c.trans, *e);
+  if (e->is_logical()) {
+    auto logn = e->cast<LogicalCachedExtent>();
+    return lower_bound(
+      c,
+      logn->get_laddr()
+    ).si_then([FNAME, this, c, logn](auto iter) {
+      if (!iter.is_end() &&
+	  iter.get_key() == logn->get_laddr() &&
+	  iter.get_val().paddr == logn->get_paddr()) {
+	logn->set_pin(iter.get_pin());
+	c.pins.add_pin(
+	  static_cast<BtreeLBAPin&>(logn->get_pin()).pin);
+	DEBUGT(": logical extent {} live, initialized", c.trans, *logn);
+      } else {
+	DEBUGT(": logical extent {} not live, dropping", c.trans, *logn);
+	c.cache.drop_from_cache(logn);
+      }
+    });
+  } else if (e->get_type() == extent_types_t::LADDR_INTERNAL) {
+    auto eint = e->cast<LBAInternalNode>();
+    return lower_bound(
+      c, eint->get_node_meta().begin
+    ).si_then([FNAME, c, eint](auto iter) {
+      // Note, this check is valid even if iter.is_end()
+      depth_t cand_depth = eint->get_node_meta().depth;
+      if (cand_depth <= iter.get_depth() &&
+	  &*iter.get_internal(cand_depth).node == &*eint) {
+	DEBUGT(": extent {} is live", c.trans, *eint);
+      } else {
+	DEBUGT(": extent {} is not live", c.trans, *eint);
+	c.cache.drop_from_cache(eint);
+      }
+      return init_cached_extent_iertr::now();
+    });
+  } else if (e->get_type() == extent_types_t::LADDR_LEAF) {
+    auto eleaf = e->cast<LBALeafNode>();
+    return lower_bound(
+      c, eleaf->get_node_meta().begin
+    ).si_then([FNAME, c, eleaf](auto iter) {
+      // Note, this check is valid even if iter.is_end()
+      if (iter.leaf.node == &*eleaf) {
+	DEBUGT(": extent {} is live", c.trans, *eleaf);
+      } else {
+	DEBUGT(": extent {} is not live", c.trans, *eleaf);
+	c.cache.drop_from_cache(eleaf);
+      }
+      return init_cached_extent_iertr::now();
+    });
+  } else {
+    ERRORT(
+      ": found impossible extent {} type {}",
+      c.trans,
+      *e,
+      e->get_type());
+    assert(0 == "impossible");
+    return init_cached_extent_iertr::now();
+  }
+}
+
 LBABtree::get_internal_node_ret LBABtree::get_internal_node(
   op_context_t c,
   depth_t depth,
