@@ -68,7 +68,7 @@ struct record_validator_t {
 struct journal_test_t : seastar_test_suite_t, SegmentProvider {
   segment_manager::EphemeralSegmentManagerRef segment_manager;
   WritePipeline pipeline;
-  std::unique_ptr<Journal> journal;
+  JournalRef journal;
 
   std::vector<record_validator_t> records;
 
@@ -79,6 +79,8 @@ struct journal_test_t : seastar_test_suite_t, SegmentProvider {
   ExtentReaderRef scanner;
 
   segment_id_t next;
+
+  SegmentCleanerRef seg_cleaner;
 
   journal_test_t() = default;
 
@@ -101,10 +103,13 @@ struct journal_test_t : seastar_test_suite_t, SegmentProvider {
     segment_manager = segment_manager::create_test_ephemeral();
     block_size = segment_manager->get_block_size();
     scanner.reset(new ExtentReader());
+    auto tmp_reader = std::make_unique<ExtentReader>();
+    seg_cleaner = std::make_unique<SegmentCleaner>(
+      SegmentCleaner::config_t::get_default(),
+      std::move(std::move(tmp_reader)),
+      true);
     next = segment_id_t(segment_manager->get_device_id(), 0);
-    journal.reset(new Journal(*segment_manager, *scanner));
-
-    journal->set_segment_provider(this);
+    journal = journal::make_segmented(*segment_manager, *scanner, *seg_cleaner);
     journal->set_write_pipeline(&pipeline);
     scanner->add_segment_manager(segment_manager.get());
     return segment_manager->init(
@@ -123,6 +128,7 @@ struct journal_test_t : seastar_test_suite_t, SegmentProvider {
       segment_manager.reset();
       scanner.reset();
       journal.reset();
+      seg_cleaner.reset();
     }).handle_error(
       crimson::ct_error::all_same_way([](auto e) {
         ASSERT_FALSE("Unable to close");
@@ -134,48 +140,12 @@ struct journal_test_t : seastar_test_suite_t, SegmentProvider {
   auto replay(T &&f) {
     return journal->close(
     ).safe_then([this, f=std::move(f)]() mutable {
-      journal.reset(new Journal(*segment_manager, *scanner));
-      journal->set_segment_provider(this);
+      journal = journal::make_segmented(
+	*segment_manager, *scanner, *seg_cleaner);
       journal->set_write_pipeline(&pipeline);
-      return seastar::do_with(
-	std::vector<std::pair<segment_id_t, segment_header_t>>(),
-	[this](auto& segments) {
-	return crimson::do_for_each(
-	  boost::make_counting_iterator(device_segment_id_t{0}),
-	  boost::make_counting_iterator(device_segment_id_t{
-	    segment_manager->get_num_segments()}),
-	  [this, &segments](auto segment_id) {
-	  return scanner->read_segment_header(segment_id_t{0, segment_id})
-	  .safe_then([&segments, segment_id](auto header) {
-	    if (header.get_type() == segment_type_t::JOURNAL) {
-	      segments.emplace_back(
-		std::make_pair(
-		  segment_id_t{0, segment_id},
-		  std::move(header)
-		));
-	    }
-	    return seastar::now();
-	  }).handle_error(
-	    crimson::ct_error::enoent::handle([](auto) {
-	      return SegmentCleaner::init_segments_ertr::now();
-	    }),
-	    crimson::ct_error::enodata::handle([](auto) {
-	      return SegmentCleaner::init_segments_ertr::now();
-	    }),
-	    crimson::ct_error::input_output_error::pass_further{}
-	  );
-	}).safe_then([&segments] {
-	  return seastar::make_ready_future<
-	    std::vector<std::pair<segment_id_t, segment_header_t>>>(
-	      std::move(segments));
-	});
-      }).safe_then([this, f=std::move(f)](auto&& segments) mutable {
-	return journal->replay(
-	  std::move(segments),
-	  std::forward<T>(std::move(f)));
-      }).safe_then([this] {
-	return journal->open_for_write();
-      });
+      return journal->replay(std::forward<T>(std::move(f)));
+    }).safe_then([this] {
+      return journal->open_for_write();
     });
   }
 
