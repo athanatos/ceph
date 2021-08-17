@@ -88,7 +88,7 @@ public:
       assert(!is_end());
       return std::make_unique<BtreeLBAPin>(
 	leaf.node,
-	get_val().paddr /* probably needs to be adjusted TODO */,
+	get_val().paddr.maybe_relative_to(leaf.node->get_paddr()),
 	lba_node_meta_t{ get_key(), get_key() + get_val().len, 0 });
     }
 
