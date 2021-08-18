@@ -296,7 +296,6 @@ void BtreeLBAManager::complete_transaction(
   }
 }
 
-// TODOSAM move to lba_btree
 BtreeLBAManager::init_cached_extent_ret BtreeLBAManager::init_cached_extent(
   Transaction &t,
   CachedExtentRef e)

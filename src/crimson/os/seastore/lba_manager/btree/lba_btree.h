@@ -341,6 +341,16 @@ public:
   using init_cached_extent_iertr = base_iertr;
   using init_cached_extent_ret = init_cached_extent_iertr::future<>;
   init_cached_extent_ret init_cached_extent(op_context_t c, CachedExtentRef e);
+
+  /**
+   * rewrite_lba_extent
+   *
+   * Rewrites a fresh copy of extent into transaction and updates internal
+   * references.
+   */
+  using rewrite_lba_extent_iertr = base_iertr;
+  using rewrite_lba_extent_ret = rewrite_lba_extent_iertr::future<>;
+  rewrite_lba_extent_ret rewrite_lba_extent(op_context_t c, CachedExtentRef e);
 private:
   lba_root_t root;
   bool root_dirty = false;
@@ -477,29 +487,6 @@ private:
 	    }
 	  });
       });
-#if 0
-    // Causing mysterious crash, probably a bug in do_for_each itself TODO
-    return trans_intr::do_for_each(
-      boost::reverse_iterator(boost::counting_iterator(from)),
-      boost::reverse_iterator(boost::counting_iterator(to)),
-      [FNAME, c, &iter, &li, &ll](auto d) {
-	DEBUGT("depth {}", c.trans, d);
-	if (d > 1) {
-	  return lookup_internal_level(
-	    c,
-	    d,
-	    iter,
-	    li);
-	} else if (d == 1) {
-	  return lookup_leaf(
-	    c,
-	    iter,
-	    ll);
-	} else {
-	  assert(0 == "impossible");
-	}
-      });
-#endif
   }
 
   using lookup_iertr = base_iertr;

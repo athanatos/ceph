@@ -6,12 +6,6 @@
 
 #include "crimson/os/seastore/lba_manager/btree/lba_btree.h"
 
-namespace {
-  seastar::logger& logger() {
-    return crimson::get_logger(ceph_subsys_seastore);
-  }
-}
-
 namespace crimson::os::seastore::lba_manager::btree {
 
 LBABtree::mkfs_ret LBABtree::mkfs(op_context_t c)
@@ -303,6 +297,65 @@ LBABtree::init_cached_extent_ret LBABtree::init_cached_extent(
       e->get_type());
     assert(0 == "impossible");
     return init_cached_extent_iertr::now();
+  }
+}
+
+template <typename T>
+auto _rewrite_lba_extent(
+  op_context_t c,
+  T &lba_extent) {
+  LOG_PREFIX(lbabtree.cc::_rewrite_lba_extent);
+  auto nlba_extent = c.cache.alloc_new_extent<T>(
+    c.trans,
+    lba_extent.get_length());
+  lba_extent.get_bptr().copy_out(
+    0,
+    lba_extent.get_length(),
+    nlba_extent->get_bptr().c_str());
+  nlba_extent->pin.set_range(nlba_extent->get_node_meta());
+  
+  /* This is a bit underhanded.  Any relative addrs here must necessarily
+   * be record relative as we are rewriting a dirty extent.  Thus, we
+   * are using resolve_relative_addrs with a (likely negative) block
+   * relative offset to correct them to block-relative offsets adjusted
+   * for our new transaction location.
+   *
+   * Upon commit, these now block relative addresses will be interpretted
+   * against the real final address.
+   */
+  nlba_extent->resolve_relative_addrs(
+    make_record_relative_paddr(0) - nlba_extent->get_paddr());
+
+  DEBUGT(
+    "rewriteing {} into {}",
+    c.trans,
+    lba_extent,
+    *nlba_extent);
+
+  return seastar::now();
+}
+
+LBABtree::rewrite_lba_extent_ret LBABtree::rewrite_lba_extent(
+  op_context_t c,
+  CachedExtentRef e)
+{
+  if (e->get_type() == extent_types_t::LADDR_INTERNAL ||
+      e->get_type() == extent_types_t::LADDR_LEAF) {
+    c.cache.retire_extent(c.trans, e);
+
+    CachedExtentRef nlba_extent;
+    if (e->get_type() == extent_types_t::LADDR_INTERNAL) {
+      auto lint = e->cast<LBAInternalNode>();
+      return _rewrite_lba_extent(c, *lint);
+    } else {
+      assert(e->get_type() == extent_types_t::LADDR_LEAF);
+      auto lleaf = e->cast<LBALeafNode>();
+      return _rewrite_lba_extent(c, *lleaf);
+    }
+    
+  } else {
+    ceph_assert(0 == "impossible");
+    return rewrite_lba_extent_iertr::now();
   }
 }
 
