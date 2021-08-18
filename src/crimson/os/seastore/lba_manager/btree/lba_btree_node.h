@@ -96,8 +96,7 @@ struct lba_node_meta_le_t {
  */
 constexpr size_t INTERNAL_NODE_CAPACITY = 254;
 struct LBAInternalNode
-  : LBANode,
-    common::FixedKVNodeLayout<
+  : common::FixedKVNodeLayout<
       INTERNAL_NODE_CAPACITY,
       lba_node_meta_t, lba_node_meta_le_t,
       laddr_t, laddr_le_t,
@@ -106,7 +105,6 @@ struct LBAInternalNode
   using internal_iterator_t = const_iterator;
   template <typename... T>
   LBAInternalNode(T&&... t) :
-    LBANode(std::forward<T>(t)...),
     FixedKVNodeLayout(get_bptr().c_str()) {}
 
   static constexpr extent_types_t type = extent_types_t::LADDR_INTERNAL;
@@ -122,54 +120,6 @@ struct LBAInternalNode
   delta_buffer_t *maybe_get_delta_buffer() {
     return is_mutation_pending() ? &delta_buffer : nullptr;
   }
-
-  lookup_ret lookup(op_context_t c, laddr_t addr, depth_t depth) final;
-
-  lookup_range_ret lookup_range(
-    op_context_t c,
-    laddr_t addr,
-    extent_len_t len) final;
-
-  lookup_pin_ret lookup_pin(
-    op_context_t c,
-    laddr_t addr) final;
-
-  insert_ret insert(
-    op_context_t c,
-    laddr_t laddr,
-    lba_map_val_t val) final;
-
-  mutate_mapping_ret mutate_mapping(
-    op_context_t c,
-    laddr_t laddr,
-    mutate_func_t &&f) final;
-  mutate_mapping_ret mutate_mapping_internal(
-    op_context_t c,
-    laddr_t laddr,
-    bool is_root,
-    mutate_func_t &&f) final;
-
-  mutate_internal_address_ret mutate_internal_address(
-    op_context_t c,
-    depth_t depth,
-    laddr_t laddr,
-    paddr_t paddr) final;
-
-  find_hole_ret find_hole(
-    op_context_t c,
-    laddr_t min,
-    laddr_t max,
-    extent_len_t len) final;
-
-  scan_mappings_ret scan_mappings(
-    op_context_t c,
-    laddr_t begin,
-    laddr_t end,
-    scan_mappings_func_t &f) final;
-
-  scan_mapped_space_ret scan_mapped_space(
-    op_context_t c,
-    scan_mapped_space_func_t &f) final;
 
   void update(
     const_iterator iter,
@@ -325,43 +275,6 @@ struct LBAInternalNode
   bool at_min_capacity() const {
     return get_size() == (get_capacity() / 2);
   }
-
-  /// returns iterators containing [l, r)
-  std::pair<internal_iterator_t, internal_iterator_t> bound(
-    laddr_t l, laddr_t r) {
-    // TODO: inefficient
-    auto retl = begin();
-    for (; retl != end(); ++retl) {
-      if (retl->get_next_key_or_max() > l)
-	break;
-    }
-    auto retr = retl;
-    for (; retr != end(); ++retr) {
-      if (retr->get_key() >= r)
-	break;
-    }
-    return std::make_pair(retl, retr);
-  }
-
-  using split_iertr = base_iertr;
-  using split_ret = split_iertr::future<LBANodeRef>;
-  split_ret split_entry(
-    op_context_t c,
-    laddr_t addr,
-    internal_iterator_t,
-    LBANodeRef entry);
-
-  using merge_iertr = base_iertr;
-  using merge_ret = merge_iertr::future<LBANodeRef>;
-  merge_ret merge_entry(
-    op_context_t c,
-    laddr_t addr,
-    internal_iterator_t,
-    LBANodeRef entry,
-    bool is_root);
-
-  /// returns iterator for subtree containing laddr
-  internal_iterator_t get_containing_child(laddr_t laddr);
 };
 using LBAInternalNodeRef = LBAInternalNode::Ref;
 
@@ -409,8 +322,7 @@ struct lba_map_val_le_t {
 };
 
 struct LBALeafNode
-  : LBANode,
-    common::FixedKVNodeLayout<
+  : common::FixedKVNodeLayout<
       LEAF_NODE_CAPACITY,
       lba_node_meta_t, lba_node_meta_le_t,
       laddr_t, laddr_le_t,
@@ -419,7 +331,6 @@ struct LBALeafNode
   using internal_iterator_t = const_iterator;
   template <typename... T>
   LBALeafNode(T&&... t) :
-    LBANode(std::forward<T>(t)...),
     FixedKVNodeLayout(get_bptr().c_str()) {}
 
   static constexpr extent_types_t type = extent_types_t::LADDR_LEAF;
@@ -435,59 +346,6 @@ struct LBALeafNode
   delta_buffer_t *maybe_get_delta_buffer() {
     return is_mutation_pending() ? &delta_buffer : nullptr;
   }
-
-  lookup_ret lookup(op_context_t c, laddr_t addr, depth_t depth) final
-  {
-    return lookup_ret(
-      interruptible::ready_future_marker{},
-      this);
-  }
-
-  lookup_range_ret lookup_range(
-    op_context_t c,
-    laddr_t addr,
-    extent_len_t len) final;
-
-  lookup_pin_ret lookup_pin(
-    op_context_t c,
-    laddr_t addr) final;
-
-  insert_ret insert(
-    op_context_t c,
-    laddr_t laddr,
-    lba_map_val_t val) final;
-
-  mutate_mapping_ret mutate_mapping(
-    op_context_t c,
-    laddr_t laddr,
-    mutate_func_t &&f) final;
-  mutate_mapping_ret mutate_mapping_internal(
-    op_context_t c,
-    laddr_t laddr,
-    bool is_root,
-    mutate_func_t &&f) final;
-
-  mutate_internal_address_ret mutate_internal_address(
-    op_context_t c,
-    depth_t depth,
-    laddr_t laddr,
-    paddr_t paddr) final;
-
-  find_hole_ret find_hole(
-    op_context_t c,
-    laddr_t min,
-    laddr_t max,
-    extent_len_t len) final;
-
-  scan_mappings_ret scan_mappings(
-    op_context_t c,
-    laddr_t begin,
-    laddr_t end,
-    scan_mappings_func_t &f) final;
-
-  scan_mapped_space_ret scan_mapped_space(
-    op_context_t c,
-    scan_mapped_space_func_t &f) final;
 
   void update(
     const_iterator iter,
@@ -633,26 +491,6 @@ struct LBALeafNode
   bool at_min_capacity() const final {
     return get_size() == (get_capacity() / 2);
   }
-
-  /// returns iterators <lb, ub> containing addresses [l, r)
-  std::pair<internal_iterator_t, internal_iterator_t> bound(
-    laddr_t l, laddr_t r) {
-    // TODO: inefficient
-    auto retl = begin();
-    for (; retl != end(); ++retl) {
-      if (retl->get_key() >= l || (retl->get_key() + retl->get_val().len) > l)
-	break;
-    }
-    auto retr = retl;
-    for (; retr != end(); ++retr) {
-      if (retr->get_key() >= r)
-	break;
-    }
-    return std::make_pair(retl, retr);
-  }
-
-  std::pair<internal_iterator_t, internal_iterator_t>
-  get_leaf_entries(laddr_t addr, extent_len_t len);
 };
 using LBALeafNodeRef = TCachedExtentRef<LBALeafNode>;
 
