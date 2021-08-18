@@ -337,9 +337,11 @@ public:
    *
    * Checks whether e is live (reachable from lba tree) and drops or initializes
    * accordingly.
+   *
+   * Returns e if live and a null CachedExtentRef otherwise.
    */
   using init_cached_extent_iertr = base_iertr;
-  using init_cached_extent_ret = init_cached_extent_iertr::future<>;
+  using init_cached_extent_ret = init_cached_extent_iertr::future<CachedExtentRef>;
   init_cached_extent_ret init_cached_extent(op_context_t c, CachedExtentRef e);
 
   /**

@@ -41,24 +41,6 @@ BtreeLBAManager::mkfs_ret BtreeLBAManager::mkfs(
     );
 }
 
-// REMOVE
-BtreeLBAManager::get_root_ret
-BtreeLBAManager::get_root(Transaction &t)
-{
-  return cache.get_root(t).si_then([this, &t](auto croot) {
-    logger().debug(
-      "BtreeLBAManager::get_root: reading root at {} depth {}",
-      paddr_t{croot->get_root().lba_root.get_location()},
-      croot->get_root().lba_root.get_depth());
-    return get_lba_btree_extent(
-      get_context(t),
-      croot,
-      croot->get_root().lba_root.get_depth(),
-      croot->get_root().lba_root.get_location(),
-      paddr_t());
-  });
-}
-
 BtreeLBAManager::get_mappings_ret
 BtreeLBAManager::get_mappings(
   Transaction &t,
@@ -305,7 +287,9 @@ BtreeLBAManager::init_cached_extent_ret BtreeLBAManager::init_cached_extent(
   return with_btree(
     c,
     [FNAME, c, e](auto &btree) {
-      return btree.init_cached_extent(c, e);
+      return btree.init_cached_extent(
+	c, e
+      ).si_then([](auto) {});
     });
 }
 
@@ -428,7 +412,6 @@ BtreeLBAManager::rewrite_extent_ret BtreeLBAManager::rewrite_extent(
   }
 }
 
-// TODOSAM move to lba_btree
 BtreeLBAManager::get_physical_extent_if_live_ret
 BtreeLBAManager::get_physical_extent_if_live(
   Transaction &t,
@@ -445,24 +428,14 @@ BtreeLBAManager::get_physical_extent_if_live(
     laddr,
     len
   ).si_then([=, &t](CachedExtentRef extent) {
-    return get_root(t).si_then([=, &t](LBANodeRef root) {
-      auto lba_node = extent->cast<LBANode>();
-      return root->lookup(
-	op_context_t{cache, pin_set, t},
-	lba_node->get_node_meta().begin,
-	lba_node->get_node_meta().depth).si_then([=](LBANodeRef c) {
-	  if (c->get_paddr() == lba_node->get_paddr()) {
-	    return get_physical_extent_if_live_ret(
-	      interruptible::ready_future_marker{},
-	      lba_node);
-	  } else {
-	    cache.drop_from_cache(lba_node);
-	    return get_physical_extent_if_live_ret(
-	      interruptible::ready_future_marker{},
-	      CachedExtentRef());
-	  }
-	});
-    });
+    auto c = get_context(t);
+    return with_btree_ret<CachedExtentRef>(
+      c,
+      [this, c, extent](auto &btree) {
+	return btree.init_cached_extent(
+	  c,
+	  extent);
+      });
   });
 }
 

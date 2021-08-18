@@ -133,16 +133,6 @@ private:
 
   static btree_range_pin_t &get_pin(CachedExtent &e);
 
-
-  /** (REMOVE)
-   * get_root
-   *
-   * Get a reference to the root LBANode.
-   */
-  using get_root_iertr = base_iertr;
-  using get_root_ret = get_root_iertr::future<LBANodeRef>;
-  get_root_ret get_root(Transaction &);
-
   template <typename F, typename... Args>
   auto with_btree(
     op_context_t c,

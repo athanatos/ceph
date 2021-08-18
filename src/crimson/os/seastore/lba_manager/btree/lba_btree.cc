@@ -246,7 +246,7 @@ LBABtree::init_cached_extent_ret LBABtree::init_cached_extent(
     return lower_bound(
       c,
       logn->get_laddr()
-    ).si_then([FNAME, this, c, logn](auto iter) {
+    ).si_then([FNAME, this, e, c, logn](auto iter) {
       if (!iter.is_end() &&
 	  iter.get_key() == logn->get_laddr() &&
 	  iter.get_val().paddr == logn->get_paddr()) {
@@ -254,40 +254,43 @@ LBABtree::init_cached_extent_ret LBABtree::init_cached_extent(
 	c.pins.add_pin(
 	  static_cast<BtreeLBAPin&>(logn->get_pin()).pin);
 	DEBUGT(": logical extent {} live, initialized", c.trans, *logn);
+	return e;
       } else {
 	DEBUGT(": logical extent {} not live, dropping", c.trans, *logn);
 	c.cache.drop_from_cache(logn);
+	return CachedExtentRef();
       }
     });
   } else if (e->get_type() == extent_types_t::LADDR_INTERNAL) {
     auto eint = e->cast<LBAInternalNode>();
     return lower_bound(
       c, eint->get_node_meta().begin
-    ).si_then([FNAME, c, eint](auto iter) {
+    ).si_then([FNAME, e, c, eint](auto iter) {
       // Note, this check is valid even if iter.is_end()
       depth_t cand_depth = eint->get_node_meta().depth;
       if (cand_depth <= iter.get_depth() &&
 	  &*iter.get_internal(cand_depth).node == &*eint) {
 	DEBUGT(": extent {} is live", c.trans, *eint);
+	return e;
       } else {
 	DEBUGT(": extent {} is not live", c.trans, *eint);
-	c.cache.drop_from_cache(eint);
+	return CachedExtentRef();
       }
-      return init_cached_extent_iertr::now();
     });
   } else if (e->get_type() == extent_types_t::LADDR_LEAF) {
     auto eleaf = e->cast<LBALeafNode>();
     return lower_bound(
       c, eleaf->get_node_meta().begin
-    ).si_then([FNAME, c, eleaf](auto iter) {
+    ).si_then([FNAME, c, e, eleaf](auto iter) {
       // Note, this check is valid even if iter.is_end()
       if (iter.leaf.node == &*eleaf) {
 	DEBUGT(": extent {} is live", c.trans, *eleaf);
+	return e;
       } else {
 	DEBUGT(": extent {} is not live", c.trans, *eleaf);
 	c.cache.drop_from_cache(eleaf);
+	return CachedExtentRef();
       }
-      return init_cached_extent_iertr::now();
     });
   } else {
     ERRORT(
@@ -296,7 +299,9 @@ LBABtree::init_cached_extent_ret LBABtree::init_cached_extent(
       *e,
       e->get_type());
     assert(0 == "impossible");
-    return init_cached_extent_iertr::now();
+    return init_cached_extent_ret(
+      interruptible::ready_future_marker{},
+      CachedExtentRef());
   }
 }
 
