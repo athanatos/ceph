@@ -339,23 +339,18 @@ LBABtree::rewrite_lba_extent_ret LBABtree::rewrite_lba_extent(
   op_context_t c,
   CachedExtentRef e)
 {
-  if (e->get_type() == extent_types_t::LADDR_INTERNAL ||
-      e->get_type() == extent_types_t::LADDR_LEAF) {
-    c.cache.retire_extent(c.trans, e);
+  assert(e->get_type() == extent_types_t::LADDR_INTERNAL ||
+	 e->get_type() == extent_types_t::LADDR_LEAF);
+  c.cache.retire_extent(c.trans, e);
 
-    CachedExtentRef nlba_extent;
-    if (e->get_type() == extent_types_t::LADDR_INTERNAL) {
-      auto lint = e->cast<LBAInternalNode>();
-      return _rewrite_lba_extent(c, *lint);
-    } else {
-      assert(e->get_type() == extent_types_t::LADDR_LEAF);
-      auto lleaf = e->cast<LBALeafNode>();
-      return _rewrite_lba_extent(c, *lleaf);
-    }
-    
+  CachedExtentRef nlba_extent;
+  if (e->get_type() == extent_types_t::LADDR_INTERNAL) {
+    auto lint = e->cast<LBAInternalNode>();
+    return _rewrite_lba_extent(c, *lint);
   } else {
-    ceph_assert(0 == "impossible");
-    return rewrite_lba_extent_iertr::now();
+    assert(e->get_type() == extent_types_t::LADDR_LEAF);
+    auto lleaf = e->cast<LBALeafNode>();
+    return _rewrite_lba_extent(c, *lleaf);
   }
 }
 

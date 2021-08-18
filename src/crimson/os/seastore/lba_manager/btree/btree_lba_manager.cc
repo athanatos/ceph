@@ -419,46 +419,12 @@ BtreeLBAManager::rewrite_extent_ret BtreeLBAManager::rewrite_extent(
 	}
       );
   } else if (is_lba_node(*extent)) {
-    auto lba_extent = extent->cast<LBANode>();
-    cache.retire_extent(t, extent);
-    auto nlba_extent = cache.alloc_new_extent_by_type(
-      t,
-      lba_extent->get_type(),
-      lba_extent->get_length())->cast<LBANode>();
-    lba_extent->get_bptr().copy_out(
-      0,
-      lba_extent->get_length(),
-      nlba_extent->get_bptr().c_str());
-    nlba_extent->pin.set_range(nlba_extent->get_node_meta());
-
-    /* This is a bit underhanded.  Any relative addrs here must necessarily
-     * be record relative as we are rewriting a dirty extent.  Thus, we
-     * are using resolve_relative_addrs with a (likely negative) block
-     * relative offset to correct them to block-relative offsets adjusted
-     * for our new transaction location.
-     *
-     * Upon commit, these now block relative addresses will be interpretted
-     * against the real final address.
-     */
-    nlba_extent->resolve_relative_addrs(
-      make_record_relative_paddr(0) - nlba_extent->get_paddr());
-
-    logger().debug(
-      "{}: rewriting {} into {}",
-      __func__,
-      *lba_extent,
-      *nlba_extent);
-
-    return update_internal_mapping(
-      t,
-      nlba_extent->get_node_meta().depth,
-      nlba_extent->get_node_meta().begin,
-      nlba_extent->get_paddr()).si_then(
-	[](auto) {},
-	rewrite_extent_iertr::pass_further{},
-	crimson::ct_error::assert_all{
-	  "Invalid error in BtreeLBAManager::rewrite_extent update_internal_mapping"
-	});
+    auto c = get_context(t);
+    return with_btree(
+      c,
+      [this, c, extent](auto &btree) mutable {
+	return btree.rewrite_lba_extent(c, extent);
+      });
   } else {
     return rewrite_extent_iertr::now();
   }
