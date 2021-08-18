@@ -808,6 +808,12 @@ LBABtree::update_internal_mapping_ret LBABtree::update_internal_mapping(
       );
       LBAInternalNodeRef mparent = mut->cast<LBAInternalNode>();
       mparent->update(piter, new_addr);
+
+      /* Note, iter is now invalid as we didn't udpate either the parent
+       * node reference to the new mutable instance nor did we update the
+       * child pointer to the new node.  Not a problem as we'll now just
+       * destruct it.
+       */
     }
     return seastar::now();
   });

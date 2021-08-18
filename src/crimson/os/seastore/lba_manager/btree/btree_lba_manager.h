@@ -243,14 +243,6 @@ private:
     Transaction &t,
     laddr_t addr,
     update_func_t &&f);
-
-  using update_internal_mapping_iertr = LBANode::mutate_internal_address_iertr;
-  using update_internal_mapping_ret = LBANode::mutate_internal_address_ret;
-  update_internal_mapping_ret update_internal_mapping(
-    Transaction &t,
-    depth_t depth,
-    laddr_t laddr,
-    paddr_t paddr);
 };
 using BtreeLBAManagerRef = std::unique_ptr<BtreeLBAManager>;
 

@@ -252,7 +252,6 @@ static depth_t get_depth(const CachedExtent &e)
   }
 }
 
-// TODOSAM move to lba_btree
 void BtreeLBAManager::complete_transaction(
   Transaction &t)
 {
@@ -533,53 +532,6 @@ BtreeLBAManager::update_mapping_ret BtreeLBAManager::update_mapping(
 	}
       });
     });
-}
-
-
-// TODOSAM move to lba_btree
-BtreeLBAManager::update_internal_mapping_ret
-BtreeLBAManager::update_internal_mapping(
-  Transaction &t,
-  depth_t depth,
-  laddr_t laddr,
-  paddr_t paddr)
-{
-  return cache.get_root(t).si_then([=, &t](RootBlockRef croot) {
-    if (depth == croot->get_root().lba_root.get_depth()) {
-      logger().debug(
-	"update_internal_mapping: updating lba root to: {}->{}",
-	laddr,
-	paddr);
-      {
-	auto mut_croot = cache.duplicate_for_write(t, croot);
-	croot = mut_croot->cast<RootBlock>();
-      }
-      ceph_assert(laddr == 0);
-      auto old_paddr = croot->get_root().lba_root.get_location();
-      croot->get_root().lba_root.set_location(paddr);
-      return update_internal_mapping_ret(
-	interruptible::ready_future_marker{},
-	old_paddr);
-    } else {
-      logger().debug(
-	"update_internal_mapping: updating lba node at depth {} to: {}->{}",
-	depth,
-	laddr,
-	paddr);
-      return get_lba_btree_extent(
-	get_context(t),
-	croot,
-	croot->get_root().lba_root.get_depth(),
-	croot->get_root().lba_root.get_location(),
-	paddr_t()).si_then([=, &t](LBANodeRef broot) {
-	  return broot->mutate_internal_address(
-	    get_context(t),
-	    depth,
-	    laddr,
-	    paddr);
-	});
-    }
-  });
 }
 
 BtreeLBAManager::~BtreeLBAManager()
