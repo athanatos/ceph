@@ -300,43 +300,6 @@ LBABtree::init_cached_extent_ret LBABtree::init_cached_extent(
   }
 }
 
-template <typename T>
-auto _rewrite_lba_extent(
-  op_context_t c,
-  T &lba_extent) {
-  LOG_PREFIX(lbabtree.cc::_rewrite_lba_extent);
-  auto nlba_extent = c.cache.alloc_new_extent<T>(
-    c.trans,
-    lba_extent.get_length());
-  lba_extent.get_bptr().copy_out(
-    0,
-    lba_extent.get_length(),
-    nlba_extent->get_bptr().c_str());
-  nlba_extent->pin.set_range(nlba_extent->get_node_meta());
-  
-  /* This is a bit underhanded.  Any relative addrs here must necessarily
-   * be record relative as we are rewriting a dirty extent.  Thus, we
-   * are using resolve_relative_addrs with a (likely negative) block
-   * relative offset to correct them to block-relative offsets adjusted
-   * for our new transaction location.
-   *
-   * Upon commit, these now block relative addresses will be interpretted
-   * against the real final address.
-   */
-  nlba_extent->resolve_relative_addrs(
-    make_record_relative_paddr(0) - nlba_extent->get_paddr());
-
-  DEBUGT(
-    "rewriteing {} into {}",
-    c.trans,
-    lba_extent,
-    *nlba_extent);
-
-  auto laddr = nlba_extent->get_meta().begin;
-
-  return seastar::now();
-}
-
 LBABtree::rewrite_lba_extent_ret LBABtree::rewrite_lba_extent(
   op_context_t c,
   CachedExtentRef e)
@@ -376,9 +339,12 @@ LBABtree::rewrite_lba_extent_ret LBABtree::rewrite_lba_extent(
       lba_extent,
       *nlba_extent);
 
-    auto laddr = nlba_extent->get_node_meta().begin;
-    auto depth = nlba_extent->get_node_meta().depth;
-    return seastar::now();
+    return update_internal_mapping(
+      c,
+      nlba_extent->get_node_meta().depth,
+      nlba_extent->get_node_meta().begin,
+      e->get_paddr(),
+      nlba_extent->get_paddr());
   };
 
   CachedExtentRef nlba_extent;
@@ -747,5 +713,103 @@ LBABtree::handle_merge_ret LBABtree::handle_merge(
 	});
     });
 }
+  
+LBABtree::update_internal_mapping_ret LBABtree::update_internal_mapping(
+  op_context_t c,
+  depth_t depth,
+  laddr_t laddr,
+  paddr_t old_addr,
+  paddr_t new_addr)
+{
+  LOG_PREFIX(LBATree::update_internal_mapping);
+  DEBUGT(
+    "updating laddr {} at depth {} from {} to {}",
+    c.trans,
+    laddr,
+    depth,
+    old_addr,
+    new_addr);
+	
+  return lower_bound(
+    c, laddr
+  ).si_then([=](auto iter) {
+    assert(iter.get_depth() >= depth);
+    if (depth == iter.get_depth()) {
+      DEBUGT("update at root", c.trans);
 
+      if (laddr != 0) {
+	ERRORT(
+	  "updating root laddr {} at depth {} from {} to {},"
+	  "laddr is not 0",
+	  c.trans,
+	  laddr,
+	  depth,
+	  old_addr,
+	  new_addr,
+	  root.get_location());
+	ceph_assert(0 == "impossible");
+      }
+
+      if (root.get_location() != old_addr) {
+	ERRORT(
+	  "updating root laddr {} at depth {} from {} to {},"
+	  "root addr {} does not match",
+	  c.trans,
+	  laddr,
+	  depth,
+	  old_addr,
+	  new_addr,
+	  root.get_location());
+	ceph_assert(0 == "impossible");
+      }
+
+      root.set_location(new_addr);
+      root_dirty = true;
+    } else {
+      auto &parent = iter.get_internal(depth + 1);
+      assert(parent.node);
+      assert(parent.pos < parent.node->get_size());
+      auto piter = parent.node->iter_idx(parent.pos);
+
+      if (piter->get_key() != laddr) {
+	ERRORT(
+	  "updating laddr {} at depth {} from {} to {},"
+	  "node {} pos {} val pivot addr {} does not match",
+	  c.trans,
+	  laddr,
+	  depth,
+	  old_addr,
+	  new_addr,
+	  *(parent.node),
+	  parent.pos,
+	  piter->get_key());
+	ceph_assert(0 == "impossible");
+      }
+
+
+      if (piter->get_val() != old_addr) {
+	ERRORT(
+	  "updating laddr {} at depth {} from {} to {},"
+	  "node {} pos {} val addr {} does not match",
+	  c.trans,
+	  laddr,
+	  depth,
+	  old_addr,
+	  new_addr,
+	  *(parent.node),
+	  parent.pos,
+	  piter->get_val());
+	ceph_assert(0 == "impossible");
+      }
+
+      CachedExtentRef mut = c.cache.duplicate_for_write(
+	c.trans,
+	parent.node
+      );
+      LBAInternalNodeRef mparent = mut->cast<LBAInternalNode>();
+      mparent->update(piter, new_addr);
+    }
+    return seastar::now();
+  });
+}
 }

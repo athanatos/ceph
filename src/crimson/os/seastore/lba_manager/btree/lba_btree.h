@@ -554,6 +554,15 @@ private:
     op_context_t c,
     iterator &iter);
 
+  using update_internal_mapping_iertr = base_iertr;
+  using update_internal_mapping_ret = update_internal_mapping_iertr::future<>;
+  update_internal_mapping_ret update_internal_mapping(
+    op_context_t c,
+    depth_t depth,
+    laddr_t laddr,
+    paddr_t old_addr,
+    paddr_t new_addr);
+
   template <typename T>
   using node_position_t = iterator::node_position_t<T>;
 
