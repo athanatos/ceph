@@ -332,6 +332,8 @@ auto _rewrite_lba_extent(
     lba_extent,
     *nlba_extent);
 
+  auto laddr = nlba_extent->get_meta().begin;
+
   return seastar::now();
 }
 
@@ -339,18 +341,54 @@ LBABtree::rewrite_lba_extent_ret LBABtree::rewrite_lba_extent(
   op_context_t c,
   CachedExtentRef e)
 {
+  LOG_PREFIX(LBABtree::rewrite_lba_extent);
   assert(e->get_type() == extent_types_t::LADDR_INTERNAL ||
 	 e->get_type() == extent_types_t::LADDR_LEAF);
   c.cache.retire_extent(c.trans, e);
 
+  auto do_rewrite = [&](auto &lba_extent) {
+    auto nlba_extent = c.cache.alloc_new_extent<
+      std::remove_reference_t<decltype(lba_extent)>
+      >(
+      c.trans,
+      lba_extent.get_length());
+    lba_extent.get_bptr().copy_out(
+      0,
+      lba_extent.get_length(),
+      nlba_extent->get_bptr().c_str());
+    nlba_extent->pin.set_range(nlba_extent->get_node_meta());
+  
+    /* This is a bit underhanded.  Any relative addrs here must necessarily
+     * be record relative as we are rewriting a dirty extent.  Thus, we
+     * are using resolve_relative_addrs with a (likely negative) block
+     * relative offset to correct them to block-relative offsets adjusted
+     * for our new transaction location.
+     *
+     * Upon commit, these now block relative addresses will be interpretted
+     * against the real final address.
+     */
+    nlba_extent->resolve_relative_addrs(
+      make_record_relative_paddr(0) - nlba_extent->get_paddr());
+    
+    DEBUGT(
+      "rewriting {} into {}",
+      c.trans,
+      lba_extent,
+      *nlba_extent);
+
+    auto laddr = nlba_extent->get_node_meta().begin;
+    auto depth = nlba_extent->get_node_meta().depth;
+    return seastar::now();
+  };
+
   CachedExtentRef nlba_extent;
   if (e->get_type() == extent_types_t::LADDR_INTERNAL) {
     auto lint = e->cast<LBAInternalNode>();
-    return _rewrite_lba_extent(c, *lint);
+    return do_rewrite(*lint);
   } else {
     assert(e->get_type() == extent_types_t::LADDR_LEAF);
     auto lleaf = e->cast<LBALeafNode>();
-    return _rewrite_lba_extent(c, *lleaf);
+    return do_rewrite(*lleaf);
   }
 }
 
