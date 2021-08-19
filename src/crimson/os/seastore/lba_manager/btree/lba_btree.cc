@@ -311,7 +311,6 @@ LBABtree::rewrite_lba_extent_ret LBABtree::rewrite_lba_extent(
   LOG_PREFIX(LBABtree::rewrite_lba_extent);
   assert(e->get_type() == extent_types_t::LADDR_INTERNAL ||
 	 e->get_type() == extent_types_t::LADDR_LEAF);
-  c.cache.retire_extent(c.trans, e);
 
   auto do_rewrite = [&](auto &lba_extent) {
     auto nlba_extent = c.cache.alloc_new_extent<
@@ -348,7 +347,10 @@ LBABtree::rewrite_lba_extent_ret LBABtree::rewrite_lba_extent(
       nlba_extent->get_node_meta().depth,
       nlba_extent->get_node_meta().begin,
       e->get_paddr(),
-      nlba_extent->get_paddr());
+      nlba_extent->get_paddr()
+    ).si_then([c, e] {
+      c.cache.retire_extent(c.trans, e);
+    });
   };
 
   CachedExtentRef nlba_extent;
