@@ -158,6 +158,11 @@ LBABtree::insert_ret LBABtree::insert(
   lba_map_val_t val)
 {
   LOG_PREFIX(LBATree::insert);
+  DEBUGT(
+    "inserting laddr {} at iter {}",
+    c.trans,
+    laddr,
+    iter.is_end() ? L_ADDR_MAX : iter.get_key());
   return seastar::do_with(
     iter,
     [this, c, laddr, val](auto &ret) {
@@ -198,22 +203,26 @@ LBABtree::insert_ret LBABtree::insert(
 
 LBABtree::update_ret LBABtree::update(
   op_context_t c,
-  iterator ret,
+  iterator iter,
   lba_map_val_t val)
 {
   LOG_PREFIX(LBATree::update);
-  if (!ret.leaf.node->is_pending()) {
+  DEBUGT(
+    "update element at {}",
+    c.trans,
+    iter.is_end() ? L_ADDR_MAX : iter.get_key());
+  if (!iter.leaf.node->is_pending()) {
     CachedExtentRef mut = c.cache.duplicate_for_write(
-      c.trans, ret.leaf.node
+      c.trans, iter.leaf.node
     );
-    ret.leaf.node = mut->cast<LBALeafNode>();
+    iter.leaf.node = mut->cast<LBALeafNode>();
   }
-  ret.leaf.node->update(
-    ret.leaf.node->iter_idx(ret.leaf.pos),
+  iter.leaf.node->update(
+    iter.leaf.node->iter_idx(iter.leaf.pos),
     val);
   return update_ret(
     interruptible::ready_future_marker{},
-    ret);
+    iter);
 }
 
 LBABtree::remove_ret LBABtree::remove(
@@ -221,6 +230,10 @@ LBABtree::remove_ret LBABtree::remove(
   iterator iter)
 {
   LOG_PREFIX(LBATree::remove);
+  DEBUGT(
+    "remove element at {}",
+    c.trans,
+    iter.is_end() ? L_ADDR_MAX : iter.get_key());
   assert(!iter.is_end());
   return seastar::do_with(
     iter,
@@ -475,8 +488,11 @@ LBABtree::handle_split_ret LBABtree::handle_split(
   op_context_t c,
   iterator &iter)
 {
+  LOG_PREFIX(LBATree::insert);
 
   depth_t split_from = iter.check_split();
+
+  DEBUGT("split_from {}, depth {}", c.trans, split_from, iter.get_depth());
 
   if (split_from == iter.get_depth()) {
     auto nroot = c.cache.alloc_new_extent<LBAInternalNode>(
@@ -534,9 +550,11 @@ LBABtree::handle_split_ret LBABtree::handle_split(
 
     if (split_from > 1) {
       auto &pos = iter.get_internal(split_from);
+      DEBUGT("splitting parent {} depth {}", c.trans, split_from, *pos.node);
       split_level(parent_pos, pos);
     } else {
       auto &pos = iter.leaf;
+      DEBUGT("splitting child {}", c.trans, *pos.node);
       split_level(parent_pos, pos);
     }
   }

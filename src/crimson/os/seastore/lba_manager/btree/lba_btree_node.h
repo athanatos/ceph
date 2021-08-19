@@ -392,10 +392,10 @@ struct LBALeafNode
   void update(
     const_iterator iter,
     lba_map_val_t val) {
+    val.paddr = maybe_generate_relative(val.paddr);
     return journal_update(
       iter,
       val,
-      //maybe_generate_relative(addr),
       maybe_get_delta_buffer());
   }
 
@@ -403,11 +403,11 @@ struct LBALeafNode
     const_iterator iter,
     laddr_t addr,
     lba_map_val_t val) {
+    val.paddr = maybe_generate_relative(val.paddr);
     journal_insert(
       iter,
       addr,
       val,
-      //maybe_generate_relative(addr),
       maybe_get_delta_buffer());
     return iter;
   }
