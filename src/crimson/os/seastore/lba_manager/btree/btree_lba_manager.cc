@@ -330,7 +330,7 @@ BtreeLBAManager::scan_mapped_space_ret BtreeLBAManager::scan_mapped_space(
     [this, c, &t, f=std::move(f)](auto &btree) mutable {
       return LBABtree::iterate_repeat(
 	c,
-	btree.begin(c),
+	btree.lower_bound(c, 0, &f),
 	[f=std::move(f)](auto &pos) {
 	  if (pos.is_end()) {
 	    return LBABtree::iterate_repeat_ret(
@@ -341,7 +341,8 @@ BtreeLBAManager::scan_mapped_space_ret BtreeLBAManager::scan_mapped_space(
 	  return LBABtree::iterate_repeat_ret(
 	    interruptible::ready_future_marker{},
 	    seastar::stop_iteration::no);
-	});
+	},
+	&f);
     });
 }
 

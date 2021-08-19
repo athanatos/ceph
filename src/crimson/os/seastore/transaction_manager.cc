@@ -83,12 +83,12 @@ TransactionManager::mount_ertr::future<> TransactionManager::mount()
 	      return lba_manager->scan_mapped_space(
 		t,
 		[this, FNAME, &t](paddr_t addr, extent_len_t len) {
-		  TRACET(
-		    "marking {}~{} used",
-		    t,
-		    addr,
-		    len);
 		  if (addr.is_real()) {
+		    DEBUGT(
+		      "marking {}~{} used",
+		      t,
+		      addr,
+		      len);
 		    segment_cleaner->mark_space_used(
 		      addr,
 		      len ,

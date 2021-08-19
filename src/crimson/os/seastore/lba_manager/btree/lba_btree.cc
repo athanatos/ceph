@@ -20,7 +20,9 @@ LBABtree::mkfs_ret LBABtree::mkfs(op_context_t c)
   return lba_root_t{root_leaf->get_paddr(), 1u};
 }
 
-LBABtree::iterator_fut LBABtree::iterator::next(op_context_t c) const
+LBABtree::iterator_fut LBABtree::iterator::next(
+  op_context_t c,
+  mapped_space_visitor_t *visit) const
 {
   assert_valid();
   assert(!is_end());
@@ -114,7 +116,8 @@ LBABtree::iterator_fut LBABtree::iterator::prev(op_context_t c) const
 
 LBABtree::iterator_fut LBABtree::lower_bound(
   op_context_t c,
-  laddr_t addr) const
+  laddr_t addr,
+  mapped_space_visitor_t *visit) const
 {
   LOG_PREFIX(LBATree::lower_bound);
   return lookup(

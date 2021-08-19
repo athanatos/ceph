@@ -10,6 +10,7 @@
 
 #include "crimson/common/log.h"
 
+#include "crimson/os/seastore/lba_manager.h"
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/lba_manager/btree/lba_btree_node.h"
 
@@ -24,6 +25,8 @@ public:
   class iterator;
   using iterator_fut = base_iertr::future<iterator>;
 
+  using mapped_space_visitor_t = LBAManager::scan_mapped_space_func_t;
+
   class iterator {
   public:
     iterator(const iterator &) noexcept = default;
@@ -33,7 +36,10 @@ public:
 
     iterator(depth_t depth) : internal(depth - 1) {}
 
-    iterator_fut next(op_context_t c) const;
+    iterator_fut next(
+      op_context_t c,
+      mapped_space_visitor_t *visit=nullptr) const;
+
     iterator_fut prev(op_context_t c) const;
 
     void assert_valid() const {
@@ -163,7 +169,8 @@ public:
    */
   iterator_fut lower_bound(
     op_context_t c,
-    laddr_t addr) const;
+    laddr_t addr,
+    mapped_space_visitor_t *visit=nullptr) const;
 
   /**
    * upper_bound
@@ -235,17 +242,23 @@ public:
   using iterate_repeat_ret = base_iertr::future<
     seastar::stop_iteration>;
   template <typename F>
-  static auto iterate_repeat(op_context_t c, iterator_fut &&iter_fut, F &&f) {
-    return std::move(iter_fut).si_then([c, f=std::forward<F>(f)](auto iter) {
+  static auto iterate_repeat(
+    op_context_t c,
+    iterator_fut &&iter_fut,
+    F &&f,
+    mapped_space_visitor_t *visitor=nullptr) {
+    return std::move(
+      iter_fut
+    ).si_then([c, visitor, f=std::forward<F>(f)](auto iter) {
       return seastar::do_with(
 	iter,
 	std::move(f),
-	[c](auto &pos, auto &f) {
+	[c, visitor](auto &pos, auto &f) {
 	  return trans_intr::repeat(
-	    [c, &f, &pos] {
+	    [c, visitor, &f, &pos] {
 	      return f(
 		pos
-	      ).si_then([c, &pos](auto done) {
+	      ).si_then([c, visitor, &pos](auto done) {
 		if (done == seastar::stop_iteration::yes) {
 		  return iterate_repeat_ret(
 		    interruptible::ready_future_marker{},
@@ -253,7 +266,7 @@ public:
 		} else {
 		  ceph_assert(!pos.is_end());
 		  return pos.next(
-		    c
+		    c, visitor
 		  ).si_then([&pos](auto next) {
 		    pos = next;
 		    return iterate_repeat_ret(
