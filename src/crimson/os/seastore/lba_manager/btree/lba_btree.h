@@ -397,7 +397,7 @@ private:
 	root.get_location()
       ).si_then([this, visitor, &iter](LBAInternalNodeRef root_node) {
 	iter.get_internal(root.get_depth()).node = root_node;
-	if (visitor) (*visitor)(root_node->get_paddr(), root_node->get_size());
+	if (visitor) (*visitor)(root_node->get_paddr(), root_node->get_length());
 	return lookup_root_iertr::now();
       });
     } else {
@@ -406,7 +406,7 @@ private:
 	root.get_location()
       ).si_then([this, visitor, &iter](LBALeafNodeRef root_node) {
 	iter.leaf.node = root_node;
-	if (visitor) (*visitor)(root_node->get_paddr(), root_node->get_size());
+	if (visitor) (*visitor)(root_node->get_paddr(), root_node->get_length());
 	return lookup_root_iertr::now();
       });
     }
@@ -436,7 +436,7 @@ private:
       auto node_iter = f(*node);
       assert(node_iter != node->end());
       entry.pos = node_iter->get_offset();
-      if (visitor) (*visitor)(node->get_paddr(), node->get_size());
+      if (visitor) (*visitor)(node->get_paddr(), node->get_length());
       return seastar::now();
     });
   }
@@ -462,7 +462,7 @@ private:
       iter.leaf.node = node;
       auto node_iter = f(*node);
       iter.leaf.pos = node_iter->get_offset();
-      if (visitor) (*visitor)(node->get_paddr(), node->get_size());
+      if (visitor) (*visitor)(node->get_paddr(), node->get_length());
       return seastar::now();
     });
   }
