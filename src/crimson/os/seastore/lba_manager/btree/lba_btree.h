@@ -386,22 +386,27 @@ private:
 
   using lookup_root_iertr = base_iertr;
   using lookup_root_ret = lookup_root_iertr::future<>;
-  lookup_root_ret lookup_root(op_context_t c, iterator &iter) const {
+  lookup_root_ret lookup_root(
+    op_context_t c,
+    iterator &iter,
+    mapped_space_visitor_t *visitor) const {
     if (root.get_depth() > 1) {
       return get_internal_node(
 	c,
 	root.get_depth(),
 	root.get_location()
-      ).si_then([this, &iter](LBAInternalNodeRef root_node) {
+      ).si_then([this, visitor, &iter](LBAInternalNodeRef root_node) {
 	iter.get_internal(root.get_depth()).node = root_node;
+	if (visitor) (*visitor)(root_node->get_paddr(), root_node->get_size());
 	return lookup_root_iertr::now();
       });
     } else {
       return get_leaf_node(
 	c,
 	root.get_location()
-      ).si_then([this, &iter](LBALeafNodeRef root_node) {
+      ).si_then([this, visitor, &iter](LBALeafNodeRef root_node) {
 	iter.leaf.node = root_node;
+	if (visitor) (*visitor)(root_node->get_paddr(), root_node->get_size());
 	return lookup_root_iertr::now();
       });
     }
@@ -466,7 +471,8 @@ private:
     depth_t from,   ///< [in] from inclusive
     depth_t to,     ///< [in] to exclusive, (to <= from, to == from is a noop)
     LI &li,         ///< [in] internal->iterator
-    LL &ll          ///< [in] leaf->iterator
+    LL &ll,         ///< [in] leaf->iterator
+    mapped_space_visitor_t *visitor ///< [in] mapped space visitor
   ) {
     LOG_PREFIX(LBATree::lookup_depth_range);
     DEBUGT("{} -> {}", c.trans, from, to);
@@ -483,12 +489,14 @@ private:
 		    d,
 		    iter,
 		    li);
+		  /// TOODSAM
 		} else {
 		  assert(d == 1);
 		  return lookup_leaf(
 		    c,
 		    iter,
 		    ll);
+		  /// TOODSAM
 		}
 	      }().si_then([&d] {
 		--d;
@@ -511,16 +519,18 @@ private:
   lookup_ret lookup(
     op_context_t c,
     LI &&lookup_internal,
-    LL &&lookup_leaf) const {
+    LL &&lookup_leaf,
+    mapped_space_visitor_t *visitor
+  ) const {
     LOG_PREFIX(LBATree::lookup);
     return seastar::do_with(
       iterator{root.get_depth()},
       std::forward<LI>(lookup_internal),
       std::forward<LL>(lookup_leaf),
-      [FNAME, this, c](auto &iter, auto &li, auto &ll) {
+      [FNAME, this, visitor, c](auto &iter, auto &li, auto &ll) {
 	return lookup_root(
-	  c, iter
-	).si_then([FNAME, this, c, &iter, &li, &ll] {
+	  c, iter, visitor
+	).si_then([FNAME, this, visitor, c, &iter, &li, &ll] {
 	  if (iter.get_depth() > 1) {
 	    auto &root_entry = *(iter.internal.rbegin());
 	    root_entry.pos = li(*(root_entry.node)).get_offset();
@@ -536,7 +546,8 @@ private:
 	    root.get_depth() - 1,
 	    0,
 	    li,
-	    ll);
+	    ll,
+	    visitor);
 	}).si_then([c, &iter] {
 	  return std::move(iter);
 	});

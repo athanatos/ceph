@@ -22,7 +22,7 @@ LBABtree::mkfs_ret LBABtree::mkfs(op_context_t c)
 
 LBABtree::iterator_fut LBABtree::iterator::next(
   op_context_t c,
-  mapped_space_visitor_t *visit) const
+  mapped_space_visitor_t *visitor) const
 {
   assert_valid();
   assert(!is_end());
@@ -48,14 +48,14 @@ LBABtree::iterator_fut LBABtree::iterator::next(
       *this,
       [](const LBAInternalNode &internal) { return internal.begin(); },
       [](const LBALeafNode &leaf) { return leaf.begin(); },
-      [c, depth_with_space](auto &ret, auto &li, auto &ll) {
+      [c, depth_with_space, visitor](auto &ret, auto &li, auto &ll) {
 	for (depth_t depth = 2; depth < depth_with_space; ++depth) {
 	  ret.get_internal(depth).reset();
 	}
 	ret.leaf.reset();
 	ret.get_internal(depth_with_space).pos++;
 	return lookup_depth_range(
-	  c, ret, depth_with_space - 1, 0, li, ll
+	  c, ret, depth_with_space - 1, 0, li, ll, visitor
 	).si_then([&ret] {
 	  return std::move(ret);
 	});
@@ -107,7 +107,7 @@ LBABtree::iterator_fut LBABtree::iterator::prev(op_context_t c) const
       ret.leaf.reset();
       ret.get_internal(depth_with_space).pos--;
       return lookup_depth_range(
-	c, ret, depth_with_space - 1, 0, li, ll
+	c, ret, depth_with_space - 1, 0, li, ll, nullptr
       ).si_then([&ret] {
 	return std::move(ret);
       });
@@ -117,7 +117,7 @@ LBABtree::iterator_fut LBABtree::iterator::prev(op_context_t c) const
 LBABtree::iterator_fut LBABtree::lower_bound(
   op_context_t c,
   laddr_t addr,
-  mapped_space_visitor_t *visit) const
+  mapped_space_visitor_t *visitor) const
 {
   LOG_PREFIX(LBATree::lower_bound);
   return lookup(
@@ -139,14 +139,16 @@ LBABtree::iterator_fut LBABtree::lower_bound(
 	leaf.get_size(),
 	ret == leaf.end());
       return ret;
-    }).si_then([FNAME, c](auto &&ret) {
-      DEBUGT(
-	"ret.leaf.pos {}",
-	c.trans,
-	ret.leaf.pos);
-      ret.assert_valid();
-      return std::move(ret);
-    });
+    },
+    visitor
+  ).si_then([FNAME, c](auto &&ret) {
+    DEBUGT(
+      "ret.leaf.pos {}",
+      c.trans,
+      ret.leaf.pos);
+    ret.assert_valid();
+    return std::move(ret);
+  });
 }
 
 LBABtree::insert_ret LBABtree::insert(
