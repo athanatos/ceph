@@ -419,7 +419,9 @@ private:
     op_context_t c,
     depth_t depth,
     iterator &iter,
-    F &f) {
+    F &f,
+    mapped_space_visitor_t *visitor
+  ) {
     assert(depth > 1);
     auto &parent_entry = iter.get_internal(depth + 1);
     auto parent = parent_entry.node;
@@ -428,12 +430,13 @@ private:
       c,
       depth,
       node_iter->get_val().maybe_relative_to(parent->get_paddr())
-    ).si_then([c, depth, &iter, &f](LBAInternalNodeRef node) {
+    ).si_then([c, depth, visitor, &iter, &f](LBAInternalNodeRef node) {
       auto &entry = iter.get_internal(depth);
       entry.node = node;
       auto node_iter = f(*node);
       assert(node_iter != node->end());
       entry.pos = node_iter->get_offset();
+      if (visitor) (*visitor)(node->get_paddr(), node->get_size());
       return seastar::now();
     });
   }
@@ -444,7 +447,8 @@ private:
   static lookup_internal_level_ret lookup_leaf(
     op_context_t c,
     iterator &iter,
-    F &f
+    F &f,
+    mapped_space_visitor_t *visitor
   ) {
     auto &parent_entry = iter.get_internal(2);
     auto parent = parent_entry.node;
@@ -454,10 +458,11 @@ private:
     return get_leaf_node(
       c,
       node_iter->get_val().maybe_relative_to(parent->get_paddr())
-    ).si_then([c, &iter, &f](LBALeafNodeRef node) {
+    ).si_then([c, visitor, &iter, &f](LBALeafNodeRef node) {
       iter.leaf.node = node;
       auto node_iter = f(*node);
       iter.leaf.pos = node_iter->get_offset();
+      if (visitor) (*visitor)(node->get_paddr(), node->get_size());
       return seastar::now();
     });
   }
@@ -478,9 +483,9 @@ private:
     DEBUGT("{} -> {}", c.trans, from, to);
     return seastar::do_with(
       from,
-      [FNAME, c, to, &iter, &li, &ll](auto &d) {
+      [FNAME, c, to, visitor, &iter, &li, &ll](auto &d) {
 	return trans_intr::repeat(
-	  [FNAME, c, to, &iter, &li, &ll, &d] {
+	  [FNAME, c, to, visitor, &iter, &li, &ll, &d] {
 	    if (d > to) {
 	      return [&] {
 		if (d > 1) {
@@ -488,15 +493,15 @@ private:
 		    c,
 		    d,
 		    iter,
-		    li);
-		  /// TOODSAM
+		    li,
+		    visitor);
 		} else {
 		  assert(d == 1);
 		  return lookup_leaf(
 		    c,
 		    iter,
-		    ll);
-		  /// TOODSAM
+		    ll,
+		    visitor);
 		}
 	      }().si_then([&d] {
 		--d;

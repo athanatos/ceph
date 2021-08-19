@@ -325,24 +325,28 @@ BtreeLBAManager::scan_mapped_space_ret BtreeLBAManager::scan_mapped_space(
   LOG_PREFIX(BtreeLBAManager::scan_mapped_space);
   DEBUGT("", t);
   auto c = get_context(t);
-  return with_btree(
-    c,
-    [this, c, &t, f=std::move(f)](auto &btree) mutable {
-      return LBABtree::iterate_repeat(
+  return seastar::do_with(
+    std::move(f),
+    [this, c, &t](auto &visitor) {
+      return with_btree(
 	c,
-	btree.lower_bound(c, 0, &f),
-	[f=std::move(f)](auto &pos) {
-	  if (pos.is_end()) {
-	    return LBABtree::iterate_repeat_ret(
-	      interruptible::ready_future_marker{},
-	      seastar::stop_iteration::yes);
-	  }
-	  f(pos.get_val().paddr, pos.get_val().len);
-	  return LBABtree::iterate_repeat_ret(
-	    interruptible::ready_future_marker{},
-	    seastar::stop_iteration::no);
-	},
-	&f);
+	[this, c, &t, &visitor](auto &btree) {
+	  return LBABtree::iterate_repeat(
+	    c,
+	    btree.lower_bound(c, 0, &visitor),
+	    [&visitor](auto &pos) {
+	      if (pos.is_end()) {
+		return LBABtree::iterate_repeat_ret(
+		  interruptible::ready_future_marker{},
+		  seastar::stop_iteration::yes);
+	      }
+	      visitor(pos.get_val().paddr, pos.get_val().len);
+	      return LBABtree::iterate_repeat_ret(
+		interruptible::ready_future_marker{},
+		seastar::stop_iteration::no);
+	    },
+	    &visitor);
+	});
     });
 }
 
