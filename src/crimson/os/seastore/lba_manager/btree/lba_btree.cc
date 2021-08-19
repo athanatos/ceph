@@ -292,6 +292,7 @@ LBABtree::init_cached_extent_ret LBABtree::init_cached_extent(
 	return e;
       } else {
 	DEBUGT(": extent {} is not live", c.trans, *eint);
+	c.cache.drop_from_cache(eint);
 	return CachedExtentRef();
       }
     });

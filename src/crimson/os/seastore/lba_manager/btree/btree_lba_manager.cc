@@ -102,11 +102,14 @@ BtreeLBAManager::get_mapping(
     [&t, FNAME, this, c, offset](auto &btree) {
       return btree.lower_bound(
 	c, offset
-      ).si_then([&t, FNAME](auto iter) {
-	ceph_assert(!iter.is_end());
-	auto e = iter.get_pin();
-	DEBUGT("got mapping {}", t, *e);
-	return e;
+      ).si_then([FNAME, offset, &t](auto iter) {
+	if (iter.is_end() || iter.get_key() != offset) {
+	  return LBAPinRef();
+	} else {
+	  auto e = iter.get_pin();
+	  DEBUGT("got mapping {}", t, *e);
+	  return e;
+	}
       });
     });
 }

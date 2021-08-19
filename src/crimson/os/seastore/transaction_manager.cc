@@ -321,9 +321,9 @@ TransactionManager::get_extent_if_live_ret TransactionManager::get_extent_if_liv
       return lba_manager->get_mapping(
 	t,
 	laddr).si_then([=, &t] (LBAPinRef pin) -> inner_ret {
-	  ceph_assert(pin->get_laddr() == laddr);
-	  ceph_assert(pin->get_length() == (extent_len_t)len);
-	  if (pin->get_paddr() == addr) {
+	  if (pin && pin->get_paddr() == addr) {
+	    ceph_assert(pin->get_laddr() == laddr);
+	    ceph_assert(pin->get_length() == (extent_len_t)len);
 	    return cache->get_extent_by_type(
 	      t,
 	      type,
