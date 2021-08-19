@@ -483,9 +483,11 @@ BtreeLBAManager::update_mapping_ret BtreeLBAManager::update_mapping(
     [&t, f=std::move(f), c, this, addr](auto &btree) mutable {
       return btree.lower_bound(
 	c, addr
-      ).si_then([&t, &btree, f=std::move(f), c, this, addr](auto iter) {
-	ceph_assert(!iter.is_end());
-	ceph_assert(iter.get_key() == addr);
+      ).si_then([&t, &btree, f=std::move(f), c, this, addr](auto iter)
+		-> update_mapping_ret {
+	if (iter.is_end() || iter.get_key() != addr) {
+	  return crimson::ct_error::enoent::make();
+	}
 
 	auto ret = f(iter.get_val());
 	if (ret.refcount == 0) {
