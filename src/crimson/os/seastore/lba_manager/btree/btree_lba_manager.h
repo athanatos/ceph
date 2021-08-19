@@ -228,7 +228,9 @@ private:
    */
   using update_mapping_iertr = ref_iertr;
   using update_mapping_ret = ref_iertr::future<lba_map_val_t>;
-  using update_func_t = LBANode::mutate_func_t;
+  using update_func_t = std::function<
+    lba_map_val_t(const lba_map_val_t &v)
+    >;
   update_mapping_ret update_mapping(
     Transaction &t,
     laddr_t addr,

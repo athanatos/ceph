@@ -76,6 +76,44 @@ struct lba_node_meta_le_t {
   }
 };
 
+/**
+ * LBANode
+ *
+ * Base class enabling recursive lookup between internal and leaf nodes.
+ */
+struct LBANode : CachedExtent {
+  using LBANodeRef = TCachedExtentRef<LBANode>;
+
+  btree_range_pin_t pin;
+
+  LBANode(ceph::bufferptr &&ptr) : CachedExtent(std::move(ptr)), pin(this) {}
+  LBANode(const LBANode &rhs)
+    : CachedExtent(rhs), pin(rhs.pin, this) {}
+
+  virtual lba_node_meta_t get_node_meta() const = 0;
+
+  virtual ~LBANode() = default;
+
+  void on_delta_write(paddr_t record_block_offset) final {
+    // All in-memory relative addrs are necessarily record-relative
+    assert(get_prior_instance());
+    pin.take_pin(get_prior_instance()->cast<LBANode>()->pin);
+    resolve_relative_addrs(record_block_offset);
+  }
+
+  void on_initial_write() final {
+    // All in-memory relative addrs are necessarily block-relative
+    resolve_relative_addrs(get_paddr());
+  }
+
+  void on_clean_read() final {
+    // From initial write of block, relative addrs are necessarily block-relative
+    resolve_relative_addrs(get_paddr());
+  }
+
+  virtual void resolve_relative_addrs(paddr_t base) = 0;
+};
+using LBANodeRef = LBANode::LBANodeRef;
 
 /**
  * LBAInternalNode
@@ -96,7 +134,8 @@ struct lba_node_meta_le_t {
  */
 constexpr size_t INTERNAL_NODE_CAPACITY = 254;
 struct LBAInternalNode
-  : common::FixedKVNodeLayout<
+  : LBANode,
+    common::FixedKVNodeLayout<
       INTERNAL_NODE_CAPACITY,
       lba_node_meta_t, lba_node_meta_le_t,
       laddr_t, laddr_le_t,
@@ -105,11 +144,12 @@ struct LBAInternalNode
   using internal_iterator_t = const_iterator;
   template <typename... T>
   LBAInternalNode(T&&... t) :
+    LBANode(std::forward<T>(t)...),
     FixedKVNodeLayout(get_bptr().c_str()) {}
 
   static constexpr extent_types_t type = extent_types_t::LADDR_INTERNAL;
 
-  lba_node_meta_t get_node_meta() const final { return get_meta(); }
+  lba_node_meta_t get_node_meta() const { return get_meta(); }
 
   CachedExtentRef duplicate_for_write() final {
     assert(delta_buffer.empty());
@@ -219,7 +259,7 @@ struct LBAInternalNode
    * resolve_relative_addrs fixes up relative internal references
    * based on base.
    */
-  void resolve_relative_addrs(paddr_t base) final;
+  void resolve_relative_addrs(paddr_t base);
   void node_resolve_vals(iterator from, iterator to) const final {
     if (is_initial_pending()) {
       for (auto i = from; i != to; ++i) {
@@ -268,7 +308,7 @@ struct LBAInternalNode
     resolve_relative_addrs(base);
   }
 
-  bool at_max_capacity() const final {
+  bool at_max_capacity() const {
     return get_size() == get_capacity();
   }
 
@@ -322,7 +362,8 @@ struct lba_map_val_le_t {
 };
 
 struct LBALeafNode
-  : common::FixedKVNodeLayout<
+  : LBANode,
+    common::FixedKVNodeLayout<
       LEAF_NODE_CAPACITY,
       lba_node_meta_t, lba_node_meta_le_t,
       laddr_t, laddr_le_t,
@@ -331,11 +372,12 @@ struct LBALeafNode
   using internal_iterator_t = const_iterator;
   template <typename... T>
   LBALeafNode(T&&... t) :
+    LBANode(std::forward<T>(t)...),
     FixedKVNodeLayout(get_bptr().c_str()) {}
 
   static constexpr extent_types_t type = extent_types_t::LADDR_LEAF;
 
-  lba_node_meta_t get_node_meta() const final { return get_meta(); }
+  lba_node_meta_t get_node_meta() const { return get_meta(); }
 
   CachedExtentRef duplicate_for_write() final {
     assert(delta_buffer.empty());
@@ -430,7 +472,7 @@ struct LBALeafNode
   }
 
   // See LBAInternalNode, same concept
-  void resolve_relative_addrs(paddr_t base) final;
+  void resolve_relative_addrs(paddr_t base);
   void node_resolve_vals(iterator from, iterator to) const final {
     if (is_initial_pending()) {
       for (auto i = from; i != to; ++i) {
@@ -484,11 +526,11 @@ struct LBALeafNode
 
   std::ostream &print_detail(std::ostream &out) const final;
 
-  bool at_max_capacity() const final {
+  bool at_max_capacity() const {
     return get_size() == get_capacity();
   }
 
-  bool at_min_capacity() const final {
+  bool at_min_capacity() const {
     return get_size() == (get_capacity() / 2);
   }
 };

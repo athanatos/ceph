@@ -9,7 +9,7 @@
 
 #include "include/buffer.h"
 #include "crimson/os/seastore/lba_manager/btree/btree_lba_manager.h"
-#include "crimson/os/seastore/lba_manager/btree/lba_btree_node_impl.h"
+#include "crimson/os/seastore/lba_manager/btree/lba_btree_node.h"
 #include "crimson/os/seastore/lba_manager/btree/lba_btree.h"
 
 

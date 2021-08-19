@@ -11,7 +11,7 @@
 #include "crimson/common/log.h"
 
 #include "crimson/os/seastore/seastore_types.h"
-#include "crimson/os/seastore/lba_manager/btree/lba_btree_node_impl.h"
+#include "crimson/os/seastore/lba_manager/btree/lba_btree_node.h"
 
 namespace crimson::os::seastore::lba_manager::btree {
 
@@ -353,13 +353,6 @@ public:
   using rewrite_lba_extent_iertr = base_iertr;
   using rewrite_lba_extent_ret = rewrite_lba_extent_iertr::future<>;
   rewrite_lba_extent_ret rewrite_lba_extent(op_context_t c, CachedExtentRef e);
-
-  #if 0
-  template <typename T>
-  friend TCachedExtentRef<T> _rewrite_lba_extent(
-    op_context_t c,
-    T &lba_extent);
-#endif
 
 private:
   lba_root_t root;
