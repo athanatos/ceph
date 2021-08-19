@@ -293,15 +293,14 @@ LBABtree::init_cached_extent_ret LBABtree::init_cached_extent(
       }
     });
   } else {
-    ERRORT(
-      ": found impossible extent {} type {}",
+    DEBUGT(
+      ": found other extent {} type {}",
       c.trans,
       *e,
       e->get_type());
-    assert(0 == "impossible");
     return init_cached_extent_ret(
       interruptible::ready_future_marker{},
-      CachedExtentRef());
+      e);
   }
 }
 

@@ -332,7 +332,6 @@ BtreeLBAManager::scan_mapped_space_ret BtreeLBAManager::scan_mapped_space(
 	c,
 	btree.begin(c),
 	[f=std::move(f)](auto &pos) {
-	  ceph_assert(!pos.is_end());
 	  if (pos.is_end()) {
 	    return LBABtree::iterate_repeat_ret(
 	      interruptible::ready_future_marker{},
