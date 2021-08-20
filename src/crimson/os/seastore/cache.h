@@ -544,7 +544,14 @@ public:
     return out;
   }
 
-  /// returns extents with get_dirty_from() < seq
+  /**
+   * get_next_dirty_extents
+   *
+   * Returns extents with get_dirty_from() < seq.  Note, get_next_dirty_extents
+   * does not take a Transaction and does not add the extent in question to
+   * the read set.  Consumers of the returned list will therefore need to
+   * consider invalidated extents.
+   */
   using get_next_dirty_extents_ertr = crimson::errorator<>;
   using get_next_dirty_extents_ret = get_next_dirty_extents_ertr::future<
     std::vector<CachedExtentRef>>;

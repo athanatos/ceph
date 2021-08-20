@@ -354,6 +354,7 @@ public:
   submit_transaction_direct_ret submit_transaction_direct(
     Transaction &t) final;
 
+  /// See Cache::get_next_dirty_extents
   using SegmentCleaner::ExtentCallbackInterface::get_next_dirty_extents_ret;
   get_next_dirty_extents_ret get_next_dirty_extents(
     journal_seq_t seq,

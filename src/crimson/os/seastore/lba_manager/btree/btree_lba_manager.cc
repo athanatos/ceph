@@ -357,6 +357,10 @@ BtreeLBAManager::rewrite_extent_ret BtreeLBAManager::rewrite_extent(
   Transaction &t,
   CachedExtentRef extent)
 {
+  LOG_PREFIX(BtreeLBAManager::rewrite_extent);
+  if (extent->has_been_invalidated()) {
+    ERRORT("{} has been invalidated", t, *extent);
+  }
   assert(!extent->has_been_invalidated());
 
   logger().debug(
