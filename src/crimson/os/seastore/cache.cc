@@ -884,7 +884,7 @@ void Cache::complete_commit(
   SegmentCleaner *cleaner)
 {
   LOG_PREFIX(Cache::complete_commit);
-  DEBUGT("enter", t);
+  ERRORT("enter", t);
 
   for (auto &i: t.fresh_block_list) {
     i->set_paddr(final_block_start.add_relative(i->get_paddr()));
@@ -897,7 +897,7 @@ void Cache::complete_commit(
     }
 
     i->state = CachedExtent::extent_state_t::CLEAN;
-    DEBUGT("fresh {}", t, *i);
+    ERRORT("fresh {}", t, *i);
     add_extent(i);
     if (cleaner) {
       cleaner->mark_space_used(
@@ -911,7 +911,7 @@ void Cache::complete_commit(
     if (!i->is_valid()) {
       continue;
     }
-    DEBUGT("mutated {}", t, *i);
+    ERRORT("mutated {}", t, *i);
     assert(i->prior_instance);
     i->on_delta_write(final_block_start);
     i->prior_instance = CachedExtentRef();
@@ -923,6 +923,13 @@ void Cache::complete_commit(
 
   if (cleaner) {
     for (auto &i: t.retired_set) {
+      if (i->get_paddr().is_relative()) {
+	ERRORT(
+	  "invalid retire_set member addr {} extent {}",
+	  t,
+	  i->get_paddr(),
+	  *i);
+      }
       cleaner->mark_space_free(
 	i->get_paddr(),
 	i->get_length());

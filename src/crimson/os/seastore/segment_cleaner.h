@@ -76,6 +76,13 @@ class SpaceTrackerSimple : public SpaceTrackerI {
 
   int64_t update_usage(segment_id_t segment, int64_t delta) {
     assert(segment < live_bytes_by_segment.size());
+    if (segment >= live_bytes_by_segment.size()) {
+      crimson::get_logger(ceph_subsys_seastore).error(
+	"SegmentCleaner::update_usage: segment {}, delta {} invalid segment",
+	segment,
+	delta);
+      ceph_assert(0 == "impossible segment");
+    }
     live_bytes_by_segment[segment] += delta;
     assert(live_bytes_by_segment[segment] >= 0);
     return live_bytes_by_segment[segment];
