@@ -519,6 +519,8 @@ public:
       if (t.root) {
 	return t.root;
       } else {
+	t.add_to_read_set(extent);
+	t.root = extent->cast<RootBlock>();
 	return extent;
       }
     } else {

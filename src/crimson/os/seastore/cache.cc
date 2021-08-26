@@ -1102,6 +1102,7 @@ Cache::get_next_dirty_extents_ret Cache::get_next_dirty_extents(
 	      if (ext->get_type() == extent_types_t::ROOT) {
 		if (t.root) {
 		  assert(&*t.root == &*ext);
+		  assert(0 == "t.root would have to already be in the read set");
 		} else {
 		  assert(&*ext == &*root);
 		  t.root = root;
