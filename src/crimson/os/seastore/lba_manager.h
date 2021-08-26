@@ -86,7 +86,8 @@ public:
   /**
    * Creates a new absolute mapping.
    *
-   * off~len must be unreferenced
+   * off~len must be unreferenced.  Used for testing, see
+   * test_btree_lba_manager.cc.
    */
   using set_extent_iertr = base_iertr::extend<
     crimson::ct_error::invarg>;

@@ -198,20 +198,6 @@ private:
   }
 
   /**
-   * insert_mapping
-   *
-   * Insert a lba mapping into the tree
-   */
-  using insert_mapping_iertr = base_iertr;
-  using insert_mapping_ret = insert_mapping_iertr::future<LBAPinRef>;
-  insert_mapping_ret insert_mapping(
-    Transaction &t,   ///< [in,out] transaction
-    LBANodeRef root,  ///< [in] root node
-    laddr_t laddr,    ///< [in] logical addr to insert
-    lba_map_val_t val ///< [in] mapping to insert
-  );
-
-  /**
    * update_refcount
    *
    * Updates refcount, returns resulting refcount

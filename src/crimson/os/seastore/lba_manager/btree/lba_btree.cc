@@ -272,6 +272,7 @@ LBABtree::init_cached_extent_ret LBABtree::init_cached_extent(
 	  iter.get_key() == logn->get_laddr() &&
 	  iter.get_val().paddr == logn->get_paddr()) {
 	logn->set_pin(iter.get_pin());
+	ceph_assert(iter.get_val().len == e->get_length());
 	c.pins.add_pin(
 	  static_cast<BtreeLBAPin&>(logn->get_pin()).pin);
 	DEBUGT(": logical extent {} live, initialized", c.trans, *logn);
