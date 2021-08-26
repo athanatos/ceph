@@ -30,6 +30,7 @@ public:
     bool mkfs = false;
     unsigned num_collections = 128;
     unsigned object_size = 4<<20 /* 4MB, rbd default */;
+    unsigned oi_size = 1<<9 /* 512b */;
     std::optional<std::string> path;
 
     bool is_futurized_store() const {
@@ -62,6 +63,11 @@ public:
 	 po::value<unsigned>()
 	 ->notifier([this](auto s) { num_collections = s; }),
 	 "Number of collections to use for futurized_store backends"
+	("object-info-size",
+	 po::value<unsigned>()
+	 ->notifier([this](auto s) { log_entry_size = s; }),
+	 "Size of each log entry per pg to use for futurized_store backends"
+	 ", 0 to disable"
 	)
 	("object-size",
 	 po::value<unsigned>()
