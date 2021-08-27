@@ -16,7 +16,7 @@ coll_t get_coll(unsigned num) {
 FSDriver::offset_mapping_t FSDriver::map_offset(off_t offset)
 {
   uint32_t objid = offset / config.object_size;
-  uint32_t collid = objid % config.num_collections;
+  uint32_t collid = objid % config.num_pgs;
   return offset_mapping_t{
     collections[collid],
     ghobject_t(
@@ -109,7 +109,7 @@ seastar::future<> FSDriver::mkfs()
   }).then([this] {
     return seastar::do_for_each(
       boost::counting_iterator<unsigned>(0),
-      boost::counting_iterator<unsigned>(config.num_collections),
+      boost::counting_iterator<unsigned>(config.num_pgs),
       [this](auto i) {
 	return fs->create_new_collection(get_coll(i)
 	).then([this, i](auto coll) {
@@ -141,7 +141,7 @@ seastar::future<> FSDriver::mount()
   }).then([this] {
     return seastar::do_for_each(
       boost::counting_iterator<unsigned>(0),
-      boost::counting_iterator<unsigned>(config.num_collections),
+      boost::counting_iterator<unsigned>(config.num_pgs),
       [this](auto i) {
 	return fs->open_collection(get_coll(i)
 	).then([this, i](auto ref) {
