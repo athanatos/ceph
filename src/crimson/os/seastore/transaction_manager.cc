@@ -238,8 +238,9 @@ TransactionManager::submit_transaction_direct(
   LOG_PREFIX(TransactionManager::submit_transaction_direct);
   DEBUGT("about to alloc delayed extents", tref);
 
-  return epm->delayed_alloc_or_ool_write(tref)
-  .handle_error_interruptible(
+  return epm->delayed_alloc_or_ool_write(
+    tref
+  ).handle_error_interruptible(
     crimson::ct_error::input_output_error::pass_further(),
     crimson::ct_error::assert_all("invalid error")
   ).si_then([&tref, this] {
