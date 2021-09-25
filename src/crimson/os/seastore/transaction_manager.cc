@@ -220,22 +220,11 @@ TransactionManager::refs_ret TransactionManager::dec_ref(
 }
 
 TransactionManager::submit_transaction_iertr::future<>
-TransactionManager::submit_transaction(
-  Transaction &t)
+TransactionManager::_submit_transaction(
+  Transaction &tref,
+  bool throttle)
 {
-  LOG_PREFIX(TransactionManager::submit_transaction);
-  DEBUGT("about to await throttle", t);
-  return trans_intr::make_interruptible(segment_cleaner->await_hard_limits()
-  ).then_interruptible([this, &t]() {
-    return submit_transaction_direct(t);
-  });
-}
-
-TransactionManager::submit_transaction_direct_ret
-TransactionManager::submit_transaction_direct(
-  Transaction &tref)
-{
-  LOG_PREFIX(TransactionManager::submit_transaction_direct);
+  LOG_PREFIX(TransactionManager::_submit_transaction);
   DEBUGT("about to alloc delayed extents", tref);
 
   return epm->delayed_alloc_or_ool_write(
@@ -243,16 +232,21 @@ TransactionManager::submit_transaction_direct(
   ).handle_error_interruptible(
     crimson::ct_error::input_output_error::pass_further(),
     crimson::ct_error::assert_all("invalid error")
-  ).si_then([&tref, this] {
-    LOG_PREFIX(TransactionManager::submit_transaction_direct);
+  ).si_then([&tref, FNAME, this] {
     DEBUGT("about to prepare", tref);
     return tref.get_handle().enter(write_pipeline.prepare);
+  }).si_then([this, FNAME, throttle, &tref] {
+    tref.get_handle().maybe_release_collection_lock();
+    if (throttle) {
+      DEBUGT("about to await throttle", tref);
+      return trans_intr::make_interruptible(segment_cleaner->await_hard_limits());
+    } else {
+      DEBUGT("skipping throttle", tref);
+      return trans_intr::make_interruptible(seastar::now());
+    }
   }).si_then([this, FNAME, &tref]() mutable
 	      -> submit_transaction_iertr::future<> {
     auto record = cache->prepare_record(tref);
-
-    tref.get_handle().maybe_release_collection_lock();
-
     DEBUGT("about to submit to journal", tref);
 
     return journal->submit_record(std::move(record), tref.get_handle()

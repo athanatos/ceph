@@ -351,12 +351,16 @@ public:
    * Atomically submits transaction to persistence
    */
   using submit_transaction_iertr = base_iertr;
-  submit_transaction_iertr::future<> submit_transaction(Transaction &);
+  submit_transaction_iertr::future<> submit_transaction(Transaction &t) {
+    return _submit_transaction(t, true);
+  }
 
   /// SegmentCleaner::ExtentCallbackInterface
   using SegmentCleaner::ExtentCallbackInterface::submit_transaction_direct_ret;
   submit_transaction_direct_ret submit_transaction_direct(
-    Transaction &t) final;
+    Transaction &t) final {
+    return _submit_transaction(t, false);
+  }
 
   using SegmentCleaner::ExtentCallbackInterface::get_next_dirty_extents_ret;
   get_next_dirty_extents_ret get_next_dirty_extents(
@@ -519,6 +523,10 @@ private:
   rewrite_extent_ret rewrite_logical_extent(
     Transaction& t,
     LogicalCachedExtentRef extent);
+
+  submit_transaction_iertr::future<> _submit_transaction(
+    Transaction &t,
+    bool throttle);
 public:
   // Testing interfaces
   auto get_segment_cleaner() {
