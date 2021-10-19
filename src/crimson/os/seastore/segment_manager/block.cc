@@ -376,33 +376,33 @@ BlockSegmentManager::~BlockSegmentManager()
 
 BlockSegmentManager::mount_ret BlockSegmentManager::mount()
 {
-  return open_device(
-    device_path, seastar::open_flags::rw
-  ).safe_then([=](auto p) {
-    device = std::move(p.first);
-    auto sd = p.second;
-    stats.data_read.increment(
-        ceph::encoded_sizeof_bounded<block_sm_superblock_t>());
-    return read_superblock(device, sd);
-  }).safe_then([=](auto sb) {
-    superblock = sb;
-    tracker = std::make_unique<SegmentStateTracker>(
-      superblock.segments,
-      superblock.block_size);
-    stats.data_read.increment(tracker->get_size());
-    return tracker->read_in(
-      device,
-      superblock.tracker_offset
-    ).safe_then([this] {
-      for (segment_id_t i = 0; i < tracker->get_capacity(); ++i) {
-	if (tracker->get(i) == segment_state_t::OPEN) {
-	  tracker->set(i, segment_state_t::CLOSED);
-	}
-      }
-      stats.metadata_write.increment(tracker->get_size());
-      return tracker->write_out(device, superblock.tracker_offset);
-    });
-  });
+	return open_device(
+    		device_path, seastar::open_flags::rw
+	).safe_then([=](auto p) {
+    		device = std::move(p.first);
+		auto sd = p.second;
+		stats.data_read.increment(
+			ceph::encoded_sizeof_bounded<block_sm_superblock_t>());
+		return read_superblock(device, sd);
+        }).safe_then([=](auto sb) {
+                superblock = sb;
+                tracker = std::make_unique<SegmentStateTracker>(
+                        superblock.segments,
+                        superblock.block_size);
+                stats.data_read.increment(tracker->get_size());
+                return tracker->read_in(
+                        device,
+                        superblock.tracker_offset
+                ).safe_then([this] {
+                        for (segment_id_t i = 0; i < tracker->get_capacity(); ++i) {
+	                        if (tracker->get(i) == segment_state_t::OPEN) {
+	                                tracker->set(i, segment_state_t::CLOSED);
+	                        }
+                        }
+                        stats.metadata_write.increment(tracker->get_size());
+                        return tracker->write_out(device, superblock.tracker_offset);
+                });
+        });
 }
 
 BlockSegmentManager::mkfs_ret BlockSegmentManager::mkfs(seastore_meta_t meta)
