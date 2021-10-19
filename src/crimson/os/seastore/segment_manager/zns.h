@@ -66,6 +66,7 @@ namespace crimson::os::seastore::segment_manager::zns {
 
 	class ZNSSegmentManager final : public SegmentManager{
 	public:
+	  ZNSSegmentManager(const std::string&) {}
 		mount_ret mount() final;
 
 		mkfs_ret mkfs(seastore_meta_t meta) final;
@@ -76,13 +77,27 @@ namespace crimson::os::seastore::segment_manager::zns {
 
 		read_ertr::future<> read(paddr_t addr, size_t len, ceph::bufferptr &out) final;
 
-		size_t get_size() const final;
 
-		segment_off_t get_block_size() const final;
+	  size_t get_size() const final {
+	    // TODO
+	    return 0;
+	  }
 
-		segment_off_t get_segment_size() const final;
+	  segment_off_t get_block_size() const final {
+	    // TODO
+	    return 0;
+	  }
+	    
 
-		const seastore_meta_t &get_meta() const final;
+	  segment_off_t get_segment_size() const final {
+	    // TODO
+	    return 0;
+	  }
+
+	  seastore_meta_t meta;
+	  const seastore_meta_t &get_meta() const final {
+	    return meta;
+	  }
 
 	private:
 		friend class ZNSSegment;

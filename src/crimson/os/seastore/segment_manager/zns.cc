@@ -233,47 +233,71 @@ namespace crimson::os::seastore::segment_manager::zns {
                 );
         }       
 
+ZNSSegmentManager::mount_ret ZNSSegmentManager::mount() {
+  // TODO
+  return mount_ertr::now();
+}
 
+ZNSSegmentManager::mkfs_ret ZNSSegmentManager::mkfs(seastore_meta_t meta) {
+  return seastar::do_with(
+    seastar::file{},
+    seastar::stat_data{},
+    zns_sm_metadata_t{},
+    [=](auto &device, auto &stat, auto &sb) {
+      logger().error("ZNSSegmentManager::mkfs path {}", device_path);
+      check_create_device_ret maybe_create = check_create_device_ertr::now();
+      using crimson::common::get_conf;
+      if (get_conf<bool>("seastore_zns_create")) {
+	auto size = get_conf<Option::size_t>("seastore_device_size");
+	maybe_create = check_create_device(device_path, size);
+      }
+      
+      return maybe_create
+	.safe_then([this] {
+	  return open_device(device_path, seastar::open_flags::rw);
+	}).safe_then([&, meta](auto p) {
+	  auto device = p.first;
+	  auto stat = p.second;
+	  size_t zone_size, zone_capacity, nr_zones;
+	  return device.ioctl(BLKGETZONESZ, (void *) &zone_size)
+	    .then([&] (int ret) {
+	      return device.ioctl(BLKGETNRZONES, (void *) &nr_zones);
+	    })
+	    .then([&] (int ret) {
+	      return get_zone_capacity(device, zone_capacity, zone_size, nr_zones);
+	    })
+	    .then([&, meta, zone_size] {
+	      sb = make_metadata(meta, stat, zone_size, zone_capacity, nr_zones);
+	      stats.metadata_write.increment(ceph::encoded_sizeof_bounded<zns_sm_metadata_t>());
+	      return write_metadata(device, sb);
+	    });
+	}).finally([&] {
+	  return device.close();
+	}).safe_then([] {
+	  logger().debug("ZNSSegmentManager::mkfs: complete");
+	  return mkfs_ertr::now();
+	});
+    });
+}
 
-        ZNSSegmentManager::mkfs_ret ZNSSegmentManager::mkfs(seastore_meta_t meta) {
-                return seastar::do_with(
-                seastar::file{},
-                seastar::stat_data{},
-                zns_sm_metadata_t{},
-                [=](auto &device, auto &stat, auto &sb) {
-                        logger().error("ZNSSegmentManager::mkfs path {}", device_path);
-                        check_create_device_ret maybe_create = check_create_device_ertr::now();
-                        using crimson::common::get_conf;
-                        if (get_conf<bool>("seastore_zns_create")) {
-                                auto size = get_conf<Option::size_t>("seastore_device_size");
-                                maybe_create = check_create_device(device_path, size);
-                        }
+ZNSSegmentManager::open_ertr::future<SegmentRef>
+ZNSSegmentManager::open(segment_id_t id) {
+  // TODO
+  return open_ertr::future<SegmentRef>(
+    open_ertr::ready_future_marker{},
+    SegmentRef());
+}
 
-                        return maybe_create
-                        .safe_then([this] {
-                                return open_device(device_path, seastar::open_flags::rw);
-                        }).safe_then([&, meta](auto p) {
-                                auto device = p.first;
-                                auto stat = p.second;
-                                size_t zone_size, zone_capacity, nr_zones;
-                                return device.ioctl(BLKGETZONESZ, (void *) &zone_size)
-                                .then([&] (int ret) {
-                                        return device.ioctl(BLKGETNRZONES, (void *) &nr_zones);
-                                })
-                                .then([&] (int ret) {
-                                        return get_zone_capacity(device, zone_capacity, zone_size, nr_zones);
-                                })
-                                .then([&, meta, zone_size] {
-                                        sb = make_metadata(meta, stat, zone_size, zone_capacity, nr_zones);
-                                        stats.metadata_write.increment(ceph::encoded_sizeof_bounded<zns_sm_metadata_t>());
-                                        return write_metadata(device, sb);
-                                });
-                        }).finally([&] {
-                                return device.close();
-                        }).safe_then([] {
-                                logger().debug("ZNSSegmentManager::mkfs: complete");
-                                return mkfs_ertr::now();
-                        });
-                });
-        }
+ZNSSegmentManager::release_ertr::future<>
+ZNSSegmentManager::release(segment_id_t id) {
+  // TODO
+  return release_ertr::now();
+}
+
+ZNSSegmentManager::read_ertr::future<>
+ZNSSegmentManager::read(paddr_t addr, size_t len, ceph::bufferptr &out) {
+  // TODO
+  return release_ertr::now();
+}
+
 }
