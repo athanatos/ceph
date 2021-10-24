@@ -121,8 +121,11 @@ public:
     uint64_t off,
     uint64_t len) final;
 
+  seastar::future<> write_meta_file(const std::string& key,
+                  const std::string& value);
   seastar::future<> write_meta(const std::string& key,
 		  const std::string& value) final;
+  seastar::future<std::optional<std::string>> read_meta_file(const std::string& key);
   seastar::future<std::tuple<int, std::string>> read_meta(const std::string& key) final;
   uuid_d get_fsid() const final;
 
