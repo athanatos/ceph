@@ -143,7 +143,7 @@ seastar::future<> SeaStore::write_fsid(uuid_d new_osd_fsid)
 {
   LOG_PREFIX(SeaStore::write_fsid);
   return read_meta("fsid").then([this, FNAME, new_osd_fsid] (auto tuple) {
-    auto[ret, fsid] = tuple;
+    auto [ret, fsid] = tuple;
     std::string str_fsid = stringify(new_osd_fsid);
     if (ret == -1) {
        return write_meta("fsid", stringify(new_osd_fsid));
@@ -1286,39 +1286,40 @@ seastar::future<> SeaStore::write_meta(const std::string& key,
   return seastar::do_with(
       key, value,
       [this, FNAME](auto& key, auto& value) {
-    return repeat_eagain([this, FNAME, &key, &value] {
-      return transaction_manager->with_transaction_intr(
-          Transaction::src_t::MUTATE,
-          [this, FNAME, &key, &value](auto& t) {
-        DEBUGT("Have transaction, key: {}; value: {}", t, key, value);
-        return transaction_manager->update_root_meta(
-          t, key, value
-        ).si_then([this, &t] {
-          return transaction_manager->submit_transaction(t);
-        });
-      });
-    }).safe_then([this, &key, &value] {
-      return write_meta_file(key, value);
-    });
-  }).handle_error(
-    crimson::ct_error::assert_all{"Invalid error in SeaStore::write_meta"}
-  );
+	return repeat_eagain([this, FNAME, &key, &value] {
+	  return transaction_manager->with_transaction_intr(
+	    Transaction::src_t::MUTATE,
+	    [this, FNAME, &key, &value](auto& t) {
+	      DEBUGT("Have transaction, key: {}; value: {}", t, key, value);
+	      return transaction_manager->update_root_meta(
+		t, key, value
+	      ).si_then([this, &t] {
+		return transaction_manager->submit_transaction(t);
+	      });
+	    });
+	}).safe_then([this, &key, &value] {
+	  return write_meta_file(key, value);
+	});
+      }).handle_error(
+	crimson::ct_error::assert_all{"Invalid error in SeaStore::write_meta"}
+      );
 }
 
 seastar::future<std::optional<std::string>>
 SeaStore::read_meta_file(const std::string& key)
 {
   std::string path = fmt::format("{}/{}", root, key);
-  return seastar::file_exists(path)
-    .then([path] (bool exist) {
+  return seastar::file_exists(
+    path
+  ).then([path] (bool exist) {
     if (exist) {
       return crimson::read_file(path)
         .then([] (auto tmp_buf) {
-        std::string v = {tmp_buf.get(), tmp_buf.size()};
-        std::size_t pos = v.find("\n");
-        std::string str = v.substr(0, pos);
-        return seastar::make_ready_future<std::optional<std::string>>(str);
-      });
+	  std::string v = {tmp_buf.get(), tmp_buf.size()};
+	  std::size_t pos = v.find("\n");
+	  std::string str = v.substr(0, pos);
+	  return seastar::make_ready_future<std::optional<std::string>>(str);
+	});
     } else {
       return seastar::make_ready_future<std::optional<std::string>>(std::nullopt);
     }
@@ -1329,7 +1330,7 @@ seastar::future<std::tuple<int, std::string>> SeaStore::read_meta(const std::str
 {
   LOG_PREFIX(SeaStore::read_meta);
   DEBUG("key: {}", key);
-  return read_meta_file(key).then([] (auto v) {
+  return read_meta_file(key).then([](auto v) {
     if (v) {
       return std::make_tuple(0, std::move(*v));
     } else {
