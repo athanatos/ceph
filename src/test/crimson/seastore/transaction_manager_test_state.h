@@ -21,7 +21,7 @@ using namespace crimson::os::seastore;
 class EphemeralTestState {
 protected:
   std::unique_ptr<segment_manager::EphemeralSegmentManager> segment_manager;
-  std::string root = "/tmp/dev";
+
   EphemeralTestState()
     : segment_manager(segment_manager::create_test_ephemeral()) {}
 
@@ -64,16 +64,7 @@ protected:
   }
 
   seastar::future<> tm_teardown() {
-    std::string path = fmt::format("{}/mkfs_done", root);
-    return seastar::file_exists(path).then([this, path] (bool exist) {
-      if (exist) {
-        return seastar::remove_file(path).then([this] {
-          return _teardown();
-        });
-      } else {
-        return _teardown();
-      }
-    });
+    return _teardown();
   }
 };
 
@@ -117,7 +108,7 @@ auto get_seastore(SegmentManagerRef sm) {
   auto tm = get_transaction_manager(*sm);
   auto cm = std::make_unique<collection_manager::FlatCollectionManager>(*tm);
   return std::make_unique<SeaStore>(
-    "/tmp/dev",
+    "",
     std::move(sm),
     std::move(tm),
     std::move(cm),
@@ -290,15 +281,6 @@ protected:
   }
 
   virtual FuturizedStore::mkfs_ertr::future<> _mkfs() final {
-    return seastar::file_exists(root).then([this] (bool exist) {
-      if (exist) {
-        return seastore->mkfs(uuid_d{});
-      } else {
-        return seastar::make_directory(root,
-          seastar::file_permissions::default_dir_permissions).then([this] {
-            return seastore->mkfs(uuid_d{});
-        });
-      }
-    });
+    return seastore->mkfs(uuid_d{});
   }
 };
