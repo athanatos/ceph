@@ -478,12 +478,6 @@ public:
   const seg_paddr_t& as_seg_paddr() const;
 
   paddr_t operator-(paddr_t rhs) const;
-  bool operator==(const paddr_t& other) const;
-  bool operator!=(const paddr_t& other) const;
-  bool operator<(const paddr_t& other) const;
-  bool operator<=(const paddr_t& other) const;
-  bool operator>(const paddr_t& other) const;
-  bool operator>=(const paddr_t& other) const;
 
   DENC(paddr_t, v, p) {
     DENC_START(1, 1, p);
@@ -491,7 +485,16 @@ public:
     DENC_FINISH(p);
   }
   friend struct paddr_le_t;
+
+  friend bool operator==(const paddr_t &, const paddr_t&);
+  friend bool operator!=(const paddr_t &, const paddr_t&);
+  friend bool operator<=(const paddr_t &, const paddr_t&);
+  friend bool operator<(const paddr_t &, const paddr_t&);
+  friend bool operator>=(const paddr_t &, const paddr_t&);
+  friend bool operator>(const paddr_t &, const paddr_t&);
 };
+WRITE_EQ_OPERATORS_1(paddr_t, dev_addr);
+WRITE_CMP_OPERATORS_1(paddr_t, dev_addr);
 
 bool is_relative(const paddr_t& paddr);
 bool is_record_relative(const paddr_t& paddr);
@@ -592,8 +595,6 @@ struct seg_paddr_t : public paddr_t {
       return *this;
   }
 };
-WRITE_CMP_OPERATORS_2(seg_paddr_t, get_segment_id(), get_segment_off())
-WRITE_EQ_OPERATORS_2(seg_paddr_t, get_segment_id(), get_segment_off())
 constexpr paddr_t P_ADDR_NULL = paddr_t{};
 constexpr paddr_t P_ADDR_MIN = paddr_t::make_zero();
 constexpr paddr_t P_ADDR_MAX = paddr_t::make_max();

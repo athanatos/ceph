@@ -366,23 +366,4 @@ paddr_t paddr_t::operator-(paddr_t rhs) const {
   return paddr_t{};
 }
 
-bool paddr_t::operator==(const paddr_t& other) const {
-  return dev_addr == other.dev_addr;
-}
-bool paddr_t::operator!=(const paddr_t& other) const {
-  return dev_addr != other.dev_addr;
-}
-bool paddr_t::operator<(const paddr_t& other) const {
-  return dev_addr < other.dev_addr;
-}
-bool paddr_t::operator<=(const paddr_t& other) const {
-  return dev_addr <= other.dev_addr;
-}
-bool paddr_t::operator>(const paddr_t& other) const {
-  return dev_addr > other.dev_addr;
-}
-bool paddr_t::operator>=(const paddr_t& other) const {
-  return dev_addr >= other.dev_addr;
-}
-
 }
