@@ -446,7 +446,14 @@ public:
   }
 
   // use 1bit in device_id_t for address type
-  void set_device_id(device_id_t id, addr_types_t type = addr_types_t::SEGMENT);
+  void set_device_id(device_id_t id, addr_types_t type = addr_types_t::SEGMENT) {
+    dev_addr &= static_cast<common_addr_t>(
+      std::numeric_limits<device_segment_id_t>::max());
+    dev_addr |= static_cast<common_addr_t>(id & 0x8) << DEV_ADDR_LEN_BITS;
+    dev_addr |= static_cast<common_addr_t>(type)
+      << (std::numeric_limits<common_addr_t>::digits - 1);
+  }
+
   device_id_t get_device_id() const {
     return static_cast<device_id_t>((dev_addr >> DEV_ADDR_LEN_BITS) & 0xF);
   }
@@ -1315,6 +1322,65 @@ struct scan_valid_records_cursor {
     journal_seq_t seq)
     : seq(seq) {}
 };
+
+inline paddr_t::paddr_t(device_id_t id, device_segment_id_t sgt, segment_off_t offset) {
+  static_cast<seg_paddr_t*>(this)->set_segment_id(segment_id_t{id, sgt});
+  static_cast<seg_paddr_t*>(this)->set_segment_off(offset);
+}
+
+inline const seg_paddr_t& paddr_t::as_seg_paddr() const {
+  assert(get_addr_type() == addr_types_t::SEGMENT);
+  return *static_cast<const seg_paddr_t*>(this);
+}
+
+inline seg_paddr_t& paddr_t::as_seg_paddr() {
+  assert(get_addr_type() == addr_types_t::SEGMENT);
+  return *static_cast<seg_paddr_t*>(this);
+}
+
+inline paddr_t paddr_t::operator-(paddr_t rhs) const {
+  if (get_addr_type() == addr_types_t::SEGMENT) {
+    auto& seg_addr = as_seg_paddr();
+    return seg_addr - rhs;
+  }
+  ceph_assert(0 == "not supported type");
+  return paddr_t{};
+}
+
+#define PADDR_OPERATION(a_type, base, func)        \
+  if (get_addr_type() == a_type) {                 \
+    return static_cast<const base*>(this)->func;   \
+  }
+
+inline paddr_t paddr_t::add_offset(int32_t o) const {
+  PADDR_OPERATION(addr_types_t::SEGMENT, seg_paddr_t, add_offset(o))
+  ceph_assert(0 == "not supported type");
+  return paddr_t{};
+}
+
+inline paddr_t paddr_t::add_relative(paddr_t o) const {
+  PADDR_OPERATION(addr_types_t::SEGMENT, seg_paddr_t, add_relative(o))
+  ceph_assert(0 == "not supported type");
+  return paddr_t{};
+}
+
+inline paddr_t paddr_t::add_block_relative(paddr_t o) const {
+  PADDR_OPERATION(addr_types_t::SEGMENT, seg_paddr_t, add_block_relative(o))
+  ceph_assert(0 == "not supported type");
+  return paddr_t{};
+}
+
+inline paddr_t paddr_t::add_record_relative(paddr_t o) const {
+  PADDR_OPERATION(addr_types_t::SEGMENT, seg_paddr_t, add_record_relative(o))
+  ceph_assert(0 == "not supported type");
+  return paddr_t{};
+}
+
+inline paddr_t paddr_t::maybe_relative_to(paddr_t o) const {
+  PADDR_OPERATION(addr_types_t::SEGMENT, seg_paddr_t, maybe_relative_to(o))
+  ceph_assert(0 == "not supported type");
+  return paddr_t{};
+}
 
 }
 
