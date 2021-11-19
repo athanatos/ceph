@@ -459,22 +459,24 @@ public:
 
   paddr_t operator-(paddr_t rhs) const;
 
-  bool is_relative() const {
-    return get_device_id() == DEVICE_ID_RECORD_RELATIVE ||
-	   get_device_id() == DEVICE_ID_BLOCK_RELATIVE;
+  bool is_block_relative() const {
+    return get_device_id() == DEVICE_ID_BLOCK_RELATIVE;
   }
   bool is_record_relative() const {
     return get_device_id() == DEVICE_ID_RECORD_RELATIVE;
   }
+  bool is_relative() const {
+    return is_block_relative() || is_record_relative();
+  }
   /// Denotes special null addr
-  bool is_null() const;
-  bool is_block_relative() const {
-    return get_device_id() == DEVICE_ID_BLOCK_RELATIVE;
+  bool is_null() const {
+    return get_device_id() == DEVICE_ID_NULL;
   }
   /// Denotes special zero addr
   bool is_zero() const {
-    return dev_addr == make_zero().dev_addr;
+    return get_device_id() == DEVICE_ID_ZERO;
   }
+
   /**
    * is_real
    *
@@ -585,11 +587,6 @@ struct seg_paddr_t : public paddr_t {
       return s.add_block_relative(*this);
     else
       return *this;
-  }
-
-  bool is_null() const {
-    return get_segment_id() == NULL_SEG_ID ||
-	   dev_addr == make_null().dev_addr;
   }
 };
 constexpr paddr_t P_ADDR_NULL = paddr_t{};
@@ -1370,12 +1367,6 @@ inline paddr_t paddr_t::maybe_relative_to(paddr_t o) const {
   PADDR_OPERATION(addr_types_t::SEGMENT, seg_paddr_t, maybe_relative_to(o))
   ceph_assert(0 == "not supported type");
   return paddr_t{};
-}
-
-inline bool paddr_t::is_null() const {
-  PADDR_OPERATION(addr_types_t::SEGMENT, seg_paddr_t, is_null())
-  ceph_assert(0 == "not supported type");
-  return false;
 }
 
 }
