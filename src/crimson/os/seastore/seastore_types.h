@@ -503,11 +503,18 @@ public:
 WRITE_EQ_OPERATORS_1(paddr_t, dev_addr);
 WRITE_CMP_OPERATORS_1(paddr_t, dev_addr);
 
-bool is_relative(const paddr_t& paddr);
-bool is_record_relative(const paddr_t& paddr);
+inline bool is_relative(const paddr_t& paddr) {
+  return paddr.get_device_id() == RECORD_REL_ID ||
+	 paddr.get_device_id() == BLOCK_REL_ID;
+}
+inline bool is_record_relative(const paddr_t& paddr) {
+  return paddr.get_device_id() == RECORD_REL_ID;
+}
 /// Denotes special null addr
 bool is_null(const paddr_t& paddr);
-bool is_block_relative(const paddr_t& paddr);
+inline bool is_block_relative(const paddr_t& paddr) {
+  return paddr.get_device_id() == BLOCK_REL_ID;
+}
 /// Denotes special zero addr
 bool is_zero(const paddr_t& paddr);
 /**
@@ -517,7 +524,9 @@ bool is_zero(const paddr_t& paddr);
  * or relative.  FAKE segments also count as real so as to reflect
  * the way in which unit tests use them.
  */
-bool is_real(const paddr_t& paddr);
+inline bool is_real(const paddr_t& paddr) {
+  return !is_zero(paddr) && !is_null(paddr);
+}
 
 struct seg_paddr_t : public paddr_t {
   static constexpr uint64_t SEG_OFF_MASK = std::numeric_limits<uint32_t>::max();
