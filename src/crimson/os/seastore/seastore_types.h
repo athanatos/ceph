@@ -55,7 +55,12 @@ constexpr device_id_t DEVICE_ID_MAX =
 constexpr device_id_t DEVICE_ID_RECORD_RELATIVE = DEVICE_ID_MAX - 1;
 constexpr device_id_t DEVICE_ID_BLOCK_RELATIVE = DEVICE_ID_MAX - 2;
 constexpr device_id_t DEVICE_ID_DELAYED = DEVICE_ID_MAX - 3;
+constexpr device_id_t DEVICE_ID_NULL = DEVICE_ID_MAX - 4;
+constexpr device_id_t DEVICE_ID_FAKE = DEVICE_ID_MAX - 5;
 constexpr device_id_t DEVICE_ID_MAX_VALID = DEVICE_ID_MAX - 6;
+
+constexpr device_segment_id_t DEVICE_SEGMENT_ID_MAX =
+  (1 << SEGMENT_ID_LEN_BITS) - 1;
 
 // Identifies segment location on disk, see SegmentManager,
 struct segment_id_t {
@@ -76,25 +81,11 @@ private:
   internal_segment_id_t segment = DEFAULT_INTERNAL_SEG_ID;
 
   constexpr segment_id_t(uint32_t encoded) : segment(encoded) {}
-public:
-  constexpr static segment_id_t make_max() {
-    return std::numeric_limits<internal_segment_id_t>::max() >> 1;
-  }
-  constexpr static segment_id_t make_null() {
-    return make_max().segment - 1;
-  }
-  // for tests which generate fake paddrs
-  constexpr static segment_id_t make_fake() {
-    return make_max().segment - 2;
-  }
 
+public:
   segment_id_t() = default;
   constexpr segment_id_t(device_id_t id, device_segment_id_t segment)
-    : segment(make_internal(segment, id)) {
-    // only lower 3 bits are effective, and we have to reserve 0x0F for
-    // special XXX_SEG_IDs
-    assert(id <= DEVICE_ID_MAX_VALID);
-  }
+    : segment(make_internal(segment, id)) {}
 
   [[gnu::always_inline]]
   device_id_t device_id() const {
@@ -167,10 +158,13 @@ struct __attribute((packed)) segment_id_le_t {
   }
 };
 
-constexpr segment_id_t MAX_SEG_ID = segment_id_t::make_max();
-constexpr segment_id_t NULL_SEG_ID = segment_id_t::make_null();
+constexpr segment_id_t MAX_SEG_ID = segment_id_t(
+  DEVICE_ID_MAX,
+  DEVICE_SEGMENT_ID_MAX
+);
 // for tests which generate fake paddrs
-constexpr segment_id_t FAKE_SEG_ID = segment_id_t::make_fake();
+constexpr segment_id_t NULL_SEG_ID = segment_id_t(DEVICE_ID_NULL, 0);
+constexpr segment_id_t FAKE_SEG_ID = segment_id_t(DEVICE_ID_FAKE, 0);
 
 std::ostream &operator<<(std::ostream &out, const segment_id_t&);
 
