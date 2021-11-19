@@ -36,9 +36,9 @@ std::ostream &operator<<(std::ostream &out, const paddr_t &rhs)
     out << "NULL_PADDR";
   } else if (rhs == P_ADDR_MIN) {
     out << "MIN_PADDR";
-  } else if (rhs.get_device_id() == BLOCK_REL_ID) {
+  } else if (rhs.is_block_relative()) {
     out << "BLOCK_REG";
-  } else if (rhs.get_device_id() == RECORD_REL_ID) {
+  } else if (rhs.is_record_relative()) {
     out << "RECORD_REG";
   } else if (rhs.get_device_id() == DELAYED_TEMP_ID) {
     out << "DELAYED_TEMP";
