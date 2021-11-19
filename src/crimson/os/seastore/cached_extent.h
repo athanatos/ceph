@@ -331,7 +331,7 @@ public:
   placement_hint_t hint = placement_hint_t::NUM_HINTS;
 
   bool is_inline() const {
-    return is_relative(poffset);
+    return poffset.is_relative();
   }
 private:
   template <typename T>
@@ -465,10 +465,10 @@ protected:
    * reference.
    */
   paddr_t maybe_generate_relative(paddr_t addr) {
-    if (is_initial_pending() && is_record_relative(addr)) {
+    if (is_initial_pending() && addr.is_record_relative()) {
       return addr - get_paddr();
     } else {
-      ceph_assert(!is_record_relative(addr) || is_mutation_pending());
+      ceph_assert(!addr.is_record_relative() || is_mutation_pending());
       return addr;
     }
   }

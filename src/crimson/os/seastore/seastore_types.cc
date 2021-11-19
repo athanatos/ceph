@@ -262,18 +262,20 @@ blk_paddr_t convert_paddr_to_blk_paddr(paddr_t addr, size_t block_size,
 	  (block_size * blocks_per_segment) + s.get_segment_off());
 }
 
-bool is_null(const paddr_t& paddr) {
-  if (paddr.get_addr_type() == addr_types_t::SEGMENT) {
-    auto& seg_addr = paddr.as_seg_paddr();
-    return seg_addr.get_segment_id() == NULL_SEG_ID || paddr == P_ADDR_NULL;
+bool paddr_t::is_null() const {
+  if (get_addr_type() == addr_types_t::SEGMENT) {
+    auto& seg_addr = as_seg_paddr();
+    return seg_addr.get_segment_id() == NULL_SEG_ID ||
+	   dev_addr == make_null().dev_addr;
   }
   ceph_assert(0 == "not supported type");
 }
 
-bool is_zero(const paddr_t& paddr) {
-  if (paddr.get_addr_type() == addr_types_t::SEGMENT) {
-    auto& seg_addr = paddr.as_seg_paddr();
-    return seg_addr.get_segment_id() == ZERO_SEG_ID || paddr == P_ADDR_MIN;
+bool paddr_t::is_zero() const {
+  if (get_addr_type() == addr_types_t::SEGMENT) {
+    auto& seg_addr = as_seg_paddr();
+    return seg_addr.get_segment_id() == ZERO_SEG_ID ||
+	   dev_addr == make_zero().dev_addr;
   }
   ceph_assert(0 == "not supported type");
 }

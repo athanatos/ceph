@@ -486,6 +486,31 @@ public:
 
   paddr_t operator-(paddr_t rhs) const;
 
+  inline bool is_relative() const {
+    return get_device_id() == RECORD_REL_ID ||
+	   get_device_id() == BLOCK_REL_ID;
+  }
+  inline bool is_record_relative() const {
+    return get_device_id() == RECORD_REL_ID;
+  }
+  /// Denotes special null addr
+  bool is_null() const;
+  inline bool is_block_relative() const {
+    return get_device_id() == BLOCK_REL_ID;
+  }
+  /// Denotes special zero addr
+  bool is_zero() const;
+  /**
+   * is_real
+   *
+   * indicates whether addr reflects a physical location, absolute
+   * or relative.  FAKE segments also count as real so as to reflect
+   * the way in which unit tests use them.
+   */
+  inline bool is_real() const {
+    return !is_zero() && !is_null();
+  }
+
   DENC(paddr_t, v, p) {
     DENC_START(1, 1, p);
     denc(v.dev_addr, p);
@@ -502,31 +527,6 @@ public:
 };
 WRITE_EQ_OPERATORS_1(paddr_t, dev_addr);
 WRITE_CMP_OPERATORS_1(paddr_t, dev_addr);
-
-inline bool is_relative(const paddr_t& paddr) {
-  return paddr.get_device_id() == RECORD_REL_ID ||
-	 paddr.get_device_id() == BLOCK_REL_ID;
-}
-inline bool is_record_relative(const paddr_t& paddr) {
-  return paddr.get_device_id() == RECORD_REL_ID;
-}
-/// Denotes special null addr
-bool is_null(const paddr_t& paddr);
-inline bool is_block_relative(const paddr_t& paddr) {
-  return paddr.get_device_id() == BLOCK_REL_ID;
-}
-/// Denotes special zero addr
-bool is_zero(const paddr_t& paddr);
-/**
- * is_real
- *
- * indicates whether addr reflects a physical location, absolute
- * or relative.  FAKE segments also count as real so as to reflect
- * the way in which unit tests use them.
- */
-inline bool is_real(const paddr_t& paddr) {
-  return !is_zero(paddr) && !is_null(paddr);
-}
 
 struct seg_paddr_t : public paddr_t {
   static constexpr uint64_t SEG_OFF_MASK = std::numeric_limits<uint32_t>::max();
@@ -560,7 +560,7 @@ struct seg_paddr_t : public paddr_t {
   }
 
   paddr_t add_relative(paddr_t o) const {
-    assert(is_relative(o));
+    assert(o.is_relative());
     seg_paddr_t& s = o.as_seg_paddr();
     return paddr_t::make_seg_paddr(get_segment_id(),
 	    get_segment_off() + s.get_segment_off());
@@ -568,13 +568,13 @@ struct seg_paddr_t : public paddr_t {
 
   paddr_t add_block_relative(paddr_t o) const {
     // special version mainly for documentation purposes
-    assert(is_block_relative(o));
+    assert(o.is_block_relative());
     return add_relative(o);
   }
 
   paddr_t add_record_relative(paddr_t o) const {
     // special version mainly for documentation purposes
-    assert(is_record_relative(o));
+    assert(o.is_record_relative());
     return add_relative(o);
   }
 
@@ -586,7 +586,7 @@ struct seg_paddr_t : public paddr_t {
    */
   paddr_t operator-(paddr_t rhs) const {
     seg_paddr_t& r = rhs.as_seg_paddr();
-    assert(is_relative(rhs) && is_relative(*this));
+    assert(rhs.is_relative() && is_relative());
     assert(r.get_segment_id() == get_segment_id());
     return paddr_t::make_seg_paddr(
       segment_id_t{BLOCK_REL_ID, 0},
@@ -603,9 +603,9 @@ struct seg_paddr_t : public paddr_t {
    * base must be either absolute or record_relative.
    */
   paddr_t maybe_relative_to(paddr_t base) const {
-    assert(!is_block_relative(base));
+    assert(!base.is_block_relative());
     seg_paddr_t& s = base.as_seg_paddr();
-    if (is_block_relative(*this))
+    if (is_block_relative())
       return s.add_block_relative(*this);
     else
       return *this;
@@ -1042,7 +1042,7 @@ public:
 
   void adjust_addrs_from_base(paddr_t base) {
     paddr_t _root_addr = root_addr;
-    if (is_relative(_root_addr)) {
+    if (_root_addr.is_relative()) {
       root_addr = base.add_record_relative(_root_addr);
     }
   }
