@@ -99,12 +99,6 @@ public:
     return make_max().segment - 2;
   }
 
-  /* Used to denote references to notional zero filled segment, mainly
-   * in denoting reserved laddr ranges for unallocated object data.
-   */
-  constexpr static segment_id_t make_zero() {
-    return make_max().segment - 3;
-  }
   segment_id_t() = default;
   constexpr segment_id_t(device_id_t id, device_segment_id_t segment)
     : segment(make_internal(segment, id)) {
@@ -188,10 +182,6 @@ constexpr segment_id_t MAX_SEG_ID = segment_id_t::make_max();
 constexpr segment_id_t NULL_SEG_ID = segment_id_t::make_null();
 // for tests which generate fake paddrs
 constexpr segment_id_t FAKE_SEG_ID = segment_id_t::make_fake();
-/* Used to denote references to notional zero filled segment, mainly
- * in denoting reserved laddr ranges for unallocated object data.
- */
-constexpr segment_id_t ZERO_SEG_ID = segment_id_t::make_zero();
 
 std::ostream &operator<<(std::ostream &out, const segment_id_t&);
 
@@ -499,7 +489,9 @@ public:
     return get_device_id() == BLOCK_REL_ID;
   }
   /// Denotes special zero addr
-  bool is_zero() const;
+  inline bool is_zero() const {
+    return dev_addr == make_zero().dev_addr;
+  }
   /**
    * is_real
    *
@@ -695,7 +687,7 @@ WRITE_CMP_OPERATORS_2(journal_seq_t, segment_seq, offset)
 WRITE_EQ_OPERATORS_2(journal_seq_t, segment_seq, offset)
 constexpr journal_seq_t JOURNAL_SEQ_MIN{
   0,
-  paddr_t::make_seg_paddr(ZERO_SEG_ID, 0)
+  paddr_t::make_seg_paddr(NULL_SEG_ID, 0)
 };
 constexpr journal_seq_t JOURNAL_SEQ_MAX{
   MAX_SEG_SEQ,

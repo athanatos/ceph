@@ -9,8 +9,6 @@ std::ostream &segment_to_stream(std::ostream &out, const segment_id_t &t)
 {
   if (t == NULL_SEG_ID)
     return out << "NULL_SEG";
-  else if (t == ZERO_SEG_ID)
-    return out << "ZERO_SEG";
   else if (t == FAKE_SEG_ID)
     return out << "FAKE_SEG";
   else
@@ -267,15 +265,6 @@ bool paddr_t::is_null() const {
     auto& seg_addr = as_seg_paddr();
     return seg_addr.get_segment_id() == NULL_SEG_ID ||
 	   dev_addr == make_null().dev_addr;
-  }
-  ceph_assert(0 == "not supported type");
-}
-
-bool paddr_t::is_zero() const {
-  if (get_addr_type() == addr_types_t::SEGMENT) {
-    auto& seg_addr = as_seg_paddr();
-    return seg_addr.get_segment_id() == ZERO_SEG_ID ||
-	   dev_addr == make_zero().dev_addr;
   }
   ceph_assert(0 == "not supported type");
 }
