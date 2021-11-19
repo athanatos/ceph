@@ -39,10 +39,10 @@ struct seastore_meta_t {
 // identifies a specific physical device within seastore
 using device_id_t = uint8_t;
 
-constexpr uint16_t SEGMENT_ID_LEN_BITS = 28;
+constexpr uint16_t SEGMENT_ID_LEN_BITS = 24;
 
 // order of device_id_t
-constexpr uint16_t DEVICE_ID_LEN_BITS = 4;
+constexpr uint16_t DEVICE_ID_LEN_BITS = 8;
 
 // 1 bit to identify address type
 
