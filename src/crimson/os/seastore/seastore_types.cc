@@ -260,14 +260,5 @@ blk_paddr_t convert_paddr_to_blk_paddr(paddr_t addr, size_t block_size,
 	  (block_size * blocks_per_segment) + s.get_segment_off());
 }
 
-bool paddr_t::is_null() const {
-  if (get_addr_type() == addr_types_t::SEGMENT) {
-    auto& seg_addr = as_seg_paddr();
-    return seg_addr.get_segment_id() == NULL_SEG_ID ||
-	   dev_addr == make_null().dev_addr;
-  }
-  ceph_assert(0 == "not supported type");
-}
-
 
 }
