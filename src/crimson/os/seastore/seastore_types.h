@@ -433,7 +433,7 @@ public:
   }
 
   device_id_t get_device_id() const {
-    return static_cast<device_id_t>((dev_addr >> DEV_ADDR_LEN_BITS) & 0xF);
+    return static_cast<device_id_t>(dev_addr >> DEV_ADDR_LEN_BITS);
   }
   addr_types_t get_addr_type() const {
     return (addr_types_t)((dev_addr
