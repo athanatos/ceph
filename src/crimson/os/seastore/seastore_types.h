@@ -476,20 +476,20 @@ public:
 
   paddr_t operator-(paddr_t rhs) const;
 
-  inline bool is_relative() const {
+  bool is_relative() const {
     return get_device_id() == RECORD_REL_ID ||
 	   get_device_id() == BLOCK_REL_ID;
   }
-  inline bool is_record_relative() const {
+  bool is_record_relative() const {
     return get_device_id() == RECORD_REL_ID;
   }
   /// Denotes special null addr
   bool is_null() const;
-  inline bool is_block_relative() const {
+  bool is_block_relative() const {
     return get_device_id() == BLOCK_REL_ID;
   }
   /// Denotes special zero addr
-  inline bool is_zero() const {
+  bool is_zero() const {
     return dev_addr == make_zero().dev_addr;
   }
   /**
@@ -499,7 +499,7 @@ public:
    * or relative.  FAKE segments also count as real so as to reflect
    * the way in which unit tests use them.
    */
-  inline bool is_real() const {
+  bool is_real() const {
     return !is_zero() && !is_null();
   }
 
