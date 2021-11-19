@@ -40,7 +40,7 @@ std::ostream &operator<<(std::ostream &out, const paddr_t &rhs)
     out << "BLOCK_REG";
   } else if (rhs.is_record_relative()) {
     out << "RECORD_REG";
-  } else if (rhs.get_device_id() == DELAYED_TEMP_ID) {
+  } else if (rhs.get_device_id() == DEVICE_ID_DELAYED) {
     out << "DELAYED_TEMP";
   } else if (rhs.get_addr_type() == addr_types_t::SEGMENT) {
     const seg_paddr_t& s = rhs.as_seg_paddr();

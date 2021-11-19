@@ -44,29 +44,18 @@ constexpr uint16_t SEGMENT_ID_LEN_BITS = 28;
 // order of device_id_t
 constexpr uint16_t DEVICE_ID_LEN_BITS = 4;
 
-// maximum number of devices supported
-constexpr uint16_t DEVICE_ID_MAX = (1 << (DEVICE_ID_LEN_BITS - 1));
 // 1 bit to identify address type
 
 // segment ids without a device id encapsulated
 using device_segment_id_t = uint32_t;
 
-constexpr device_id_t make_record_relative() {
-  return (std::numeric_limits<device_id_t>::max() >>
-    (std::numeric_limits<device_id_t>::digits - DEVICE_ID_LEN_BITS + 1)) - 1;
-}
-constexpr device_id_t make_block_relative() {
-  return (std::numeric_limits<device_id_t>::max() >>
-    (std::numeric_limits<device_id_t>::digits - DEVICE_ID_LEN_BITS + 1)) - 2;
-}
-constexpr device_id_t make_delayed() {
-  return (std::numeric_limits<device_id_t>::max() >>
-    (std::numeric_limits<device_id_t>::digits - DEVICE_ID_LEN_BITS + 1)) - 3;
-}
-
-constexpr device_id_t RECORD_REL_ID = make_record_relative();
-constexpr device_id_t BLOCK_REL_ID = make_block_relative();
-constexpr device_id_t DELAYED_TEMP_ID = make_delayed();
+constexpr device_id_t DEVICE_ID_MAX = 
+  (std::numeric_limits<device_id_t>::max() >>
+   (std::numeric_limits<device_id_t>::digits - DEVICE_ID_LEN_BITS + 1));
+constexpr device_id_t DEVICE_ID_RECORD_RELATIVE = DEVICE_ID_MAX - 1;
+constexpr device_id_t DEVICE_ID_BLOCK_RELATIVE = DEVICE_ID_MAX - 2;
+constexpr device_id_t DEVICE_ID_DELAYED = DEVICE_ID_MAX - 3;
+constexpr device_id_t DEVICE_ID_MAX_VALID = DEVICE_ID_MAX - 6;
 
 // Identifies segment location on disk, see SegmentManager,
 struct segment_id_t {
@@ -104,7 +93,7 @@ public:
     : segment(make_internal(segment, id)) {
     // only lower 3 bits are effective, and we have to reserve 0x0F for
     // special XXX_SEG_IDs
-    assert(id < DEVICE_ID_MAX);
+    assert(id <= DEVICE_ID_MAX_VALID);
   }
 
   [[gnu::always_inline]]
@@ -222,17 +211,17 @@ public:
   segment_map_t() {
     // initializes top vector with 0 length vectors to indicate that they
     // are not yet present
-    device_to_segments.resize(DEVICE_ID_MAX);
+    device_to_segments.resize(DEVICE_ID_MAX_VALID);
   }
   void add_device(device_id_t device, size_t segments, const T& init) {
-    assert(device < DEVICE_ID_MAX);
+    assert(device <= DEVICE_ID_MAX_VALID);
     assert(device_to_segments[device].size() == 0);
     device_to_segments[device].resize(segments, init);
     total_segments += segments;
   }
   void clear() {
     device_to_segments.clear();
-    device_to_segments.resize(DEVICE_ID_MAX);
+    device_to_segments.resize(DEVICE_ID_MAX_VALID);
     total_segments = 0;
   }
 
@@ -281,7 +270,7 @@ private:
       const segment_map_t &,
       segment_map_t &> parent;
 
-    /// points at current device, or DEVICE_ID_MAX if is_end()
+    /// points at current device, or DEVICE_ID_MAX_VALID if is_end()
     device_id_t device_id;
 
     /// segment at which we are pointing, 0 if is_end()
@@ -295,7 +284,7 @@ private:
 	>> current;
 
     bool is_end() const {
-      return device_id == DEVICE_ID_MAX;
+      return device_id == DEVICE_ID_MAX_VALID;
     }
 
     void find_valid() {
@@ -303,7 +292,7 @@ private:
       auto &device_vec = parent.device_to_segments[device_id];
       if (device_vec.size() == 0 ||
 	  device_segment_id == device_vec.size()) {
-	while (++device_id < DEVICE_ID_MAX &&
+	while (++device_id < DEVICE_ID_MAX_VALID &&
 	       parent.device_to_segments[device_id].size() == 0);
 	device_segment_id = 0;
       }
@@ -329,7 +318,7 @@ private:
       decltype(parent) &parent,
       device_id_t device_id,
       device_segment_id_t device_segment_id) {
-      if (device_id == DEVICE_ID_MAX) {
+      if (device_id == DEVICE_ID_MAX_VALID) {
 	return end_iterator(parent);
       } else {
 	auto ret = iterator{parent, device_id, device_segment_id};
@@ -340,7 +329,7 @@ private:
 
     static iterator end_iterator(
       decltype(parent) &parent) {
-      return iterator{parent, DEVICE_ID_MAX, 0};
+      return iterator{parent, DEVICE_ID_MAX_VALID, 0};
     }
 
     iterator<is_const>& operator++() {
@@ -477,16 +466,16 @@ public:
   paddr_t operator-(paddr_t rhs) const;
 
   bool is_relative() const {
-    return get_device_id() == RECORD_REL_ID ||
-	   get_device_id() == BLOCK_REL_ID;
+    return get_device_id() == DEVICE_ID_RECORD_RELATIVE ||
+	   get_device_id() == DEVICE_ID_BLOCK_RELATIVE;
   }
   bool is_record_relative() const {
-    return get_device_id() == RECORD_REL_ID;
+    return get_device_id() == DEVICE_ID_RECORD_RELATIVE;
   }
   /// Denotes special null addr
   bool is_null() const;
   bool is_block_relative() const {
-    return get_device_id() == BLOCK_REL_ID;
+    return get_device_id() == DEVICE_ID_BLOCK_RELATIVE;
   }
   /// Denotes special zero addr
   bool is_zero() const {
@@ -582,7 +571,7 @@ struct seg_paddr_t : public paddr_t {
     assert(rhs.is_relative() && is_relative());
     assert(r.get_segment_id() == get_segment_id());
     return paddr_t::make_seg_paddr(
-      segment_id_t{BLOCK_REL_ID, 0},
+      segment_id_t{DEVICE_ID_BLOCK_RELATIVE, 0},
       get_segment_off() - r.get_segment_off()
       );
   }
@@ -614,12 +603,12 @@ constexpr paddr_t P_ADDR_MIN = paddr_t::make_zero();
 constexpr paddr_t P_ADDR_MAX = paddr_t::make_max();
 constexpr paddr_t make_record_relative_paddr(segment_off_t off) {
   return paddr_t::make_seg_paddr(
-    segment_id_t{make_record_relative(), 0},
+    segment_id_t{DEVICE_ID_RECORD_RELATIVE, 0},
     off);
 }
 constexpr paddr_t make_block_relative_paddr(segment_off_t off) {
   return paddr_t::make_seg_paddr(
-    segment_id_t{make_block_relative(), 0},
+    segment_id_t{DEVICE_ID_BLOCK_RELATIVE, 0},
     off);
 }
 constexpr paddr_t make_fake_paddr(segment_off_t off) {
@@ -630,7 +619,7 @@ constexpr paddr_t zero_paddr() {
 }
 constexpr paddr_t delayed_temp_paddr(segment_off_t off) {
   return paddr_t::make_seg_paddr(
-    segment_id_t{make_delayed(), 0},
+    segment_id_t{DEVICE_ID_DELAYED, 0},
     off);
 }
 
