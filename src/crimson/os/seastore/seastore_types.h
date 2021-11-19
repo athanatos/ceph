@@ -57,7 +57,8 @@ constexpr device_id_t DEVICE_ID_BLOCK_RELATIVE = DEVICE_ID_MAX - 2;
 constexpr device_id_t DEVICE_ID_DELAYED = DEVICE_ID_MAX - 3;
 constexpr device_id_t DEVICE_ID_NULL = DEVICE_ID_MAX - 4;
 constexpr device_id_t DEVICE_ID_FAKE = DEVICE_ID_MAX - 5;
-constexpr device_id_t DEVICE_ID_MAX_VALID = DEVICE_ID_MAX - 6;
+constexpr device_id_t DEVICE_ID_ZERO = DEVICE_ID_MAX - 6;
+constexpr device_id_t DEVICE_ID_MAX_VALID = DEVICE_ID_MAX - 7;
 
 constexpr device_segment_id_t DEVICE_SEGMENT_ID_MAX =
   (1 << SEGMENT_ID_LEN_BITS) - 1;
@@ -401,22 +402,26 @@ enum class addr_types_t : uint8_t {
 };
 struct seg_paddr_t;
 struct paddr_t {
+protected:
+  using common_addr_t = uint64_t;
+  common_addr_t dev_addr;
 private:
   constexpr paddr_t(segment_id_t seg, segment_off_t offset)
     : dev_addr((static_cast<common_addr_t>(seg.segment)
 	<< SEG_OFF_LEN_BITS) | static_cast<uint32_t>(offset)) {}
-protected:
-  using common_addr_t = uint64_t;
-  common_addr_t dev_addr = make_null().dev_addr;
-
+  constexpr paddr_t(common_addr_t val) : dev_addr(val) {}
 public:
-  paddr_t() = default;
-  constexpr paddr_t(common_addr_t addr)
-    : dev_addr(addr) {}
-  paddr_t(device_id_t id, device_segment_id_t sgt, segment_off_t offset);
-  static constexpr paddr_t make_seg_paddr(segment_id_t seg, segment_off_t offset) {
+  static constexpr paddr_t make_seg_paddr(
+    segment_id_t seg, segment_off_t offset) {
     return paddr_t(seg, offset);
   }
+  static constexpr paddr_t make_seg_paddr(
+    device_id_t device,
+    device_segment_id_t seg,
+    segment_off_t offset) {
+    return paddr_t(segment_id_t(device, seg), offset);
+  }
+  constexpr paddr_t() : paddr_t(NULL_SEG_ID, 0) {}
 
   // use 1bit in device_id_t for address type
   void set_device_id(device_id_t id, addr_types_t type = addr_types_t::SEGMENT) {
@@ -433,19 +438,6 @@ public:
   addr_types_t get_addr_type() const {
     return (addr_types_t)((dev_addr
 	    >> (std::numeric_limits<common_addr_t>::digits - 1)) & 1);
-  }
-
-  constexpr static paddr_t make_max() {
-    return std::numeric_limits<common_addr_t>::max() >> 1;
-  }
-  constexpr static paddr_t make_null() {
-    return make_max().dev_addr - 1;
-  }
-  constexpr static paddr_t make_fake() {
-    return make_max().dev_addr - 2;
-  }
-  constexpr static paddr_t make_zero() {
-    return make_max().dev_addr - 3;
   }
 
   paddr_t add_offset(int32_t o) const;
@@ -590,8 +582,13 @@ struct seg_paddr_t : public paddr_t {
   }
 };
 constexpr paddr_t P_ADDR_NULL = paddr_t{};
-constexpr paddr_t P_ADDR_MIN = paddr_t::make_zero();
-constexpr paddr_t P_ADDR_MAX = paddr_t::make_max();
+constexpr paddr_t P_ADDR_MIN = paddr_t::make_seg_paddr(segment_id_t(0, 0), 0);
+constexpr paddr_t P_ADDR_MAX = paddr_t::make_seg_paddr(
+  segment_id_t(DEVICE_ID_MAX, DEVICE_SEGMENT_ID_MAX),
+  std::numeric_limits<segment_off_t>::max());
+constexpr paddr_t P_ADDR_ZERO = paddr_t::make_seg_paddr(
+  DEVICE_ID_ZERO, 0, 0);
+
 constexpr paddr_t make_record_relative_paddr(segment_off_t off) {
   return paddr_t::make_seg_paddr(
     segment_id_t{DEVICE_ID_RECORD_RELATIVE, 0},
@@ -605,9 +602,6 @@ constexpr paddr_t make_block_relative_paddr(segment_off_t off) {
 constexpr paddr_t make_fake_paddr(segment_off_t off) {
   return paddr_t::make_seg_paddr(FAKE_SEG_ID, off);
 }
-constexpr paddr_t zero_paddr() {
-  return paddr_t::make_zero();
-}
 constexpr paddr_t delayed_temp_paddr(segment_off_t off) {
   return paddr_t::make_seg_paddr(
     segment_id_t{DEVICE_ID_DELAYED, 0},
@@ -616,7 +610,7 @@ constexpr paddr_t delayed_temp_paddr(segment_off_t off) {
 
 struct __attribute((packed)) paddr_le_t {
   ceph_le64 dev_addr =
-    ceph_le64(paddr_t::make_null().dev_addr);
+    ceph_le64(P_ADDR_NULL.dev_addr);
 
   paddr_le_t() = default;
   paddr_le_t(const paddr_t &addr) : dev_addr(ceph_le64(addr.dev_addr)) {}
@@ -1309,11 +1303,6 @@ struct scan_valid_records_cursor {
     journal_seq_t seq)
     : seq(seq) {}
 };
-
-inline paddr_t::paddr_t(device_id_t id, device_segment_id_t sgt, segment_off_t offset) {
-  static_cast<seg_paddr_t*>(this)->set_segment_id(segment_id_t{id, sgt});
-  static_cast<seg_paddr_t*>(this)->set_segment_off(offset);
-}
 
 inline const seg_paddr_t& paddr_t::as_seg_paddr() const {
   assert(get_addr_type() == addr_types_t::SEGMENT);
