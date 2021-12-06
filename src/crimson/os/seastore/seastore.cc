@@ -24,6 +24,7 @@
 #include "crimson/os/futurized_collection.h"
 
 #include "crimson/os/seastore/segment_cleaner.h"
+#include "crimson/os/seastore/segment_manager.h"
 #include "crimson/os/seastore/segment_manager/block.h"
 #include "crimson/os/seastore/collection_manager/flat_collection_manager.h"
 #include "crimson/os/seastore/onode_manager/staged-fltree/fltree_onode_manager.h"
@@ -32,9 +33,6 @@
 #include "crimson/os/seastore/onode_manager.h"
 #include "crimson/os/seastore/object_data_handler.h"
 
-#ifdef HAVE_ZNS
-#include "crimson/os/seastore/segment_manager/zns.h"
-#endif
 
 using std::string;
 using crimson::common::local_conf;
@@ -1366,52 +1364,12 @@ uuid_d SeaStore::get_fsid() const
   return segment_manager->get_meta().seastore_id;
 }
 
-static seastar::future<crimson::os::seastore::SegmentManagerRef>
-get_segment_manager(
-  const std::string &device,
-  const ConfigValues &config)
-{
-#ifdef HAVE_ZNS
-  return seastar::do_with(
-    static_cast<size_t>(0),
-    [&](auto &nr_zones) {
-      return seastar::open_file_dma(
-	device + "/block",
-	seastar::open_flags::rw
-      ).then([&](auto file) {
-	return seastar::do_with(
-	  file,
-	  [=](auto &f) -> seastar::future<int> {
-	    ceph_assert(f);
-	    return f.ioctl(BLKGETNRZONES, (void *)&nr_zones);
-	  });
-      }).then([&](auto ret) -> crimson::os::seastore::SegmentManagerRef {
-	crimson::os::seastore::SegmentManagerRef sm;
-	if (nr_zones != 0) {
-	  return std::make_unique<
-	    segment_manager::zns::ZNSSegmentManager
-	    >(device + "/block");
-	} else {
-	  return std::make_unique<
-	    segment_manager::block::BlockSegmentManager
-	    >(device + "/block");
-	}
-      });
-    });
-#else
-  return seastar::make_ready_future<crimson::os::seastore::SegmentManagerRef>(
-    std::make_unique<
-      segment_manager::block::BlockSegmentManager
-    >(device + "/block"));
-#endif
-}
-
 seastar::future<std::unique_ptr<SeaStore>> make_seastore(
   const std::string &device,
   const ConfigValues &config)
 {
-  return get_segment_manager(
-    device, config
+  return segment_manager::SegmentManager::get_segment_manager(
+    device
   ).then([&device, &config](auto sm) {
     auto scanner = std::make_unique<ExtentReader>();
     auto& scanner_ref = *scanner.get();
