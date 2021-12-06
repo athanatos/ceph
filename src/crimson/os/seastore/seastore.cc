@@ -1368,7 +1368,7 @@ seastar::future<std::unique_ptr<SeaStore>> make_seastore(
   const std::string &device,
   const ConfigValues &config)
 {
-  return segment_manager::SegmentManager::get_segment_manager(
+  return SegmentManager::get_segment_manager(
     device
   ).then([&device, &config](auto sm) {
     auto scanner = std::make_unique<ExtentReader>();

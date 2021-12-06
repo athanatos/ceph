@@ -1,6 +1,7 @@
 set(crimson_seastore_srcs
   cached_extent.cc
   seastore_types.cc
+  segment_manager.cc
   segment_manager/ephemeral.cc
   segment_manager/block.cc
   transaction_manager.cc

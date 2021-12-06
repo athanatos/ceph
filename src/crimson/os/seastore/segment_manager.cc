@@ -1,3 +1,6 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
+
 #include "crimson/os/seastore/segment_manager.h"
 #include "crimson/os/seastore/segment_manager/block.h"
 
@@ -5,7 +8,9 @@
 #include "crimson/os/seastore/segment_manager/zns.h"
 #endif
 
-static seastar::future<crimson::os::seastore::SegmentManagerRef>
+namespace crimson::os::seastore {
+
+seastar::future<crimson::os::seastore::SegmentManagerRef>
 SegmentManager::get_segment_manager(
   const std::string &device)
 {
@@ -42,4 +47,6 @@ SegmentManager::get_segment_manager(
       segment_manager::block::BlockSegmentManager
     >(device + "/block"));
 #endif
+}
+
 }
