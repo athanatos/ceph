@@ -58,20 +58,6 @@ namespace crimson::os::seastore::segment_manager::zns {
     }
   };
 
-  struct ZoneReport {
-    struct blk_zone_report *hdr;
-    ZoneReport(int nr_zones) 
-    : hdr((blk_zone_report *)malloc(
-      sizeof(struct blk_zone_report) + nr_zones * sizeof(struct blk_zone))){;}
-    ~ZoneReport(){
-      free(hdr);
-    }
-    ZoneReport(const ZoneReport &) = delete;
-    ZoneReport(ZoneReport &&rhs) : hdr(rhs.hdr) {
-      rhs.hdr = nullptr;
-    }
-  };
-
   using write_ertr = crimson::errorator<crimson::ct_error::input_output_error>;
   using read_ertr = crimson::errorator<crimson::ct_error::input_output_error>;
 

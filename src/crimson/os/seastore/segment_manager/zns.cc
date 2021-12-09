@@ -87,6 +87,21 @@ namespace crimson::os::seastore::segment_manager::zns{
     return ret;
   }
 
+  struct ZoneReport {
+    struct blk_zone_report *hdr;
+    ZoneReport(int nr_zones) 
+    : hdr((blk_zone_report *)malloc(
+      sizeof(struct blk_zone_report) + nr_zones * sizeof(struct blk_zone))){;}
+    ~ZoneReport(){
+      free(hdr);
+    }
+    ZoneReport(const ZoneReport &) = delete;
+    ZoneReport(ZoneReport &&rhs) : hdr(rhs.hdr) {
+      rhs.hdr = nullptr;
+    }
+  };
+
+
   static seastar::future<> reset_device(
     seastar::file &device, 
     uint32_t zone_size, 
