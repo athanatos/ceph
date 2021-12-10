@@ -4,7 +4,6 @@
 #include "seastore.h"
 
 #include <algorithm>
-#include <linux/blkzoned.h>
 
 #include <boost/algorithm/string/trim.hpp>
 #include <fmt/format.h>
@@ -14,7 +13,6 @@
 #include <seastar/core/fstream.hh>
 #include <seastar/core/shared_mutex.hh>
 
-#include "acconfig.h"
 #include "common/safe_io.h"
 #include "include/stringify.h"
 #include "os/Transaction.h"
