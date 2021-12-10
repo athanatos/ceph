@@ -95,34 +95,21 @@ namespace crimson::os::seastore::segment_manager::zns {
       size_t len, 
       ceph::bufferptr &out) final;
 
-    // size_t get_size() const final;
-    size_t get_size() const {
+    size_t get_size() const final {
       return metadata.size;
     };
 
-    // segment_off_t get_block_size() const final;
-    segment_off_t get_block_size() const {
+    segment_off_t get_block_size() const final {
       return metadata.block_size;
     };
 
-    // segment_off_t get_segment_size() const final;
-    segment_off_t get_segment_size() const {
+    segment_off_t get_segment_size() const final {
       return metadata.segment_size;
     };
-
-    uint64_t get_offset(paddr_t addr) {
-      auto& seg_addr = addr.as_seg_paddr();
-      const auto default_sector_size = 512;
-      return (metadata.first_segment_offset +
-             (seg_addr.get_segment_id().device_segment_id() * 
-	     metadata.zone_size)) * default_sector_size + 
-	     seg_addr.get_segment_off();
-    }
 
     const seastore_meta_t &get_meta() const {
       return metadata.meta;
     };
-
 
     device_id_t get_device_id() const final;
 
@@ -132,10 +119,9 @@ namespace crimson::os::seastore::segment_manager::zns {
 
     magic_t get_magic() const final;
 
+    ZNSSegmentManager(const std::string &path) : device_path(path) {}
 
-    ZNSSegmentManager(const std::string &path) : device_path(path){;};
-
-    ~ZNSSegmentManager() final;
+    ~ZNSSegmentManager() final = default;
 
     Segment::write_ertr::future<> segment_write(
     paddr_t addr,
@@ -176,7 +162,16 @@ namespace crimson::os::seastore::segment_manager::zns {
     seastar::metrics::metric_group metrics;
 
     Segment::close_ertr::future<> segment_close(
-    segment_id_t id, segment_off_t write_pointer);
+      segment_id_t id, segment_off_t write_pointer);
+
+    uint64_t get_offset(paddr_t addr) {
+      auto& seg_addr = addr.as_seg_paddr();
+      const auto default_sector_size = 512;
+      return (metadata.first_segment_offset +
+	      (seg_addr.get_segment_id().device_segment_id() * 
+	       metadata.zone_size)) * default_sector_size + 
+	seg_addr.get_segment_off();
+    }
   };
 
 }

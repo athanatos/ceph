@@ -11,9 +11,9 @@
 #include "include/buffer.h"
 
 namespace {
-  seastar::logger &logger(){
-    return crimson::get_logger(ceph_subsys_seastore);
-  }
+seastar::logger &logger(){
+  return crimson::get_logger(ceph_subsys_seastore);
+}
 }
 
 namespace crimson::os::seastore::segment_manager::zns {
@@ -230,8 +230,6 @@ write_metadata(seastar::file &device, zns_sm_metadata_t sb)
       return do_write(device, 0, bp);
     });
 }
-
-ZNSSegmentManager::~ZNSSegmentManager() {}
 
 static read_ertr::future<> do_read(
   seastar::file &device,
