@@ -51,7 +51,7 @@ public:
       ceph_assert(ctx.transaction.empty());
       return seastar::now();
     } else {
-      return osd.get_shard_services().dispatch_context_transaction(
+      return shard_services.dispatch_context_transaction(
 	pg->get_collection_ref(), ctx);
     }
   }
@@ -82,9 +82,8 @@ std::vector<crimson::OperationRef> handle_pg_create(
         pgid, m->epoch,
         pi, history);
     } else {
-      auto op = osd.get_shard_services().start_operation<PeeringSubEvent>(
+      auto op = osd.start_pg_operation<PeeringSubEvent>(
 	  state,
-	  osd,
 	  conn,
 	  osd.get_shard_services(),
 	  pg_shard_t(),
@@ -123,7 +122,8 @@ struct SubOpBlocker : crimson::BlockerT<SubOpBlocker> {
 namespace crimson::osd {
 
 CompoundPeeringRequest::CompoundPeeringRequest(
-  OSD &osd, crimson::net::ConnectionRef conn, Ref<Message> m)
+  OSD &osd,
+  crimson::net::ConnectionRef conn, Ref<Message> m)
   : osd(osd),
     conn(conn),
     m(m)
