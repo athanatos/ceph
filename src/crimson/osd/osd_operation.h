@@ -10,6 +10,24 @@
 
 namespace crimson::osd {
 
+/// Ordering stages for a class of operations ordered by PG.
+struct ConnectionPipeline {
+  OrderedExclusivePhase await_active = {
+    "PeeringRequest::OSDPipeline::await_active"
+  };
+  OrderedExclusivePhase await_map = {
+    "PeeringRequest::ConnectionPipeline::await_map"
+  };
+  OrderedExclusivePhase get_pg = {
+    "PeeringRequest::ConnectionPipeline::get_pg"
+  };
+
+  ConnectionPipeline(const std::string &op_class)
+    : await_active(op_class + "::OSDPipeline::await_active"),
+      await_map(op_class + "::OSDPipeline::await_map"),
+      get_pg(op_class + "::OSDPipeline::get_pg") {}
+};
+
 enum class OperationTypeCode {
   client_request = 0,
   peering_event,

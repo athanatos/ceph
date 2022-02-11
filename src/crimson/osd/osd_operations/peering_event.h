@@ -101,22 +101,6 @@ protected:
   seastar::future<Ref<PG>> get_pg() final;
 
 public:
-  class OSDPipeline {
-    OrderedExclusivePhase await_active = {
-      "PeeringRequest::OSDPipeline::await_active"
-    };
-    friend class RemotePeeringEvent;
-  };
-  class ConnectionPipeline {
-    OrderedExclusivePhase await_map = {
-      "PeeringRequest::ConnectionPipeline::await_map"
-    };
-    OrderedExclusivePhase get_pg = {
-      "PeeringRequest::ConnectionPipeline::get_pg"
-    };
-    friend class RemotePeeringEvent;
-  };
-
   template <typename... Args>
   RemotePeeringEvent(OSD &osd, crimson::net::ConnectionRef conn, Args&&... args) :
     PeeringEvent(std::forward<Args>(args)...),
@@ -126,7 +110,6 @@ public:
 
 private:
   ConnectionPipeline &cp();
-  OSDPipeline &op();
 };
 
 class LocalPeeringEvent final : public PeeringEvent {

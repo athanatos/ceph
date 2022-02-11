@@ -44,7 +44,7 @@ void ClientRequest::dump_detail(Formatter *f) const
 {
 }
 
-ClientRequest::ConnectionPipeline &ClientRequest::cp()
+ConnectionPipeline &ClientRequest::cp()
 {
   return get_osd_priv(conn.get()).client_request_conn_pipeline;
 }

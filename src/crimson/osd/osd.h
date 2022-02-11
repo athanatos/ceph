@@ -233,7 +233,6 @@ private:
   void update_heartbeat_peers();
   friend class PGAdvanceMap;
 
-  RemotePeeringEvent::OSDPipeline peering_request_osd_pipeline;
   friend class RemotePeeringEvent;
 
 public:

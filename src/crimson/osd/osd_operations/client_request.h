@@ -25,15 +25,6 @@ class ClientRequest final : public OperationT<ClientRequest>,
   PipelineHandle handle;
 
 public:
-  class ConnectionPipeline {
-    OrderedExclusivePhase await_map = {
-      "ClientRequest::ConnectionPipeline::await_map"
-    };
-    OrderedExclusivePhase get_pg = {
-      "ClientRequest::ConnectionPipeline::get_pg"
-    };
-    friend class ClientRequest;
-  };
   class PGPipeline : public CommonPGPipeline {
     OrderedExclusivePhase await_map = {
       "ClientRequest::PGPipeline::await_map"

@@ -20,15 +20,6 @@ class PG;
 
 class RepRequest final : public OperationT<RepRequest> {
 public:
-  class ConnectionPipeline {
-    OrderedExclusivePhase await_map = {
-      "RepRequest::ConnectionPipeline::await_map"
-    };
-    OrderedExclusivePhase get_pg = {
-      "RepRequest::ConnectionPipeline::get_pg"
-    };
-    friend RepRequest;
-  };
   class PGPipeline {
     OrderedExclusivePhase await_map = {
       "RepRequest::PGPipeline::await_map"
