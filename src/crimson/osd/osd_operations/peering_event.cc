@@ -119,14 +119,9 @@ PeeringEvent::interruptible_future<> PeeringEvent::complete_rctx(Ref<PG> pg)
     std::move(ctx));
 }
 
-RemotePeeringEvent::ConnectionPipeline &RemotePeeringEvent::cp()
+ConnectionPipeline &RemotePeeringEvent::cp()
 {
   return get_osd_priv(conn.get()).peering_request_conn_pipeline;
-}
-
-RemotePeeringEvent::OSDPipeline &RemotePeeringEvent::op()
-{
-  return osd.peering_request_osd_pipeline;
 }
 
 void RemotePeeringEvent::on_pg_absent()
@@ -177,7 +172,7 @@ seastar::future<> RemotePeeringEvent::complete_rctx_no_pg()
 seastar::future<Ref<PG>> RemotePeeringEvent::get_pg()
 {
   return with_blocking_future(
-    handle.enter(op().await_active)
+    handle.enter(cp().await_active)
   ).then([this] {
     return osd.state.when_active();
   }).then([this] {

@@ -46,7 +46,7 @@ void RepRequest::dump_detail(Formatter *f) const
   f->close_section();
 }
 
-RepRequest::ConnectionPipeline &RepRequest::cp()
+ConnectionPipeline &RepRequest::cp()
 {
   return get_osd_priv(conn.get()).replicated_request_conn_pipeline;
 }
