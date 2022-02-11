@@ -480,7 +480,7 @@ public:
 class OrderedExclusivePhase : public PipelineStageI {
   void dump_detail(ceph::Formatter *f) const final;
   const char *get_type_name() const final {
-    return name;
+    return name.c_str();
   }
 
   class ExitBarrier final : public PipelineExitBarrierI {
@@ -520,9 +520,10 @@ public:
   }
 
   OrderedExclusivePhase(const char *name) : name(name) {}
+  OrderedExclusivePhase(const std::string &name) : name(name) {}
 
 private:
-  const char * name;
+  const std::string name;
   seastar::shared_mutex mutex;
 };
 
@@ -534,7 +535,7 @@ private:
 class OrderedConcurrentPhase : public PipelineStageI {
   void dump_detail(ceph::Formatter *f) const final;
   const char *get_type_name() const final {
-    return name;
+    return name.c_str();
   }
 
   class ExitBarrier final : public PipelineExitBarrierI {
@@ -582,9 +583,10 @@ public:
   }
 
   OrderedConcurrentPhase(const char *name) : name(name) {}
+  OrderedConcurrentPhase(const std::string &name) : name(name) {}
 
 private:
-  const char * name;
+  const std::string name;
   seastar::shared_mutex mutex;
 };
 
@@ -596,7 +598,7 @@ private:
 class UnorderedStage : public PipelineStageI {
   void dump_detail(ceph::Formatter *f) const final {}
   const char *get_type_name() const final {
-    return name;
+    return name.c_str();
   }
 
   class ExitBarrier final : public PipelineExitBarrierI {
@@ -620,10 +622,10 @@ public:
       new ExitBarrier);
   }
 
-  UnorderedStage(const char *name) : name(name) {}
+  UnorderedStage(const std::string &name) : name(name) {}
 
 private:
-  const char * name;
+  const std::string name;
 };
 
 
