@@ -7,6 +7,7 @@
 
 #include "crimson/common/log.h"
 #include "crimson/os/seastore/seastore_types.h"
+#include "crimson/os/seastore/journal.h"
 #include "crimson/os/seastore/circular_bounded_journal.h"
 #include "crimson/os/seastore/random_block_manager.h"
 #include "crimson/os/seastore/random_block_manager/nvmedevice.h"
@@ -102,6 +103,16 @@ struct entry_validator_t {
       offset += header.mdlength + header.dlength;
     }
   }
+
+  bool validate_delta(bufferlist bl) {
+    for (auto &&block : record.deltas) {
+      if (bl.begin().crc32c(bl.length(), 1) ==
+	  block.bl.begin().crc32c(block.bl.length(), 1)) {
+	return true;
+      }
+    }
+    return false;
+  }
 };
 
 struct cbjournal_test_t : public seastar_test_suite_t
@@ -195,6 +206,24 @@ struct cbjournal_test_t : public seastar_test_suite_t
     for (auto &i : entries) {
       i.validate(*(cbj.get()));
     }
+  }
+  
+  auto replay() {
+    cbj->replay(
+      [this](const auto &offsets, const auto &e) -> Journal::replay_ret {
+      bool found = false;
+      for (auto &i : entries) {
+	paddr_t base = offsets.record_block_base;
+	rbm_abs_addr addr = convert_paddr_to_abs_addr(base);
+	if (addr == i.addr) {
+	  logger().debug(" compare addr: {} and i.addr {} ", base, i.addr);
+	  found = i.validate_delta(e.bl);
+	  break;
+	}
+      }
+      assert(found == true);
+      return Journal::replay_ertr::now();
+    }).unsafe_get0();
   }
 
   auto mkfs() {
@@ -373,5 +402,41 @@ TEST_F(cbjournal_test_t, update_super)
    ASSERT_EQ(header.used_size, update_header2.used_size);
    ASSERT_EQ(header.written_to + record_total_size, update_header2.written_to);
    ASSERT_EQ(header.last_committed_record_base + block_size , update_header2.last_committed_record_base);
+ });
+}
+
+TEST_F(cbjournal_test_t, replay)
+{
+ run_async([this] {
+   mkfs();
+   open();
+   record_t rec {
+      { generate_extent(1), generate_extent(2) },
+      { generate_delta(20), generate_delta(21) }
+      };
+   auto r_size = record_group_size_t(rec.size, block_size);
+   auto record_total_size = r_size.get_encoded_length();
+   submit_record(std::move(rec));
+   while (record_total_size <= get_available_size()) {
+     submit_record(
+       record_t {
+	  { generate_extent(1), generate_extent(2) },
+	  { generate_delta(20), generate_delta(21) }
+	  });
+   }
+
+   uint64_t avail = get_available_size();
+   update_applied_to(entries.front().addr, record_total_size);
+   entries.erase(entries.begin());
+   ASSERT_EQ(avail + record_total_size, get_available_size());
+   avail = get_available_size();
+   // will be appended at the begining of WAL
+   submit_record(
+     record_t {
+	{ generate_extent(1), generate_extent(2) },
+	{ generate_delta(20), generate_delta(21) }
+	});
+   ASSERT_EQ(avail - record_total_size, get_available_size());
+   replay();
  });
 }

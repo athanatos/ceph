@@ -382,6 +382,92 @@ CBJournal::read_record_ret CBJournal::return_record(record_group_header_t& heade
   }
 }
 
+Journal::replay_ret CBJournal::replay(
+  delta_handler_t &&delta_handler)
+{
+  /*
+   * read records from last applied record prior to written_to, and replay
+   */
+  if (last_committed_record_base == applied_to) {
+    return replay_ertr::now();
+  }
+  return seastar::do_with(
+    rbm_abs_addr(applied_to),
+    std::move(delta_handler),
+    [this](auto &cursor_addr, auto &d_handler) {
+    return crimson::repeat(
+      [this, &cursor_addr, &d_handler]() mutable
+      -> replay_ertr::future<seastar::stop_iteration> {
+      paddr_t cursor_paddr = convert_abs_addr_to_paddr(
+	cursor_addr,
+	header.device_id);
+      return read_record(cursor_paddr
+      ).safe_then([this, &cursor_addr, &d_handler] (auto ret) {
+	auto [r_header, bl] = *ret;
+	if (cursor_addr == applied_to) {
+	  cursor_addr += bl.length();
+	  return replay_ertr::make_ready_future<
+	    seastar::stop_iteration>(seastar::stop_iteration::no);
+	}
+	bufferlist mdbuf;
+	mdbuf.substr_of(bl, 0, r_header.mdlength);
+	paddr_t record_block_base = paddr_t::make_blk_paddr(
+	  header.device_id, cursor_addr);
+	auto maybe_record_deltas_list = try_decode_deltas(
+	  r_header, mdbuf, record_block_base);
+	if (!maybe_record_deltas_list) {
+	  logger().debug("unable to decode deltas for record {} at {}",
+	    r_header, record_block_base);
+	  return replay_ertr::make_ready_future<
+	    seastar::stop_iteration>(seastar::stop_iteration::yes);
+	}
+	logger().debug(" record_group_header_t: {}, cursor_addr: {} ",
+	  r_header, cursor_addr);
+	auto write_result = write_result_t{
+	  r_header.committed_to,
+	  (seastore_off_t)bl.length()
+	};
+	cursor_addr += bl.length();
+	return seastar::do_with(
+	  std::move(*maybe_record_deltas_list),
+	  [write_result,
+	  this,
+	  &d_handler,
+	  &cursor_addr](auto& record_deltas_list) {
+	  return crimson::do_for_each(
+	    record_deltas_list,
+	    [write_result,
+	    &d_handler](record_deltas_t& record_deltas) {
+	    auto locator = record_locator_t{
+	      record_deltas.record_block_base,
+	      write_result
+	    };
+	    logger().debug("processing {} deltas at block_base {}",
+		  record_deltas.deltas.size(),
+		  locator);
+	    return crimson::do_for_each(
+	      record_deltas.deltas,
+	      [locator,
+	       &d_handler](delta_info_t& delta){
+	      return d_handler(locator, delta);
+	    });
+	  }).safe_then([this, &cursor_addr]() {
+	    if (cursor_addr >= header.end) {
+	      cursor_addr = get_start_addr();
+	    }
+	    if (cursor_addr == last_committed_record_base) {
+	      return replay_ertr::make_ready_future<
+		seastar::stop_iteration>(seastar::stop_iteration::yes);
+	    }
+	    return replay_ertr::make_ready_future<
+	      seastar::stop_iteration>(seastar::stop_iteration::no);
+	  });
+	});
+      });
+    });
+  });
+}
+
 CBJournal::read_record_ret CBJournal::read_record(paddr_t off)
 {
   rbm_abs_addr offset = convert_paddr_to_abs_addr(

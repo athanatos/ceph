@@ -76,6 +76,9 @@ public:
     return seastar::now();
   }
 
+  replay_ret replay(
+    delta_handler_t &&delta_handler);
+
   open_for_write_ertr::future<> _open_device(const std::string path);
 
   struct cbj_header_t;
