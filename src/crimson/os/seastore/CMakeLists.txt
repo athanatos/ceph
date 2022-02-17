@@ -38,7 +38,7 @@ set(crimson_seastore_srcs
   seastore.cc
   random_block_manager/nvme_manager.cc
   random_block_manager/nvmedevice.cc
-  circular_bounded_journal.cc
+  journal/circular_bounded_journal.cc
   journal/segmented_journal.cc
   journal.cc
   ../../../test/crimson/seastore/test_block.cc

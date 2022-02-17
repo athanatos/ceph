@@ -103,12 +103,12 @@ target_link_libraries(
   crimson-seastore
   aio)
 
-add_executable(unittest-seastore-cbjournal
-  test_cbjournal.cc)
-add_ceph_test(unittest-seastore-cbjournal
-  unittest-seastore-cbjournal --memory 256M --smp 1)
+add_executable(unittest-seastore-circular-bounded-journal
+  test_circular_bounded_journal.cc)
+add_ceph_test(unittest-seastore-circular-bounded-journal
+  unittest-seastore-circular-bounded-journal --memory 256M --smp 1)
 target_link_libraries(
-  unittest-seastore-cbjournal
+  unittest-seastore-circular-bounded-journal
   crimson::gtest
   crimson-seastore
   aio)

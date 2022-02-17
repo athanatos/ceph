@@ -94,6 +94,10 @@ JournalRef make_segmented(
   ExtentReader &reader,
   SegmentProvider &provider);
 
+JournalRef make_circular_bounded(
+  nvme_device::NVMeBlockDevice *device,
+  const std::string path);
+
 }
 
 }

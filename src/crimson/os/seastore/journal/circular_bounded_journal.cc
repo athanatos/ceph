@@ -4,7 +4,7 @@
 #include <boost/iterator/counting_iterator.hpp>
 
 #include "include/intarith.h"
-#include "crimson/os/seastore/circular_bounded_journal.h"
+#include "circular_bounded_journal.h"
 
 namespace {
   seastar::logger& logger() {
@@ -14,7 +14,7 @@ namespace {
 
 namespace crimson::os::seastore {
 
-std::ostream &operator<<(std::ostream &out, const CBJournal::cbj_header_t &header)
+std::ostream &operator<<(std::ostream &out, const CircularBoundedJournal::cbj_header_t &header)
 {
   return out << "cbj_header_t(magin=" << header.magic
 	     << ", uuid=" << header.uuid
@@ -35,11 +35,11 @@ std::ostream &operator<<(std::ostream &out, const CBJournal::cbj_header_t &heade
 }
 
 
-CBJournal::CBJournal(NVMeBlockDevice* device, const std::string path)
+CircularBoundedJournal::CircularBoundedJournal(NVMeBlockDevice* device, const std::string path)
   : device(device), path(path) {}
 
-CBJournal::mkfs_ret
-CBJournal::mkfs(mkfs_config_t& config)
+CircularBoundedJournal::mkfs_ret
+CircularBoundedJournal::mkfs(mkfs_config_t& config)
 {
   return _open_device(path
   ).safe_then([this, &config]() {
@@ -52,7 +52,7 @@ CBJournal::mkfs(mkfs_config_t& config)
       crimson::ct_error::enoent::handle([this, &config, start_addr] (auto) 
 	-> mkfs_ret {
 	ceph::bufferlist bl;
-	CBJournal::cbj_header_t head;
+	CircularBoundedJournal::cbj_header_t head;
 	try {
 	  head.magic = CBJOURNAL_MAGIC;
 	  head.uuid = uuid_d(); // TODO
@@ -82,24 +82,24 @@ CBJournal::mkfs(mkfs_config_t& config)
 	size = head.size;
 	block_size = config.block_size;
 	logger().debug(
-	  "initialize header block in CBJournal, length {}",
+	  "initialize header block in CircularBoundedJournal, length {}",
 	  bl.length());
 	return device_write_bl(start_addr, bl
 	).handle_error(
 	  mkfs_ertr::pass_further{},
 	  crimson::ct_error::assert_all{
-	  "Invalid error device_write during CBJournal::mkfs"
+	  "Invalid error device_write during CircularBoundedJournal::mkfs"
 	});
       }),
       mkfs_ertr::pass_further{},
       crimson::ct_error::assert_all{
-        "Invalid error read_super in CBJournal::mkfs"
+        "Invalid error read_super in CircularBoundedJournal::mkfs"
       }
     );
   }).handle_error(
     mkfs_ertr::pass_further{},
     crimson::ct_error::assert_all{
-    "Invalid error _open_device in CBJournal::mkfs"
+    "Invalid error _open_device in CircularBoundedJournal::mkfs"
   }).finally([this] {
     if (device) {
       return device->close();
@@ -109,7 +109,7 @@ CBJournal::mkfs(mkfs_config_t& config)
   });
 }
 
-CBJournal::open_for_write_ertr::future<> CBJournal::_open_device(
+CircularBoundedJournal::open_for_write_ertr::future<> CircularBoundedJournal::_open_device(
         const std::string path)
 {
   ceph_assert(device);
@@ -122,19 +122,19 @@ CBJournal::open_for_write_ertr::future<> CBJournal::_open_device(
   );
 }
 
-ceph::bufferlist CBJournal::encode_super()
+ceph::bufferlist CircularBoundedJournal::encode_super()
 {
   bufferlist bl;
   encode(header, bl);
   return bl;
 }
 
-CBJournal::open_for_write_ret CBJournal::open_for_write()
+CircularBoundedJournal::open_for_write_ret CircularBoundedJournal::open_for_write()
 {
   return open_for_write(CBJOURNAL_START_ADDRESS);
 }
 
-CBJournal::close_ertr::future<> CBJournal::close()
+CircularBoundedJournal::close_ertr::future<> CircularBoundedJournal::close()
 {
   return sync_super(
   ).safe_then([this]() -> close_ertr::future<> {
@@ -147,7 +147,7 @@ CBJournal::close_ertr::future<> CBJournal::close()
   );
 }
 
-CBJournal::open_for_write_ret CBJournal::open_for_write(rbm_abs_addr start)
+CircularBoundedJournal::open_for_write_ret CircularBoundedJournal::open_for_write(rbm_abs_addr start)
 {
   return _open_device(path
   ).safe_then([this, start]() {
@@ -185,7 +185,7 @@ CBJournal::open_for_write_ret CBJournal::open_for_write(rbm_abs_addr start)
   });
 }
 
-CBJournal::write_ertr::future<> CBJournal::append_record(
+CircularBoundedJournal::write_ertr::future<> CircularBoundedJournal::append_record(
   ceph::bufferlist bl,
   rbm_abs_addr addr)
 {
@@ -213,7 +213,7 @@ CBJournal::write_ertr::future<> CBJournal::append_record(
       return write_ertr::now();
     } else {
       // write remaining data---in this case,
-      // data is splited into two parts before due to the end of CBJournal.
+      // data is splited into two parts before due to the end of CircularBoundedJournal.
       // the following code is to write the second part
       auto next = get_start_addr();
       bufferlist next_write;
@@ -233,7 +233,7 @@ CBJournal::write_ertr::future<> CBJournal::append_record(
   });
 }
 
-CBJournal::submit_record_ret CBJournal::submit_record(
+CircularBoundedJournal::submit_record_ret CircularBoundedJournal::submit_record(
   record_t &&record,
   OrderingHandle &handle)
 {
@@ -242,7 +242,7 @@ CBJournal::submit_record_ret CBJournal::submit_record(
   auto encoded_size = r_size.get_encoded_length();
   if (encoded_size > get_available_size()) {
     logger().error(
-      "CBJournal::submit_record: record size {}, but available size {}",
+      "CircularBoundedJournal::submit_record: record size {}, but available size {}",
       encoded_size,
       get_available_size()
       );
@@ -290,7 +290,7 @@ CBJournal::submit_record_ret CBJournal::submit_record(
     ).handle_error(
       write_ertr::pass_further{},
       crimson::ct_error::assert_all{
-        "Invalid error in CBJournal::append_record"
+        "Invalid error in CircularBoundedJournal::append_record"
       }
     );
   }).safe_then([this, &handle] {
@@ -316,7 +316,7 @@ CBJournal::submit_record_ret CBJournal::submit_record(
   });
 }
 
-CBJournal::write_ertr::future<> CBJournal::device_write_bl(
+CircularBoundedJournal::write_ertr::future<> CircularBoundedJournal::device_write_bl(
     rbm_abs_addr offset, bufferlist &bl)
 {
   auto length = bl.length();
@@ -324,7 +324,7 @@ CBJournal::write_ertr::future<> CBJournal::device_write_bl(
     return crimson::ct_error::erange::make();
   }
   logger().debug(
-    "overwrite in CBJournal, offset {}, length {}",
+    "overwrite in CircularBoundedJournal, offset {}, length {}",
     offset,
     length);
   auto write_length = length < block_size ? block_size : length;
@@ -340,7 +340,7 @@ CBJournal::write_ertr::future<> CBJournal::device_write_bl(
   });
 }
 
-CBJournal::read_super_ret CBJournal::read_super(rbm_abs_addr start)
+CircularBoundedJournal::read_super_ret CircularBoundedJournal::read_super(rbm_abs_addr start)
 {
   auto bptr = bufferptr(ceph::buffer::create_page_aligned(block_size));
   return device->read(start, bptr
@@ -364,7 +364,7 @@ CBJournal::read_super_ret CBJournal::read_super(rbm_abs_addr start)
   });
 }
 
-CBJournal::read_record_ret CBJournal::return_record(record_group_header_t& header, bufferlist bl)
+CircularBoundedJournal::read_record_ret CircularBoundedJournal::return_record(record_group_header_t& header, bufferlist bl)
 {
   bufferlist md_bl, data_bl;
   md_bl.substr_of(bl, 0, block_size);
@@ -382,7 +382,7 @@ CBJournal::read_record_ret CBJournal::return_record(record_group_header_t& heade
   }
 }
 
-Journal::replay_ret CBJournal::replay(
+Journal::replay_ret CircularBoundedJournal::replay(
   delta_handler_t &&delta_handler)
 {
   /*
@@ -468,7 +468,7 @@ Journal::replay_ret CBJournal::replay(
   });
 }
 
-CBJournal::read_record_ret CBJournal::read_record(paddr_t off)
+CircularBoundedJournal::read_record_ret CircularBoundedJournal::read_record(paddr_t off)
 {
   rbm_abs_addr offset = convert_paddr_to_abs_addr(
     off);
@@ -561,8 +561,8 @@ CBJournal::read_record_ret CBJournal::read_record(paddr_t off)
     });
 }
 
-CBJournal::write_ertr::future<>
-CBJournal::sync_super()
+CircularBoundedJournal::write_ertr::future<>
+CircularBoundedJournal::sync_super()
 {
   header.used_size = used_size;
   header.size = size;
@@ -579,7 +579,7 @@ CBJournal::sync_super()
     return crimson::ct_error::input_output_error::make();
   }
   logger().debug(
-    "sync header of CBJournal, length {}",
+    "sync header of CircularBoundedJournal, length {}",
     bl.length());
   return device_write_bl(start, bl);
 }

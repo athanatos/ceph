@@ -8,7 +8,7 @@
 #include "crimson/common/log.h"
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/journal.h"
-#include "crimson/os/seastore/circular_bounded_journal.h"
+#include "crimson/os/seastore/journal/circular_bounded_journal.h"
 #include "crimson/os/seastore/random_block_manager.h"
 #include "crimson/os/seastore/random_block_manager/nvmedevice.h"
 #include "test/crimson/seastore/transaction_manager_test_state.h"
@@ -91,7 +91,7 @@ struct entry_validator_t {
     }
   }
 
-  void validate(CBJournal &cbj) {
+  void validate(CircularBoundedJournal &cbj) {
     rbm_abs_addr offset = 0;
     for (int i = 0; i < entries; i++) {
       paddr_t paddr = convert_abs_addr_to_paddr(
@@ -115,29 +115,29 @@ struct entry_validator_t {
   }
 };
 
-struct cbjournal_test_t : public seastar_test_suite_t
+struct circular_bounded_journal_test_t : public seastar_test_suite_t
 {
   segment_manager::EphemeralSegmentManagerRef segment_manager; // Need to be deleted, just for Cache
   ExtentReaderRef reader;
   ExtentPlacementManagerRef epm;
   Cache cache;
   std::vector<entry_validator_t> entries;
-  std::unique_ptr<CBJournal> cbj;
+  std::unique_ptr<CircularBoundedJournal> cbj;
   nvme_device::NVMeBlockDevice *device;
 
   std::default_random_engine generator;
   uint64_t block_size;
-  CBJournal::mkfs_config_t config;
+  CircularBoundedJournal::mkfs_config_t config;
   WritePipeline pipeline;
 
-  cbjournal_test_t() :
+  circular_bounded_journal_test_t() :
       segment_manager(segment_manager::create_test_ephemeral()),
       reader(new ExtentReader()),
       epm(new ExtentPlacementManager()),
       cache(*reader, *epm)
   {
     device = new nvme_device::TestMemory(DEFAULT_TEST_SIZE);
-    cbj.reset(new CBJournal(device, std::string()));
+    cbj.reset(new CircularBoundedJournal(device, std::string()));
     device_id_t d_id = 1 << (std::numeric_limits<device_id_t>::digits - 1);
     config.start = paddr_t::make_blk_paddr(d_id, 0);
     config.end = paddr_t::make_blk_paddr(d_id, DEFAULT_TEST_SIZE);
@@ -257,7 +257,7 @@ struct cbjournal_test_t : public seastar_test_suite_t
   }
 };
 
-TEST_F(cbjournal_test_t, submit_one_record)
+TEST_F(circular_bounded_journal_test_t, submit_one_record)
 {
  run_async([this] {
    mkfs();
@@ -271,7 +271,7 @@ TEST_F(cbjournal_test_t, submit_one_record)
  });
 }
 
-TEST_F(cbjournal_test_t, submit_three_records)
+TEST_F(circular_bounded_journal_test_t, submit_three_records)
 {
  run_async([this] {
    mkfs();
@@ -295,7 +295,7 @@ TEST_F(cbjournal_test_t, submit_three_records)
  });
 }
 
-TEST_F(cbjournal_test_t, submit_full_records)
+TEST_F(circular_bounded_journal_test_t, submit_full_records)
 {
  run_async([this] {
    mkfs();
@@ -339,7 +339,7 @@ TEST_F(cbjournal_test_t, submit_full_records)
  });
 }
 
-TEST_F(cbjournal_test_t, boudary_check_verify)
+TEST_F(circular_bounded_journal_test_t, boudary_check_verify)
 {
  run_async([this] {
    mkfs();
@@ -375,7 +375,7 @@ TEST_F(cbjournal_test_t, boudary_check_verify)
  });
 }
 
-TEST_F(cbjournal_test_t, update_super)
+TEST_F(circular_bounded_journal_test_t, update_super)
 {
  run_async([this] {
    mkfs();
@@ -405,7 +405,7 @@ TEST_F(cbjournal_test_t, update_super)
  });
 }
 
-TEST_F(cbjournal_test_t, replay)
+TEST_F(circular_bounded_journal_test_t, replay)
 {
  run_async([this] {
    mkfs();

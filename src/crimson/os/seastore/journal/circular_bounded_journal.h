@@ -30,11 +30,11 @@ using NVMeBlockDevice = nvme_device::NVMeBlockDevice;
 /**
  * CircularBoundedJournal
  *
- * TODO: move record from CBJournal to RandomBlockManager
+ * TODO: move record from CircularBoundedJournal to RandomBlockManager
  *
  */
 
-class CBJournal : public Journal {
+class CircularBoundedJournal : public Journal {
 public:
   struct mkfs_config_t {
     std::string path;
@@ -46,8 +46,8 @@ public:
     seastore_meta_t meta;
   };
 
-  CBJournal(NVMeBlockDevice* device, const std::string path);
-  ~CBJournal() {}
+  CircularBoundedJournal(NVMeBlockDevice* device, const std::string path);
+  ~CircularBoundedJournal() {}
 
   open_for_write_ret open_for_write() final;
   open_for_write_ret open_for_write(rbm_abs_addr start);
@@ -57,7 +57,7 @@ public:
    * submit_record
    *
    * treat all bufferlists as a single write stream
-   * , and issue those bufferlists to the CBJournal.
+   * , and issue those bufferlists to the CircularBoundedJournal.
    *
    * @param bufferlists to write
    * @return <the start offset of entry submitted,
@@ -91,14 +91,14 @@ public:
   /*
    * append_record
    *
-   * append data to current write position of CBJournal
+   * append data to current write position of CircularBoundedJournal
    *
    * Will write bl from offset to length
    *
    * @param bufferlist to write
    * @param laddr_t where data is written
    * @return <relative address to write,
-   * 	      total length written to CBJournal (bytes)>
+   * 	      total length written to CircularBoundedJournal (bytes)>
    *
    */
   write_ertr::future<> append_record(ceph::bufferlist bl, rbm_abs_addr addr);
@@ -109,7 +109,7 @@ public:
    * @param bufferlist to write
    *
    * @return <address to write,
-   * 	      total length written to CBJournal (bytes)>
+   * 	      total length written to CircularBoundedJournal (bytes)>
    */
   write_ertr::future<> device_write_bl(rbm_abs_addr offset, ceph::bufferlist &bl);
 
@@ -156,7 +156,7 @@ public:
 
 
   /**
-   * CBJournal structure
+   * CircularBoundedJournal structure
    *
    * +-------------------------------------------------------+
    * |   header    | record | record | record | record | ... |
@@ -168,7 +168,7 @@ public:
 
   /**
    *
-   * CBJournal write
+   * CircularBoundedJournal write
    *
    * NVMe will support a large block write (< 512KB) with atomic write unit command.
    * With this command, we expect that the most of incoming data can be stored
@@ -185,7 +185,7 @@ public:
     uint64_t used_size;  // current used_size of journal
     uint32_t error;      // reserved
 
-    rbm_abs_addr start_offset;      // start offset of CBJournal
+    rbm_abs_addr start_offset;      // start offset of CircularBoundedJournal
     rbm_abs_addr last_committed_record_base;
     rbm_abs_addr written_to;
     rbm_abs_addr applied_to;
@@ -228,9 +228,9 @@ public:
 
   /**
    *
-   * Write position for CBJournal
+   * Write position for CircularBoundedJournal
    *
-   * | written to rbm |    written length to CBJournal    | new write |
+   * | written to rbm |    written length to CircularBoundedJournal    | new write |
    * ----------------->----------------------------------->------------>
    *                  ^      	            ^             ^
    *            applied_to   last_committed_record_base   written_to
@@ -297,7 +297,7 @@ private:
   WritePipeline *write_pipeline = nullptr;
 };
 
-std::ostream &operator<<(std::ostream &out, const CBJournal::cbj_header_t &header);
+std::ostream &operator<<(std::ostream &out, const CircularBoundedJournal::cbj_header_t &header);
 }
 
-WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::CBJournal::cbj_header_t)
+WRITE_CLASS_DENC_BOUNDED(crimson::os::seastore::CircularBoundedJournal::cbj_header_t)
