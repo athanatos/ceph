@@ -231,6 +231,7 @@ private:
   seastar::future<> restart();
   seastar::future<> shutdown();
   void update_heartbeat_peers();
+  void note_down_osd(int osd);
   friend class PGAdvanceMap;
 
   RemotePeeringEvent::OSDPipeline peering_request_osd_pipeline;

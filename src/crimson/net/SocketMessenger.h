@@ -88,6 +88,12 @@ class SocketMessenger final : public Messenger {
 
   seastar::future<> shutdown() override;
 
+  void mark_down(entity_addr_t addr) override {
+    if (auto it = connections.find(addr); it != connections.end()) {
+      it->second->mark_down();
+    }
+  }
+
   void print(std::ostream& out) const override {
     out << get_myname()
         << "(" << logic_name

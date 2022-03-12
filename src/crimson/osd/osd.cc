@@ -1122,10 +1122,12 @@ seastar::future<> OSD::committed_osd_maps(version_t first,
 {
   logger().info("osd.{}: committed_osd_maps({}, {})", whoami, first, last);
   // advance through the new maps
+  auto oldosds = seastar::make_lw_shared<std::set<int>>();
+  osdmap->get_all_osds(*oldosds);
   return seastar::do_for_each(boost::make_counting_iterator(first),
                               boost::make_counting_iterator(last + 1),
-                              [this](epoch_t cur) {
-    return get_map(cur).then([this](cached_map_t&& o) {
+                              [this, oldosds=std::move(oldosds)](epoch_t cur) {
+    return get_map(cur).then([this, oldosds](cached_map_t&& o) {
       osdmap = std::move(o);
       shard_services.update_map(osdmap);
       if (up_epoch == 0 &&
@@ -1135,6 +1137,11 @@ seastar::future<> OSD::committed_osd_maps(version_t first,
         if (!boot_epoch) {
           boot_epoch = osdmap->get_epoch();
         }
+      }
+      for (auto &osdid: *oldosds) {
+	if (osdmap->exists(osdid) && !osdmap->is_up(osdid)) {
+	  note_down_osd(osdid);
+	}
       }
     });
   }).then([m, this] {
@@ -1368,6 +1375,17 @@ void OSD::update_heartbeat_peers()
     }
   }
   heartbeat->update_peers(whoami);
+}
+
+void OSD::note_down_osd(int osd) {
+  auto addr = osdmap->get_cluster_addrs(osd);
+  logger().info(
+    "osd.{}: noting down osd {} addr {}",
+    whoami,
+    osd,
+    addr
+  );
+  cluster_msgr->mark_down_addrs(addr);
 }
 
 seastar::future<> OSD::handle_peering_op(

@@ -99,6 +99,12 @@ public:
   // and must be called if is bound.
   virtual seastar::future<> shutdown() = 0;
 
+  // mark connection down
+  virtual void mark_down(entity_addr_t addr) = 0;
+  virtual void mark_down_addrs(const entity_addrvec_t& a) {
+    mark_down(a.legacy_addr());
+  }
+
   uint32_t get_crc_flags() const {
     return crc_flags;
   }
