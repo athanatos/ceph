@@ -22,6 +22,7 @@ namespace crimson::osd {
 class ShardServices;
 
 class OSDMapGate {
+protected:
   struct OSDMapBlocker : public BlockerT<OSDMapBlocker> {
     const char * type_name;
     epoch_t epoch;
@@ -56,9 +57,44 @@ public:
     : blocker_type(blocker_type), shard_services(shard_services) {}
 
   // wait for an osdmap whose epoch is greater or equal to given epoch
-  blocking_future<epoch_t> wait_for_map(epoch_t epoch);
+  blocking_future<epoch_t>
+  wait_for_map(epoch_t epoch);
+  seastar::future<epoch_t>
+  wait_for_map(OSDMapBlocker::BlockingEvent::TriggerI&& trigger,
+	       epoch_t epoch);
   void got_map(epoch_t epoch);
   seastar::future<> stop();
 };
+
+
+enum class OSDMapGateType {
+  OSD,
+  PG,
+  last_item
+};
+
+template <OSDMapGateType GateTypeV>
+struct ConcreteOSDMapGate : OSDMapGate  {
+  struct ConcreteOSDMapBlocker : OSDMapBlocker {
+    using OSDMapBlocker::OSDMapBlocker;
+  };
+
+  using OSDMapGate::OSDMapGate;
+  using OSDMapGate::got_map;
+  using OSDMapGate::stop;
+
+  using BlockingEvent = typename ConcreteOSDMapBlocker::BlockingEvent;
+
+  // just for type safety. We want to ensure the appropriate filler is used.
+  seastar::future<epoch_t>
+  wait_for_map(typename ConcreteOSDMapBlocker::BlockingEvent::TriggerI&& trigger,
+	       epoch_t epoch) {
+    return OSDMapGate::wait_for_map(std::move(trigger), epoch);
+
+  }
+};
+
+using OSD_OSDMapGate = ConcreteOSDMapGate<OSDMapGateType::OSD>;
+using PG_OSDMapGate = ConcreteOSDMapGate<OSDMapGateType::PG>;
 
 }
