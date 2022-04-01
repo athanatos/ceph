@@ -16,10 +16,13 @@ void Operation::dump(ceph::Formatter* f) const
     dump_detail(f);
     f->close_section();
   }
+#if 0
+  // TODO: implement at the TrackableOperationT layer
   f->open_array_section("blockers");
   for (auto &blocker : blockers) {
     blocker->dump(f);
   }
+#endif
   f->close_section();
   f->close_section();
 }
