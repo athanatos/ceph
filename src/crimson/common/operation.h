@@ -468,6 +468,13 @@ public:
   virtual seastar::future<PipelineExitBarrierI::Ref> enter() = 0;
 };
 
+
+template <class T>
+class PipelineStageIT : public BlockerT<T> {
+public:
+  virtual seastar::future<PipelineExitBarrierI::Ref> enter() = 0;
+};
+
 class PipelineHandle {
   PipelineExitBarrierI::Ref barrier;
 
@@ -534,11 +541,8 @@ public:
  * resolve) a new phase prior to exiting the previous one will ensure that
  * the op ordering is preserved.
  */
-class OrderedExclusivePhase : public PipelineStageI {
+class OrderedExclusivePhase : public PipelineStageIT<OrderedExclusivePhase> {
   void dump_detail(ceph::Formatter *f) const final;
-  const char *get_type_name() const final {
-    return name;
-  }
 
   class ExitBarrier final : public PipelineExitBarrierI {
     OrderedExclusivePhase *phase;
@@ -576,10 +580,11 @@ public:
     });
   }
 
-  OrderedExclusivePhase(const char *name) : name(name) {}
+  OrderedExclusivePhase(const char *type_name) : type_name(type_name) {}
+
+  const char * type_name;
 
 private:
-  const char * name;
   seastar::shared_mutex mutex;
 };
 
@@ -588,11 +593,8 @@ private:
  * they will proceed to the next stage in the order in which they called
  * enter.
  */
-class OrderedConcurrentPhase : public PipelineStageI {
+class OrderedConcurrentPhase : public PipelineStageIT<OrderedConcurrentPhase> {
   void dump_detail(ceph::Formatter *f) const final;
-  const char *get_type_name() const final {
-    return name;
-  }
 
   class ExitBarrier final : public PipelineExitBarrierI {
     OrderedConcurrentPhase *phase;
@@ -638,10 +640,11 @@ public:
       new ExitBarrier{this, mutex.lock()});
   }
 
-  OrderedConcurrentPhase(const char *name) : name(name) {}
+  OrderedConcurrentPhase(const char *type_name) : type_name(type_name) {}
+
+  const char * type_name;
 
 private:
-  const char * name;
   seastar::shared_mutex mutex;
 };
 
@@ -650,11 +653,8 @@ private:
  * may exit in any order.  Useful mainly for informational purposes between
  * stages with constraints.
  */
-class UnorderedStage : public PipelineStageI {
+class UnorderedStage : public PipelineStageIT<UnorderedStage> {
   void dump_detail(ceph::Formatter *f) const final {}
-  const char *get_type_name() const final {
-    return name;
-  }
 
   class ExitBarrier final : public PipelineExitBarrierI {
   public:
@@ -677,10 +677,9 @@ public:
       new ExitBarrier);
   }
 
-  UnorderedStage(const char *name) : name(name) {}
+  UnorderedStage(const char *type_name) : type_name(type_name) {}
 
-private:
-  const char * name;
+  const char * type_name;
 };
 
 
