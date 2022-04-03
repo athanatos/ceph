@@ -98,7 +98,7 @@ private:
     ::crimson::interruptible::interruptible_errorator<
       ::crimson::osd::IOInterruptCondition,
       Errorator>;
-private:
+
   bool is_misdirected(const PG& pg) const;
 };
 
