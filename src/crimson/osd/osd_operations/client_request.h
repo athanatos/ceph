@@ -99,6 +99,11 @@ private:
       Errorator>;
 
   bool is_misdirected(const PG& pg) const;
+
+public:
+  std::tuple<
+    ConnectionPipeline::AwaitMap::BlockingEvent
+  > tracking_events;
 };
 
 }
