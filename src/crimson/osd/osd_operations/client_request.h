@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include <boost/intrusive/list.hpp>
+#include <boost/intrusive_ptr.hpp>
+
 #include "osd/osd_op_util.h"
 #include "crimson/net/Connection.h"
 #include "crimson/osd/object_context.h"
@@ -15,6 +18,8 @@
 namespace crimson::osd {
 class PG;
 class OSD;
+
+class ClientRequest;
 
 class ClientRequest final : public OperationT<ClientRequest>,
                             private CommonClientRequest {
@@ -46,6 +51,31 @@ public:
     };
     friend class ClientRequest;
   };
+
+  using ordering_hook_t = boost::intrusive::list_member_hook<>;
+  ordering_hook_t ordering_hook;
+  class Orderer {
+    using list_t = boost::intrusive::list<
+      ClientRequest,
+      boost::intrusive::member_hook<
+	ClientRequest,
+	typename ClientRequest::ordering_hook_t,
+	&ClientRequest::ordering_hook>
+      >;
+    list_t list;
+
+  public:
+    void add_request(ClientRequest &request) {
+      intrusive_ptr_add_ref(&request);
+      list.push_back(request);
+    }
+    void remove_request(ClientRequest &request) {
+      list.erase(list_t::s_iterator_to(request));
+      intrusive_ptr_release(&request);
+    }
+    void requeue() {}
+  };
+
 
   static constexpr OperationTypeCode type = OperationTypeCode::client_request;
 
