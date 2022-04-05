@@ -511,6 +511,24 @@ public:
     );
   }
 
+  template <typename OpT, typename T>
+  seastar::future<>
+  enter(T &t, typename T::BlockingEvent::template Trigger<OpT>&& f) {
+    return wait_barrier().then([this, &t, f=std::move(f)] () mutable {
+      auto fut = t.enter();
+      f.maybe_record_blocking(fut, t);
+      exit();
+      return std::move(fut).then(
+        [this, &t, f=std::move(f)](auto &&barrier_ref) mutable {
+        barrier = std::move(barrier_ref);
+	// TODO: move this to exit. It would require dynamic memory + TriggerI
+	// or, alternatively, static_ptr
+        f.record_unblocking(t);
+        return seastar::now();
+      });
+    });
+  }
+
   /**
    * Completes pending exit barrier without entering a new one.
    */
