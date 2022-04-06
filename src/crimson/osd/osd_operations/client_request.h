@@ -106,7 +106,7 @@ private:
 public:
   std::tuple<
     ConnectionPipeline::AwaitMap::BlockingEvent,
-    OSD_OSDMapGate::BlockingEvent
+    OSD_OSDMapGate::OSDMapBlocker::BlockingEvent
   > tracking_events;
 };
 
