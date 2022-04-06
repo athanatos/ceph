@@ -21,9 +21,15 @@ namespace crimson::osd {
 
 class ShardServices;
 
+enum class OSDMapGateType {
+  OSD,
+  PG,
+};
+
+template <OSDMapGateType OSDMapGateTypeV>
 class OSDMapGate {
-protected:
-  struct OSDMapBlocker : public BlockerT<OSDMapBlocker> {
+public:
+  struct OSDMapBlocker : BlockerT<OSDMapBlocker> {
     const char * type_name;
     epoch_t epoch;
 
@@ -40,6 +46,7 @@ protected:
     void dump_detail(Formatter *f) const final;
   };
 
+private:
   // order the promises in ascending order of the waited osdmap epoch,
   // so we can access all the waiters expecting a map whose epoch is less
   // than or equal to a given epoch
@@ -61,41 +68,13 @@ public:
   wait_for_map(epoch_t epoch);
   // TODO: define me!
   seastar::future<epoch_t>
-  wait_for_map(OSDMapBlocker::BlockingEvent::TriggerI&& trigger,
+  wait_for_map(typename OSDMapBlocker::BlockingEvent::TriggerI&& trigger,
 	       epoch_t epoch);
   void got_map(epoch_t epoch);
   seastar::future<> stop();
 };
 
-
-enum class OSDMapGateType {
-  OSD,
-  PG,
-  last_item
-};
-
-template <OSDMapGateType GateTypeV>
-struct ConcreteOSDMapGate : OSDMapGate  {
-  struct ConcreteOSDMapBlocker : OSDMapBlocker {
-    using OSDMapBlocker::OSDMapBlocker;
-  };
-
-  using OSDMapGate::OSDMapGate;
-  using OSDMapGate::got_map;
-  using OSDMapGate::stop;
-
-  using BlockingEvent = typename ConcreteOSDMapBlocker::BlockingEvent;
-
-  // just for type safety. We want to ensure the appropriate filler is used.
-  seastar::future<epoch_t>
-  wait_for_map(typename ConcreteOSDMapBlocker::BlockingEvent::TriggerI&& trigger,
-	       epoch_t epoch) {
-    return OSDMapGate::wait_for_map(std::move(trigger), epoch);
-
-  }
-};
-
-using OSD_OSDMapGate = ConcreteOSDMapGate<OSDMapGateType::OSD>;
-using PG_OSDMapGate = ConcreteOSDMapGate<OSDMapGateType::PG>;
+using OSD_OSDMapGate = OSDMapGate<OSDMapGateType::OSD>;
+using PG_OSDMapGate = OSDMapGate<OSDMapGateType::PG>;
 
 }
