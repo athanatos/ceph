@@ -167,17 +167,11 @@ struct Event {
     return static_cast<const T*>(this);
   }
 
-  template <class... Args>
-  void trigger(Args&&... args) {
-    that()->internal_backend.handle(*that(), std::forward<Args>(args)...);
-
-#if 0
-    // let's call `handle()` for concrete event type from each single
-    // of our backends. the order in the registry matters.
-    std::apply([&op, this] (auto... backend) {
-      (..., backend.handle(static_cast<T&>(*this), std::forward<Args>(args)...));
-    }, EventBackendRegistry<U>::get_backends());
-#endif
+  template <class BlockerT, class OpT>
+  void trigger(BlockerT&& blocker, OpT&& op) {
+    that()->internal_backend.handle(*that(),
+		                    std::forward<BlockerT>(blocker),
+				    std::forward<OpT>(op));
   }
 };
 
