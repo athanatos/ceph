@@ -2,6 +2,7 @@
 // vim: ts=8 sw=2 smarttab expandtab
 
 #include <seastar/core/future.hh>
+#include <seastar/core/sleep.hh>
 
 #include "messages/MOSDOp.h"
 #include "messages/MOSDOpReply.h"
@@ -155,6 +156,8 @@ seastar::future<> ClientRequest::start()
       });
     }).then([this] {
       track_event<CompletionEvent>();
+      using namespace std::chrono_literals;
+      return seastar::sleep(1s);
     });
 }
 
