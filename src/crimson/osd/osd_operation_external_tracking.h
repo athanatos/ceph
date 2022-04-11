@@ -18,13 +18,13 @@ struct LttngBackend
     OSD_OSDMapGate::OSDMapBlocker::BlockingEvent::Backend
 {
   void handle(ClientRequest::ConnectionPipeline::AwaitMap::BlockingEvent& ev,
-              const ClientRequest::ConnectionPipeline::AwaitMap& blocker,
-              const Operation& op) override {
+              const Operation& op,
+              const ClientRequest::ConnectionPipeline::AwaitMap& blocker) override {
   }
 
   void handle(OSD_OSDMapGate::OSDMapBlocker::BlockingEvent&,
-              const OSD_OSDMapGate::OSDMapBlocker&,
-              const Operation&) override {
+              const Operation&,
+              const OSD_OSDMapGate::OSDMapBlocker&) override {
   }
 };
 
