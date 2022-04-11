@@ -49,6 +49,14 @@ blocking_future<epoch_t> OSDMapGate<OSDMapGateTypeV>::wait_for_map(epoch_t epoch
 }
 
 template <OSDMapGateType OSDMapGateTypeV>
+seastar::future<epoch_t> OSDMapGate<OSDMapGateTypeV>::wait_for_map(
+  typename OSDMapBlocker::BlockingEvent::TriggerI&& trigger,
+  epoch_t epoch)
+{
+  return seastar::make_ready_future<epoch_t>(0);
+}
+
+template <OSDMapGateType OSDMapGateTypeV>
 void OSDMapGate<OSDMapGateTypeV>::got_map(epoch_t epoch) {
   current = epoch;
   auto first = waiting_peering.begin();
