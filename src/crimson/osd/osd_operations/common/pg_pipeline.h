@@ -21,7 +21,7 @@ protected:
   struct GetOBC : OrderedExclusivePhaseT<GetOBC> {
     static constexpr auto type_name = "CommonPGPipeline::get_obc";
   } get_obc;
-  struct Process : OrderedExclusivePhase {
+  struct Process : OrderedExclusivePhaseT<Process> {
     static constexpr auto type_name = "CommonPGPipeline::process";
   } process;
 };
