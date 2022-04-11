@@ -152,7 +152,7 @@ protected:
   void track_event(Args&&... args) {
     // the idea is to have a visitor-like interface that allows to double
     // dispatch (backend, blocker type)
-    get_event<EventT>.trigger(*that(), std::forward<Args>(args)...);
+    get_event<EventT>().trigger(*that(), std::forward<Args>(args)...);
   }
 
   template <class BlockingEventT, class F>
