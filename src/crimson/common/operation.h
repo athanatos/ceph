@@ -182,18 +182,19 @@ struct Event {
     return static_cast<const T*>(this);
   }
 
-  template <class BlockerT, class OpT>
-  void trigger(BlockerT&& blocker, OpT&& op) {
+  template <class OpT, class... Args>
+  void trigger(OpT&& op, Args&&... args) {
     that()->internal_backend.handle(*that(),
-		                    std::forward<BlockerT>(blocker),
-				    std::forward<OpT>(op));
+                                    std::forward<OpT>(op),
+                                    std::forward<Args>(args)...);
 
     // let's call `handle()` for concrete event type from each single
     // of our backends. the order in the registry matters.
-    std::apply([&op, &blocker, this] (auto... backend) {
+    std::apply([&, //args=std::forward_as_tuple(std::forward<Args>(args)...),
+		this] (auto... backend) {
       (..., backend.handle(*that(),
-			   std::forward<BlockerT>(blocker),
-			   std::forward<OpT>(op)));
+                           std::forward<OpT>(op),
+                           std::forward<Args>(args)...));
     }, EventBackendRegistry<std::decay_t<OpT>>::get_backends());
   }
 };
@@ -227,11 +228,13 @@ public:
     struct Backend {
       // `T` is based solely to let implementations to discriminate
       // basing on the type-of-event.
-      virtual void handle(typename T::BlockingEvent&, const T&, const Operation&) = 0;
+      virtual void handle(typename T::BlockingEvent&, const Operation&, const T&) = 0;
     };
 
     struct InternalBackend : Backend {
-      void handle(typename T::BlockingEvent&, const T& blocker, const Operation&) override {
+      void handle(typename T::BlockingEvent&,
+                  const Operation&,
+                  const T& blocker) override {
         this->timestamp = ceph_clock_now();
         this->blocker = &blocker;
       }
@@ -276,7 +279,7 @@ public:
       }
     protected:
       void record_event(const T& blocker) override {
-        event.trigger(blocker, op);
+        event.trigger(op, blocker);
       }
 
       BlockingEvent& event;
