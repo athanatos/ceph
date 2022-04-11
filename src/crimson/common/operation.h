@@ -678,16 +678,13 @@ public:
       new ExitBarrier{this, mutex.lock()});
   }
 
-  OrderedConcurrentPhaseT(const char *type_name) : type_name(type_name) {}
-
-  const char * type_name;
-
 private:
   seastar::shared_mutex mutex;
 };
 
 struct OrderedConcurrentPhase : OrderedConcurrentPhaseT<OrderedConcurrentPhase> {
-  using OrderedConcurrentPhaseT::OrderedConcurrentPhaseT;
+  OrderedConcurrentPhase(const char *type_name) : type_name(type_name) {}
+  const char * type_name;
 };
 
 /**
