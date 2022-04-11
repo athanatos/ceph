@@ -169,6 +169,9 @@ class PhasedOperationT : public TrackableOperationT<T> {
 protected:
   using TrackableOperationT<T>::TrackableOperationT;
 
+  struct StartEvent : TimeEvent<StartEvent> {};
+  struct CompletionEvent : TimeEvent<CompletionEvent> {};
+
   template <class StageT>
   auto enter_stage(StageT& stage) {
     return this->template with_blocking_event<typename StageT::BlockingEvent>(
