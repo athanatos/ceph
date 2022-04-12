@@ -108,6 +108,15 @@ public:
     StartEvent,
     ConnectionPipeline::AwaitMap::BlockingEvent,
     OSD_OSDMapGate::OSDMapBlocker::BlockingEvent,
+    ConnectionPipeline::GetPG::BlockingEvent,
+    PGPipeline::AwaitMap::BlockingEvent,
+    PG_OSDMapGate::OSDMapBlocker::BlockingEvent,
+    PGPipeline::WaitForActive::BlockingEvent,
+    PGPipeline::RecoverMissing::BlockingEvent,
+    PGPipeline::GetOBC::BlockingEvent,
+    PGPipeline::Process::BlockingEvent,
+    PGPipeline::WaitRepop::BlockingEvent,
+    PGPipeline::SendReply::BlockingEvent,
     CompletionEvent
   > tracking_events;
 
