@@ -225,6 +225,8 @@ template <typename T>
 class BlockerT : public Blocker {
 public:
   struct BlockingEvent : Event<BlockingEvent> {
+    using Blocker = std::decay_t<T>;
+
     struct Backend {
       // `T` is based solely to let implementations to discriminate
       // basing on the type-of-event.
