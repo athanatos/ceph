@@ -17,6 +17,16 @@ void PGActivationBlocker::on_active()
   p = {};
 }
 
+seastar::future<>
+PGActivationBlocker::wait(PGActivationBlocker::BlockingEvent::TriggerI&& trigger)
+{
+  if (pg->get_peering_state().is_active()) {
+    return seastar::now();
+  } else {
+    return p.get_shared_future();
+  }
+}
+
 blocking_future<> PGActivationBlocker::wait()
 {
   if (pg->get_peering_state().is_active()) {
