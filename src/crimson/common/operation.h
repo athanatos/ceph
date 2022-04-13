@@ -250,13 +250,14 @@ public:
     // a blocker, type erasuring is used.
     struct TriggerI {
       template <class FutureT>
-      void maybe_record_blocking(const FutureT& fut, const T& blocker) {
+      decltype(auto) maybe_record_blocking(FutureT&& fut, const T& blocker) {
         if (!fut.available()) {
           // a full blown call via vtable. that's the cost for templatization
 	  // avoidance. anyway, most of the things actually have the type
 	  // knowledge.
           record_event(blocker);
 	}
+	return std::forward<FutureT>(fut);
       }
     protected:
       virtual void record_event(const T& blocker) = 0;
@@ -267,12 +268,13 @@ public:
       Trigger(BlockingEvent& event, const OpT& op) : event(event), op(op) {}
 
       template <class FutureT>
-      void maybe_record_blocking(const FutureT& fut, const T& blocker) {
+      decltype(auto) maybe_record_blocking(FutureT&& fut, const T& blocker) {
         if (!fut.available()) {
           // no need for the dynamic dispatch! if we're lucky, a compiler
 	  // should collapse all these abstractions into a bunch of movs.
           this->Trigger::record_event(blocker);
         }
+	return std::forward<FutureT>(fut);
       }
 
       void record_unblocking(const T& blocker) {
@@ -538,8 +540,7 @@ public:
   seastar::future<>
   enter(T &t, typename T::BlockingEvent::template Trigger<OpT>&& f) {
     return wait_barrier().then([this, &t, f=std::move(f)] () mutable {
-      auto fut = t.enter();
-      f.maybe_record_blocking(fut, t);
+      auto fut = f.maybe_record_blocking(t.enter(), t);
       exit();
       return std::move(fut).then(
         [this, &t, f=std::move(f)](auto &&barrier_ref) mutable {
