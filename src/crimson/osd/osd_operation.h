@@ -155,11 +155,18 @@ protected:
     get_event<EventT>().trigger(*that(), std::forward<Args>(args)...);
   }
 
-  template <class BlockingEventT, class F>
+  template <class BlockingEventT, class InterruptorT=void, class F>
   auto with_blocking_event(F&& f) {
-    return std::forward<F>(f)(typename BlockingEventT::Trigger<T>{
-      get_event<BlockingEventT>(), *that()
-    });
+    if constexpr (std::is_same_v<InterruptorT, void>) {
+      return std::forward<F>(f)(typename BlockingEventT::Trigger<T>{
+        get_event<BlockingEventT>(), *that()
+      });
+    } else {
+      return InterruptorT::make_interruptible(
+        std::forward<F>(f)(typename BlockingEventT::Trigger<T>{
+          get_event<BlockingEventT>(), *that()
+        }));
+    }
   }
 };
 
@@ -172,11 +179,12 @@ protected:
   struct StartEvent : TimeEvent<StartEvent> {};
   struct CompletionEvent : TimeEvent<CompletionEvent> {};
 
-  template <class StageT>
+  template <class InterruptorT=void, class StageT>
   auto enter_stage(StageT& stage) {
-    return this->template with_blocking_event<typename StageT::BlockingEvent>(
+    return this->template with_blocking_event<typename StageT::BlockingEvent,
+	                                      InterruptorT>(
       [&stage, this] (auto&& trigger) {
-      return handle.enter<T>(stage, std::move(trigger));
+        return handle.enter<T>(stage, std::move(trigger));
     });
   }
 
