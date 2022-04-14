@@ -20,6 +20,7 @@ enum class OperationTypeCode {
   background_recovery,
   background_recovery_sub,
   internal_client_request,
+  historic_client_request,
   last_op
 };
 
@@ -33,6 +34,7 @@ static constexpr const char* const OP_NAMES[] = {
   "background_recovery",
   "background_recovery_sub",
   "internal_client_request",
+  "historic_client_request",
 };
 
 // prevent the addition of OperationTypeCode-s with no matching OP_NAMES entry:
@@ -198,6 +200,8 @@ struct OSDOperationRegistry : OperationRegistryT<
   static_cast<size_t>(OperationTypeCode::last_op)
 > {
   size_t dump_client_requests(ceph::Formatter* f) const;
+  size_t dump_historic_client_requests(ceph::Formatter* f) const;
+
 };
 /**
  * Throttles set of currently running operations

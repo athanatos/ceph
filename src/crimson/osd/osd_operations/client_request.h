@@ -40,6 +40,7 @@ public:
 
     friend class ClientRequest;
     friend class LttngBackend;
+    friend class HistoricBackend;
   };
 
   class PGPipeline : public CommonPGPipeline {
@@ -54,6 +55,7 @@ public:
     } send_reply;
     friend class ClientRequest;
     friend class LttngBackend;
+    friend class HistoricBackend;
   };
 
   static constexpr OperationTypeCode type = OperationTypeCode::client_request;
