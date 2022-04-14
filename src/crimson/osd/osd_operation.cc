@@ -25,6 +25,27 @@ size_t OSDOperationRegistry::dump_client_requests(ceph::Formatter* f) const
   return std::size(client_registry);
 }
 
+size_t OSDOperationRegistry::dump_historic_client_requests(ceph::Formatter* f) const
+{
+  const auto& historic_client_registry =
+    get_registry<static_cast<size_t>(OperationTypeCode::historic_client_request)>(); //ClientRequest::type)>();
+  f->open_object_section("op_history");
+  f->dump_int("size", historic_client_registry.size());
+  // TODO: f->dump_int("duration", history_duration.load());
+  // the intrusive list is configured to not store the size
+  size_t ops_count = 0;
+  {
+    f->open_array_section("ops");
+    for (const auto& op : historic_client_registry) {
+      op.dump(f);
+      ++ops_count;
+    }
+    f->close_section();
+  }
+  f->close_section();
+  return ops_count;
+}
+
 OperationThrottler::OperationThrottler(ConfigProxy &conf)
   : scheduler(crimson::osd::scheduler::make_scheduler(conf))
 {
