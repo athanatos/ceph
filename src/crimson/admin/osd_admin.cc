@@ -16,6 +16,7 @@
 #include "crimson/common/log.h"
 #include "crimson/osd/exceptions.h"
 #include "crimson/osd/osd.h"
+#include "crimson/osd/osd_operation.h"
 
 namespace {
 seastar::logger& logger()
@@ -423,5 +424,44 @@ private:
 };
 template std::unique_ptr<AdminSocketHook> make_asok_hook<InjectMDataErrorHook>(
   crimson::osd::ShardServices&);
+
+/**
+ * Dump live osd op information
+ */
+class DumpLiveOpsHook : public AdminSocketHook {
+public:
+  osd::OSDOperationRegistry &registry;
+  DumpLiveOpsHook(osd::OSDOperationRegistry &registry) :
+    AdminSocketHook(
+      "dump_live_ops",
+      "",
+      "dump status of currently live ops"),
+    registry(registry)
+  {}
+  seastar::future<tell_result_t>
+  call(const cmdmap_t& cmdmap,
+       std::string_view format,
+       ceph::bufferlist&& input) const final {
+    std::unique_ptr<Formatter> f{
+      Formatter::create(format, "json-pretty", "json-pretty")};
+    f->open_array_section("op_types");
+    auto &lists = registry.get_registries();
+    for (unsigned i = 0; i < lists.size(); ++i) {
+      f->open_object_section("registry");
+      f->dump_string("type", osd::OP_NAMES[i]);
+      f->open_array_section("ops");
+      for (const auto &op: lists[i]) {
+	op.dump(&*f);
+      }
+      f->close_section();
+      f->close_section();
+    }
+    f->close_section();
+    return seastar::make_ready_future<tell_result_t>(std::move(f));
+  }
+};
+
+template std::unique_ptr<AdminSocketHook>
+make_asok_hook<DumpLiveOpsHook>(osd::OSDOperationRegistry&);
 
 } // namespace crimson::admin

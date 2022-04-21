@@ -387,6 +387,10 @@ public:
       REGISTRY_INDEX < std::tuple_size<decltype(registries)>::value);
     return registries[REGISTRY_INDEX];
   }
+
+  const auto &get_registries() const {
+    return registries;
+  }
 };
 
 class PipelineExitBarrierI {
