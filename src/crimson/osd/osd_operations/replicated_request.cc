@@ -77,7 +77,7 @@ seastar::future<> RepRequest::start()
       });
   }).then([this, ref=std::move(ref)](Ref<PG> pg) {
     return interruptor::with_interruption([this, ref, pg] {
-	return pg->handle_rep_op(std::move(req));
+	return pg->handle_rep_op(req);
       }, [](std::exception_ptr) { return seastar::now(); }, pg);
   });
 }
