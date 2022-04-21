@@ -21,6 +21,7 @@
 #include "MOSDFastDispatchOp.h"
 #include "include/ceph_features.h"
 #include "common/hobject.h"
+#include "common/Formatter.h"
 
 /*
  * OSD op
@@ -68,7 +69,7 @@ private:
 public:
   friend MOSDOpReply;
 
-  ceph_tid_t get_client_tid() { return header.tid; }
+  ceph_tid_t get_client_tid() const { return header.tid; }
   void set_snapid(const snapid_t& s) {
     hobj.snap = s;
   }
@@ -151,6 +152,19 @@ public:
   const std::vector<snapid_t> &get_snaps() const {
     ceph_assert(!final_decode_needed);
     return snaps;
+  }
+
+  void dump(Formatter *f) const final {
+    f->dump_stream("client_tid") << get_client_tid();
+    f->dump_bool("final_decode_needed", final_decode_needed);
+    if (!final_decode_needed) {
+      f->dump_stream("request_id") << get_reqid();
+      f->dump_stream("raw_pg") << get_raw_pg();
+      f->dump_stream("pg") << get_pg();
+      f->dump_stream("spg") << get_spg();
+      f->dump_stream("map_epoch") << get_map_epoch();
+    }
+    f->dump_stream("summary") << *this;
   }
 
   /**

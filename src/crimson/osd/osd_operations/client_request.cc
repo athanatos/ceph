@@ -42,6 +42,10 @@ void ClientRequest::print(std::ostream &lhs) const
 
 void ClientRequest::dump_detail(Formatter *f) const
 {
+  f->open_object_section("client_operation_message");
+  m->dump(f);
+  f->close_section();
+  f->dump_unsigned("instance_id", instance_id);
 }
 
 ClientRequest::ConnectionPipeline &ClientRequest::cp()
