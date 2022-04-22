@@ -18,6 +18,22 @@ namespace {
   }
 }
 
+namespace crimson {
+  template <>
+  struct EventBackendRegistry<osd::UrgentRecovery> {
+    static std::tuple<> get_backends() {
+      return {};
+    }
+  };
+
+  template <>
+  struct EventBackendRegistry<osd::PglogBasedRecovery> {
+    static std::tuple<> get_backends() {
+      return {};
+    }
+  };
+}
+
 namespace crimson::osd {
 
 template <class T>
@@ -97,9 +113,9 @@ UrgentRecovery::do_recovery()
 {
   logger().debug("{}: {}", __func__, *this);
   if (!pg->has_reset_since(epoch_started)) {
-    return with_blocking_future_interruptible<interruptor::condition>(
-      pg->get_recovery_handler()->recover_missing(soid, need)
-    ).then_interruptible([] {
+    return with_blocking_event<RecoveryBackend::RecoveryBlockingEvent,
+			       interruptor>([this] (auto&& trigger) {
+      pg->get_recovery_handler()->recover_missing(trigger, soid, need);
       return seastar::make_ready_future<bool>(false);
     });
   }
@@ -143,9 +159,13 @@ PglogBasedRecovery::do_recovery()
   if (pg->has_reset_since(epoch_started)) {
     return seastar::make_ready_future<bool>(false);
   }
-  return with_blocking_future_interruptible<interruptor::condition>(
+  return with_blocking_event<RecoveryBackend::RecoveryBlockingEvent,
+      		       interruptor>([this] (auto&& trigger) {
     pg->get_recovery_handler()->start_recovery_ops(
-      crimson::common::local_conf()->osd_recovery_max_single_start));
+      trigger,
+      crimson::common::local_conf()->osd_recovery_max_single_start);
+    return seastar::make_ready_future<bool>(false);
+  });
 }
 
 BackfillRecovery::BackfillRecoveryPipeline &BackfillRecovery::bp(PG &pg)

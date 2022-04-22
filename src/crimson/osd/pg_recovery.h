@@ -27,7 +27,9 @@ public:
   virtual ~PGRecovery() {}
   void start_pglogbased_recovery();
 
-  blocking_interruptible_future<bool> start_recovery_ops(size_t max_to_start);
+  blocking_interruptible_future<bool> start_recovery_ops(
+    RecoveryBackend::RecoveryBlockingEvent::TriggerI&,
+    size_t max_to_start);
   void on_backfill_reserved();
   void dispatch_backfill_event(
     boost::intrusive_ptr<const boost::statechart::event_base> evt);
@@ -36,6 +38,7 @@ public:
 private:
   PGRecoveryListener* pg;
   size_t start_primary_recovery_ops(
+    RecoveryBackend::RecoveryBlockingEvent::TriggerI&,
     size_t max_to_start,
     std::vector<blocking_interruptible_future<>> *out);
   size_t start_replica_recovery_ops(
@@ -46,6 +49,7 @@ private:
     return pg->get_replica_recovery_order();
   }
   blocking_interruptible_future<> recover_missing(
+    RecoveryBackend::RecoveryBlockingEvent::TriggerI&,
     const hobject_t &soid, eversion_t need);
   size_t prep_object_replica_deletes(
     const hobject_t& soid,

@@ -35,7 +35,9 @@ void PGRecovery::start_pglogbased_recovery()
 }
 
 PGRecovery::blocking_interruptible_future<bool>
-PGRecovery::start_recovery_ops(size_t max_to_start)
+PGRecovery::start_recovery_ops(
+  RecoveryBackend::RecoveryBlockingEvent::TriggerI& trigger,
+  size_t max_to_start)
 {
   assert(pg->is_primary());
   assert(pg->is_peered());
@@ -51,7 +53,7 @@ PGRecovery::start_recovery_ops(size_t max_to_start)
 
   std::vector<blocking_interruptible_future<>> started;
   started.reserve(max_to_start);
-  max_to_start -= start_primary_recovery_ops(max_to_start, &started);
+  max_to_start -= start_primary_recovery_ops(trigger, max_to_start, &started);
   if (max_to_start > 0) {
     max_to_start -= start_replica_recovery_ops(max_to_start, &started);
   }
@@ -93,6 +95,7 @@ PGRecovery::start_recovery_ops(size_t max_to_start)
 }
 
 size_t PGRecovery::start_primary_recovery_ops(
+  RecoveryBackend::RecoveryBlockingEvent::TriggerI& trigger,
   size_t max_to_start,
   std::vector<PGRecovery::blocking_interruptible_future<>> *out)
 {
@@ -155,7 +158,7 @@ size_t PGRecovery::start_primary_recovery_ops(
     } else if (pg->get_recovery_backend()->is_recovering(head)) {
       ++skipped;
     } else {
-      out->push_back(recover_missing(soid, item.need));
+      out->push_back(recover_missing(trigger, soid, item.need));
       ++started;
     }
 
@@ -258,6 +261,7 @@ size_t PGRecovery::start_replica_recovery_ops(
 
 PGRecovery::blocking_interruptible_future<>
 PGRecovery::recover_missing(
+  RecoveryBackend::RecoveryBlockingEvent::TriggerI&,
   const hobject_t &soid, eversion_t need)
 {
   if (pg->get_peering_state().get_missing_loc().is_deleted(soid)) {
