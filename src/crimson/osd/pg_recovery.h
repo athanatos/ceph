@@ -20,6 +20,8 @@ class PGBackend;
 class PGRecovery : public crimson::osd::BackfillState::BackfillListener {
 public:
   template <typename T = void>
+  using interruptible_future = RecoveryBackend::interruptible_future<T>;
+  template <typename T = void>
   using blocking_interruptible_future =
     ::crimson::blocking_interruptible_future<
       ::crimson::osd::IOInterruptCondition, T>;
@@ -42,23 +44,24 @@ private:
     size_t max_to_start,
     std::vector<blocking_interruptible_future<>> *out);
   size_t start_replica_recovery_ops(
+    RecoveryBackend::RecoveryBlockingEvent::TriggerI&,
     size_t max_to_start,
     std::vector<blocking_interruptible_future<>> *out);
 
   std::vector<pg_shard_t> get_replica_recovery_order() const {
     return pg->get_replica_recovery_order();
   }
-  blocking_interruptible_future<> recover_missing(
+  RecoveryBackend::interruptible_future<> recover_missing(
     RecoveryBackend::RecoveryBlockingEvent::TriggerI&,
     const hobject_t &soid, eversion_t need);
-  size_t prep_object_replica_deletes(
+  RecoveryBackend::interruptible_future<> prep_object_replica_deletes(
+    RecoveryBackend::RecoveryBlockingEvent::TriggerI& trigger,
     const hobject_t& soid,
-    eversion_t need,
-    std::vector<blocking_interruptible_future<>> *in_progress);
-  size_t prep_object_replica_pushes(
+    eversion_t need);
+  RecoveryBackend::interruptible_future<> prep_object_replica_pushes(
+    RecoveryBackend::RecoveryBlockingEvent::TriggerI& trigger,
     const hobject_t& soid,
-    eversion_t need,
-    std::vector<blocking_interruptible_future<>> *in_progress);
+    eversion_t need);
 
   void on_local_recover(
     const hobject_t& soid,

@@ -115,7 +115,8 @@ UrgentRecovery::do_recovery()
   if (!pg->has_reset_since(epoch_started)) {
     return with_blocking_event<RecoveryBackend::RecoveryBlockingEvent,
 			       interruptor>([this] (auto&& trigger) {
-      pg->get_recovery_handler()->recover_missing(trigger, soid, need);
+      return pg->get_recovery_handler()->recover_missing(trigger, soid, need);
+    }).then_interruptible([] {
       return seastar::make_ready_future<bool>(false);
     });
   }
@@ -160,7 +161,7 @@ PglogBasedRecovery::do_recovery()
     return seastar::make_ready_future<bool>(false);
   }
   return with_blocking_event<RecoveryBackend::RecoveryBlockingEvent,
-      		       interruptor>([this] (auto&& trigger) {
+			     interruptor>([this] (auto&& trigger) {
     pg->get_recovery_handler()->start_recovery_ops(
       trigger,
       crimson::common::local_conf()->osd_recovery_max_single_start);
