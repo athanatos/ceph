@@ -162,15 +162,14 @@ protected:
 
   template <class BlockingEventT, class InterruptorT=void, class F>
   auto with_blocking_event(F&& f) {
+    auto ret = std::forward<F>(f)(typename BlockingEventT::Trigger<T>{
+      get_event<BlockingEventT>(), *that()
+    });
     if constexpr (std::is_same_v<InterruptorT, void>) {
-      return std::forward<F>(f)(typename BlockingEventT::Trigger<T>{
-        get_event<BlockingEventT>(), *that()
-      });
+      return ret;
     } else {
-      return InterruptorT::make_interruptible(
-        std::forward<F>(f)(typename BlockingEventT::Trigger<T>{
-          get_event<BlockingEventT>(), *that()
-        }));
+      using ret_t = decltype(ret);
+      return typename InterruptorT::template futurize_t<ret_t>{std::move(ret)};
     }
   }
 };
