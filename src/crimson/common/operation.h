@@ -292,6 +292,11 @@ public:
   };
 
   virtual ~BlockerT() = default;
+  template <class TriggerT, class... Args>
+  decltype(auto) track_blocking(TriggerT&& trigger, Args&&... args) {
+    return std::forward<TriggerT>(trigger).maybe_record_blocking(
+      std::forward<Args>(args)..., static_cast<const T&>(*this));
+  }
 
 private:
   const char *get_type_name() const final {
