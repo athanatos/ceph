@@ -22,6 +22,7 @@ public:
   RecoverySubRequest(OSD &osd, crimson::net::ConnectionRef conn, Ref<MOSDFastDispatchOp>&& m)
     : osd(osd), conn(conn), m(m) {}
 
+  void _set_id(operation_id_t) final { /* no handle */ }
   void print(std::ostream& out) const final
   {
     out << *m;

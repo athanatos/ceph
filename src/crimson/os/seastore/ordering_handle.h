@@ -21,6 +21,7 @@ class PlaceholderOperation : public Operation {
 public:
   using IRef = boost::intrusive_ptr<PlaceholderOperation>;
 
+  void _set_id(operation_id_t id) final { /* TODO once registry is set up */ }
   unsigned get_type() const final {
     return 0;
   }
@@ -44,6 +45,8 @@ struct OrderingHandle {
     : op(std::move(other.op)), phase_handle(std::move(other.phase_handle)),
       collection_ordering_lock(other.collection_ordering_lock) {
     other.collection_ordering_lock = nullptr;
+    phase_handle.set_id(
+      0 /* TODO: use a real id once we can pass osd level operations through */);
   }
 
   seastar::future<> take_collection_lock(seastar::shared_mutex &mutex) {
