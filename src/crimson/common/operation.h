@@ -392,11 +392,11 @@ public:
   PipelineHandle &operator=(PipelineHandle&&) = default;
 
   /**
-     * Returns a future which unblocks when the handle has entered the passed
-     * OrderedPipelinePhase.  If already in a phase, enter will also release
-     * that phase after placing itself in the queue for the next one to preserve
-     * ordering.
-     */
+   * Returns a future which unblocks when the handle has entered the passed
+   * OrderedPipelinePhase.  If already in a phase, enter will also release
+   * that phase after placing itself in the queue for the next one to preserve
+   * ordering.
+   */
   template <typename OpT, typename T>
   seastar::future<>
   enter(T &stage, typename T::BlockingEvent::template Trigger<OpT>&& t) {
