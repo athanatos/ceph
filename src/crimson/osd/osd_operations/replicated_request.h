@@ -41,6 +41,7 @@ public:
   static constexpr OperationTypeCode type = OperationTypeCode::replicated_request;
   RepRequest(OSD&, crimson::net::ConnectionRef&&, Ref<MOSDRepOp>&&);
 
+  void _set_id(operation_id_t id) final { handle.set_id(id); }
   void print(std::ostream &) const final;
   void dump_detail(ceph::Formatter* f) const final;
   seastar::future<> start();

@@ -32,6 +32,7 @@ public:
   CompoundPeeringRequest(
     OSD &osd, crimson::net::ConnectionRef conn, Ref<Message> m);
 
+  void _set_id(operation_id_t) final { /* RemotePeeringEvent has the Handle */ }
   void print(std::ostream &) const final;
   void dump_detail(Formatter *f) const final;
   seastar::future<> start();

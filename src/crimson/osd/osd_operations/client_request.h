@@ -52,6 +52,7 @@ public:
   ClientRequest(OSD &osd, crimson::net::ConnectionRef, Ref<MOSDOp> &&m);
   ~ClientRequest();
 
+  void _set_id(operation_id_t id) final { handle.set_id(id); }
   void print(std::ostream &) const final;
   void dump_detail(Formatter *f) const final;
 

@@ -64,6 +64,8 @@ public:
   : BackgroundRecovery{pg, ss, epoch_started,
                        crimson::osd::scheduler::scheduler_class_t::immediate},
     soid{soid}, need(need) {}
+
+  void _set_id(operation_id_t id) final { /* no handle */ }
   void print(std::ostream&) const final;
 
 private:
@@ -81,6 +83,7 @@ public:
     epoch_t epoch_started,
     float delay = 0);
 
+  void _set_id(operation_id_t id) final { /* no handle */ }
 private:
   interruptible_future<bool> do_recovery() override;
 };
@@ -104,6 +107,7 @@ public:
 
   static BackfillRecoveryPipeline &bp(PG &pg);
 
+  void _set_id(operation_id_t id) final { handle.set_id(id); }
 private:
   boost::intrusive_ptr<const boost::statechart::event_base> evt;
   PipelineHandle handle;
