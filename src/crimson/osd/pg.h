@@ -736,7 +736,7 @@ private:
     static constexpr const char *type_name = "WaitForActiveBlocker";
 
     WaitForActiveBlocker(PG *pg) : pg(pg) {}
-    void on_active();
+    void unblock();
     blocking_future<> wait();
     seastar::future<> stop();
   } wait_for_active_blocker;
