@@ -26,7 +26,7 @@ public:
   static constexpr const char *type_name = "PGActivationBlocker";
 
   PGActivationBlocker(PG *pg) : pg(pg) {}
-  void on_active();
+  void unblock();
   blocking_future<> wait();
   seastar::future<> wait(PGActivationBlocker::BlockingEvent::TriggerI&&);
   seastar::future<> stop();
