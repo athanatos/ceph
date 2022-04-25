@@ -502,6 +502,15 @@ public:
  * the op ordering is preserved.
  */
 class OrderedExclusivePhase : public PipelineStageI {
+  operation_id_t held_by = INVALID_OPERATION_ID;
+  void set_held_by(operation_id_t id) {
+    assert(held_by == INVALID_OPERATION_ID);
+    held_by = id;
+  }
+  void clear_held_by() {
+    assert(held_by != INVALID_OPERATION_ID);
+    held_by = INVALID_OPERATION_ID;
+  }
   void dump_detail(ceph::Formatter *f) const final;
   const char *get_type_name() const final {
     return name;
@@ -509,8 +518,10 @@ class OrderedExclusivePhase : public PipelineStageI {
 
   class ExitBarrier final : public PipelineExitBarrierI {
     OrderedExclusivePhase *phase;
+    operation_id_t id;
   public:
-    ExitBarrier(OrderedExclusivePhase *phase) : phase(phase) {}
+    ExitBarrier(OrderedExclusivePhase *phase, operation_id_t id)
+      : phase(phase), id(id) {}
 
     seastar::future<> wait() final {
       return seastar::now();
@@ -518,6 +529,7 @@ class OrderedExclusivePhase : public PipelineStageI {
 
     void exit() final {
       if (phase) {
+	assert(phase->held_by == id);
 	phase->exit();
 	phase = nullptr;
       }
@@ -533,13 +545,15 @@ class OrderedExclusivePhase : public PipelineStageI {
   };
 
   void exit() {
+    clear_held_by();
     mutex.unlock();
   }
 
 public:
-  seastar::future<PipelineExitBarrierI::Ref> enter(operation_id_t) final {
-    return mutex.lock().then([this] {
-      return PipelineExitBarrierI::Ref(new ExitBarrier{this});
+  seastar::future<PipelineExitBarrierI::Ref> enter(operation_id_t id) final {
+    return mutex.lock().then([this, id] {
+      set_held_by(id);
+      return PipelineExitBarrierI::Ref(new ExitBarrier{this, id});
     });
   }
 
