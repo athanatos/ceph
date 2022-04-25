@@ -7,6 +7,7 @@
 #include <array>
 #include <set>
 #include <vector>
+#include <limits>
 #include <boost/intrusive/list.hpp>
 #include <boost/intrusive_ptr.hpp>
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
@@ -393,6 +394,9 @@ join_blocking_interruptible_futures(T&& t) {
       }));
 }
 
+using operation_id_t = uint64_t;
+constexpr operation_id_t INVALID_OPERATION_ID =
+  std::numeric_limits<operation_id_t>::max();
 
 /**
  * Common base for all crimson-osd operations.  Mainly provides
@@ -402,7 +406,7 @@ join_blocking_interruptible_futures(T&& t) {
 class Operation : public boost::intrusive_ref_counter<
   Operation, boost::thread_unsafe_counter> {
  public:
-  uint64_t get_id() const {
+  operation_id_t get_id() const {
     return id;
   }
 
@@ -419,10 +423,19 @@ class Operation : public boost::intrusive_ref_counter<
 
   registry_hook_t registry_hook;
 
-  uint64_t id = 0;
-  void set_id(uint64_t in_id) {
+  operation_id_t id = 0;
+  void set_id(operation_id_t in_id) {
     id = in_id;
+    _set_id(in_id);
   }
+
+  /**
+   * _set_id
+   *
+   * Implementations should use to set any internal members, notably
+   * PipelineHandle::set_id.
+   */
+  virtual void _set_id(operation_id_t in_id) {}
 
   friend class OperationRegistryI;
   template <size_t>
@@ -529,16 +542,12 @@ public:
   virtual ~PipelineExitBarrierI() {}
 };
 
-class PipelineStageI : public Blocker {
-public:
-  virtual seastar::future<PipelineExitBarrierI::Ref> enter() = 0;
-};
-
-
 template <class T>
 class PipelineStageIT : public BlockerT<T> {
 public:
-  virtual seastar::future<PipelineExitBarrierI::Ref> enter() = 0;
+  virtual seastar::future<PipelineExitBarrierI::Ref> enter(
+    operation_id_t op_id
+  ) = 0;
 };
 
 class PipelineHandle {
@@ -548,6 +557,7 @@ class PipelineHandle {
     return barrier ? barrier->wait() : seastar::now();
   }
 
+  operation_id_t parent_operation_id = INVALID_OPERATION_ID;
 public:
   PipelineHandle() = default;
 
@@ -555,6 +565,8 @@ public:
   PipelineHandle(PipelineHandle&&) = default;
   PipelineHandle &operator=(const PipelineHandle&) = delete;
   PipelineHandle &operator=(PipelineHandle&&) = default;
+
+  void set_id(operation_id_t id) { parent_operation_id = id; }
 
   /**
    * Returns a future which unblocks when the handle has entered the passed
@@ -569,9 +581,10 @@ public:
      * until enter() resolves, but blocking_future will need some refactoring
      * to permit that.  TODO
      */
+    assert(parent_operation_id != INVALID_OPERATION_ID);
     return t.make_blocking_future(
       wait_barrier().then([this, &t] {
-	auto fut = t.enter();
+	auto fut = t.enter(parent_operation_id);
 	exit();
 	return std::move(fut).then([this](auto &&barrier_ref) {
 	  barrier = std::move(barrier_ref);
@@ -584,8 +597,9 @@ public:
   template <typename OpT, typename T>
   seastar::future<>
   enter(T &t, typename T::BlockingEvent::template Trigger<OpT>&& f) {
+    assert(parent_operation_id != INVALID_OPERATION_ID);
     return wait_barrier().then([this, &t, f=std::move(f)] () mutable {
-      auto fut = f.maybe_record_blocking(t.enter(), t);
+      auto fut = f.maybe_record_blocking(t.enter(parent_operation_id), t);
       exit();
       return std::move(fut).then(
         [this, &t, f=std::move(f)](auto &&barrier_ref) mutable {
@@ -658,7 +672,7 @@ class OrderedExclusivePhaseT : public PipelineStageIT<T> {
   }
 
 public:
-  seastar::future<PipelineExitBarrierI::Ref> enter() final {
+  seastar::future<PipelineExitBarrierI::Ref> enter(operation_id_t) final {
     return mutex.lock().then([this] {
       return PipelineExitBarrierI::Ref(new ExitBarrier{this});
     });
@@ -722,7 +736,7 @@ class OrderedConcurrentPhaseT : public PipelineStageIT<T> {
   };
 
 public:
-  seastar::future<PipelineExitBarrierI::Ref> enter() final {
+  seastar::future<PipelineExitBarrierI::Ref> enter(operation_id_t) final {
     return seastar::make_ready_future<PipelineExitBarrierI::Ref>(
       new ExitBarrier{this, mutex.lock()});
   }
@@ -761,7 +775,7 @@ class UnorderedStageT : public PipelineStageIT<T> {
   };
 
 public:
-  seastar::future<PipelineExitBarrierI::Ref> enter() final {
+  seastar::future<PipelineExitBarrierI::Ref> enter(operation_id_t) final {
     return seastar::make_ready_future<PipelineExitBarrierI::Ref>(
       new ExitBarrier);
   }

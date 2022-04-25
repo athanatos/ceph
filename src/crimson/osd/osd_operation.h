@@ -196,6 +196,10 @@ protected:
 
   PipelineHandle handle;
 
+  void _set_id(operation_id_t id) final {
+    handle.set_id(id);
+  }
+
   template <class OpT>
   friend class crimson::os::seastore::OperationProxyT;
 };
