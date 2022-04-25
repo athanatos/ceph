@@ -64,6 +64,7 @@ void AggregateBlocker::dump_detail(ceph::Formatter *f) const
 
 void OrderedExclusivePhase::dump_detail(ceph::Formatter* f) const
 {
+  f->dump_unsigned("held_by", held_by);
 }
 
 void OrderedConcurrentPhase::dump_detail(ceph::Formatter* f) const
