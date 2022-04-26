@@ -527,16 +527,13 @@ public:
   virtual ~PipelineExitBarrierI() {}
 };
 
-class PipelineStageI : public Blocker {
-public:
-  virtual seastar::future<PipelineExitBarrierI::Ref> enter() = 0;
-};
-
-
 template <class T>
 class PipelineStageIT : public BlockerT<T> {
 public:
-  virtual seastar::future<PipelineExitBarrierI::Ref> enter() = 0;
+  template <class... Args>
+  decltype(auto) enter(Args&&... args) {
+    return static_cast<T*>(this)->enter(std::forward<Args>(args)...);
+  }
 };
 
 class PipelineHandle {
@@ -653,7 +650,7 @@ class OrderedExclusivePhaseT : public PipelineStageIT<T> {
   }
 
 public:
-  seastar::future<PipelineExitBarrierI::Ref> enter() final {
+  seastar::future<PipelineExitBarrierI::Ref> enter() {
     return mutex.lock().then([this] {
       return PipelineExitBarrierI::Ref(new ExitBarrier{this});
     });
@@ -717,7 +714,7 @@ class OrderedConcurrentPhaseT : public PipelineStageIT<T> {
   };
 
 public:
-  seastar::future<PipelineExitBarrierI::Ref> enter() final {
+  seastar::future<PipelineExitBarrierI::Ref> enter() {
     return seastar::make_ready_future<PipelineExitBarrierI::Ref>(
       new ExitBarrier{this, mutex.lock()});
   }
@@ -756,7 +753,7 @@ class UnorderedStageT : public PipelineStageIT<T> {
   };
 
 public:
-  seastar::future<PipelineExitBarrierI::Ref> enter() final {
+  seastar::future<PipelineExitBarrierI::Ref> enter() {
     return seastar::make_ready_future<PipelineExitBarrierI::Ref>(
       new ExitBarrier);
   }
