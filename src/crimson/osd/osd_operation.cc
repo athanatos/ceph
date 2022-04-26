@@ -40,8 +40,8 @@ size_t OSDOperationRegistry::dump_historic_client_requests(ceph::Formatter* f) c
     f->close_section();
   }
   f->close_section();
+  return std::size(historic_client_registry);
 }
-
 
 OperationThrottler::OperationThrottler(ConfigProxy &conf)
   : scheduler(crimson::osd::scheduler::make_scheduler(conf))

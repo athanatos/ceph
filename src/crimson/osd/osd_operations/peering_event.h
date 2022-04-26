@@ -66,7 +66,10 @@ protected:
   }
 
   virtual void on_pg_absent();
-  virtual typename PeeringEvent::interruptible_future<> complete_rctx(Ref<PG>);
+
+  virtual typename PeeringEvent::template interruptible_future<>
+  complete_rctx(Ref<PG>);
+
   virtual seastar::future<> complete_rctx_no_pg() { return seastar::now();}
   virtual seastar::future<Ref<PG>> get_pg() = 0;
 

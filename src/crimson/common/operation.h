@@ -318,6 +318,7 @@ struct AggregateBlockingEvent {
     }
 
     virtual std::unique_ptr<typename T::TriggerI> create_part_trigger() = 0;
+    virtual ~TriggerI() = default;
   };
 
   template <class OpT>
@@ -326,7 +327,8 @@ struct AggregateBlockingEvent {
       : event(event), op(op) {}
 
     std::unique_ptr<typename T::TriggerI> create_part_trigger() override {
-      return std::make_unique<typename T::Trigger<OpT>>(event.events.emplace_back(), op);
+      return std::make_unique<typename T::template Trigger<OpT>>(
+	event.events.emplace_back(), op);
     }
 
   private:

@@ -119,7 +119,7 @@ void PeeringEvent<T>::on_pg_absent()
 }
 
 template <class T>
-typename PeeringEvent<T>::interruptible_future<>
+typename PeeringEvent<T>::template interruptible_future<>
 PeeringEvent<T>::complete_rctx(Ref<PG> pg)
 {
   logger().debug("{}: submitting ctx", *this);

@@ -130,8 +130,8 @@ namespace crimson {
 
 template <>
 struct EventBackendRegistry<osd::ClientRequest> {
-  static std::tuple<osd::LttngBackend/*, HistoricBackend*/> get_backends() {
-    return { {} };
+  static std::tuple</*osd::LttngBackend, HistoricBackend*/> get_backends() {
+    return { /*{}*/ };
   }
 };
 

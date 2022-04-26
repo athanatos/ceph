@@ -73,6 +73,8 @@ struct OperationProxy {
 
   virtual void exit() = 0;
   virtual seastar::future<> complete() = 0;
+
+  virtual ~OperationProxy() = default;
 };
 
 template <typename OpT>
