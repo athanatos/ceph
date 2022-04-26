@@ -761,14 +761,11 @@ public:
     return seastar::make_ready_future<PipelineExitBarrierI::Ref>(
       new ExitBarrier);
   }
-
-  UnorderedStageT(const char *type_name) : type_name(type_name) {}
-
-  const char * type_name;
 };
 
 struct UnorderedStage : UnorderedStageT<UnorderedStage> {
-  using UnorderedStageT::UnorderedStageT;
+  UnorderedStage(const char *type_name) : type_name(type_name) {}
+  const char * type_name;
 };
 
 }
