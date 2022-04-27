@@ -259,6 +259,8 @@ public:
 	}
 	return std::forward<FutureT>(fut);
       }
+
+      virtual ~TriggerI() = default;
     protected:
       virtual void record_event(const T& blocker) = 0;
     };
