@@ -54,15 +54,4 @@ void Blocker::dump(ceph::Formatter* f) const
   f->close_section();
 }
 
-void AggregateBlocker::dump_detail(ceph::Formatter *f) const
-{
-  f->open_array_section("parent_blockers");
-  for (auto b : parent_blockers) {
-    f->open_object_section("parent_blocker");
-    b->dump(f);
-    f->close_section();
-  }
-  f->close_section();
-}
-
 }
