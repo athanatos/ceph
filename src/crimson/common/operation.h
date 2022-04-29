@@ -19,6 +19,7 @@
 
 #include "include/ceph_assert.h"
 #include "include/utime.h"
+#include "common/Formatter.h"
 #include "common/Clock.h"
 #include "crimson/common/interruptible_future.h"
 
@@ -458,12 +459,25 @@ public:
  */
 template <class T>
 class OrderedExclusivePhaseT : public PipelineStageIT<T> {
-  void dump_detail(ceph::Formatter *f) const final {}
+  operation_id_t held_by = INVALID_OPERATION_ID;
+  void set_held_by(operation_id_t id) {
+    assert(held_by == INVALID_OPERATION_ID);
+    held_by = id;
+  }
+  void clear_held_by() {
+    assert(held_by != INVALID_OPERATION_ID);
+    held_by = INVALID_OPERATION_ID;
+  }
+  void dump_detail(ceph::Formatter *f) const final {
+    f->dump_unsigned("held_by", held_by);
+  }
 
   class ExitBarrier final : public PipelineExitBarrierI {
     OrderedExclusivePhaseT *phase;
+    operation_id_t id;
   public:
-    ExitBarrier(OrderedExclusivePhaseT *phase) : phase(phase) {}
+    ExitBarrier(OrderedExclusivePhaseT *phase, operation_id_t id)
+      : phase(phase), id(id) {}
 
     seastar::future<> wait() final {
       return seastar::now();
@@ -471,6 +485,7 @@ class OrderedExclusivePhaseT : public PipelineStageIT<T> {
 
     void exit() final {
       if (phase) {
+	assert(phase->held_by == id);
 	phase->exit();
 	phase = nullptr;
       }
@@ -486,14 +501,17 @@ class OrderedExclusivePhaseT : public PipelineStageIT<T> {
   };
 
   void exit() {
+    clear_held_by();
     mutex.unlock();
   }
 
 public:
   template <class... IgnoreArgs>
-  seastar::future<PipelineExitBarrierI::Ref> enter(IgnoreArgs&&...) {
-    return mutex.lock().then([this] {
-      return PipelineExitBarrierI::Ref(new ExitBarrier{this});
+  seastar::future<PipelineExitBarrierI::Ref> enter(operation_id_t id,
+						   IgnoreArgs&&...) {
+    return mutex.lock().then([this, id] {
+      set_held_by(id);
+      return PipelineExitBarrierI::Ref(new ExitBarrier{this, id});
     });
   }
 
