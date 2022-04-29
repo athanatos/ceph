@@ -43,10 +43,19 @@ void ClientRequest::print(std::ostream &lhs) const
 
 void ClientRequest::dump_detail(Formatter *f) const
 {
-  logger().debug("{}: dumping", *this);
-  std::apply([f] (auto... event) {
-    (..., event.dump(f));
-  }, tracking_events);
+  {
+    f->open_object_section("client_operation_message");
+    m->dump(f);
+    f->close_section();
+  }
+  f->dump_unsigned("instance_id", instance_id);
+  {
+    f->open_array_section("events");
+    std::apply([f] (auto... event) {
+      (..., event.dump(f));
+    }, tracking_events);
+    f->close_section();
+  }
 }
 
 ClientRequest::ConnectionPipeline &ClientRequest::cp()
