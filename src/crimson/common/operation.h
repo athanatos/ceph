@@ -7,6 +7,7 @@
 #include <array>
 #include <set>
 #include <vector>
+#include <limits>
 #include <boost/intrusive/list.hpp>
 #include <boost/intrusive_ptr.hpp>
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
@@ -232,6 +233,10 @@ private:
   friend class Trigger;
 };
 
+using operation_id_t = uint64_t;
+constexpr operation_id_t INVALID_OPERATION_ID =
+  std::numeric_limits<operation_id_t>::max();
+
 /**
  * Common base for all crimson-osd operations.  Mainly provides
  * an interface for registering ops in flight and dumping
@@ -240,7 +245,7 @@ private:
 class Operation : public boost::intrusive_ref_counter<
   Operation, boost::thread_unsafe_counter> {
  public:
-  uint64_t get_id() const {
+  operation_id_t get_id() const {
     return id;
   }
 
@@ -257,10 +262,19 @@ class Operation : public boost::intrusive_ref_counter<
 
   registry_hook_t registry_hook;
 
-  uint64_t id = 0;
-  void set_id(uint64_t in_id) {
+  operation_id_t id = 0;
+  void set_id(operation_id_t in_id) {
     id = in_id;
+    _set_id(in_id);
   }
+
+  /**
+   * _set_id
+   *
+   * Implementations should use to set any internal members, notably
+   * PipelineHandle::set_id.
+   */
+  virtual void _set_id(operation_id_t in_id) {}
 
   friend class OperationRegistryI;
   template <size_t>
@@ -383,6 +397,7 @@ class PipelineHandle {
     return barrier ? barrier->wait() : seastar::now();
   }
 
+  operation_id_t parent_operation_id = INVALID_OPERATION_ID;
 public:
   PipelineHandle() = default;
 
@@ -390,6 +405,8 @@ public:
   PipelineHandle(PipelineHandle&&) = default;
   PipelineHandle &operator=(const PipelineHandle&) = delete;
   PipelineHandle &operator=(PipelineHandle&&) = default;
+
+  void set_id(operation_id_t id) { parent_operation_id = id; }
 
   /**
    * Returns a future which unblocks when the handle has entered the passed
@@ -401,7 +418,9 @@ public:
   seastar::future<>
   enter(T &stage, typename T::BlockingEvent::template Trigger<OpT>&& t) {
     return wait_barrier().then([this, &stage, t=std::move(t)] () mutable {
-      auto fut = t.maybe_record_blocking(stage.enter(t), stage);
+      auto fut = t.maybe_record_blocking(
+	stage.enter(parent_operation_id, t),
+	stage);
       exit();
       return std::move(fut).then(
         [this, t=std::move(t)](auto &&barrier_ref) mutable {
@@ -549,7 +568,9 @@ private:
 
 public:
   template <class TriggerT>
-  seastar::future<PipelineExitBarrierI::Ref> enter(TriggerT& t) {
+  seastar::future<PipelineExitBarrierI::Ref> enter(
+    operation_id_t id,
+    TriggerT& t) {
     return seastar::make_ready_future<PipelineExitBarrierI::Ref>(
       new ExitBarrier<TriggerT>{this, mutex.lock(), t});
   }
