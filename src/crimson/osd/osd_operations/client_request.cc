@@ -11,7 +11,6 @@
 #include "crimson/osd/pg.h"
 #include "crimson/osd/osd.h"
 #include "common/Formatter.h"
-#include "crimson/osd/osd_operation_sequencer.h"
 #include "crimson/osd/osd_operation_external_tracking.h"
 #include "crimson/osd/osd_operations/client_request.h"
 #include "crimson/osd/osd_connection_priv.h"
@@ -24,12 +23,33 @@ namespace {
 
 namespace crimson::osd {
 
+
+void ClientRequest::Orderer::requeue(
+  ShardServices &shard_services, Ref<PG> pg)
+{
+  for (auto &req: list) {
+    req.handle.exit();
+  }
+  for (auto &req: list) {
+    logger().debug("{}: {} requeueing {}", __func__, *pg, req);
+    std::ignore = req.with_pg_int(shard_services, pg);
+  }
+}
+
+void ClientRequest::Orderer::clear_and_cancel()
+{
+  for (auto i = list.begin(); i != list.end(); ) {
+    logger().debug("{}: {} canceling {}", __func__, *i);
+    i->handle.exit();
+    remove_request(*(i++));
+  }
+}
+
 ClientRequest::ClientRequest(
   OSD &osd, crimson::net::ConnectionRef conn, Ref<MOSDOp> &&m)
   : osd(osd),
     conn(conn),
-    m(m),
-    sequencer(get_osd_priv(conn.get()).op_sequencer[m->get_spg()])
+    m(m)
 {}
 
 ClientRequest::~ClientRequest()
@@ -80,7 +100,7 @@ bool ClientRequest::is_pg_op() const
     [](auto& op) { return ceph_osd_op_type_pg(op.op.op); });
 }
 
-seastar::future<seastar::stop_iteration> ClientRequest::with_pg_int(
+seastar::future<> ClientRequest::with_pg_int(
   ShardServices &shard_services, Ref<PG> pgref)
 {
   epoch_t same_interval_since = pgref->get_interval_start_epoch();
@@ -88,77 +108,64 @@ seastar::future<seastar::stop_iteration> ClientRequest::with_pg_int(
   if (m->finish_decode()) {
     m->clear_payload();
   }
+  const auto this_instance_id = instance_id++;
   return interruptor::with_interruption(
-    [this, &shard_services, pgref]() mutable {
-      return sequencer.start_op(
-	*this, handle, shard_services.registry,
-	interruptor::wrap_function([pgref, this, &shard_services] {
-	  PG &pg = *pgref;
-	  if (pg.can_discard_op(*m)) {
-	    return osd.send_incremental_map(
-	      conn, m->get_map_epoch()
-	    ).then([this, &shard_services] {
-	      sequencer.finish_op_out_of_order(*this, shard_services.registry);
-	      return interruptor::now();
-	    });
-	  }
-	  return enter_stage<interruptor>(pp(pg).await_map
-	  ).then_interruptible([this, &pg] {
-	    return with_blocking_event<
-	      PG_OSDMapGate::OSDMapBlocker::BlockingEvent
-	      >([this, &pg] (auto&& trigger) {
-		return pg.osdmap_gate.wait_for_map(std::move(trigger),
-						   m->get_min_epoch());
-	      });
-	  }).then_interruptible([this, &pg](auto map) {
-	    return enter_stage<interruptor>(pp(pg).wait_for_active);
-	  }).then_interruptible([this, &pg]() {
-	    return with_blocking_event<
-	      PGActivationBlocker::BlockingEvent
-	      >([&pg] (auto&& trigger) {
-                return pg.wait_for_active_blocker.wait(std::move(trigger));
-	      });
-	  }).then_interruptible(
-	    [this, &shard_services, pgref=std::move(pgref)]() mutable {
-	      if (is_pg_op()) {
-		return process_pg_op(
-		  pgref
-		).then_interruptible([this, &shard_services] {
-		  sequencer.finish_op_out_of_order(*this, shard_services.registry);
-		});
-	      } else {
-		return process_op(
-		  pgref
-		).then_interruptible([this, &shard_services](const seq_mode_t mode) {
-		  if (mode == seq_mode_t::IN_ORDER) {
-		    sequencer.finish_op_in_order(*this);
-		  } else {
-		    assert(mode == seq_mode_t::OUT_OF_ORDER);
-		    sequencer.finish_op_out_of_order(*this, shard_services.registry);
-		  }
-		});
-	      }
-	    });
-	})).then_interruptible([] {
-	  return seastar::stop_iteration::yes;
+    [this, pgref, this_instance_id]() mutable {
+      PG &pg = *pgref;
+      if (pg.can_discard_op(*m)) {
+	return osd.send_incremental_map(
+	  conn, m->get_map_epoch()
+	).then([] {
+	  return interruptor::now();
 	});
-    }, [this, pgref](std::exception_ptr eptr) {
-      if (should_abort_request(*this, std::move(eptr))) {
-	sequencer.abort();
-	return seastar::stop_iteration::yes;
-      } else {
-	sequencer.maybe_reset(*this);
-	return seastar::stop_iteration::no;
       }
+      return enter_stage<interruptor>(pp(pg).await_map
+      ).then_interruptible([this, this_instance_id, &pg] {
+	logger().debug("{}.{}: after await_map stage", *this, this_instance_id);
+	return with_blocking_event<
+	  PG_OSDMapGate::OSDMapBlocker::BlockingEvent
+	  >([this, &pg] (auto&& trigger) {
+	    return pg.osdmap_gate.wait_for_map(std::move(trigger),
+					       m->get_min_epoch());
+	  });
+      }).then_interruptible([this, this_instance_id, &pg](auto map) {
+	logger().debug("{}.{}: after wait_for_map", *this, this_instance_id);
+	return enter_stage<interruptor>(pp(pg).wait_for_active);
+      }).then_interruptible([this, this_instance_id, &pg]() {
+	logger().debug(
+	  "{}.{}: after wait_for_active stage", *this, this_instance_id);
+	return with_blocking_event<
+	  PGActivationBlocker::BlockingEvent
+	  >([&pg] (auto&& trigger) {
+	    return pg.wait_for_active_blocker.wait(std::move(trigger));
+	  });
+      }).then_interruptible([this, pgref, this_instance_id]() mutable
+			    -> interruptible_future<> {
+	logger().debug(
+	  "{}.{}: after wait_for_active", *this, this_instance_id);
+	if (is_pg_op()) {
+	  return process_pg_op(pgref);
+	} else {
+	  return process_op(
+	    pgref
+	  ).then_interruptible([](auto){});
+	}
+      }).then_interruptible([this, this_instance_id, pgref=std::move(pgref)] {
+	logger().debug("{}.{}: after process*", *this, this_instance_id);
+	pgref->client_request_orderer.remove_request(*this);
+      });
+    }, [this, this_instance_id, pgref](std::exception_ptr eptr) {
+      // TODO: better debug output
+      logger().debug("{}.{}: interrupted {}", *this, this_instance_id, eptr);
     }, pgref);
 }
 
 seastar::future<> ClientRequest::with_pg(
   ShardServices &shard_services, Ref<PG> pgref)
 {
-  return seastar::repeat([this, &shard_services, pgref]() mutable {
-    return with_pg_int(shard_services, pgref);
-  });
+  pgref->client_request_orderer.add_request(*this);
+  // TODO wire up eventual rerun to start_pg_operation
+  return with_pg_int(shard_services, pgref);
 }
 
 ClientRequest::interruptible_future<>
