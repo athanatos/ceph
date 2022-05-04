@@ -12,15 +12,17 @@
 
 namespace crimson::osd {
 
-class OSD;
 class PG;
 
 class RecoverySubRequest final : public OperationT<RecoverySubRequest> {
 public:
-  static constexpr OperationTypeCode type = OperationTypeCode::background_recovery_sub;
+  static constexpr OperationTypeCode type =
+    OperationTypeCode::background_recovery_sub;
 
-  RecoverySubRequest(OSD &osd, crimson::net::ConnectionRef conn, Ref<MOSDFastDispatchOp>&& m)
-    : osd(osd), conn(conn), m(m) {}
+  RecoverySubRequest(
+    crimson::net::ConnectionRef conn,
+    Ref<MOSDFastDispatchOp>&& m)
+    : conn(conn), m(m) {}
 
   void print(std::ostream& out) const final
   {
@@ -31,11 +33,20 @@ public:
   {
   }
 
-  seastar::future<> start();
+  static constexpr bool can_create() { return false; }
+  spg_t get_pgid() const {
+    return m->get_spg();
+  }
+  ConnectionPipeline &get_connection_pipeline();
+  PipelineHandle &get_handle() { return handle; }
+  epoch_t get_epoch() const { return m->get_min_epoch(); }
+
+  seastar::future<> with_pg(
+    ShardServices &shard_services, Ref<PG> pg);
 private:
-  OSD& osd;
   crimson::net::ConnectionRef conn;
   Ref<MOSDFastDispatchOp> m;
+  PipelineHandle handle;
 };
 
 }
