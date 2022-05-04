@@ -235,13 +235,14 @@ private:
 
   friend class RemotePeeringEvent;
 
-public:
   blocking_future<Ref<PG>> get_or_create_pg(
     spg_t pgid,
     epoch_t epoch,
     std::unique_ptr<PGCreateInfo> info);
   blocking_future<Ref<PG>> wait_for_pg(
     spg_t pgid);
+
+public:
   Ref<PG> get_pg(spg_t pgid);
   seastar::future<> send_beacon();
 
