@@ -586,7 +586,7 @@ class PgScrubber : public ScrubPgIF,
 
   CephContext* get_pg_cct() const final { return m_pg->cct; }
  
-  LoggerSinkSet* get_logger() const final;
+  LoggerSinkSet& get_logger() const final;
 
   spg_t get_pgid() const final { return m_pg->get_pgid(); }
 

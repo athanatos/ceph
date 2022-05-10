@@ -264,7 +264,7 @@ void ScrubBackend::omap_checks()
 
   if (!wss.str().empty()) {
     dout(5) << __func__ << ": " << wss.str() << dendl;
-    clog->warn(wss);
+    clog.warn(wss);
   }
 }
 
@@ -328,7 +328,7 @@ int ScrubBackend::scrub_process_inconsistent()
                              m_inconsistent.size());
 
   dout(4) << err_msg << dendl;
-  clog->error() << err_msg;
+  clog.error() << err_msg;
 
   ceph_assert(m_repair);
   int fixed_cnt{0};
@@ -760,7 +760,7 @@ void ScrubBackend::compare_smaps()
                 [this](const auto& ho) {
                   if (auto maybe_clust_err = compare_obj_in_maps(ho);
                       maybe_clust_err) {
-                    clog->error() << *maybe_clust_err;
+                    clog.error() << *maybe_clust_err;
                   }
                 });
 }
@@ -778,7 +778,7 @@ std::optional<std::string> ScrubBackend::compare_obj_in_maps(
   if (candidates_errors.str().size()) {
     // a collection of shard-specific errors detected while
     // finding the best shard to serve as authoritative
-    clog->error() << candidates_errors.str();
+    clog.error() << candidates_errors.str();
   }
 
   inconsistent_obj_wrapper object_error{ho};
@@ -1433,7 +1433,7 @@ void ScrubBackend::scrub_snapshot_metadata(ScrubMap& map)
     std::optional<object_info_t> oi;
     if (!p->second.attrs.count(OI_ATTR)) {
       oi = std::nullopt;
-      clog->error() << m_mode_desc << " " << m_pg_id << " " << soid
+      clog.error() << m_mode_desc << " " << m_pg_id << " " << soid
                     << " : no '" << OI_ATTR << "' attr";
       this_chunk->m_error_counts.shallow_errors++;
       soid_error.set_info_missing();
@@ -1444,7 +1444,7 @@ void ScrubBackend::scrub_snapshot_metadata(ScrubMap& map)
         oi = object_info_t(bv);
       } catch (ceph::buffer::error& e) {
         oi = std::nullopt;
-        clog->error() << m_mode_desc << " " << m_pg_id << " " << soid
+        clog.error() << m_mode_desc << " " << m_pg_id << " " << soid
                       << " : can't decode '" << OI_ATTR << "' attr "
                       << e.what();
         this_chunk->m_error_counts.shallow_errors++;
@@ -1455,7 +1455,7 @@ void ScrubBackend::scrub_snapshot_metadata(ScrubMap& map)
 
     if (oi) {
       if (logical_to_ondisk_size(oi->size) != p->second.size) {
-        clog->error() << m_mode_desc << " " << m_pg_id << " " << soid
+        clog.error() << m_mode_desc << " " << m_pg_id << " " << soid
                       << " : on disk size (" << p->second.size
                       << ") does not match object info size (" << oi->size
                       << ") adjusted for ondisk to ("
@@ -1523,11 +1523,11 @@ void ScrubBackend::scrub_snapshot_metadata(ScrubMap& map)
     if (!expected) {
       // If we couldn't read the head's snapset, just ignore clones
       if (head && !snapset) {
-        clog->error() << m_mode_desc << " " << m_pg_id << " TTTTT:" << m_pg_id
+        clog.error() << m_mode_desc << " " << m_pg_id << " TTTTT:" << m_pg_id
                       << " " << soid
                       << " : clone ignored due to missing snapset";
       } else {
-        clog->error() << m_mode_desc << " " << m_pg_id << " " << soid
+        clog.error() << m_mode_desc << " " << m_pg_id << " " << soid
                       << " : is an unexpected clone";
       }
       this_chunk->m_error_counts.shallow_errors++;
@@ -1561,7 +1561,7 @@ void ScrubBackend::scrub_snapshot_metadata(ScrubMap& map)
                << dendl;
 
       if (p->second.attrs.count(SS_ATTR) == 0) {
-        clog->error() << m_mode_desc << " " << m_pg_id << " " << soid
+        clog.error() << m_mode_desc << " " << m_pg_id << " " << soid
                       << " : no '" << SS_ATTR << "' attr";
         this_chunk->m_error_counts.shallow_errors++;
         snapset = std::nullopt;
@@ -1576,7 +1576,7 @@ void ScrubBackend::scrub_snapshot_metadata(ScrubMap& map)
           head_error.ss_bl.push_back(p->second.attrs[SS_ATTR]);
         } catch (ceph::buffer::error& e) {
           snapset = std::nullopt;
-          clog->error() << m_mode_desc << " " << m_pg_id << " " << soid
+          clog.error() << m_mode_desc << " " << m_pg_id << " " << soid
                         << " : can't decode '" << SS_ATTR << "' attr "
                         << e.what();
           this_chunk->m_error_counts.shallow_errors++;
@@ -1591,7 +1591,7 @@ void ScrubBackend::scrub_snapshot_metadata(ScrubMap& map)
         if (!snapset->clones.empty()) {
           dout(20) << "  snapset " << *snapset << dendl;
           if (snapset->seq == 0) {
-            clog->error() << m_mode_desc << " " << m_pg_id << " " << soid
+            clog.error() << m_mode_desc << " " << m_pg_id << " " << soid
                           << " : snaps.seq not set";
             this_chunk->m_error_counts.shallow_errors++;
             head_error.set_snapset_error();
@@ -1608,13 +1608,13 @@ void ScrubBackend::scrub_snapshot_metadata(ScrubMap& map)
                << dendl;
 
       if (snapset->clone_size.count(soid.snap) == 0) {
-        clog->error() << m_mode_desc << " " << m_pg_id << " " << soid
+        clog.error() << m_mode_desc << " " << m_pg_id << " " << soid
                       << " : is missing in clone_size";
         this_chunk->m_error_counts.shallow_errors++;
         soid_error.set_size_mismatch();
       } else {
         if (oi && oi->size != snapset->clone_size[soid.snap]) {
-          clog->error() << m_mode_desc << " " << m_pg_id << " " << soid
+          clog.error() << m_mode_desc << " " << m_pg_id << " " << soid
                         << " : size " << oi->size << " != clone_size "
                         << snapset->clone_size[*curclone];
           this_chunk->m_error_counts.shallow_errors++;
@@ -1622,7 +1622,7 @@ void ScrubBackend::scrub_snapshot_metadata(ScrubMap& map)
         }
 
         if (snapset->clone_overlap.count(soid.snap) == 0) {
-          clog->error() << m_mode_desc << " " << m_pg_id << " " << soid
+          clog.error() << m_mode_desc << " " << m_pg_id << " " << soid
                         << " : is missing in clone_overlap";
           this_chunk->m_error_counts.shallow_errors++;
           soid_error.set_size_mismatch();
@@ -1646,7 +1646,7 @@ void ScrubBackend::scrub_snapshot_metadata(ScrubMap& map)
           }
 
           if (bad_interval_set) {
-            clog->error() << m_mode_desc << " " << m_pg_id << " " << soid
+            clog.error() << m_mode_desc << " " << m_pg_id << " " << soid
                           << " : bad interval_set in clone_overlap";
             this_chunk->m_error_counts.shallow_errors++;
             soid_error.set_size_mismatch();
@@ -1711,7 +1711,7 @@ int ScrubBackend::process_clones_to(
     // skip higher-numbered clones in the list.
     if (!m_incomplete_clones_allowed) {
       next_clone.snap = **curclone;
-      clog->error() << m_mode_desc << " " << m_pg_id << " " << *head
+      clog.error() << m_mode_desc << " " << m_pg_id << " " << *head
                     << " : expected clone " << next_clone << " " << m_missing
                     << " missing";
       this_chunk->m_error_counts.shallow_errors++;
@@ -1733,7 +1733,7 @@ void ScrubBackend::log_missing(int missing,
              << *head << " skipped " << missing << " clone(s) in cache tier"
              << dendl;
   } else {
-    clog->info() << m_mode_desc << " " << m_pg_id << " " << *head << " : "
+    clog.info() << m_mode_desc << " " << m_pg_id << " " << *head << " : "
                  << missing << " missing clone(s)";
   }
 }
