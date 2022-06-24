@@ -59,6 +59,8 @@ public:
   FORWARD(set_active, set_active, local_state.osd_state);
   FORWARD_CONST(get_osd_state_string, to_string, local_state.osd_state);
 
+  FORWARD(got_map, got_map, core_state.osdmap_gate);
+
   template <typename T, typename... Args>
   auto start_pg_operation(Args&&... args) {
     auto op = local_state.registry.create_operation<T>(
@@ -83,9 +85,10 @@ public:
       return opref.template with_blocking_event<OSDMapBlockingEvent>(
 	[this, &opref](auto &&trigger) {
 	  std::ignore = this;
-	  std::ignore = opref;
-	  return seastar::make_ready_future<epoch_t>(0); //osdmap_gate.wait_for_map(std::move(trigger),
-	  //  opref.get_epoch()); TODOSAM
+	  return core_state.osdmap_gate.wait_for_map(
+	    std::move(trigger),
+	    opref.get_epoch(),
+	    &shard_services);
 	});
     }).then([&logger, &opref](auto epoch) {
       logger.debug("{}: got map {}, entering get_pg", opref, epoch);
