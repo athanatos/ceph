@@ -20,8 +20,7 @@
 #include "crimson/mgr/client.h"
 #include "crimson/net/Dispatcher.h"
 #include "crimson/osd/osdmap_service.h"
-#include "crimson/osd/state.h"
-#include "crimson/osd/shard_services.h"
+#include "crimson/osd/pg_shard_manager.h"
 #include "crimson/osd/osdmap_gate.h"
 #include "crimson/osd/pg_map.h"
 #include "crimson/osd/osd_operations/peering_event.h"
@@ -80,8 +79,6 @@ class OSD final : public crimson::net::Dispatcher,
   crimson::os::FuturizedStore& store;
   std::unique_ptr<OSDMeta> meta_coll;
 
-  OSDState state;
-
   /// _first_ epoch we were marked up (after this process started)
   epoch_t boot_epoch = 0;
   /// _most_recent_ epoch we were marked up
@@ -111,7 +108,8 @@ class OSD final : public crimson::net::Dispatcher,
   void handle_authentication(const EntityName& name,
 			     const AuthCapsInfo& caps) final;
 
-  crimson::osd::ShardServices shard_services;
+  crimson::osd::PGShardManager pg_shard_manager;
+  crimson::osd::ShardServices &shard_services;
 
   std::unique_ptr<Heartbeat> heartbeat;
   seastar::timer<seastar::lowres_clock> tick_timer;
@@ -215,10 +213,8 @@ private:
     crimson::net::ConnectionRef conn,
     Ref<MOSDPGUpdateLogMissingReply> m);
 public:
-  OSD_OSDMapGate osdmap_gate;
-
   ShardServices &get_shard_services() {
-    return shard_services;
+    return pg_shard_manager.get_shard_services();
   }
 
   seastar::future<> consume_map(epoch_t epoch);
@@ -252,7 +248,7 @@ public:
 
   template <typename T, typename... Args>
   auto start_pg_operation(Args&&... args) {
-    auto op = shard_services.registry.create_operation<T>(
+    auto op = shard_services.get_registry().create_operation<T>(
       std::forward<Args>(args)...);
     auto &logger = crimson::get_logger(ceph_subsys_osd);
     logger.debug("{}: starting {}", *op, __func__);
@@ -262,7 +258,7 @@ public:
       opref.get_connection_pipeline().await_active
     ).then([this, &opref, &logger] {
       logger.debug("{}: start_pg_operation in await_active stage", opref);
-      return state.when_active();
+      return pg_shard_manager.when_active();
     }).then([&logger, &opref] {
       logger.debug("{}: start_pg_operation active, entering await_map", opref);
       return opref.template enter_stage<>(
@@ -273,7 +269,7 @@ public:
 	OSD_OSDMapGate::OSDMapBlocker::BlockingEvent;
       return opref.template with_blocking_event<OSDMapBlockingEvent>(
 	[this, &opref](auto &&trigger) {
-	  return osdmap_gate.wait_for_map(
+	  return pg_shard_manager.wait_for_map(
 	    std::move(trigger),
 	    opref.get_epoch(),
 	    &shard_services
