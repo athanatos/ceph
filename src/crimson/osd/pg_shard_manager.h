@@ -26,6 +26,7 @@ class PGShardManager {
 
 public:
   PGShardManager(
+    OSDMapService &osdmap_service,
     const int whoami,
     crimson::net::Messenger &cluster_msgr,
     crimson::net::Messenger &public_msgr,
@@ -59,12 +60,6 @@ public:
   FORWARD_CONST(get_osd_state_string, to_string, local_state.osd_state);
 
   FORWARD(got_map, got_map, core_state.osdmap_gate);
-
-  // Core OSDMap methods
-  FORWARD_TO_CORE(get_map);
-  FORWARD_TO_CORE(load_map_bl);
-  FORWARD_TO_CORE(load_map_bls);
-  FORWARD_TO_CORE(store_maps);
 
   template <typename T, typename... Args>
   auto start_pg_operation(Args&&... args) {
