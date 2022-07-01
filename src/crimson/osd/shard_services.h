@@ -10,6 +10,7 @@
 #include "osd_operation.h"
 #include "msg/MessageRef.h"
 #include "crimson/common/exception.h"
+#include "crimson/common/shared_lru.h"
 #include "crimson/os/futurized_collection.h"
 #include "osd/PeeringState.h"
 #include "crimson/osd/osdmap_service.h"
@@ -108,12 +109,11 @@ class PerShardState {
  * OSD-wide singleton holding instances that need to be accessible
  * from all PGs.
  */
-class CoreState : public md_config_obs_t {
+class CoreState : public md_config_obs_t, public OSDMapService {
   friend class ShardServices;
   friend class PGShardManager;
   CoreState(
     int whoami,
-    OSDMapService &osdmap_service,
     crimson::net::Messenger &cluster_msgr,
     crimson::net::Messenger &public_msgr,
     crimson::mon::Client &monc,
@@ -123,10 +123,9 @@ class CoreState : public md_config_obs_t {
   const int whoami;
   crimson::common::CephContext cct;
 
-  OSDMapService &osdmap_service;
-  OSDMapService::cached_map_t osdmap;
-  OSDMapService::cached_map_t &get_osdmap() { return osdmap; }
-  void update_map(OSDMapService::cached_map_t new_osdmap) {
+  cached_map_t osdmap;
+  cached_map_t &get_osdmap() { return osdmap; }
+  void update_map(cached_map_t new_osdmap) {
     osdmap = std::move(new_osdmap);
   }
   OSD_OSDMapGate osdmap_gate;
@@ -197,6 +196,29 @@ class CoreState : public md_config_obs_t {
   void handle_conf_change(
     const ConfigProxy& conf,
     const std::set <std::string> &changed) final;
+
+  // OSDMapService
+  epoch_t up_epoch = 0;
+  epoch_t get_up_epoch() const final {
+    return up_epoch;
+  }
+  void set_up_epoch(epoch_t e) {
+    up_epoch = e;
+  }
+
+  SharedLRU<epoch_t, OSDMap> osdmaps;
+  SimpleLRU<epoch_t, bufferlist, false> map_bl_cache;
+
+  seastar::future<cached_map_t> get_map(epoch_t e) final;
+  cached_map_t get_map() const final;
+  seastar::future<std::unique_ptr<OSDMap>> load_map(epoch_t e);
+  seastar::future<bufferlist> load_map_bl(epoch_t e);
+  seastar::future<std::map<epoch_t, bufferlist>>
+  load_map_bls(epoch_t first, epoch_t last);
+  void store_map_bl(ceph::os::Transaction& t,
+                    epoch_t e, bufferlist&& bl);
+  seastar::future<> store_maps(ceph::os::Transaction& t,
+                               epoch_t start, Ref<MOSDMap> m);
 };
 
 #define FORWARD_CONST(FROM_METHOD, TO_METHOD, TARGET)		\
@@ -240,7 +262,7 @@ public:
 
   // OSDMapService
   const OSDMapService &get_osdmap_service() const {
-    return core_state.osdmap_service;
+    return core_state;
   }
 
   template <typename T, typename... Args>
