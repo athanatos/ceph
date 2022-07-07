@@ -144,9 +144,6 @@ private:
   seastar::future<> _send_boot();
   seastar::future<> _add_me_to_crush();
 
-  seastar::future<Ref<PG>> make_pg(OSDMapService::cached_map_t create_map,
-				   spg_t pgid,
-				   bool do_create);
   seastar::future<Ref<PG>> load_pg(spg_t pgid);
   seastar::future<> load_pgs();
 
@@ -156,9 +153,6 @@ private:
   seastar::future<> read_superblock();
 
   bool require_mon_peer(crimson::net::Connection *conn, Ref<Message> m);
-
-  seastar::future<Ref<PG>> handle_pg_create_info(
-    std::unique_ptr<PGCreateInfo> info);
 
   seastar::future<> handle_osd_map(crimson::net::ConnectionRef conn,
                                    Ref<MOSDMap> m);
@@ -188,6 +182,9 @@ private:
   seastar::future<> start_asok_admin();
 
 public:
+  auto &get_pg_shard_manager() {
+    return pg_shard_manager;
+  }
   ShardServices &get_shard_services() {
     return pg_shard_manager.get_shard_services();
   }
@@ -195,7 +192,6 @@ public:
   seastar::future<> consume_map(epoch_t epoch);
 
 private:
-  PGMap pg_map;
   crimson::common::Gated gate;
 
   seastar::promise<> stop_acked;
@@ -209,16 +205,7 @@ private:
   void update_heartbeat_peers();
   friend class PGAdvanceMap;
 
-  seastar::future<Ref<PG>> get_or_create_pg(
-    PGMap::PGCreationBlockingEvent::TriggerI&&,
-    spg_t pgid,
-    epoch_t epoch,
-    std::unique_ptr<PGCreateInfo> info);
-  seastar::future<Ref<PG>> wait_for_pg(
-    PGMap::PGCreationBlockingEvent::TriggerI&&, spg_t pgid);
-
 public:
-  Ref<PG> get_pg(spg_t pgid);
   seastar::future<> send_beacon();
 
 private:

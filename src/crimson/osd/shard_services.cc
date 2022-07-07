@@ -19,6 +19,8 @@
 #include "crimson/net/Connection.h"
 #include "crimson/os/cyanstore/cyan_store.h"
 #include "crimson/osd/osdmap_service.h"
+#include "crimson/osd/osd_operations/pg_advance_map.h"
+#include "crimson/osd/pg.h"
 
 namespace {
   seastar::logger& logger() {
@@ -365,6 +367,184 @@ seastar::future<> CoreState::store_maps(ceph::os::Transaction& t,
     }
   });
 }
+
+seastar::future<Ref<PG>> CoreState::make_pg(
+  ShardServices &shard_services,
+  OSDMapService::cached_map_t create_map,
+  spg_t pgid,
+  bool do_create)
+{
+  using ec_profile_t = std::map<std::string, std::string>;
+  auto get_pool_info = [create_map, pgid, this] {
+    if (create_map->have_pg_pool(pgid.pool())) {
+      pg_pool_t pi = *create_map->get_pg_pool(pgid.pool());
+      std::string name = create_map->get_pool_name(pgid.pool());
+      ec_profile_t ec_profile;
+      if (pi.is_erasure()) {
+	ec_profile = create_map->get_erasure_code_profile(
+	  pi.erasure_code_profile);
+      }
+      return seastar::make_ready_future<
+	std::tuple<pg_pool_t,std::string, ec_profile_t>
+	>(std::make_tuple(
+	    std::move(pi),
+	    std::move(name),
+	    std::move(ec_profile)));
+    } else {
+      // pool was deleted; grab final pg_pool_t off disk.
+      return get_meta_coll().load_final_pool_info(pgid.pool());
+    }
+  };
+  auto get_collection = [pgid, do_create, this] {
+    const coll_t cid{pgid};
+    if (do_create) {
+      return store.create_new_collection(cid);
+    } else {
+      return store.open_collection(cid);
+    }
+  };
+  return seastar::when_all(
+    std::move(get_pool_info),
+    std::move(get_collection)
+  ).then([&shard_services, pgid, create_map, this] (auto&& ret) {
+    auto [pool, name, ec_profile] = std::move(std::get<0>(ret).get0());
+    auto coll = std::move(std::get<1>(ret).get0());
+    return seastar::make_ready_future<Ref<PG>>(
+      new PG{
+	pgid,
+	pg_shard_t{whoami, pgid.shard},
+	std::move(coll),
+	std::move(pool),
+	std::move(name),
+	create_map,
+	shard_services,
+	ec_profile});
+  });
+}
+
+seastar::future<Ref<PG>> CoreState::handle_pg_create_info(
+  PGShardManager &shard_manager,
+  ShardServices &shard_services,
+  std::unique_ptr<PGCreateInfo> info) {
+  return seastar::do_with(
+    std::move(info),
+    [this, &shard_manager, &shard_services](auto &info) -> seastar::future<Ref<PG>> {
+      return get_map(info->epoch).then(
+	[&info, &shard_services, this](
+	  OSDMapService::cached_map_t startmap) ->
+	seastar::future<std::tuple<Ref<PG>, OSDMapService::cached_map_t>> {
+	  const spg_t &pgid = info->pgid;
+	  if (info->by_mon) {
+	    int64_t pool_id = pgid.pgid.pool();
+	    const pg_pool_t *pool = get_osdmap()->get_pg_pool(pool_id);
+	    if (!pool) {
+	      logger().debug(
+		"{} ignoring pgid {}, pool dne",
+		__func__,
+		pgid);
+	      return seastar::make_ready_future<
+		std::tuple<Ref<PG>, OSDMapService::cached_map_t>
+		>(std::make_tuple(Ref<PG>(), startmap));
+	    }
+	    ceph_assert(osdmap->require_osd_release >= ceph_release_t::octopus);
+	    if (!pool->has_flag(pg_pool_t::FLAG_CREATING)) {
+	      // this ensures we do not process old creating messages after the
+	      // pool's initial pgs have been created (and pg are subsequently
+	      // allowed to split or merge).
+	      logger().debug(
+		"{} dropping {} create, pool does not have CREATING flag set",
+		__func__,
+		pgid);
+	      return seastar::make_ready_future<
+		std::tuple<Ref<PG>, OSDMapService::cached_map_t>
+		>(std::make_tuple(Ref<PG>(), startmap));
+	    }
+	  }
+	  return make_pg(shard_services, startmap, pgid, true).then(
+	    [startmap=std::move(startmap)](auto pg) mutable {
+	      return seastar::make_ready_future<
+		std::tuple<Ref<PG>, OSDMapService::cached_map_t>
+		>(std::make_tuple(std::move(pg), std::move(startmap)));
+	    });
+	}).then([this, &shard_manager, &shard_services, &info](auto&& ret) ->
+		seastar::future<Ref<PG>> {
+	  auto [pg, startmap] = std::move(ret);
+	  if (!pg)
+	    return seastar::make_ready_future<Ref<PG>>(Ref<PG>());
+	  const pg_pool_t* pp = startmap->get_pg_pool(info->pgid.pool());
+
+	  int up_primary, acting_primary;
+	  vector<int> up, acting;
+	  startmap->pg_to_up_acting_osds(
+	    info->pgid.pgid, &up, &up_primary, &acting, &acting_primary);
+
+	  int role = startmap->calc_pg_role(
+	    pg_shard_t(whoami, info->pgid.shard),
+	    acting);
+
+	  PeeringCtx rctx;
+	  create_pg_collection(
+	    rctx.transaction,
+	    info->pgid,
+	    info->pgid.get_split_bits(pp->get_pg_num()));
+	  init_pg_ondisk(
+	    rctx.transaction,
+	    info->pgid,
+	    pp);
+
+	  pg->init(
+	    role,
+	    up,
+	    up_primary,
+	    acting,
+	    acting_primary,
+	    info->history,
+	    info->past_intervals,
+	    rctx.transaction);
+
+	  return shard_services.start_operation<PGAdvanceMap>(
+	    shard_manager, pg, pg->get_osdmap_epoch(),
+	    osdmap->get_epoch(), std::move(rctx), true).second.then([pg=pg] {
+	      return seastar::make_ready_future<Ref<PG>>(pg);
+	    });
+	});
+    });
+}
+
+
+seastar::future<Ref<PG>>
+CoreState::get_or_create_pg(
+  PGShardManager &shard_manager,
+  ShardServices &shard_services,
+  PGMap::PGCreationBlockingEvent::TriggerI&& trigger,
+  spg_t pgid,
+  epoch_t epoch,
+  std::unique_ptr<PGCreateInfo> info)
+{
+  if (info) {
+    auto [fut, creating] = pg_map.wait_for_pg(std::move(trigger), pgid);
+    if (!creating) {
+      pg_map.set_creating(pgid);
+      (void)handle_pg_create_info(
+	shard_manager, shard_services, std::move(info));
+    }
+    return std::move(fut);
+  } else {
+    return seastar::make_ready_future<Ref<PG>>(pg_map.get_pg(pgid));
+  }
+}
+
+seastar::future<Ref<PG>> CoreState::wait_for_pg(
+  PGMap::PGCreationBlockingEvent::TriggerI&& trigger, spg_t pgid)
+{
+  return pg_map.wait_for_pg(std::move(trigger), pgid).first;
+}
+
+Ref<PG> CoreState::get_pg(spg_t pgid)
+{
+  return pg_map.get_pg(pgid);
+}
+
 
 seastar::future<> ShardServices::dispatch_context_transaction(
   crimson::os::CollectionRef col, PeeringCtx &ctx) {

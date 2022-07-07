@@ -72,6 +72,8 @@ public:
   FORWARD_TO_CORE(get_up_epoch);
   FORWARD_TO_CORE(set_up_epoch);
 
+  FORWARD(pg_created, pg_created, core_state.pg_map);
+
   template <typename T, typename... Args>
   auto start_pg_operation(Args&&... args) {
     auto op = local_state.registry.create_operation<T>(
@@ -113,14 +115,12 @@ public:
 	  PGMap::PGCreationBlockingEvent
 	  >([this, &opref](auto &&trigger) {
 	    std::ignore = this; // avoid clang warning
-	    std::ignore = opref; // TODOSAM
-/*
-	    return get_or_create_pg(
+	    return core_state.get_or_create_pg(
+	      *this,
+	      shard_services,
 	      std::move(trigger),
 	      opref.get_pgid(), opref.get_epoch(),
 	      std::move(opref.get_create_info()));
-	      */
-	    return seastar::make_ready_future<Ref<PG>>();
 	  });
       } else {
 	logger.debug("{}: !can_create", opref);
@@ -128,9 +128,7 @@ public:
 	  PGMap::PGCreationBlockingEvent
 	  >([this, &opref](auto &&trigger) {
 	    std::ignore = this; // avoid clang warning
-	    std::ignore = opref; // TODOSAM
-	    //return wait_for_pg(std::move(trigger), opref.get_pgid());
-	    return seastar::make_ready_future<Ref<PG>>();
+	    return core_state.wait_for_pg(std::move(trigger), opref.get_pgid());
 	  });
       }
     }).then([this, &logger, &opref](Ref<PG> pgref) {
@@ -141,6 +139,10 @@ public:
     return std::make_pair(std::move(op), std::move(fut));
   }
 
+  template <typename F>
+  auto with_pg(spg_t pgid, F &&f) {
+    return std::invoke(std::forward<F>(f), core_state.get_pg(pgid));
+  }
 };
 
 }
