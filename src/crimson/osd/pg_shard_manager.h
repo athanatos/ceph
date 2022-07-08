@@ -72,6 +72,24 @@ public:
   FORWARD_TO_CORE(get_up_epoch);
   FORWARD_TO_CORE(set_up_epoch);
 
+  FORWARD(pg_created, pg_created, core_state.pg_map);
+  auto load_pgs() {
+    return core_state.load_pgs(shard_services);
+  }
+  FORWARD_TO_CORE(stop_pgs);
+  auto get_pg_stats() const { return core_state.get_pg_stats(); }
+
+  template <typename F>
+  auto for_each_pg(F &&f) const {
+    return core_state.for_each_pg(std::forward<F>(f));
+  }
+  auto get_num_pgs() const { return core_state.pg_map.get_pgs().size(); }
+
+  auto broadcast_map_to_pgs(epoch_t epoch) {
+    return core_state.broadcast_map_to_pgs(
+      *this, shard_services, epoch);
+  }
+
   template <typename T, typename... Args>
   auto start_pg_operation(Args&&... args) {
     auto op = local_state.registry.create_operation<T>(
@@ -113,14 +131,12 @@ public:
 	  PGMap::PGCreationBlockingEvent
 	  >([this, &opref](auto &&trigger) {
 	    std::ignore = this; // avoid clang warning
-	    std::ignore = opref; // TODO (next commit)
-/*
-	    return get_or_create_pg(
+	    return core_state.get_or_create_pg(
+	      *this,
+	      shard_services,
 	      std::move(trigger),
 	      opref.get_pgid(), opref.get_epoch(),
 	      std::move(opref.get_create_info()));
-	      */
-	    return seastar::make_ready_future<Ref<PG>>();
 	  });
       } else {
 	logger.debug("{}: !can_create", opref);
@@ -128,9 +144,7 @@ public:
 	  PGMap::PGCreationBlockingEvent
 	  >([this, &opref](auto &&trigger) {
 	    std::ignore = this; // avoid clang warning
-	    std::ignore = opref; // TODO (next commit)
-	    //return wait_for_pg(std::move(trigger), opref.get_pgid());
-	    return seastar::make_ready_future<Ref<PG>>();
+	    return core_state.wait_for_pg(std::move(trigger), opref.get_pgid());
 	  });
       }
     }).then([this, &logger, &opref](Ref<PG> pgref) {
@@ -141,6 +155,10 @@ public:
     return std::make_pair(std::move(op), std::move(fut));
   }
 
+  template <typename F>
+  auto with_pg(spg_t pgid, F &&f) {
+    return std::invoke(std::forward<F>(f), core_state.get_pg(pgid));
+  }
 };
 
 }
