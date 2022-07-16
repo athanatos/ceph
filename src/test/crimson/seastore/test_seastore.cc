@@ -426,6 +426,22 @@ ghobject_t make_oid(int i) {
   ret.set_shard(shard_id_t(shard_id_t::NO_SHARD));
   ret.hobj.nspace = "asdf";
   ret.hobj.pool = 0;
+  uint32_t reverse_hash = hobject_t::_reverse_bits(0);
+  ret.hobj.set_bitwise_key_u32(reverse_hash + i * 100);
+  return ret;
+}
+
+ghobject_t make_temp_oid(int i) {
+  stringstream ss;
+  ss << "temp_object_" << i;
+  auto ret = ghobject_t(
+    hobject_t(
+      sobject_t(ss.str(), CEPH_NOSNAP)));
+  ret.set_shard(shard_id_t(shard_id_t::NO_SHARD));
+  ret.hobj.nspace = "hjkl";
+  ret.hobj.pool = -2ll;
+  uint32_t reverse_hash = hobject_t::_reverse_bits(0);
+  ret.hobj.set_bitwise_key_u32(reverse_hash + i * 100);
   return ret;
 }
 
@@ -491,6 +507,181 @@ TEST_F(seastore_test_t, touch_stat_list_remove)
 
     remove_object(test_obj);
     validate_objects();
+  });
+}
+
+TEST_F(seastore_test_t, list_objects)
+{
+  run_async([this] {
+    // create temp objects
+    auto temp_oid_0 = make_temp_oid(0);
+    auto &test_temp_obj_0 = get_object(temp_oid_0);
+    test_temp_obj_0.touch(*seastore);
+    test_temp_obj_0.check_size(*seastore);
+    auto temp_oid_1 = make_temp_oid(1);
+    auto &test_temp_obj_1 = get_object(temp_oid_1);
+    test_temp_obj_1.touch(*seastore);
+    test_temp_obj_1.check_size(*seastore);
+    auto temp_oid_2 = make_temp_oid(2);
+    auto &test_temp_obj_2 = get_object(temp_oid_2);
+    test_temp_obj_2.touch(*seastore);
+    test_temp_obj_2.check_size(*seastore);
+    // get objects ranges
+    col_obj_ranges_t obj_ranges = seastore->get_objs_range(coll, 0);
+
+    // list all temp objects
+    std::vector<ghobject_t> temp_oids;
+    for (auto& [oid, obj] : test_objects) {
+      if (oid.hobj.oid.name.find("temp") != std::string::npos) {
+        temp_oids.emplace_back(oid);
+      }
+    }
+    auto ret = seastore->list_objects(
+      coll,
+      ghobject_t(),
+      obj_ranges.temp_end,
+      std::numeric_limits<uint64_t>::max()).get0();
+    EXPECT_EQ(std::get<1>(ret), ghobject_t::get_max());
+    EXPECT_EQ(std::get<0>(ret), temp_oids);
+    EXPECT_EQ(std::get<0>(ret).size(), 3);
+
+    // list the middle temp object
+    temp_oids.clear();
+    for (auto& [oid, obj] : test_objects) {
+      if (oid.hobj.oid.name.find("temp_object_1") != std::string::npos) {
+        temp_oids.emplace_back(oid);
+      }
+    }
+    // limit by start and end oid
+    ret = seastore->list_objects(
+      coll,
+      temp_oid_1,
+      temp_oid_2,
+      std::numeric_limits<uint64_t>::max()).get0();
+    EXPECT_EQ(std::get<1>(ret), temp_oid_2);
+    EXPECT_EQ(std::get<0>(ret), temp_oids);
+    EXPECT_EQ(std::get<0>(ret).size(), 1);
+    // limit by number
+    ret = seastore->list_objects(
+      coll,
+      temp_oid_1,
+      obj_ranges.temp_end,
+      1).get0();
+    EXPECT_EQ(std::get<1>(ret), temp_oid_2);
+    EXPECT_EQ(std::get<0>(ret), temp_oids);
+    EXPECT_EQ(std::get<0>(ret).size(), 1);
+
+    // list some temp objects including beginning
+    temp_oids.clear();
+    for (auto& [oid, obj] : test_objects) {
+      if (oid.hobj.oid.name.find("temp_object_0") != std::string::npos) {
+        temp_oids.emplace_back(oid);
+      }
+    }
+    // limit by start and end oid
+    ret = seastore->list_objects(
+      coll,
+      temp_oid_0,
+      temp_oid_1,
+      std::numeric_limits<uint64_t>::max()).get0();
+    EXPECT_EQ(std::get<1>(ret), temp_oid_1);
+    EXPECT_EQ(std::get<0>(ret), temp_oids);
+    EXPECT_EQ(std::get<0>(ret).size(), 1);
+    // limit by number
+    ret = seastore->list_objects(
+      coll,
+      ghobject_t(),
+      ghobject_t::get_max(),
+      1).get0();
+    EXPECT_EQ(std::get<1>(ret), temp_oid_1);
+    EXPECT_EQ(std::get<0>(ret), temp_oids);
+    EXPECT_EQ(std::get<0>(ret).size(), 1);
+
+    // list some temp objects including end
+    temp_oids.clear();
+    for (auto& [oid, obj] : test_objects) {
+      if (oid.hobj.oid.name.find("temp_object_2") != std::string::npos) {
+        temp_oids.emplace_back(oid);
+      }
+    }
+    // limit by start and end oid
+    ret = seastore->list_objects(
+      coll,
+      temp_oid_2,
+      obj_ranges.temp_end,
+      std::numeric_limits<uint64_t>::max()).get0();
+    EXPECT_EQ(std::get<1>(ret), ghobject_t::get_max());
+    EXPECT_EQ(std::get<0>(ret), temp_oids);
+    EXPECT_EQ(std::get<0>(ret).size(), 1);
+    // limit by number
+    ret = seastore->list_objects(
+      coll,
+      temp_oid_2,
+      obj_ranges.temp_end,
+      1).get0();
+    EXPECT_EQ(std::get<1>(ret), ghobject_t::get_max());
+    EXPECT_EQ(std::get<0>(ret), temp_oids);
+    EXPECT_EQ(std::get<0>(ret).size(), 1);
+
+    // starting from a non-beginning temp object and
+    // ending at a non-end normal object
+    // create normal objects
+    auto oid_0 = make_oid(0);
+    auto &test_obj_0 = get_object(oid_0);
+    test_obj_0.touch(*seastore);
+    test_obj_0.check_size(*seastore);
+    auto oid_1 = make_oid(1);
+    auto &test_obj_1 = get_object(oid_1);
+    test_obj_1.touch(*seastore);
+    test_obj_1.check_size(*seastore);
+    auto oid_2 = make_oid(2);
+    auto &test_obj_2 = get_object(oid_2);
+    test_obj_2.touch(*seastore);
+    test_obj_2.check_size(*seastore);
+
+    std::vector<ghobject_t> some_oids;
+    int i = 0;
+    for (auto& [oid, obj] : test_objects) {
+      if (i > 1 && i < 5) {
+        some_oids.emplace_back(oid);
+      }
+      ++i;
+    }
+    // limit by start and end oid
+    ret = seastore->list_objects(
+      coll,
+      temp_oid_2,
+      oid_2,
+      std::numeric_limits<uint64_t>::max()).get0();
+    EXPECT_EQ(std::get<1>(ret), oid_2);
+    EXPECT_EQ(std::get<0>(ret), some_oids);
+    EXPECT_EQ(std::get<0>(ret).size(), 3);
+    // limit by number
+    ret = seastore->list_objects(
+      coll,
+      temp_oid_2,
+      ghobject_t::get_max(),
+      3).get0();
+    EXPECT_EQ(std::get<1>(ret), oid_2);
+    EXPECT_EQ(std::get<0>(ret), some_oids);
+    EXPECT_EQ(std::get<0>(ret).size(), 3);
+
+    // get next cross ranges boundary
+    some_oids.clear();
+    for (auto& [oid, obj] : test_objects) {
+      if (oid.hobj.oid.name.find("temp") != std::string::npos) {
+        some_oids.emplace_back(oid);
+      }
+    }
+    ret = seastore->list_objects(
+      coll,
+      ghobject_t(),
+      ghobject_t::get_max(),
+      3).get0();
+    EXPECT_EQ(std::get<1>(ret), oid_0);
+    EXPECT_EQ(std::get<0>(ret), some_oids);
+    EXPECT_EQ(std::get<0>(ret).size(), 3);
+
   });
 }
 
