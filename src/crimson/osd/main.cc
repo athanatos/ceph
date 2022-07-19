@@ -224,7 +224,7 @@ int main(int argc, const char* argv[])
                                               CEPH_ENTITY_TYPE_OSD,
                                               &cluster_name,
                                               &conf_file_list);
-  seastar::sharded<crimson::osd::OSD> osd;
+  seastar::sharded<crimson::osd::OSD> osd; // TODOSAM
   using crimson::common::sharded_conf;
   using crimson::common::sharded_perf_coll;
   try {
