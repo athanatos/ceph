@@ -529,27 +529,26 @@ SeaStore::list_objects(CollectionRef ch,
   using RetType = typename OnodeManager::list_onodes_bare_ret;
   return seastar::do_with(
     RetType(),
-    std::list<std::pair<ghobject_t, ghobject_t>>(),
     std::move(limit),
-    [this, ch, start, end](auto& ret, auto& ranges, auto& limit) {
-    return repeat_eagain([this, ch, start, end, &limit, &ret, &ranges] {
+    [this, ch, start, end](auto& ret, auto& limit) {
+    return repeat_eagain([this, ch, start, end, &limit, &ret] {
       return transaction_manager->with_transaction_intr(
         Transaction::src_t::READ,
         "list_objects",
-        [this, ch, start, end, &limit, &ret, &ranges](auto &t)
+        [this, ch, start, end, &limit, &ret](auto &t)
       {
         return get_coll_bits(
           ch, t
-	  ).si_then([this, ch, &t, start, end, &limit, &ret, &ranges](auto bits) {
+	).si_then([this, ch, &t, start, end, &limit, &ret](auto bits) {
           if (!bits) {
             return OnodeManager::list_onodes_iertr::make_ready_future<
               OnodeManager::list_onodes_bare_ret>(std::make_tuple(
               std::vector<ghobject_t>(), ghobject_t::get_max()));
           } else {
             auto filter = get_objs_range(ch, *bits);
-            ranges = get_ranges(ch, start, end, filter);
             return trans_intr::repeat(
-              [this, &t, &ret, &ranges, &limit, filter]() mutable
+              [this, &t, &ret, &limit,
+	       filter, ranges = get_ranges(ch, start, end, filter)]() mutable
               -> OnodeManager::list_onodes_iertr::future<seastar::stop_iteration> {
               // cross boundary get next range first as next
               if (limit == 0 &&
