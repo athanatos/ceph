@@ -555,22 +555,7 @@ SeaStore::list_objects(CollectionRef ch,
               [this, &t, &ret, &limit,
 	       filter, ranges = get_ranges(ch, start, end, filter)
 	      ]() mutable -> repeat_ret {
-		// cross boundary get next range first as next
-		if (limit == 0 &&
-		    std::get<1>(ret) == filter.temp_end &&
-		    !ranges.empty()) {
-		  auto ite = ranges.begin();
-		  auto pstart = ite->first;
-		  auto pend = ite->second;
-		  ranges.pop_front();
-		  return onode_manager->list_onodes(t, pstart, pend, 0
-		  ).si_then([&ret](auto &&_ret) mutable {
-		    std::get<1>(ret) = std::get<1>(_ret);
-		    return list_iertr::make_ready_future<
-		      seastar::stop_iteration
-		      >(seastar::stop_iteration::yes);
-		  });
-		} else if (limit == 0 || ranges.empty()) {
+		if (limit == 0 || ranges.empty()) {
 		  return list_iertr::make_ready_future<
 		    seastar::stop_iteration
 		    >(seastar::stop_iteration::yes);
