@@ -12,37 +12,58 @@ namespace {
   }
 }
 
-using std::make_pair;
-
 namespace crimson::osd {
 
-PGMap::PGCreationState::PGCreationState(spg_t pgid) : pgid(pgid) {}
-PGMap::PGCreationState::~PGCreationState() {}
-
-void PGMap::PGCreationState::dump_detail(Formatter *f) const
+void PGMap::PGPlacement::dump_detail(Formatter *f) const
 {
   f->dump_stream("pgid") << pgid;
-  f->dump_bool("creating", creating);
+  f->dump_bool("creating", on_available.has_value());
 }
+
+void PGMap::PGPlacement::set_created(Ref<PG> _pg)
+{
+  assert(!pg);
+  pg = _pg;
+
+  assert(on_available);
+  on_available->set_value();
+  on_available = std::nullopt;
+}
+
+PGMap::PGPlacement::PGPlacement(spg_t pgid)
+  : pgid(pgid), on_available(seastar::shared_promise<>()) {}
+PGMap::PGPlacement::~PGPlacement() {}
 
 std::pair<seastar::future<Ref<PG>>, bool>
 PGMap::wait_for_pg(PGCreationBlockingEvent::TriggerI&& trigger, spg_t pgid)
 {
-  if (auto pg = get_pg(pgid)) {
-    return make_pair(seastar::make_ready_future<Ref<PG>>(pg), true);
-  } else {
-    auto &state = pgs_creating.emplace(pgid, pgid).first->second;
-    return make_pair(
-      // TODO: add to blocker Trigger-taking make_blocking_future
-      trigger.maybe_record_blocking(state.promise.get_shared_future(), state),
-      state.creating);
+  auto pgiter = pgs.find(pgid);
+  if (pgiter == pgs.end()) {
+    pgiter = pgs.emplace(pgid, pgid).first;
   }
+
+  if (pgiter->second.pg) {
+    return std::make_pair(
+      seastar::make_ready_future<Ref<PG>>(pgiter->second.pg),
+      true);
+  }
+
+  auto &mapping = pgiter->second;
+  assert(mapping.on_available);
+  auto retfut = mapping.on_available->get_shared_future(
+  ).then([&mapping] {
+    return mapping.pg;
+  });
+  return std::make_pair(
+    // TODO: add to blocker Trigger-taking make_blocking_future
+    trigger.maybe_record_blocking(std::move(retfut), mapping),
+    false);
 }
 
 Ref<PG> PGMap::get_pg(spg_t pgid)
 {
-  if (auto pg = pgs.find(pgid); pg != pgs.end()) {
-    return pg->second;
+  if (auto pg = pgs.find(pgid); pg != pgs.end() && pg->second.pg) {
+    return pg->second.pg;
   } else {
     return nullptr;
   }
@@ -52,28 +73,15 @@ void PGMap::set_creating(spg_t pgid)
 {
   logger().debug("Creating {}", pgid);
   ceph_assert(pgs.count(pgid) == 0);
-  auto pg = pgs_creating.find(pgid);
-  ceph_assert(pg != pgs_creating.end());
-  ceph_assert(pg->second.creating == false);
-  pg->second.creating = true;
+  pgs.emplace(pgid, pgid);
 }
 
 void PGMap::pg_created(spg_t pgid, Ref<PG> pg)
 {
   logger().debug("Created {}", pgid);
-  ceph_assert(!pgs.count(pgid));
-  pgs.emplace(pgid, pg);
-
-  auto state = pgs_creating.find(pgid);
-  ceph_assert(state != pgs_creating.end());
-  state->second.promise.set_value(pg);
-  pgs_creating.erase(pgid);
-}
-
-void PGMap::pg_loaded(spg_t pgid, Ref<PG> pg)
-{
-  ceph_assert(!pgs.count(pgid));
-  pgs.emplace(pgid, pg);
+  auto pgiter = pgs.find(pgid);
+  ceph_assert(pgiter != pgs.end());
+  pgiter->second.set_created(pg);
 }
 
 PGMap::~PGMap() {}

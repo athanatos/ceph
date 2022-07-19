@@ -85,7 +85,7 @@ public:
   FORWARD_CONST(get_pg_stats, get_pg_stats, osd_singleton_state)
 
   FORWARD_CONST(for_each_pg, for_each_pg, osd_singleton_state)
-  auto get_num_pgs() const { return osd_singleton_state.pg_map.get_pgs().size(); }
+  auto get_num_pgs() const { return osd_singleton_state.pg_map.get_num_pgs(); }
 
   auto broadcast_map_to_pgs(epoch_t epoch) {
     return osd_singleton_state.broadcast_map_to_pgs(

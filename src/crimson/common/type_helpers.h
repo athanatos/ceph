@@ -6,3 +6,6 @@
 #include "boost/intrusive_ptr.hpp"
 
 template<typename T> using Ref = boost::intrusive_ptr<T>;
+
+using core_id_t = unsigned;
+static constexpr NULL_CORE = std::numeric_limits<core_id_t>::max();
