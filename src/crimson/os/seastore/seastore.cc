@@ -582,12 +582,15 @@ SeaStore::list_objects(CollectionRef ch,
 		return onode_manager->list_onodes(
 		  t, pstart, pend, limit
 		).si_then([&limit, &ret, pend](auto &&_ret) mutable {
-		  std::get<0>(ret).insert(
-		    std::get<0>(ret).end(),
-		    std::get<0>(_ret).begin(), std::get<0>(_ret).end());
+		  auto &next_objects = std::get<0>(_ret);
+		  auto &ret_objects = std::get<0>(ret);
+		  ret_objects.insert(
+		    ret_objects.end(),
+		    next_objects.begin(),
+		    next_objects.end());
 		  std::get<1>(ret) = std::get<1>(_ret);
-		  assert(limit >= std::get<0>(_ret).size());
-		  limit -= std::get<0>(_ret).size();
+		  assert(limit >= next_objects.size());
+		  limit -= next_objects.size();
 		  assert(limit == 0 ||
 			 std::get<1>(_ret) == pend ||
 			 std::get<1>(_ret) == ghobject_t::get_max());
