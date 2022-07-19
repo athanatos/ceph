@@ -562,12 +562,13 @@ seastar::future<> OSDSingletonState::load_pgs(
       [this, &shard_services](auto coll) {
 	spg_t pgid;
 	if (coll.is_pg(&pgid)) {
+	  pg_map.set_creating(pgid);
 	  return load_pg(
 	    shard_services,
 	    pgid
 	  ).then([pgid, this, &shard_services](auto &&pg) {
 	    logger().info("load_pgs: loaded {}", pgid);
-	    pg_map.pg_loaded(pgid, std::move(pg));
+	    pg_map.pg_created(pgid, std::move(pg));
 	    shard_services.inc_pg_num();
 	    return seastar::now();
 	  });
@@ -610,16 +611,21 @@ seastar::future<Ref<PG>> OSDSingletonState::load_pg(
 
 seastar::future<> OSDSingletonState::stop_pgs()
 {
+  return seastar::now();
+/*
+  // TODOSAM
   return seastar::parallel_for_each(
     pg_map.get_pgs(),
     [](auto& p) {
       return p.second->stop();
     });
+    */
 }
 
 std::map<pg_t, pg_stat_t> OSDSingletonState::get_pg_stats() const
 {
   std::map<pg_t, pg_stat_t> ret;
+  /* TODOSAM
   for (auto [pgid, pg] : pg_map.get_pgs()) {
     if (pg->is_primary()) {
       auto stats = pg->get_stats();
@@ -628,6 +634,7 @@ std::map<pg_t, pg_stat_t> OSDSingletonState::get_pg_stats() const
       ret.emplace(pgid.pgid, std::move(stats));
     }
   }
+  */
   return ret;
 }
 
@@ -636,6 +643,8 @@ seastar::future<> OSDSingletonState::broadcast_map_to_pgs(
   ShardServices &shard_services,
   epoch_t epoch)
 {
+  return seastar::now();
+/*
   auto &pgs = pg_map.get_pgs();
   return seastar::parallel_for_each(
     pgs.begin(), pgs.end(),
@@ -647,6 +656,7 @@ seastar::future<> OSDSingletonState::broadcast_map_to_pgs(
       osdmap_gate.got_map(epoch);
       return seastar::make_ready_future();
     });
+    */
 }
 
 seastar::future<> ShardServices::dispatch_context_transaction(
