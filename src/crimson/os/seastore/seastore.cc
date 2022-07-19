@@ -526,6 +526,7 @@ SeaStore::list_objects(CollectionRef ch,
                        const ghobject_t& end,
                        uint64_t limit) const
 {
+  using list_iertr = OnodeManager::list_onodes_iertr;
   using RetType = typename OnodeManager::list_onodes_bare_ret;
   return seastar::do_with(
     RetType(),
@@ -541,54 +542,63 @@ SeaStore::list_objects(CollectionRef ch,
           ch, t
 	).si_then([this, ch, &t, start, end, &limit, &ret](auto bits) {
           if (!bits) {
-            return OnodeManager::list_onodes_iertr::make_ready_future<
-              OnodeManager::list_onodes_bare_ret>(std::make_tuple(
-              std::vector<ghobject_t>(), ghobject_t::get_max()));
+            return list_iertr::make_ready_future<
+              OnodeManager::list_onodes_bare_ret
+	      >(std::make_tuple(
+		  std::vector<ghobject_t>(),
+		  ghobject_t::get_max()));
           } else {
             auto filter = get_objs_range(ch, *bits);
+	    using list_iertr = OnodeManager::list_onodes_iertr;
+	    using repeat_ret = list_iertr::future<seastar::stop_iteration>;
             return trans_intr::repeat(
               [this, &t, &ret, &limit,
-	       filter, ranges = get_ranges(ch, start, end, filter)]() mutable
-              -> OnodeManager::list_onodes_iertr::future<seastar::stop_iteration> {
-              // cross boundary get next range first as next
-              if (limit == 0 &&
-                  std::get<1>(ret) == filter.temp_end &&
-                  !ranges.empty()) {
-                auto ite = ranges.begin();
-                auto pstart = ite->first;
-                auto pend = ite->second;
-                ranges.pop_front();
-                return onode_manager->list_onodes(t, pstart, pend, 0)
-                  .si_then([&ret](auto &&_ret) mutable {
-                  std::get<1>(ret) = std::get<1>(_ret);
-                  return OnodeManager::list_onodes_iertr::make_ready_future<
-                    seastar::stop_iteration>(seastar::stop_iteration::yes);
-                });
-              } else if (limit == 0 || ranges.empty()) {
-                return OnodeManager::list_onodes_iertr::make_ready_future<
-                  seastar::stop_iteration>(seastar::stop_iteration::yes);
-              }
-              auto ite = ranges.begin();
-              auto pstart = ite->first;
-              auto pend = ite->second;
-              ranges.pop_front();
-              return onode_manager->list_onodes(t, pstart, pend, limit)
-                .si_then([&limit, &ret, pend](auto &&_ret) mutable {
-                std::get<0>(ret).insert(std::get<0>(ret).end(),
-                  std::get<0>(_ret).begin(), std::get<0>(_ret).end());
-                std::get<1>(ret) = std::get<1>(_ret);
-                assert(limit >= std::get<0>(_ret).size());
-                limit -= std::get<0>(_ret).size();
-                assert(limit == 0 ||
-                       std::get<1>(_ret) == pend ||
-                       std::get<1>(_ret) == ghobject_t::get_max());
-                return OnodeManager::list_onodes_iertr::make_ready_future<
-                  seastar::stop_iteration>(seastar::stop_iteration::no);
+	       filter, ranges = get_ranges(ch, start, end, filter)
+	      ]() mutable -> repeat_ret {
+		// cross boundary get next range first as next
+		if (limit == 0 &&
+		    std::get<1>(ret) == filter.temp_end &&
+		    !ranges.empty()) {
+		  auto ite = ranges.begin();
+		  auto pstart = ite->first;
+		  auto pend = ite->second;
+		  ranges.pop_front();
+		  return onode_manager->list_onodes(t, pstart, pend, 0
+		  ).si_then([&ret](auto &&_ret) mutable {
+		    std::get<1>(ret) = std::get<1>(_ret);
+		    return list_iertr::make_ready_future<
+		      seastar::stop_iteration
+		      >(seastar::stop_iteration::yes);
+		  });
+		} else if (limit == 0 || ranges.empty()) {
+		  return list_iertr::make_ready_future<
+		    seastar::stop_iteration
+		    >(seastar::stop_iteration::yes);
+		}
+		auto ite = ranges.begin();
+		auto pstart = ite->first;
+		auto pend = ite->second;
+		ranges.pop_front();
+		return onode_manager->list_onodes(
+		  t, pstart, pend, limit
+		).si_then([&limit, &ret, pend](auto &&_ret) mutable {
+		  std::get<0>(ret).insert(
+		    std::get<0>(ret).end(),
+		    std::get<0>(_ret).begin(), std::get<0>(_ret).end());
+		  std::get<1>(ret) = std::get<1>(_ret);
+		  assert(limit >= std::get<0>(_ret).size());
+		  limit -= std::get<0>(_ret).size();
+		  assert(limit == 0 ||
+			 std::get<1>(_ret) == pend ||
+			 std::get<1>(_ret) == ghobject_t::get_max());
+		  return list_iertr::make_ready_future<
+		    seastar::stop_iteration
+		    >(seastar::stop_iteration::no);
+		});
+	      }).si_then([&ret] {
+		return list_iertr::make_ready_future<
+		  OnodeManager::list_onodes_bare_ret>(std::move(ret));
 	      });
-            }).si_then([&ret] {
-              return OnodeManager::list_onodes_iertr::make_ready_future<
-                OnodeManager::list_onodes_bare_ret>(std::move(ret));
-            });
           }
         });
       }).safe_then([&ret](auto&& _ret) {
