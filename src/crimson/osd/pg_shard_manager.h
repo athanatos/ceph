@@ -85,7 +85,7 @@ public:
   FORWARD_CONST(get_pg_stats, get_pg_stats, core_state)
 
   FORWARD_CONST(for_each_pg, for_each_pg, core_state)
-  auto get_num_pgs() const { return core_state.pg_map.get_pgs().size(); }
+  auto get_num_pgs() const { return core_state.pg_map.get_num_pgs(); }
 
   auto broadcast_map_to_pgs(epoch_t epoch) {
     return core_state.broadcast_map_to_pgs(

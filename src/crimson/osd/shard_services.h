@@ -276,9 +276,7 @@ class CoreState : public md_config_obs_t, public OSDMapService {
 
   template <typename F>
   void for_each_pg(F &&f) const {
-    for (auto &pg : pg_map.get_pgs()) {
-      std::invoke(f, pg.first, pg.second);
-    }
+    return; // TODOSAM
   }
 };
 
