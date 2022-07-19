@@ -565,12 +565,13 @@ seastar::future<> OSDSingletonState::load_pgs(
       [this, &shard_services](auto coll) {
 	spg_t pgid;
 	if (coll.is_pg(&pgid)) {
+	  pg_map.set_creating(pgid);
 	  return load_pg(
 	    shard_services,
 	    pgid
 	  ).then([pgid, this, &shard_services](auto &&pg) {
 	    logger().info("load_pgs: loaded {}", pgid);
-	    pg_map.pg_loaded(pgid, std::move(pg));
+	    pg_map.pg_created(pgid, std::move(pg));
 	    shard_services.inc_pg_num();
 	    return seastar::now();
 	  });
