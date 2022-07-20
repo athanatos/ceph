@@ -478,44 +478,17 @@ get_ranges(CollectionRef ch,
            ghobject_t end,
            col_obj_ranges_t obj_ranges)
 {
-  bool temp;
+  ceph_assert(start <= end);
   std::list<std::pair<ghobject_t, ghobject_t>> ranges;
-  if (start == ghobject_t() ||
-    start.hobj == hobject_t() ||
-    start == ch->get_cid().get_min_hobj()) {
-    start = obj_ranges.temp_begin;
-    temp = true;
-  } else {
-    if (start.hobj.is_temp()) {
-      temp = true;
-      ceph_assert(start >= obj_ranges.temp_begin && start <= obj_ranges.temp_end);
-    } else {
-      temp = false;
-      ceph_assert(start >= obj_ranges.obj_begin && start <= obj_ranges.obj_end);
-    }
+  if (start < obj_ranges.temp_end) {
+    ranges.emplace_back(
+      std::max(obj_ranges.temp_begin, start),
+      std::min(obj_ranges.temp_end, end));
   }
-  if (end.hobj.is_max()) {
-    if (temp) {
-      ranges.emplace_back(start, obj_ranges.temp_end);
-      ranges.emplace_back(obj_ranges.obj_begin, obj_ranges.obj_end);
-    } else {
-      ranges.emplace_back(start, obj_ranges.obj_end);
-    }
-  } else {
-    if (end.hobj.is_temp()) {
-      if (temp) {
-        ranges.emplace_back(start, end);
-      } else {
-        ceph_assert(0 == "impossible");
-      }
-    } else {
-      if (temp) {
-        ranges.emplace_back(start, obj_ranges.temp_end);
-        ranges.emplace_back(obj_ranges.obj_begin, end);
-      } else {
-        ranges.emplace_back(start, end);
-      }
-    }
+  if (end > obj_ranges.obj_begin) {
+    ranges.emplace_back(
+      std::max(obj_ranges.obj_begin, start),
+      std::min(obj_ranges.obj_end, end));
   }
   return ranges;
 }
@@ -526,6 +499,7 @@ SeaStore::list_objects(CollectionRef ch,
                        const ghobject_t& end,
                        uint64_t limit) const
 {
+  ceph_assert(start <= end);
   using list_iertr = OnodeManager::list_onodes_iertr;
   using RetType = typename OnodeManager::list_onodes_bare_ret;
   return seastar::do_with(
