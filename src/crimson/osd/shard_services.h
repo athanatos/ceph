@@ -302,13 +302,14 @@ class OSDSingletonState : public md_config_obs_t, public OSDMapService {
 class ShardServices {
   using cached_map_t = boost::local_shared_ptr<const OSDMap>;
 
+  PerShardState local_state;
+
   OSDSingletonState &osd_singleton_state;
-  PerShardState &local_state;
 public:
-  ShardServices(
-    OSDSingletonState &osd_singleton_state,
-    PerShardState &local_state)
-    : osd_singleton_state(osd_singleton_state), local_state(local_state) {}
+  template <typename... Args>
+  ShardServices(OSDSingletonState &osd_singleton_state, Args&&... args)
+    : local_state(std::forward<Args>(args)...),
+      osd_singleton_state(osd_singleton_state) {}
 
   FORWARD_TO_OSD_SINGLETON(send_to_osd)
 

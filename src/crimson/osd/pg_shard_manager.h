@@ -21,9 +21,10 @@ namespace crimson::osd {
  * etc)
  */
 class PGShardManager {
-  OSDSingletonState osd_singleton_state;
-  PerShardState local_state;
-  ShardServices shard_services;
+
+  seastar::sharded<OSDSingletonState> osd_singleton_state;
+  seastar::sharded<ShardServices> shard_services;
+  PGShardMapping pg_shard_mapping{0, seastar::smp::count};
 
 public:
   PGShardManager(

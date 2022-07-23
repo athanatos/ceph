@@ -17,11 +17,11 @@ PGShardManager::PGShardManager(
   crimson::net::Messenger &public_msgr,
   crimson::mon::Client &monc,
   crimson::mgr::Client &mgrc,
-  crimson::os::FuturizedStore &store)
+  crimson::os::FuturizedStore &store) {}
+/* TODOSAM
   : osd_singleton_state(whoami, cluster_msgr, public_msgr,
-			monc, mgrc, store),
-    local_state(whoami),
-    shard_services(osd_singleton_state, local_state)
+			monc, mgrc, store)
 {}
+*/
 
 }
