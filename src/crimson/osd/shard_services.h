@@ -301,13 +301,13 @@ class CoreState : public md_config_obs_t, public OSDMapService {
 class ShardServices {
   using cached_map_t = boost::local_shared_ptr<const OSDMap>;
 
+  PerShardState local_state;
+
   CoreState &core_state;
-  PerShardState &local_state;
 public:
-  ShardServices(
-    CoreState &core_state,
-    PerShardState &local_state)
-    : core_state(core_state), local_state(local_state) {}
+  template <typename... Args>
+  ShardServices(CoreState &core_state, Args&&... args)
+    : local_state(std::forward<Args>(args)...), core_state(core_state) {}
 
   FORWARD_TO_CORE(send_to_osd)
 

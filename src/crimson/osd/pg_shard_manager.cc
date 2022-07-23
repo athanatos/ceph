@@ -19,9 +19,7 @@ PGShardManager::PGShardManager(
   crimson::mgr::Client &mgrc,
   crimson::os::FuturizedStore &store)
   : core_state(whoami, cluster_msgr, public_msgr,
-	       monc, mgrc, store),
-    local_state(whoami),
-    shard_services(core_state, local_state)
+	       monc, mgrc, store)
 {}
 
 }
