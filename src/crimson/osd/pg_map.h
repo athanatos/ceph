@@ -4,7 +4,6 @@
 #pragma once
 
 #include <map>
-#include <limits>
 
 #include <seastar/core/future.hh>
 #include <seastar/core/shared_future.hh>
@@ -17,42 +16,31 @@
 namespace crimson::osd {
 class PG;
 
-/**
- * PGMap
- *
- * Maps spg_t to PG instance within a shard.  Handles dealing with waiting
- * on pg creation.
- */
 class PGMap {
-
-  struct PGPlacement : BlockerT<PGPlacement> {
-    static constexpr const char * type_name = "PGPlacement";
-    const spg_t pgid;
-
-    /* While is PG is being created (or loaded), contains a promise that
-     * will become available once the PG is ready.  Otherwise, nullopt. */
-    std::optional<seastar::shared_promise<>> on_available;
-
-    // null until created, only accessible on specified core
-    Ref<PG> pg;
-
-    PGPlacement(spg_t pgid);
-    ~PGPlacement();
-
-    void set_created(Ref<PG> _pg);
-
-    PGPlacement(const PGPlacement &) = delete;
-    PGPlacement(PGPlacement &&) = delete;
-    PGPlacement &operator=(const PGPlacement &) = delete;
-    PGPlacement &operator=(PGPlacement &&) = delete;
+  struct PGCreationState : BlockerT<PGCreationState> {
+    static constexpr const char * type_name = "PGCreation";
 
     void dump_detail(Formatter *f) const final;
+
+    spg_t pgid;
+    seastar::shared_promise<Ref<PG>> promise;
+    bool creating = false;
+    PGCreationState(spg_t pgid);
+
+    PGCreationState(const PGCreationState &) = delete;
+    PGCreationState(PGCreationState &&) = delete;
+    PGCreationState &operator=(const PGCreationState &) = delete;
+    PGCreationState &operator=(PGCreationState &&) = delete;
+
+    ~PGCreationState();
   };
 
-  std::map<spg_t, PGPlacement> pgs;
+  std::map<spg_t, PGCreationState> pgs_creating;
+  using pgs_t = std::map<spg_t, Ref<PG>>;
+  pgs_t pgs;
 
 public:
-  using PGCreationBlocker = PGPlacement;
+  using PGCreationBlocker = PGCreationState;
   using PGCreationBlockingEvent = PGCreationBlocker::BlockingEvent;
   /**
    * Get future for pg with a bool indicating whether it's already being
@@ -76,8 +64,13 @@ public:
    */
   void pg_created(spg_t pgid, Ref<PG> pg);
 
-  auto get_num_pgs() const { return pgs.size(); }
+  /**
+   * Add newly loaded pg
+   */
+  void pg_loaded(spg_t pgid, Ref<PG> pg);
 
+  pgs_t& get_pgs() { return pgs; }
+  const pgs_t& get_pgs() const { return pgs; }
   PGMap() = default;
   ~PGMap();
 };
