@@ -105,15 +105,15 @@ class PerShardState {
 };
 
 /**
- * CoreState
+ * OSDSingletonState
  *
  * OSD-wide singleton holding instances that need to be accessible
  * from all PGs.
  */
-class CoreState : public md_config_obs_t, public OSDMapService {
+class OSDSingletonState : public md_config_obs_t, public OSDMapService {
   friend class ShardServices;
   friend class PGShardManager;
-  CoreState(
+  OSDSingletonState(
     int whoami,
     crimson::net::Messenger &cluster_msgr,
     crimson::net::Messenger &public_msgr,
@@ -295,7 +295,7 @@ class CoreState : public md_config_obs_t, public OSDMapService {
   }
 
 #define FORWARD_TO_LOCAL(METHOD) FORWARD(METHOD, METHOD, local_state)
-#define FORWARD_TO_CORE(METHOD) FORWARD(METHOD, METHOD, core_state)
+#define FORWARD_TO_CORE(METHOD) FORWARD(METHOD, METHOD, osd_singleton_state)
 
 /**
  * Represents services available to each PG
@@ -303,18 +303,18 @@ class CoreState : public md_config_obs_t, public OSDMapService {
 class ShardServices {
   using cached_map_t = boost::local_shared_ptr<const OSDMap>;
 
-  CoreState &core_state;
+  OSDSingletonState &osd_singleton_state;
   PerShardState &local_state;
 public:
   ShardServices(
-    CoreState &core_state,
+    OSDSingletonState &osd_singleton_state,
     PerShardState &local_state)
-    : core_state(core_state), local_state(local_state) {}
+    : osd_singleton_state(osd_singleton_state), local_state(local_state) {}
 
   FORWARD_TO_CORE(send_to_osd)
 
   crimson::os::FuturizedStore &get_store() {
-    return core_state.store;
+    return osd_singleton_state.store;
   }
 
   crimson::common::CephContext *get_cct() {
@@ -323,7 +323,7 @@ public:
 
   // OSDMapService
   const OSDMapService &get_osdmap_service() const {
-    return core_state;
+    return osd_singleton_state;
   }
 
   template <typename T, typename... Args>
@@ -374,7 +374,7 @@ public:
   FORWARD_TO_CORE(dec_pg_num)
   FORWARD_TO_CORE(send_alive)
   FORWARD_TO_CORE(send_pg_temp)
-  FORWARD_CONST(get_mnow, get_mnow, core_state)
+  FORWARD_CONST(get_mnow, get_mnow, osd_singleton_state)
   FORWARD_TO_CORE(get_hb_stamps)
 
   FORWARD(
@@ -383,15 +383,20 @@ public:
     get_cached_obc, get_cached_obc, local_state.obc_registry)
 
   FORWARD(
-    local_request_reservation, request_reservation, core_state.local_reserver)
+    local_request_reservation, request_reservation,
+    osd_singleton_state.local_reserver)
   FORWARD(
-    local_update_priority, update_priority, core_state.local_reserver)
+    local_update_priority, update_priority,
+    osd_singleton_state.local_reserver)
   FORWARD(
-    local_cancel_reservation, cancel_reservation, core_state.local_reserver)
+    local_cancel_reservation, cancel_reservation,
+    osd_singleton_state.local_reserver)
   FORWARD(
-    remote_request_reservation, request_reservation, core_state.remote_reserver)
+    remote_request_reservation, request_reservation,
+    osd_singleton_state.remote_reserver)
   FORWARD(
-    remote_cancel_reservation, cancel_reservation, core_state.remote_reserver)
+    remote_cancel_reservation, cancel_reservation,
+    osd_singleton_state.remote_reserver)
 };
 
 }
