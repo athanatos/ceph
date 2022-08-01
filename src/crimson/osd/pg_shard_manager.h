@@ -77,24 +77,88 @@ public:
   FORWARD_TO_OSD_SINGLETON(get_up_epoch)
   FORWARD_TO_OSD_SINGLETON(set_up_epoch)
 
-  FORWARD(pg_created, pg_created, osd_singleton_state.pg_map)
-  auto load_pgs() {
-    return osd_singleton_state.load_pgs(shard_services);
-  }
-  FORWARD_TO_OSD_SINGLETON(stop_pgs)
-  FORWARD_CONST(get_pg_stats, get_pg_stats, osd_singleton_state)
+  using cached_map_t = OSDMapService::cached_map_t;
 
-  FORWARD_CONST(for_each_pg, for_each_pg, osd_singleton_state)
-  auto get_num_pgs() const { return osd_singleton_state.pg_map.get_pgs().size(); }
+  /// Runs opref on the appropriate core, creating the pg as necessary.  
+  template <typename T>
+  seastar::future<> run_with_pg_maybe_create(
+    T::Ref opref
+  ) {
+    static_assert(T::can_create());
+    logger.debug("{}: can_create", opref);
+    // TODOSAM: release opref from local registry and relink on the other side
+    // TODOSAM: move with_blocking_event here into remote core
+    
+    auto core = osd_singleton_state.pg_to_shard_mapping.maybe_create_pg(
+      opref.get_pgid());
 
-  auto broadcast_map_to_pgs(epoch_t epoch) {
-    return osd_singleton_state.broadcast_map_to_pgs(
-      *this, shard_services, epoch);
+    return smp::submit_to(
+      core,
+      [opref=std::move(opref)] {
+	return opref.template with_blocking_event<
+	  PGMap::PGCreationBlockingEvent
+	  >([this, &opref](auto &&trigger) {
+	    std::ignore = this; // avoid clang warning
+	    return run_with_pg_maybe_create(
+	      shard_services,
+	      std::move(trigger),
+	      opref.get_pgid(), opref.get_epoch(),
+	      std::move(opref.get_create_info()));
+	  });
+      });
   }
+
+  /// Runs opref on the appropriate core, waiting for pg as necessary
+  template <typename T>
+  seastar::future<> run_with_pg(
+    spg_t pgid,             ///< [in] pgid of pg targert
+    typename T::Ref &&op    ///< [in] op to run
+  ) {
+    return seastar::now();
+  }
+
+  seastar::future<Ref<PG>> make_pg(
+    ShardServices &shard_services,
+    cached_map_t create_map,
+    spg_t pgid,
+    bool do_create);
+  seastar::future<Ref<PG>> handle_pg_create_info(
+    ShardServices &shard_services,
+    std::unique_ptr<PGCreateInfo> info);
+  seastar::future<Ref<PG>> get_or_create_pg(
+    ShardServices &shard_services,
+    PGMap::PGCreationBlockingEvent::TriggerI&&,
+    spg_t pgid,
+    epoch_t epoch,
+    std::unique_ptr<PGCreateInfo> info);
+  seastar::future<Ref<PG>> wait_for_pg(
+    PGMap::PGCreationBlockingEvent::TriggerI&&, spg_t pgid);
+  Ref<PG> get_pg(spg_t pgid);
+  seastar::future<Ref<PG>> load_pg(
+    ShardServices &shard_services,
+    spg_t pgid);
+  seastar::future<> load_pgs();
+  seastar::future<> stop_pgs();
+
+  // TODOSAM: needs to be future
+  std::map<pg_t, pg_stat_t> get_pg_stats() const;
+
+  template <typename F>
+  void for_each_pg(F &&f) const {
+    // TODOSAM -- needs to be a future, map over all cores
+  }
+  auto get_num_pgs() const {
+    // TODOSAM -- needs to be a future, map over all cores
+    return local_state.pg_map.get_pgs().size();
+  }
+
+  seastar::future<> broadcast_map_to_pgs(epoch_t epoch);
 
   template <typename F>
   auto with_pg(spg_t pgid, F &&f) {
-    return std::invoke(std::forward<F>(f), osd_singleton_state.get_pg(pgid));
+    return std::invoke(
+      std::forward<F>(f),
+      local_state.pg_map.get_pg(pgid));
   }
 
   template <typename T, typename... Args>
@@ -138,8 +202,7 @@ public:
 	  PGMap::PGCreationBlockingEvent
 	  >([this, &opref](auto &&trigger) {
 	    std::ignore = this; // avoid clang warning
-	    return osd_singleton_state.get_or_create_pg(
-	      *this,
+	    return run_with_pg_maybe_create(
 	      shard_services,
 	      std::move(trigger),
 	      opref.get_pgid(), opref.get_epoch(),
@@ -151,7 +214,7 @@ public:
 	  PGMap::PGCreationBlockingEvent
 	  >([this, &opref](auto &&trigger) {
 	    std::ignore = this; // avoid clang warning
-	    return osd_singleton_state.wait_for_pg(
+	    return wait_for_pg(
 	      std::move(trigger), opref.get_pgid());
 	  });
       }
