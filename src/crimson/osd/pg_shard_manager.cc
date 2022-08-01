@@ -2,6 +2,13 @@
 // vim: ts=8 sw=2 smarttab
 
 #include "crimson/osd/pg_shard_manager.h"
+#include "crimson/osd/pg.h"
+
+namespace {
+  seastar::logger& logger() {
+    return crimson::get_logger(ceph_subsys_osd);
+  }
+}
 
 namespace crimson::osd {
 
@@ -17,5 +24,56 @@ PGShardManager::PGShardManager(
     local_state(whoami),
     shard_services(osd_singleton_state, local_state)
 {}
+
+seastar::future<> PGShardManager::load_pgs()
+{
+  return seastar::now();
+#if 0
+  return store.list_collections(
+  ).then([this, &shard_services](auto colls) {
+    return seastar::parallel_for_each(
+      colls,
+      [this, &shard_services](auto coll) {
+	spg_t pgid;
+	if (coll.is_pg(&pgid)) {
+	  return load_pg(
+	    shard_services,
+	    pgid
+	  ).then([pgid, this, &shard_services](auto &&pg) {
+	    logger().info("load_pgs: loaded {}", pgid);
+	    pg_map.pg_loaded(pgid, std::move(pg));
+	    shard_services.inc_pg_num();
+	    return seastar::now();
+	  });
+	} else if (coll.is_temp(&pgid)) {
+	  logger().warn(
+	    "found temp collection on crimson osd, should be impossible: {}",
+	    coll);
+	  ceph_assert(0 == "temp collection on crimson osd, should be impossible");
+	  return seastar::now();
+	} else {
+	  logger().warn("ignoring unrecognized collection: {}", coll);
+	  return seastar::now();
+	}
+      });
+  });
+#endif
+}
+
+seastar::future<> PGShardManager::stop_pgs()
+{
+  return local_state.stop_pgs();
+}
+
+std::map<pg_t, pg_stat_t> PGShardManager::get_pg_stats() const
+{
+  return local_state.get_pg_stats();
+}
+
+seastar::future<> PGShardManager::broadcast_map_to_pgs(epoch_t epoch)
+{
+  return local_state.broadcast_map_to_pgs(
+    shard_services, epoch);
+}
 
 }

@@ -1070,7 +1070,7 @@ seastar::future<> OSD::handle_scrub(crimson::net::ConnectionRef conn,
       conn,
       from_shard,
       pgid,
-      PGPeeringEvent{m->epoch, m->epoch, scrub_request}).second;
+      PGPeeringEvent{m->epoch, m->epoch, scrub_request});
   });
 }
 
