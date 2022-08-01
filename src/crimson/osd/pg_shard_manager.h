@@ -77,24 +77,22 @@ public:
   FORWARD_TO_OSD_SINGLETON(get_up_epoch)
   FORWARD_TO_OSD_SINGLETON(set_up_epoch)
 
-  FORWARD(pg_created, pg_created, osd_singleton_state.pg_map)
-  auto load_pgs() {
-    return osd_singleton_state.load_pgs(shard_services);
-  }
-  FORWARD_TO_OSD_SINGLETON(stop_pgs)
-  FORWARD_CONST(get_pg_stats, get_pg_stats, osd_singleton_state)
+  seastar::future<> load_pgs();
+  seastar::future<> stop_pgs();
 
-  FORWARD_CONST(for_each_pg, for_each_pg, osd_singleton_state)
-  auto get_num_pgs() const { return osd_singleton_state.pg_map.get_pgs().size(); }
+  // TODOSAM: needs to be future
+  std::map<pg_t, pg_stat_t> get_pg_stats() const;
 
-  auto broadcast_map_to_pgs(epoch_t epoch) {
-    return osd_singleton_state.broadcast_map_to_pgs(
-      *this, shard_services, epoch);
-  }
+  FORWARD_CONST(for_each_pg, for_each_pg, local_state)
+  auto get_num_pgs() const { return local_state.pg_map.get_pgs().size(); }
+
+  seastar::future<> broadcast_map_to_pgs(epoch_t epoch);
 
   template <typename F>
   auto with_pg(spg_t pgid, F &&f) {
-    return std::invoke(std::forward<F>(f), osd_singleton_state.get_pg(pgid));
+    return std::invoke(
+      std::forward<F>(f),
+      local_state.pg_map.get_pg(pgid));
   }
 
   template <typename T, typename... Args>
@@ -138,8 +136,7 @@ public:
 	  PGMap::PGCreationBlockingEvent
 	  >([this, &opref](auto &&trigger) {
 	    std::ignore = this; // avoid clang warning
-	    return osd_singleton_state.get_or_create_pg(
-	      *this,
+	    return local_state.get_or_create_pg(
 	      shard_services,
 	      std::move(trigger),
 	      opref.get_pgid(), opref.get_epoch(),
@@ -151,7 +148,7 @@ public:
 	  PGMap::PGCreationBlockingEvent
 	  >([this, &opref](auto &&trigger) {
 	    std::ignore = this; // avoid clang warning
-	    return osd_singleton_state.wait_for_pg(
+	    return local_state.wait_for_pg(
 	      std::move(trigger), opref.get_pgid());
 	  });
       }
