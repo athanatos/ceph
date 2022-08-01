@@ -85,7 +85,7 @@ std::vector<crimson::OperationRef> handle_pg_create(
         pgid, m->epoch,
         pi, history);
     } else {
-      auto op = pg_shard_manager.start_pg_operation<PeeringSubEvent>(
+      std::ignore = pg_shard_manager.start_pg_operation<PeeringSubEvent>(
 	  state,
 	  conn,
 	  pg_shard_t(),
@@ -94,8 +94,8 @@ std::vector<crimson::OperationRef> handle_pg_create(
 	  m->epoch,
 	  NullEvt(),
 	  true,
-	  new PGCreateInfo(pgid, m->epoch, history, pi, true)).first;
-      ret.push_back(op);
+	  new PGCreateInfo(pgid, m->epoch, history, pi, true));
+      // ret.push_back(op); TODOSAM: can't really store pointers to remote operations
     }
   }
   return ret;
