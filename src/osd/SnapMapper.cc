@@ -13,6 +13,7 @@
  */
 
 #include "SnapMapper.h"
+#include <fmt/printf.h>
 
 #define dout_context cct
 #define dout_subsys ceph_subsys_osd
@@ -99,13 +100,11 @@ int OSDriver::get_next(
 
 string SnapMapper::get_prefix(int64_t pool, snapid_t snap)
 {
-  char buf[100];
-  int len = snprintf(
-    buf, sizeof(buf),
-    "%lld_%.*X_",
-    (long long)pool,
-    (int)(sizeof(snap)*2), static_cast<unsigned>(snap));
-  return MAPPING_PREFIX + string(buf, len);
+  assert(sizeof(snap) == 8); // 2*8 is the '16' in the '%.16X' format below
+  return fmt::sprintf("%s%lld_%.16X_",
+		      MAPPING_PREFIX,
+		      pool,
+		      snap);
 }
 
 string SnapMapper::to_raw_key(
