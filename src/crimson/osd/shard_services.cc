@@ -282,11 +282,14 @@ seastar::future<OSDSingletonState::cached_map_t> OSDSingletonState::get_map(epoc
 {
   // TODO: use LRU cache for managing osdmap, fallback to disk if we have to
   if (auto found = osdmaps.find(e); found) {
-    return seastar::make_ready_future<cached_map_t>(std::move(found));
+    return seastar::make_ready_future<cached_map_t>(
+      make_local_shared_foreign<boost::local_shared_ptr<const OSDMap>>(
+	std::move(found)));
   } else {
     return load_map(e).then([e, this](std::unique_ptr<OSDMap> osdmap) {
       return seastar::make_ready_future<cached_map_t>(
-        osdmaps.insert(e, std::move(osdmap)));
+        make_local_shared_foreign<boost::local_shared_ptr<const OSDMap>>(
+	  osdmaps.insert(e, std::move(osdmap))));
     });
   }
 }
