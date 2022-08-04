@@ -302,7 +302,7 @@ class OSDSingletonState : public md_config_obs_t, public OSDMapService {
  * Represents services available to each PG
  */
 class ShardServices {
-  using cached_map_t = boost::local_shared_ptr<const OSDMap>;
+  using cached_map_t = OSDMapService::cached_map_t;
 
   OSDSingletonState &osd_singleton_state;
   PerShardState &local_state;
