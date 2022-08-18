@@ -48,20 +48,16 @@ PerShardState::PerShardState(
 
 seastar::future<> PerShardState::stop_pgs()
 {
-#if 0
   return seastar::parallel_for_each(
     pg_map.get_pgs(),
     [](auto& p) {
       return p.second->stop();
     });
-#endif
-  return seastar::now();
 }
 
 std::map<pg_t, pg_stat_t> PerShardState::get_pg_stats() const
 {
   std::map<pg_t, pg_stat_t> ret;
-#if 0
   for (auto [pgid, pg] : pg_map.get_pgs()) {
     if (pg->is_primary()) {
       auto stats = pg->get_stats();
@@ -70,7 +66,6 @@ std::map<pg_t, pg_stat_t> PerShardState::get_pg_stats() const
       ret.emplace(pgid.pgid, std::move(stats));
     }
   }
-#endif
   return ret;
 }
 
@@ -78,7 +73,6 @@ seastar::future<> PerShardState::broadcast_map_to_pgs(
   ShardServices &shard_services,
   epoch_t epoch)
 {
-#if 0
   auto &pgs = pg_map.get_pgs();
   return seastar::parallel_for_each(
     pgs.begin(), pgs.end(),
@@ -93,8 +87,6 @@ seastar::future<> PerShardState::broadcast_map_to_pgs(
       //osdmap_gate.got_map(epoch); TODOSAM
       return seastar::make_ready_future();
     });
-#endif 0
-  return seastar::now();
 }
 
 OSDSingletonState::OSDSingletonState(

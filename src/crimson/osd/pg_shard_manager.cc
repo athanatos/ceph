@@ -31,8 +31,6 @@ seastar::future<Ref<PG>> PGShardManager::make_pg(
   spg_t pgid,
   bool do_create)
 {
-  return seastar::make_ready_future<Ref<PG>>();
-#if 0
   using ec_profile_t = std::map<std::string, std::string>;
   auto get_pool_info = [create_map, pgid, this] {
     if (create_map->have_pg_pool(pgid.pool())) {
@@ -54,6 +52,8 @@ seastar::future<Ref<PG>> PGShardManager::make_pg(
       return get_meta_coll().load_final_pool_info(pgid.pool());
     }
   };
+  return seastar::make_ready_future<Ref<PG>>();
+#if 0
   auto get_collection = [pgid, do_create, this] {
     const coll_t cid{pgid};
     if (do_create) {
