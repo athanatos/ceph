@@ -37,7 +37,8 @@ void OSDOperationRegistry::do_stop()
   // to_ref_down is going off
 }
 
-OSDOperationRegistry::OSDOperationRegistry()
+OSDOperationRegistry::OSDOperationRegistry(core_id_t core)
+  : OperationRegistryT(core)
 {
   constexpr auto historic_reg_index =
     static_cast<size_t>(OperationTypeCode::historic_client_request);
