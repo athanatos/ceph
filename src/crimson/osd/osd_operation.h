@@ -188,7 +188,7 @@ protected:
 struct OSDOperationRegistry : OperationRegistryT<
   static_cast<size_t>(OperationTypeCode::last_op)
 > {
-  OSDOperationRegistry();
+  OSDOperationRegistry(core_id_t core);
 
   void do_stop() override;
 
