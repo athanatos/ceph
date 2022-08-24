@@ -26,32 +26,6 @@ class FuturizedCollection;
 class FuturizedStore {
 
 public:
-  class OmapIterator {
-  public:
-    virtual seastar::future<> seek_to_first() = 0;
-    virtual seastar::future<> upper_bound(const std::string &after) = 0;
-    virtual seastar::future<> lower_bound(const std::string &to) = 0;
-    virtual bool valid() const {
-      return false;
-    }
-    virtual seastar::future<> next() = 0;
-    virtual std::string key() {
-      return {};
-    }
-    virtual ceph::buffer::list value() {
-      return {};
-    }
-    virtual int status() const {
-      return 0;
-    }
-    virtual ~OmapIterator() {}
-  private:
-    unsigned count = 0;
-    friend void intrusive_ptr_add_ref(FuturizedStore::OmapIterator* iter);
-    friend void intrusive_ptr_release(FuturizedStore::OmapIterator* iter);
-  };
-  using OmapIteratorRef = boost::intrusive_ptr<OmapIterator>;
-
   static seastar::future<std::unique_ptr<FuturizedStore>> create(const std::string& type,
                                                 const std::string& data,
                                                 const ConfigValues& values);
@@ -155,9 +129,6 @@ public:
     return seastar::now();
   }
 
-  virtual seastar::future<OmapIteratorRef> get_omap_iterator(
-    CollectionRef ch,
-    const ghobject_t& oid) = 0;
   virtual read_errorator::future<std::map<uint64_t, uint64_t>> fiemap(
     CollectionRef ch,
     const ghobject_t& oid,
@@ -171,18 +142,5 @@ public:
   virtual uuid_d get_fsid() const  = 0;
   virtual unsigned get_max_attr_name_length() const = 0;
 };
-
-inline void intrusive_ptr_add_ref(FuturizedStore::OmapIterator* iter) {
-  assert(iter);
-  iter->count++;
-}
-
-inline void intrusive_ptr_release(FuturizedStore::OmapIterator* iter) {
-  assert(iter);
-  assert(iter->count > 0);
-  if ((--iter->count) == 0) {
-    delete iter;
-  }
-}
 
 }

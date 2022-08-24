@@ -533,6 +533,8 @@ ReplicatedRecoveryBackend::read_omap_for_push_op(
   if (progress.omap_complete) {
     return seastar::make_ready_future<>();
   }
+  return seastar::make_ready_future<>();
+#if 0
   return shard_services.get_store().get_omap_iterator(coll, ghobject_t{oid})
     .then([&progress, &new_progress, max_len, push_op](auto omap_iter) {
     return omap_iter->lower_bound(progress.omap_recovered_to).then(
@@ -571,6 +573,7 @@ ReplicatedRecoveryBackend::read_omap_for_push_op(
       });
     });
   });
+#endif
 }
 
 std::vector<pg_shard_t>
