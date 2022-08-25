@@ -22,8 +22,22 @@ namespace crimson::osd {
  */
 class PGShardManager {
   OSDSingletonState osd_singleton_state;
-  PerShardState local_state;
   ShardServices shard_services;
+
+#define FORWARD_CONST(FROM_METHOD, TO_METHOD, TARGET)		\
+  template <typename... Args>					\
+  auto FROM_METHOD(Args&&... args) const {			\
+    return TARGET.TO_METHOD(std::forward<Args>(args)...);	\
+  }
+
+#define FORWARD(FROM_METHOD, TO_METHOD, TARGET)		\
+  template <typename... Args>					\
+  auto FROM_METHOD(Args&&... args) {				\
+    return TARGET.TO_METHOD(std::forward<Args>(args)...);	\
+  }
+
+#define FORWARD_TO_OSD_SINGLETON(METHOD) \
+  FORWARD(METHOD, METHOD, osd_singleton_state)
 
 public:
   using cached_map_t = OSDMapService::cached_map_t;
@@ -37,14 +51,16 @@ public:
     crimson::os::FuturizedStore &store);
 
   auto &get_shard_services() { return shard_services; }
+  auto &get_local_state() { return shard_services.local_state; }
+  auto &get_local_state() const { return shard_services.local_state; }
 
   void update_map(cached_map_t map) {
     osd_singleton_state.update_map(map);
-    local_state.update_map(map);
+    get_local_state().update_map(map);
   }
 
   auto stop_registries() {
-    return local_state.stop_registry();
+    return get_local_state().stop_registry();
   }
 
   FORWARD_TO_OSD_SINGLETON(send_pg_created)
@@ -82,7 +98,7 @@ public:
   template <typename F>
   seastar::future<> with_remote_shard_state(core_id_t core, F &&f) {
     ceph_assert(core == 0);
-    auto &local_state_ref = local_state;
+    auto &local_state_ref = get_local_state();
     auto &shard_services_ref = shard_services;
     return seastar::smp::submit_to(
       core,
@@ -104,7 +120,7 @@ public:
     auto core = osd_singleton_state.pg_to_shard_mapping.maybe_create_pg(
       op->get_pgid());
 
-    local_state.registry.remove_from_registry(*op);
+    get_local_state().registry.remove_from_registry(*op);
     return with_remote_shard_state(
       core,
       [op=std::move(op)](
@@ -140,7 +156,7 @@ public:
     auto core = osd_singleton_state.pg_to_shard_mapping.maybe_create_pg(
       op->get_pgid());
 
-    local_state.registry.remove_from_registry(*op);
+    get_local_state().registry.remove_from_registry(*op);
     return with_remote_shard_state(
       core,
       [op=std::move(op)](
@@ -175,7 +191,7 @@ public:
    */
   template <typename F>
   seastar::future<> for_each_pg(F &&f) const {
-    for (auto &&pg: local_state.pg_map.get_pgs()) {
+    for (auto &&pg: get_local_state().pg_map.get_pgs()) {
       std::apply(f, pg);
     }
     return seastar::now();
@@ -191,12 +207,12 @@ public:
   auto with_pg(spg_t pgid, F &&f) {
     return std::invoke(
       std::forward<F>(f),
-      local_state.pg_map.get_pg(pgid));
+      get_local_state().pg_map.get_pg(pgid));
   }
 
   template <typename T, typename... Args>
   auto start_pg_operation(Args&&... args) {
-    auto op = local_state.registry.create_operation<T>(
+    auto op = get_local_state().registry.create_operation<T>(
       std::forward<Args>(args)...);
     auto &logger = crimson::get_logger(ceph_subsys_osd);
     logger.debug("{}: starting {}", *op, __func__);
@@ -240,6 +256,10 @@ public:
     });
     return std::make_pair(id, std::move(fut));
   }
+
+#undef FORWARD
+#undef FORWARD_CONST
+#undef FORWARD_TO_OSD_SINGLETON
 };
 
 }
