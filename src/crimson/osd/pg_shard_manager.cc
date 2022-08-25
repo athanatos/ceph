@@ -20,18 +20,23 @@ seastar::future<> PGShardManager::start(
   crimson::mgr::Client &mgrc,
   crimson::os::FuturizedStore &store)
 {
-  osd_singleton_state.reset(
-    new OSDSingletonState(whoami, cluster_msgr, public_msgr,
-			  monc, mgrc));
-  shard_services.reset(
-    new ShardServices(*osd_singleton_state, whoami, store));
-  return seastar::now();
+  ceph_assert(seastar::this_shard_id() == 0);
+  return osd_singleton_state.start_single(
+    whoami, std::ref(cluster_msgr), std::ref(public_msgr),
+    std::ref(monc), std::ref(mgrc)
+  ).then([this, whoami, &store] {
+    ceph::mono_time startup_time = ceph::mono_clock::now();
+    return shard_services.start(
+      std::ref(osd_singleton_state), whoami, startup_time, std::ref(store));
+  });
 }
 
 seastar::future<> PGShardManager::stop() {
-  shard_services.reset();
-  osd_singleton_state.reset();
-  return seastar::now();
+  ceph_assert(seastar::this_shard_id() == 0);
+  return shard_services.stop(
+  ).then([this] {
+    return osd_singleton_state.stop();
+  });
 }
 
 seastar::future<> PGShardManager::load_pgs()
@@ -76,21 +81,32 @@ seastar::future<> PGShardManager::load_pgs()
 
 seastar::future<> PGShardManager::stop_pgs()
 {
-  return get_local_state().stop_pgs();
+  return shard_services.invoke_on_all([](auto &local_service) {
+    return local_service.local_state.stop_pgs();
+  });
 }
 
 seastar::future<std::map<pg_t, pg_stat_t>>
 PGShardManager::get_pg_stats() const
 {
-  return seastar::make_ready_future<std::map<pg_t, pg_stat_t>>(
-    get_local_state().get_pg_stats());
+  return shard_services.map_reduce0(
+    [](auto &local) {
+      return local.local_state.get_pg_stats();
+    },
+    std::map<pg_t, pg_stat_t>(),
+    [](auto &&left, auto &&right) {
+      left.merge(std::move(right));
+      return std::move(left);
+    });
 }
 
 seastar::future<> PGShardManager::broadcast_map_to_pgs(epoch_t epoch)
 {
-  return get_local_state().broadcast_map_to_pgs(
-    get_shard_services(), epoch
-  ).then([this, epoch] {
+  return shard_services.invoke_on_all([epoch](auto &local_service) {
+    return local_service.local_state.broadcast_map_to_pgs(
+      local_service, epoch
+    );
+  }).then([this, epoch] {
     get_osd_singleton_state().osdmap_gate.got_map(epoch);
     return seastar::now();
   });
