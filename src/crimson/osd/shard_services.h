@@ -120,6 +120,7 @@ class PerShardState {
     return std::make_pair(std::move(op), std::move(fut));
   }
 
+public:
   PerShardState(
     int whoami,
     crimson::os::FuturizedStore &store);
@@ -134,6 +135,8 @@ class PerShardState {
 class OSDSingletonState : public md_config_obs_t, public OSDMapService {
   friend class ShardServices;
   friend class PGShardManager;
+
+public:
   OSDSingletonState(
     int whoami,
     crimson::net::Messenger &cluster_msgr,
@@ -141,6 +144,7 @@ class OSDSingletonState : public md_config_obs_t, public OSDMapService {
     crimson::mon::Client &monc,
     crimson::mgr::Client &mgrc);
 
+private:
   const int whoami;
 
   crimson::common::CephContext cct;

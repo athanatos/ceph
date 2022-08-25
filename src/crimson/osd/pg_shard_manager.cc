@@ -20,18 +20,23 @@ seastar::future<> PGShardManager::start(
   crimson::mgr::Client &mgrc,
   crimson::os::FuturizedStore &store)
 {
-  osd_singleton_state.reset(
-    new OSDSingletonState(whoami, cluster_msgr, public_msgr,
-			  monc, mgrc));
-  shard_services.reset(
-    new ShardServices(*osd_singleton_state, whoami, store));
-  return seastar::now();
+  ceph_assert(seastar::this_shard_id() == 0);
+  return osd_singleton_state.start_single(
+    whoami, std::ref(cluster_msgr), std::ref(public_msgr),
+    std::ref(monc), std::ref(mgrc)
+  ).then([this, whoami, &store] {
+    // TODO
+    return shard_services.start(
+      std::ref(get_osd_singleton_state()), whoami, std::ref(store));
+  });
 }
 
 seastar::future<> PGShardManager::stop() {
-  shard_services.reset();
-  osd_singleton_state.reset();
-  return seastar::now();
+  ceph_assert(seastar::this_shard_id() == 0);
+  return shard_services.stop(
+  ).then([this] {
+    return osd_singleton_state.stop();
+  });
 }
 
 seastar::future<> PGShardManager::load_pgs()
