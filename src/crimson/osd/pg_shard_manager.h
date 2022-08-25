@@ -21,8 +21,8 @@ namespace crimson::osd {
  * etc)
  */
 class PGShardManager {
-  std::unique_ptr<OSDSingletonState> osd_singleton_state;
-  std::unique_ptr<ShardServices> shard_services;
+  seastar::sharded<OSDSingletonState> osd_singleton_state;
+  seastar::sharded<ShardServices> shard_services;
 
 #define FORWARD_CONST(FROM_METHOD, TO_METHOD, TARGET)		\
   template <typename... Args>					\
@@ -53,12 +53,24 @@ public:
     crimson::os::FuturizedStore &store);
   seastar::future<> stop();
 
-  auto &get_osd_singleton_state() { return *osd_singleton_state; }
-  auto &get_osd_singleton_state() const { return *osd_singleton_state; }
-  auto &get_shard_services() { return *shard_services; }
-  auto &get_shard_services() const { return *shard_services; }
-  auto &get_local_state() { return shard_services->local_state; }
-  auto &get_local_state() const { return shard_services->local_state; }
+  auto &get_osd_singleton_state() {
+    ceph_assert(seastar::this_shard_id() == 0);
+    return osd_singleton_state.local();
+  }
+  auto &get_osd_singleton_state() const {
+    ceph_assert(seastar::this_shard_id() == 0);
+    return osd_singleton_state.local();
+  }
+  auto &get_shard_services() {
+    ceph_assert(seastar::this_shard_id() == 0);
+    return shard_services.local();
+  }
+  auto &get_shard_services() const {
+    ceph_assert(seastar::this_shard_id() == 0);
+    return shard_services.local();
+  }
+  auto &get_local_state() { return get_shard_services().local_state; }
+  auto &get_local_state() const { return get_shard_services().local_state; }
 
   void update_map(cached_map_t map) {
     get_osd_singleton_state().update_map(map);
@@ -103,14 +115,11 @@ public:
 
   template <typename F>
   seastar::future<> with_remote_shard_state(core_id_t core, F &&f) {
-    ceph_assert(core == 0);
-    auto &local_state_ref = get_local_state();
-    auto &shard_services_ref = get_shard_services();
-    return seastar::smp::submit_to(
-      core,
-      [f=std::forward<F>(f), &local_state_ref, &shard_services_ref]() mutable {
+    return shard_services.invoke_on(
+      core, [f=std::move(f)](auto &target_shard_services) mutable {
 	return std::invoke(
-	  std::move(f), local_state_ref, shard_services_ref);
+	  std::move(f), target_shard_services.local_state,
+	  target_shard_services);
       });
   }
 
@@ -197,10 +206,14 @@ public:
    */
   template <typename F>
   seastar::future<> for_each_pg(F &&f) const {
-    for (auto &&pg: get_local_state().pg_map.get_pgs()) {
-      std::apply(f, pg);
-    }
-    return seastar::now();
+    return sharded_map_seq(
+      shard_services,
+      [f=std::move(f)](const auto &local_service) mutable {
+	for (auto &&pg: local_service.local_state.pg_map.get_pgs()) {
+	  std::apply(f, pg);
+	}
+	return seastar::now();
+      });
   }
 
   auto get_num_pgs() const {
