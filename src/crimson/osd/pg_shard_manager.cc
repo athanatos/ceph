@@ -26,7 +26,7 @@ seastar::future<> PGShardManager::start(
     std::ref(monc), std::ref(mgrc)
   ).then([this, whoami, &store] {
     return shard_services.start(
-      std::ref(get_osd_singleton_state()), whoami, std::ref(store));
+      std::ref(osd_singleton_state), whoami, std::ref(store));
   });
 }
 

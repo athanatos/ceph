@@ -285,10 +285,12 @@ public:
     // Not needed yet
   }
   void queue_want_pg_temp(const std::vector<int> &wanted) final {
-    shard_services.queue_want_pg_temp(pgid.pgid, wanted);
+    // TODOSAM
+    std::ignore = shard_services.queue_want_pg_temp(pgid.pgid, wanted);
   }
   void clear_want_pg_temp() final {
-    shard_services.remove_want_pg_temp(pgid.pgid);
+    // TODOSAM
+    std::ignore = shard_services.remove_want_pg_temp(pgid.pgid);
   }
   void check_recovery_sources(const OSDMapRef& newmap) final {
     // Not needed yet

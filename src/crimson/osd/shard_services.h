@@ -45,6 +45,9 @@ class BufferedRecoveryMessages;
 
 namespace crimson::osd {
 
+// seastar::sharded puts start_single on core 0
+constexpr core_id_t PRIMARY_CORE = 0;
+
 class PGShardManager;
 
 /**
@@ -267,7 +270,17 @@ class ShardServices {
   friend class PGShardManager;
   using cached_map_t = OSDMapService::cached_map_t;
   PerShardState local_state;
+  seastar::sharded<OSDSingletonState> &osd_singleton_state_sharded;
   OSDSingletonState &osd_singleton_state;
+
+  template <typename F, typename... Args>
+  auto with_singleton(F &&f, Args&&... args) {
+    return osd_singleton_state_sharded.invoke_on(
+      PRIMARY_CORE,
+      std::forward<F>(f),
+      std::forward<Args>(args)...
+    );
+  }
 
 #define FORWARD_CONST(FROM_METHOD, TO_METHOD, TARGET)		\
   template <typename... Args>					\
@@ -283,15 +296,24 @@ class ShardServices {
 
 #define FORWARD_TO_LOCAL(METHOD) FORWARD(METHOD, METHOD, local_state)
 #define FORWARD_TO_OSD_SINGLETON(METHOD) \
-  FORWARD(METHOD, METHOD, osd_singleton_state)
+  template <typename... Args>					\
+  auto METHOD(Args&&... args) {				        \
+    return with_singleton(                                      \
+      [](auto &local_state, auto&&... args) {                   \
+        return local_state.METHOD(                              \
+	  std::forward<decltype(args)>(args)...);		\
+      }, std::forward<Args>(args)...);				\
+  }
+
 
 public:
   template <typename... PSSArgs>
   ShardServices(
-    OSDSingletonState &osd_singleton_state,
+    seastar::sharded<OSDSingletonState> &osd_singleton_state_sharded,
     PSSArgs&&... args)
     : local_state(std::forward<PSSArgs>(args)...),
-      osd_singleton_state(osd_singleton_state) {}
+      osd_singleton_state_sharded(osd_singleton_state_sharded),
+      osd_singleton_state(osd_singleton_state_sharded.local()) {}
 
   FORWARD_TO_OSD_SINGLETON(send_to_osd)
 

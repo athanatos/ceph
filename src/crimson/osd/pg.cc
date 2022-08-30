@@ -382,7 +382,8 @@ ceph::signedspan PG::get_mnow() const
 
 HeartbeatStampsRef PG::get_hb_stamps(int peer)
 {
-  return shard_services.get_hb_stamps(peer);
+  return HeartbeatStampsRef{};
+  // return shard_services.get_hb_stamps(peer); TODOSAM
 }
 
 void PG::schedule_renew_lease(epoch_t last_peering_reset, ceph::timespan delay)
