@@ -316,23 +316,16 @@ void OSDSingletonState::handle_conf_change(
   }
 }
 
-OSDSingletonState::cached_map_t OSDSingletonState::get_map() const
-{
-  return osdmap;
-}
-
-seastar::future<OSDSingletonState::cached_map_t> OSDSingletonState::get_map(epoch_t e)
+seastar::future<OSDSingletonState::local_cached_map_t>
+OSDSingletonState::get_local_map(epoch_t e)
 {
   // TODO: use LRU cache for managing osdmap, fallback to disk if we have to
   if (auto found = osdmaps.find(e); found) {
-    return seastar::make_ready_future<cached_map_t>(
-      make_local_shared_foreign<boost::local_shared_ptr<const OSDMap>>(
-	std::move(found)));
+    return seastar::make_ready_future<local_cached_map_t>(std::move(found));
   } else {
     return load_map(e).then([e, this](std::unique_ptr<OSDMap> osdmap) {
-      return seastar::make_ready_future<cached_map_t>(
-        make_local_shared_foreign<boost::local_shared_ptr<const OSDMap>>(
-	  osdmaps.insert(e, std::move(osdmap))));
+      return seastar::make_ready_future<local_cached_map_t>(
+	osdmaps.insert(e, std::move(osdmap)));
     });
   }
 }
@@ -486,7 +479,7 @@ seastar::future<Ref<PG>> ShardServices::handle_pg_create_info(
 	  const spg_t &pgid = info->pgid;
 	  if (info->by_mon) {
 	    int64_t pool_id = pgid.pgid.pool();
-	    const pg_pool_t *pool = get_osdmap()->get_pg_pool(pool_id);
+	    const pg_pool_t *pool = get_map()->get_pg_pool(pool_id);
 	    if (!pool) {
 	      logger().debug(
 		"{} ignoring pgid {}, pool dne",
@@ -496,7 +489,7 @@ seastar::future<Ref<PG>> ShardServices::handle_pg_create_info(
 		std::tuple<Ref<PG>, OSDMapService::cached_map_t>
 		>(std::make_tuple(Ref<PG>(), startmap));
 	    }
-	    ceph_assert(get_osdmap()->require_osd_release >=
+	    ceph_assert(get_map()->require_osd_release >=
 			ceph_release_t::octopus);
 	    if (!pool->has_flag(pg_pool_t::FLAG_CREATING)) {
 	      // this ensures we do not process old creating messages after the
@@ -556,7 +549,7 @@ seastar::future<Ref<PG>> ShardServices::handle_pg_create_info(
 
 	  return start_operation<PGAdvanceMap>(
 	    *this, pg, pg->get_osdmap_epoch(),
-	    get_osdmap()->get_epoch(), std::move(rctx), true
+	    get_map()->get_epoch(), std::move(rctx), true
 	  ).second.then([pg=pg] {
 	    return seastar::make_ready_future<Ref<PG>>(pg);
 	  });
