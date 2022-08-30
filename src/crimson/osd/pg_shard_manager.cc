@@ -25,8 +25,9 @@ seastar::future<> PGShardManager::start(
     whoami, std::ref(cluster_msgr), std::ref(public_msgr),
     std::ref(monc), std::ref(mgrc)
   ).then([this, whoami, &store] {
+    ceph::mono_time startup_time = ceph::mono_clock::now();
     return shard_services.start(
-      std::ref(get_osd_singleton_state()), whoami, std::ref(store));
+      std::ref(osd_singleton_state), whoami, startup_time, std::ref(store));
   });
 }
 
