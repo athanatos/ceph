@@ -77,7 +77,6 @@ seastar::future<> PGAdvanceMap::start()
         handle.exit();
         if (do_init) {
           shard_services.pg_created(pg->get_pgid(), pg);
-          shard_services.inc_pg_num();
           logger().info("PGAdvanceMap::start new pg {}", *pg);
         }
         return seastar::when_all_succeed(
