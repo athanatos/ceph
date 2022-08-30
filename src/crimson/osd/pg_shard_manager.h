@@ -41,6 +41,7 @@ class PGShardManager {
 
 public:
   using cached_map_t = OSDMapService::cached_map_t;
+  using local_cached_map_t = OSDMapService::local_cached_map_t;
 
   PGShardManager() = default;
 
@@ -60,9 +61,15 @@ public:
   auto &get_local_state() { return shard_services->local_state; }
   auto &get_local_state() const { return shard_services->local_state; }
 
-  void update_map(cached_map_t map) {
-    get_osd_singleton_state().update_map(map);
-    get_local_state().update_map(map);
+  seastar::future<> update_map(local_cached_map_t &&map) {
+    get_osd_singleton_state().update_map(
+      make_local_shared_foreign(local_cached_map_t(map))
+    );
+    return shard_services.invoke_on_all(
+      [fmap=std::move(map)](auto &local) mutable {
+	// TODOSAM: need to do something specific with fmap
+	local.local_state.update_map(make_local_shared_foreign(std::move(fmap)));
+      });
   }
 
   auto stop_registries() {
@@ -94,12 +101,12 @@ public:
   FORWARD_TO_OSD_SINGLETON(get_meta_coll)
 
   // Core OSDMap methods
-  FORWARD_TO_OSD_SINGLETON(get_map)
+  FORWARD_TO_OSD_SINGLETON(get_local_map)
   FORWARD_TO_OSD_SINGLETON(load_map_bl)
   FORWARD_TO_OSD_SINGLETON(load_map_bls)
   FORWARD_TO_OSD_SINGLETON(store_maps)
-  FORWARD_TO_OSD_SINGLETON(get_up_epoch)
-  FORWARD_TO_OSD_SINGLETON(set_up_epoch)
+
+  seastar::future<> set_up_epoch(epoch_t e);
 
   template <typename F>
   seastar::future<> with_remote_shard_state(core_id_t core, F &&f) {
