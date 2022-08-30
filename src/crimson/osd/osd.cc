@@ -794,10 +794,10 @@ void OSD::handle_authentication(const EntityName& name,
 void OSD::update_stats()
 {
   osd_stat_seq++;
-  osd_stat.up_from = pg_shard_manager.get_up_epoch();
+  osd_stat.up_from = get_shard_services().get_up_epoch();
   osd_stat.hb_peers = heartbeat->get_peers();
   osd_stat.seq = (
-    static_cast<uint64_t>(pg_shard_manager.get_up_epoch()) << 32
+    static_cast<uint64_t>(get_shard_services().get_up_epoch()) << 32
   ) | osd_stat_seq;
   gate.dispatch_in_background("statfs", *this, [this] {
     (void) store.stat().then([this](store_statfs_t&& st) {
@@ -919,13 +919,18 @@ seastar::future<> OSD::committed_osd_maps(version_t first,
     return pg_shard_manager.get_map(cur).then([this](OSDMapService::cached_map_t&& o) {
       osdmap = std::move(o);
       pg_shard_manager.update_map(osdmap);
-      if (pg_shard_manager.get_up_epoch() == 0 &&
+      if (get_shard_services().get_up_epoch() == 0 &&
           osdmap->is_up(whoami) &&
           osdmap->get_addrs(whoami) == public_msgr->get_myaddrs()) {
-        pg_shard_manager.set_up_epoch(osdmap->get_epoch());
-        if (!boot_epoch) {
-          boot_epoch = osdmap->get_epoch();
-        }
+        return pg_shard_manager.set_up_epoch(
+	  osdmap->get_epoch()
+	).then([this] {
+	  if (!boot_epoch) {
+	    boot_epoch = osdmap->get_epoch();
+	  }
+	});
+      } else {
+	return seastar::now();
       }
     });
   }).then([m, this] {
@@ -1134,11 +1139,14 @@ seastar::future<> OSD::restart()
 {
   beacon_timer.cancel();
   tick_timer.cancel();
-  pg_shard_manager.set_up_epoch(0);
-  bind_epoch = osdmap->get_epoch();
-  // TODO: promote to shutdown if being marked down for multiple times
-  // rebind messengers
-  return start_boot();
+  return pg_shard_manager.set_up_epoch(
+    0
+  ).then([this] {
+    bind_epoch = osdmap->get_epoch();
+    // TODO: promote to shutdown if being marked down for multiple times
+    // rebind messengers
+    return start_boot();
+  });
 }
 
 seastar::future<> OSD::shutdown()

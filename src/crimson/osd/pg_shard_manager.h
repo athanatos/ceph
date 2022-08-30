@@ -110,8 +110,8 @@ public:
   FORWARD_TO_OSD_SINGLETON(load_map_bl)
   FORWARD_TO_OSD_SINGLETON(load_map_bls)
   FORWARD_TO_OSD_SINGLETON(store_maps)
-  FORWARD_TO_OSD_SINGLETON(get_up_epoch)
-  FORWARD_TO_OSD_SINGLETON(set_up_epoch)
+
+  seastar::future<> set_up_epoch(epoch_t e);
 
   template <typename F>
   seastar::future<> with_remote_shard_state(core_id_t core, F &&f) {
