@@ -376,9 +376,10 @@ seastar::future<> OSD::start()
     superblock = std::move(sb);
     return pg_shard_manager.get_map(superblock.current_epoch);
   }).then([this](OSDMapService::cached_map_t&& map) {
-    pg_shard_manager.update_map(map);
-    pg_shard_manager.got_map(map->get_epoch());
     osdmap = std::move(map);
+    return pg_shard_manager.update_map(map);
+  }).then([this] {
+    pg_shard_manager.got_map(osdmap->get_epoch());
     bind_epoch = osdmap->get_epoch();
     return pg_shard_manager.load_pgs();
   }).then([this] {
@@ -930,20 +931,23 @@ seastar::future<> OSD::committed_osd_maps(version_t first,
                               [this](epoch_t cur) {
     return pg_shard_manager.get_map(cur).then([this](OSDMapService::cached_map_t&& o) {
       osdmap = std::move(o);
-      pg_shard_manager.update_map(osdmap);
-      if (get_shard_services().get_up_epoch() == 0 &&
-          osdmap->is_up(whoami) &&
-          osdmap->get_addrs(whoami) == public_msgr->get_myaddrs()) {
-        return pg_shard_manager.set_up_epoch(
-	  osdmap->get_epoch()
-	).then([this] {
-	  if (!boot_epoch) {
-	    boot_epoch = osdmap->get_epoch();
-	  }
-	});
-      } else {
-	return seastar::now();
-      }
+      return pg_shard_manager.update_map(
+	osdmap
+      ).then([this] {
+	if (get_shard_services().get_up_epoch() == 0 &&
+	    osdmap->is_up(whoami) &&
+	    osdmap->get_addrs(whoami) == public_msgr->get_myaddrs()) {
+	  return pg_shard_manager.set_up_epoch(
+	    osdmap->get_epoch()
+	  ).then([this] {
+	    if (!boot_epoch) {
+	      boot_epoch = osdmap->get_epoch();
+	    }
+	  });
+	} else {
+	  return seastar::now();
+	}
+      });
     });
   }).then([m, this] {
     if (osdmap->is_up(whoami)) {
