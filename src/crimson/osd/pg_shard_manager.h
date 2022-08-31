@@ -74,12 +74,16 @@ public:
 
   seastar::future<> update_map(cached_map_t map) {
     get_osd_singleton_state().update_map(map);
-    get_local_state().update_map(map);
-    return seastar::now();
+    return shard_services.invoke_on_all([fmap=map](auto &local) {
+      // TODOSAM: need to do something specific with fmap
+      local.local_state.update_map(fmap);
+    });
   }
 
-  auto stop_registries() {
-    return get_local_state().stop_registry();
+  seastar::future<> stop_registries() {
+    return shard_services.invoke_on_all([](auto &local) {
+      return local.local_state.stop_registry();
+    });
   }
 
   FORWARD_TO_OSD_SINGLETON(send_pg_created)
@@ -225,6 +229,7 @@ public:
 
   template <typename F>
   auto with_pg(spg_t pgid, F &&f) {
+    assert(0 == "not implemented");
     return std::invoke(
       std::forward<F>(f),
       get_local_state().pg_map.get_pg(pgid));
