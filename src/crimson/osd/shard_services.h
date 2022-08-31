@@ -224,7 +224,7 @@ private:
   seastar::future<> send_pg_temp();
 
   // TODO: add config to control mapping
-  PGShardMapping pg_to_shard_mapping{0, 1};
+  PGShardMapping pg_to_shard_mapping{0, seastar::smp::count};
 
   std::set<pg_t> pg_created;
   seastar::future<> send_pg_created(pg_t pgid);
