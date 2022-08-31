@@ -72,9 +72,10 @@ public:
   auto &get_local_state() { return get_shard_services().local_state; }
   auto &get_local_state() const { return get_shard_services().local_state; }
 
-  void update_map(cached_map_t map) {
+  seastar::future<> update_map(cached_map_t map) {
     get_osd_singleton_state().update_map(map);
     get_local_state().update_map(map);
+    return seastar::now();
   }
 
   auto stop_registries() {
