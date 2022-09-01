@@ -59,6 +59,7 @@ class PerShardState {
   friend class ShardServices;
   friend class PGShardManager;
   using cached_map_t = OSDMapService::cached_map_t;
+  using local_cached_map_t = OSDMapService::local_cached_map_t;
 
   const int whoami;
   crimson::os::FuturizedStore &store;
@@ -159,6 +160,7 @@ class OSDSingletonState : public md_config_obs_t {
   friend class ShardServices;
   friend class PGShardManager;
   using cached_map_t = OSDMapService::cached_map_t;
+  using local_cached_map_t = OSDMapService::local_cached_map_t;
 
 public:
   OSDSingletonState(
@@ -250,7 +252,7 @@ private:
   SharedLRU<epoch_t, OSDMap> osdmaps;
   SimpleLRU<epoch_t, bufferlist, false> map_bl_cache;
 
-  seastar::future<cached_map_t> get_map(epoch_t e);
+  seastar::future<local_cached_map_t> get_local_map(epoch_t e);
   seastar::future<std::unique_ptr<OSDMap>> load_map(epoch_t e);
   seastar::future<bufferlist> load_map_bl(epoch_t e);
   seastar::future<std::map<epoch_t, bufferlist>>
@@ -267,6 +269,8 @@ private:
 class ShardServices : public OSDMapService {
   friend class PGShardManager;
   using cached_map_t = OSDMapService::cached_map_t;
+  using local_cached_map_t = OSDMapService::local_cached_map_t;
+
   PerShardState local_state;
   seastar::sharded<OSDSingletonState> &osd_singleton_state;
 
@@ -387,8 +391,10 @@ public:
   seastar::future<cached_map_t> get_map(epoch_t e) final {
     return with_singleton(
       [](auto &sstate, epoch_t e) {
-	return sstate.get_map(e);
-      }, e);
+	return sstate.get_local_map(e);
+      }, e).then([](auto map) {
+	return make_local_shared_foreign(std::move(map));
+      });
   }
 
   FORWARD_TO_OSD_SINGLETON(get_pool_info)
