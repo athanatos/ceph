@@ -40,14 +40,10 @@ public:
   auto &get_shard_services() { return shard_services; }
 
   seastar::future<> update_map(local_cached_map_t &&map) {
-    get_osd_singleton_state().update_map(
-      make_local_shared_foreign(local_cached_map_t(map))
-    );
-    return shard_services.invoke_on_all(
-      [fmap=std::move(map)](auto &local) mutable {
-	// TODOSAM: need to do something specific with fmap
-	local.local_state.update_map(make_local_shared_foreign(std::move(fmap)));
-      });
+    auto fmap = make_local_shared_foreign(std::move(map));
+    osd_singleton_state.update_map(fmap);
+    local_state.update_map(std::move(fmap));
+    return seastar::now();
   }
 
   auto stop_registries() {

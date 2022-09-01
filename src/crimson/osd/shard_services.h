@@ -305,6 +305,11 @@ class ShardServices : public OSDMapService {
 
   OSDSingletonState &osd_singleton_state;
   PerShardState &local_state;
+
+  template <typename F, typename... Args>
+  auto with_singleton(F &&f, Args&&... args) {
+    return std::invoke(f, osd_singleton_state, std::forward<Args>(args)...);
+  }
 public:
   ShardServices(
     OSDSingletonState &osd_singleton_state,
@@ -367,7 +372,6 @@ public:
       });
   }
 
-  FORWARD_TO_OSD_SINGLETON(get_pool_info)
   FORWARD_TO_OSD_SINGLETON(get_pg_num)
   FORWARD(with_throttle_while, with_throttle_while, local_state.throttler)
 
