@@ -61,6 +61,8 @@ public:
     pg_to_core.erase(iter);
   }
 
+  size_t get_num_pgs() const { return pg_to_core.size(); }
+
   /// Map to cores in [min_core_mapping, core_mapping_limit)
   PGShardMapping(core_id_t min_core_mapping, core_id_t core_mapping_limit) {
     ceph_assert(min_core_mapping < core_mapping_limit);
@@ -68,6 +70,7 @@ public:
       core_to_num_pgs.emplace(i, 0);
     }
   }
+
 private:
   std::map<core_id_t, unsigned> core_to_num_pgs;
   std::map<spg_t, core_id_t> pg_to_core;
