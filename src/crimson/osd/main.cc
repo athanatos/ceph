@@ -232,6 +232,7 @@ int main(int argc, const char* argv[])
       auto& config = app.configuration();
       return seastar::async([&] {
         try {
+	  logger().info("in async");
           FatalSignal fatal_signal;
           seastar_apps_lib::stop_signal should_stop;
           if (config.count("debug")) {
@@ -244,6 +245,7 @@ int main(int argc, const char* argv[])
               seastar::log_level::trace
             );
           }
+	  logger().info("set loggers");
           sharded_conf().start(init_params.name, cluster_name).get();
 	  local_conf().start().get();
           auto stop_conf = seastar::deferred_stop(sharded_conf());
@@ -301,10 +303,12 @@ int main(int argc, const char* argv[])
                                                    nonce);
             configure_crc_handling(*msgr);
           }
+	  logger().info("about to create store");
           auto store = crimson::os::FuturizedStore::create(
             local_conf().get_val<std::string>("osd_objectstore"),
             local_conf().get_val<std::string>("osd_data"),
             local_conf().get_config_values()).get();
+	  logger().info("created store");
 
           crimson::osd::OSD osd(
 	    whoami, nonce, std::ref(*store), cluster_msgr, client_msgr,
@@ -324,6 +328,7 @@ int main(int argc, const char* argv[])
               // use a random osd uuid if not specified
               osd_uuid.generate_random();
             }
+            logger().info("--mkfs, doing mkfs osd_uuid:{}", osd_uuid);
             osd.mkfs(
 	      *store,
 	      whoami,

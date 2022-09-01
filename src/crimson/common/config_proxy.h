@@ -9,6 +9,7 @@
 #include "common/config_obs.h"
 #include "common/config_obs_mgr.h"
 #include "common/errno.h"
+#include "crimson/common/log.h"
 
 namespace ceph {
 class Formatter;
