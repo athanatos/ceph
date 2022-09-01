@@ -12,8 +12,10 @@ namespace crimson::common {
 ConfigProxy::ConfigProxy(const EntityName& name, std::string_view cluster)
 {
   if (seastar::this_shard_id() != 0) {
+    crimson::get_logger(ceph_subsys_osd).info("{}: wrong core", __func__);
     return;
   }
+  crimson::get_logger(ceph_subsys_osd).info("{}: right core", __func__);
   // set the initial value on CPU#0
   values.reset(seastar::make_lw_shared<ConfigValues>());
   values.get()->name = name;
@@ -36,6 +38,8 @@ seastar::future<> ConfigProxy::start()
     return seastar::make_ready_future<>();
   }
   return container().invoke_on_others([this](auto& proxy) {
+    crimson::get_logger(ceph_subsys_osd).info("{}: on other core", __func__);
+    
     return values.copy().then([config=local_config.get(),
 			       &proxy](auto foreign_values) {
       proxy.values.reset();
