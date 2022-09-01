@@ -70,20 +70,29 @@ public:
 
   /// Creates a copy of this foreign ptr. Only works if the stored ptr is copyable.
   seastar::future<seastar::foreign_ptr<PtrType>> get_foreign() {
+    assert(parent->cpu == seastar::this_shard_id());
     return parent->source_ptr.copy();
   }
 
   /// Accesses the wrapped object.
-  element_type& operator*() const noexcept { return *parent->source_ptr; }
+  element_type& operator*() const noexcept {
+    assert(parent->cpu == seastar::this_shard_id());
+    return *parent->source_ptr;
+  }
   /// Accesses the wrapped object.
-  element_type* operator->() const noexcept { return &*parent->source_ptr; }
+  element_type* operator->() const noexcept {
+    assert(parent->cpu == seastar::this_shard_id());
+    return &*parent->source_ptr;
+  }
   /// Access the raw pointer to the wrapped object.
   pointer get() const noexcept {
+    assert(parent->cpu == seastar::this_shard_id());
     return parent ? parent->source_ptr.get() : nullptr;
   }
 
   /// Return the owner-shard of the contained foreign_ptr.
   unsigned get_owner_shard() const noexcept {
+    assert(parent->cpu == seastar::this_shard_id());
     return parent->source_ptr.get_owner_shard();
   }
 
