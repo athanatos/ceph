@@ -353,11 +353,13 @@ seastar::future<> OSD::start()
     whoami, *cluster_msgr,
     *public_msgr, *monc, *mgrc, store
   ).then([this] {
+    logger().info("heartbeat");
     heartbeat.reset(new Heartbeat{
 	whoami, get_shard_services(),
 	*monc, hb_front_msgr, hb_back_msgr});
     return store.start();
   }).then([this] {
+    logger().info("mounting");
     return store.mount().handle_error(
       crimson::stateful_ec::handle([] (const auto& ec) {
         logger().error("error mounting object store in {}: ({}) {}",
