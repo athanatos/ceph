@@ -376,7 +376,7 @@ seastar::future<> OSD::start()
     );
   }).then([this](OSDSuperblock&& sb) {
     superblock = std::move(sb);
-    return pg_shard_manager.get_map(superblock.current_epoch);
+    return get_shard_services().get_map(superblock.current_epoch);
   }).then([this](OSDMapService::cached_map_t&& map) {
     osdmap = std::move(map);
     return pg_shard_manager.update_map(map);
@@ -931,7 +931,9 @@ seastar::future<> OSD::committed_osd_maps(version_t first,
   return seastar::do_for_each(boost::make_counting_iterator(first),
                               boost::make_counting_iterator(last + 1),
                               [this](epoch_t cur) {
-    return pg_shard_manager.get_map(cur).then([this](OSDMapService::cached_map_t&& o) {
+    return get_shard_services().get_map(
+      cur
+    ).then([this](OSDMapService::cached_map_t&& o) {
       osdmap = std::move(o);
       return pg_shard_manager.update_map(
 	osdmap
