@@ -48,7 +48,9 @@ PerShardState::PerShardState(
       static_cast<ceph_tid_t>(seastar::this_shard_id()) <<
       (std::numeric_limits<ceph_tid_t>::digits - 8)),
     startup_time(startup_time)
-{}
+{
+  logger().info("{}: body", __func__);
+}
 
 seastar::future<> PerShardState::stop_pgs()
 {
@@ -482,6 +484,15 @@ seastar::future<Ref<PG>> ShardServices::make_pg(
 
 seastar::future<Ref<PG>> ShardServices::handle_pg_create_info(
   std::unique_ptr<PGCreateInfo> info) {
+  if (info) {
+    logger().debug(
+      "{}: have info",
+      __func__);
+  } else {
+    logger().debug(
+      "{}: no info",
+      __func__);
+  }
   return seastar::do_with(
     std::move(info),
     [this](auto &info)
@@ -489,10 +500,19 @@ seastar::future<Ref<PG>> ShardServices::handle_pg_create_info(
       return get_map(info->epoch).then(
 	[&info, this](cached_map_t startmap)
 	-> seastar::future<std::tuple<Ref<PG>, cached_map_t>> {
+	  logger().debug(
+	    "ShardServices::handle_pg_create_info: have map");
+	  
 	  const spg_t &pgid = info->pgid;
 	  if (info->by_mon) {
+	    logger().debug(
+	      "ShardServices::handle_pg_create_info: by mon");
 	    int64_t pool_id = pgid.pgid.pool();
+	    logger().debug(
+	      "ShardServices::handle_pg_create_info: about to call get_map()");
 	    const pg_pool_t *pool = get_map()->get_pg_pool(pool_id);
+	    logger().debug(
+	      "ShardServices::handle_pg_create_info: after get_map()");
 	    if (!pool) {
 	      logger().debug(
 		"{} ignoring pgid {}, pool dne",
@@ -502,8 +522,12 @@ seastar::future<Ref<PG>> ShardServices::handle_pg_create_info(
 		std::tuple<Ref<PG>, OSDMapService::cached_map_t>
 		>(std::make_tuple(Ref<PG>(), startmap));
 	    }
+	    logger().debug(
+	      "ShardServices::handle_pg_create_info: about to call get_map()");
 	    ceph_assert(get_map()->require_osd_release >=
 			ceph_release_t::octopus);
+	    logger().debug(
+	      "ShardServices::handle_pg_create_info: after get_map()");
 	    if (!pool->has_flag(pg_pool_t::FLAG_CREATING)) {
 	      // this ensures we do not process old creating messages after the
 	      // pool's initial pgs have been created (and pg are subsequently
@@ -517,6 +541,8 @@ seastar::future<Ref<PG>> ShardServices::handle_pg_create_info(
 		>(std::make_tuple(Ref<PG>(), startmap));
 	    }
 	  }
+	  logger().debug(
+	    "ShardServices::handle_pg_create_info: about to make pg {}", pgid);
 	  return make_pg(
 	    startmap, pgid, true
 	  ).then([startmap=std::move(startmap)](auto pg) mutable {
