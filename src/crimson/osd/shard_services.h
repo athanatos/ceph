@@ -372,6 +372,7 @@ public:
       });
   }
 
+  FORWARD_TO_OSD_SINGLETON(get_pool_info)
   FORWARD_TO_OSD_SINGLETON(get_pg_num)
   FORWARD(with_throttle_while, with_throttle_while, local_state.throttler)
 
