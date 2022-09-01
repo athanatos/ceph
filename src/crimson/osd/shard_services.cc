@@ -433,13 +433,13 @@ seastar::future<Ref<PG>> OSDSingletonState::handle_pg_create_info(
     std::move(info),
     [this, &shard_manager, &shard_services](auto &info)
     -> seastar::future<Ref<PG>> {
-      return shard_services.get_map(info->epoch).then(
+      return get_map(info->epoch).then(
 	[&info, &shard_services, this](OSDMapService::cached_map_t startmap)
 	-> seastar::future<std::tuple<Ref<PG>, OSDMapService::cached_map_t>> {
 	  const spg_t &pgid = info->pgid;
 	  if (info->by_mon) {
 	    int64_t pool_id = pgid.pgid.pool();
-	    const pg_pool_t *pool = shard_services.get_map()->get_pg_pool(pool_id);
+	    const pg_pool_t *pool = get_map()->get_pg_pool(pool_id);
 	    if (!pool) {
 	      logger().debug(
 		"{} ignoring pgid {}, pool dne",
@@ -589,8 +589,8 @@ seastar::future<Ref<PG>> OSDSingletonState::load_pg(
 
   return seastar::do_with(PGMeta(store, pgid), [](auto& pg_meta) {
     return pg_meta.get_epoch();
-  }).then([&shard_services](epoch_t e) {
-    return shard_services.get_map(e);
+  }).then([this](epoch_t e) {
+    return get_map(e);
   }).then([pgid, this, &shard_services] (auto&& create_map) {
     return make_pg(shard_services, std::move(create_map), pgid, false);
   }).then([this](Ref<PG> pg) {
