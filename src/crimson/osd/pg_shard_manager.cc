@@ -21,10 +21,12 @@ seastar::future<> PGShardManager::start(
   crimson::os::FuturizedStore &store)
 {
   ceph_assert(seastar::this_shard_id() == 0);
+  logger().info("PGShardManager::start: about to start osd_singleton_state");
   return osd_singleton_state.start_single(
     whoami, std::ref(cluster_msgr), std::ref(public_msgr),
     std::ref(monc), std::ref(mgrc)
   ).then([this, whoami, &store] {
+    logger().info("PGShardManager::start: about to start shard_services");
     ceph::mono_time startup_time = ceph::mono_clock::now();
     return shard_services.start(
       std::ref(osd_singleton_state),
