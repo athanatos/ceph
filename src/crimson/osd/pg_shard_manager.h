@@ -74,8 +74,10 @@ public:
 
   seastar::future<> update_map(cached_map_t map) {
     get_osd_singleton_state().update_map(map);
-    get_local_state().update_map(map);
-    return seastar::now();
+    return shard_services.invoke_on_all([fmap=map](auto &local) {
+      // TODOSAM: need to do something specific with fmap
+      local.local_state.update_map(fmap);
+    });
   }
 
   seastar::future<> stop_registries() {
