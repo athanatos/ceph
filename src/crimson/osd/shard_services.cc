@@ -327,7 +327,7 @@ void OSDSingletonState::handle_conf_change(
 }
 
 seastar::future<OSDSingletonState::local_cached_map_t>
-OSDSingletonState::get_map(epoch_t e)
+OSDSingletonState::get_local_map(epoch_t e)
 {
   // TODO: use LRU cache for managing osdmap, fallback to disk if we have to
   if (auto found = osdmaps.find(e); found) {

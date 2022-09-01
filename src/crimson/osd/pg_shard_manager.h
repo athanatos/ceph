@@ -111,7 +111,6 @@ public:
   FORWARD_TO_OSD_SINGLETON(get_meta_coll)
 
   // Core OSDMap methods
-  FORWARD_TO_OSD_SINGLETON(get_map)
   FORWARD_TO_OSD_SINGLETON(load_map_bl)
   FORWARD_TO_OSD_SINGLETON(load_map_bls)
   FORWARD_TO_OSD_SINGLETON(store_maps)

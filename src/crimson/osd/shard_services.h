@@ -251,7 +251,7 @@ private:
   SimpleLRU<epoch_t, bufferlist, false> map_bl_cache;
 
   using local_cached_map_t = LocalOSDMapRef;
-  seastar::future<local_cached_map_t> get_map(epoch_t e);
+  seastar::future<local_cached_map_t> get_local_map(epoch_t e);
   seastar::future<std::unique_ptr<OSDMap>> load_map(epoch_t e);
   seastar::future<bufferlist> load_map_bl(epoch_t e);
   seastar::future<std::map<epoch_t, bufferlist>>
@@ -388,7 +388,7 @@ public:
   seastar::future<cached_map_t> get_map(epoch_t e) final {
     return with_singleton(
       [](auto &sstate, epoch_t e) {
-	return sstate.get_map(e);
+	return sstate.get_local_map(e);
       }, e).then([](auto map) {
 	return make_local_shared_foreign(std::move(map));
       });
