@@ -376,10 +376,10 @@ seastar::future<> OSD::start()
     );
   }).then([this](OSDSuperblock&& sb) {
     superblock = std::move(sb);
-    return pg_shard_manager.get_map(superblock.current_epoch);
-  }).then([this](OSDMapService::cached_map_t&& map) {
-    osdmap = std::move(map);
-    return pg_shard_manager.update_map(map);
+    return pg_shard_manager.get_local_map(superblock.current_epoch);
+  }).then([this](OSDMapService::local_cached_map_t&& map) {
+    osdmap = make_local_shared_foreign(OSDMapService::local_cached_map_t(map));
+    return pg_shard_manager.update_map(std::move(map));
   }).then([this] {
     pg_shard_manager.got_map(osdmap->get_epoch());
     bind_epoch = osdmap->get_epoch();
@@ -931,25 +931,25 @@ seastar::future<> OSD::committed_osd_maps(version_t first,
   return seastar::do_for_each(boost::make_counting_iterator(first),
                               boost::make_counting_iterator(last + 1),
                               [this](epoch_t cur) {
-    return pg_shard_manager.get_map(cur).then([this](OSDMapService::cached_map_t&& o) {
-      osdmap = std::move(o);
-      return pg_shard_manager.update_map(
-	osdmap
-      ).then([this] {
-	if (get_shard_services().get_up_epoch() == 0 &&
-	    osdmap->is_up(whoami) &&
-	    osdmap->get_addrs(whoami) == public_msgr->get_myaddrs()) {
-	  return pg_shard_manager.set_up_epoch(
-	    osdmap->get_epoch()
-	  ).then([this] {
-	    if (!boot_epoch) {
-	      boot_epoch = osdmap->get_epoch();
-	    }
-	  });
-	} else {
-	  return seastar::now();
-	}
-      });
+    return pg_shard_manager.get_local_map(
+      cur
+    ).then([this](OSDMapService::local_cached_map_t&& o) {
+      osdmap = make_local_shared_foreign(OSDMapService::local_cached_map_t(o));
+      return pg_shard_manager.update_map(std::move(o));
+    }).then([this] {
+      if (get_shard_services().get_up_epoch() == 0 &&
+	  osdmap->is_up(whoami) &&
+	  osdmap->get_addrs(whoami) == public_msgr->get_myaddrs()) {
+	return pg_shard_manager.set_up_epoch(
+	  osdmap->get_epoch()
+	).then([this] {
+	  if (!boot_epoch) {
+	    boot_epoch = osdmap->get_epoch();
+	  }
+	});
+      } else {
+	return seastar::now();
+      }
     });
   }).then([m, this] {
     if (osdmap->is_up(whoami)) {
