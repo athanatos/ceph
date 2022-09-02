@@ -77,10 +77,23 @@ public:
     get_osd_singleton_state().update_map(
       make_local_shared_foreign(local_cached_map_t(map))
     );
-    return shard_services.invoke_on_all(
-      [fmap=std::move(map)](auto &local) mutable {
-	// TODOSAM: need to do something specific with fmap
-	local.local_state.update_map(make_local_shared_foreign(std::move(fmap)));
+    /* We need each core to get its own foreign_ptr<local_cached_map_t>.
+     * foreign_ptr can't be cheaply copied, so we make one for each core
+     * up front. */
+    return seastar::do_with(
+      std::vector<seastar::foreign_ptr<local_cached_map_t>>(),
+      [this, map](auto &fmaps) {
+	fmaps.resize(seastar::smp::count);
+	for (auto &&i: fmaps) {
+	  i = seastar::foreign_ptr(map);
+	}
+	return shard_services.invoke_on_all(
+	  [&fmaps](auto &local) mutable {
+	    local.local_state.update_map(
+	      make_local_shared_foreign(
+		std::move(fmaps[seastar::this_shard_id()])
+	      ));
+	  });
       });
   }
 
