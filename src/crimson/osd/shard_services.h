@@ -391,9 +391,13 @@ public:
   seastar::future<cached_map_t> get_map(epoch_t e) final {
     return with_singleton(
       [](auto &sstate, epoch_t e) {
-	return sstate.get_local_map(e);
-      }, e).then([](auto map) {
-	return make_local_shared_foreign(std::move(map));
+	return sstate.get_local_map(
+	  e
+	).then([](auto lmap) {
+	  return seastar::foreign_ptr<local_cached_map_t>(lmap);
+	});
+      }, e).then([](auto fmap) {
+	return make_local_shared_foreign(std::move(fmap));
       });
   }
 
