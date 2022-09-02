@@ -963,7 +963,7 @@ start_osd() {
 	local extra_seastar_args
 	if [ "$ceph_osd" == "crimson-osd" ]; then
 	    # designate a single CPU node $osd for osd.$osd
-	    extra_seastar_args="--smp 5"
+	    extra_seastar_args="--smp 2"
 	    if [ "$debug" -ne 0 ]; then
 		extra_seastar_args+=" --debug"
 	    fi
