@@ -559,11 +559,12 @@ class OrderedExclusivePhaseT : public PipelineStageIT<T> {
 
     void exit() final {
       if (phase) {
+	auto *p = phase;
+	phase = nullptr;
 	std::ignore = seastar::smp::submit_to(
-	  phase->get_core(),
-	  [this] {
-	    phase->exit();
-	    phase = nullptr;
+	  p->get_core(),
+	  [p] {
+	    p->exit();
 	  });
       }
     }
