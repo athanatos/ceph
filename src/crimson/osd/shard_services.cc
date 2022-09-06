@@ -688,6 +688,7 @@ seastar::future<> ShardServices::dispatch_context(
       BufferedRecoveryMessages{ctx}),
     col ? dispatch_context_transaction(col, ctx) : seastar::now()
   ).then_unpack([] {
+    logger().debug("dispatch_context: finish");
     return seastar::now();
   });
 }
