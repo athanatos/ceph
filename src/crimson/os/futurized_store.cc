@@ -32,7 +32,7 @@ FuturizedStore::create(const std::string& type,
 #ifdef WITH_BLUESTORE
     // use AlienStore as a fallback. It adapts e.g. BlueStore.
     return seastar::make_ready_future<std::unique_ptr<FuturizedStore>>(
-      std::make_unique<ShardedStoreProxy<AlienStore>>(type, data, values));
+      std::make_unique<AlienStore>(type, data, values));
 #else
     ceph_abort_msgf("unsupported objectstore type: %s", type.c_str());
     return {};
