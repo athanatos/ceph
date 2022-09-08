@@ -27,7 +27,8 @@ using crimson::common::local_conf;
 
 SocketConnection::SocketConnection(SocketMessenger& messenger,
                                    ChainedDispatchers& dispatchers)
-  : messenger(messenger),
+  : core(messenger.shard_id()),
+    messenger(messenger),
     protocol(std::make_unique<ProtocolV2>(dispatchers, *this, messenger))
 {
 #ifdef UNIT_TESTS_BUILT
@@ -134,7 +135,7 @@ SocketConnection::close_clean(bool dispatch_reset)
 }
 
 seastar::shard_id SocketConnection::shard_id() const {
-  return messenger.shard_id();
+  return core;
 }
 
 seastar::socket_address SocketConnection::get_local_address() const {
