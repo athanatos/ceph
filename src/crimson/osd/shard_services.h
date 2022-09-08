@@ -346,6 +346,7 @@ public:
 
   template <typename T, typename... Args>
   auto start_operation(Args&&... args) {
+    crimson::get_logger(ceph_subsys_osd).info("ShardServices::{}", __func__);
     return local_state.start_operation<T>(std::forward<Args>(args)...);
   }
 
