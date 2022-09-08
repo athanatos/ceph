@@ -1010,7 +1010,7 @@ seastar::future<> OSD::handle_osd_op(crimson::net::ConnectionRef conn,
                                      Ref<MOSDOp> m)
 {
   (void) pg_shard_manager.start_pg_operation<ClientRequest>(
-    *this,
+    get_shard_services(),
     conn,
     std::move(m));
   return seastar::now();
