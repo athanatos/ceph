@@ -246,8 +246,10 @@ class Message : public RefCountedObject {
 public:
 #ifdef WITH_SEASTAR
   using ConnectionRef = crimson::net::ConnectionRef;
+  using ConnectionFRef = crimson::net::ConnectionRef;
 #else
   using ConnectionRef = ::ConnectionRef;
+  using ConnectionFRef = ::ConnectionRef;
 #endif // WITH_SEASTAR
 
 protected:
@@ -343,7 +345,7 @@ protected:
       completion_hook->complete(0);
   }
 public:
-  const ConnectionRef& get_connection() const { return connection; }
+  const ConnectionFRef& get_connection() const { return connection; }
   void set_connection(ConnectionRef c) {
     connection = std::move(c);
   }
