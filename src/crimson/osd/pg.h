@@ -796,8 +796,8 @@ private:
 };
 
 struct PG::do_osd_ops_params_t {
-  crimson::net::ConnectionRef get_connection() const {
-    return nullptr;
+  crimson::net::ConnectionFRef &get_connection() const {
+    return conn;
   }
   osd_reqid_t get_reqid() const {
     return reqid;
@@ -818,7 +818,7 @@ struct PG::do_osd_ops_params_t {
   bool has_flag(uint32_t flag) const {
     return false;
  }
-  crimson::net::ConnectionRef conn;
+  crimson::net::ConnectionFRef &conn;
   osd_reqid_t reqid;
   utime_t mtime;
   epoch_t map_epoch;
