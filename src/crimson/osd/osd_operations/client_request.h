@@ -27,7 +27,10 @@ class ShardServices;
 
 class ClientRequest final : public PhasedOperationT<ClientRequest>,
                             private CommonClientRequest {
-  OSD &osd;
+  // Initially set to primary core, updated to pg core after move,
+  // used by put_historic
+  ShardServices *put_historic_shard_services = nullptr;
+
   const seastar::foreign_ptr<crimson::net::ConnectionRef> conn;
   // must be after conn due to ConnectionPipeline's life-time
   PipelineHandle handle;
@@ -82,7 +85,9 @@ public:
 
   static constexpr OperationTypeCode type = OperationTypeCode::client_request;
 
-  ClientRequest(OSD &osd, crimson::net::ConnectionRef, Ref<MOSDOp> &&m);
+  ClientRequest(
+    ShardServices &shard_services,
+    crimson::net::ConnectionRef, Ref<MOSDOp> &&m);
   ~ClientRequest();
 
   void print(std::ostream &) const final;
