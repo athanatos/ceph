@@ -28,7 +28,7 @@ class ShardServices;
 class ClientRequest final : public PhasedOperationT<ClientRequest>,
                             private CommonClientRequest {
   OSD &osd;
-  const crimson::net::ConnectionRef conn;
+  const seastar::foreign_ptr<crimson::net::ConnectionRef> conn;
   // must be after conn due to ConnectionPipeline's life-time
   PipelineHandle handle;
   Ref<MOSDOp> m;
