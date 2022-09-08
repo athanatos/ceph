@@ -898,7 +898,7 @@ SeaStore::_omap_list_ret SeaStore::_omap_list(
     root,
     start,
     [&t, config](auto &manager, auto& root, auto& start) {
-      return manager.omap_list(root, t, start, config);
+      return manager.omap_list(root, t, start, std::nullopt, config);
     });
 }
 
