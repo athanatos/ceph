@@ -72,14 +72,20 @@ bool SocketConnection::peer_wins() const
 
 seastar::future<> SocketConnection::send(MessageURef msg)
 {
-  assert(seastar::this_shard_id() == shard_id());
-  return protocol->send(std::move(msg));
+  return seastar::smp::submit_to(
+    shard_id(),
+    [this, msg=std::move(msg)]() mutable {
+      return protocol->send(std::move(msg));
+    });
 }
 
 seastar::future<> SocketConnection::keepalive()
 {
-  assert(seastar::this_shard_id() == shard_id());
-  return protocol->keepalive();
+  return seastar::smp::submit_to(
+    shard_id(),
+    [this] {
+      return protocol->keepalive();
+    });
 }
 
 void SocketConnection::mark_down()
