@@ -70,6 +70,8 @@ seastar::future<> PGAdvanceMap::start()
       [this](epoch_t next_epoch) {
         return shard_services.get_map(next_epoch).then(
           [this] (cached_map_t&& next_map) {
+	    logger().info("PGAdvanceMap::start update pg {} to epoch {}",
+			  *pg, next_map->get_epoch());
             pg->handle_advance_map(next_map, rctx);
           });
       }).then([this] {
