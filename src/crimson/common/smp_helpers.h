@@ -22,7 +22,7 @@ static auto _apply_method_to_tuple(
 
 namespace crimson {
 
-using core_id_t = unsigned;
+using core_id_t = seastar::shard_id;
 static constexpr core_id_t NULL_CORE = std::numeric_limits<core_id_t>::max();
 
 template <typename Obj, typename Method, typename ArgTuple>
