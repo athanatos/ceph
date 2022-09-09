@@ -153,6 +153,7 @@ public:
   seastar::future<> run_with_pg_maybe_create(
     typename T::IRef op
   ) {
+    ceph_assert(op->use_count() == 1);
     ceph_assert(seastar::this_shard_id() == PRIMARY_CORE);
     auto &logger = crimson::get_logger(ceph_subsys_osd);
     static_assert(T::can_create());
@@ -190,6 +191,7 @@ public:
   seastar::future<> run_with_pg_maybe_wait(
     typename T::IRef op
   ) {
+    ceph_assert(op->use_count() == 1);
     ceph_assert(seastar::this_shard_id() == PRIMARY_CORE);
     auto &logger = crimson::get_logger(ceph_subsys_osd);
     static_assert(!T::can_create());
