@@ -391,14 +391,19 @@ TEST_F(omap_manager_test_t, force_split_listkeys_list_clear)
   run_async([this] {
     omap_root_t omap_root = initialize();
 
-    string temp;
+    string first, last;
     for (unsigned i = 0; i < 40; i++) {
       auto t = create_mutate_transaction();
       logger().debug("opened transaction");
       for (unsigned j = 0; j < 10; ++j) {
         auto key = set_random_key(omap_root, *t);
         if (i == 10)
-          temp = key;
+          first = key;
+	if (i == 30) {
+	  last = key;
+	  if (first > last)
+	    std::swap(first, last);
+	}
         if ((i % 20 == 0) && (j == 5)) {
           check_mappings(omap_root, *t);
         }
@@ -415,12 +420,22 @@ TEST_F(omap_manager_test_t, force_split_listkeys_list_clear)
 
     {
       auto t = create_read_transaction();
-      list(omap_root, *t, temp, std::nullopt, 100);
+      list(omap_root, *t, first, std::nullopt, 100);
     }
 
     {
       auto t = create_read_transaction();
-      list(omap_root, *t, temp, std::nullopt, 100, true);
+      list(omap_root, *t, first, std::nullopt, 100, true);
+    }
+
+    {
+      auto t = create_read_transaction();
+      list(omap_root, *t, std::nullopt, last, 10240);
+    }
+
+    {
+      auto t = create_read_transaction();
+      list(omap_root, *t, first, last, 10240, true);
     }
 
     {
@@ -436,15 +451,18 @@ TEST_F(omap_manager_test_t, force_inner_node_split_list)
   run_async([this] {
     omap_root_t omap_root = initialize();
 
-    string temp = "";
+    string first = "";
+    string last;
     while (cache->get_omap_tree_depth() < 3) {
       for (unsigned i = 0; i < 40; i++) {
 	auto t = create_mutate_transaction();
 	logger().debug("opened transaction");
 	for (unsigned j = 0; j < 10; ++j) {
 	  auto key = set_random_key(omap_root, *t);
-	  if (key.compare(temp) < 0 || !temp.length())
-	    temp = key;
+	  if (key.compare(first) < 0 || !first.length())
+	    first = key;
+	  if (i == 10)
+	    last = key;
 	}
 	logger().debug("force split submit transaction i = {}", i);
 	submit_transaction(std::move(t));
@@ -453,12 +471,22 @@ TEST_F(omap_manager_test_t, force_inner_node_split_list)
 
     {
       auto t = create_read_transaction();
-      list(omap_root, *t, temp, std::nullopt, 10240);
+      list(omap_root, *t, first, std::nullopt, 10240);
     }
 
     {
       auto t = create_read_transaction();
-      list(omap_root, *t, temp, std::nullopt, 10240, true);
+      list(omap_root, *t, first, std::nullopt, 10240, true);
+    }
+
+    {
+      auto t = create_read_transaction();
+      list(omap_root, *t, std::nullopt, last, 10240);
+    }
+
+    {
+      auto t = create_read_transaction();
+      list(omap_root, *t, first, last, 10240, true);
     }
 
     {
