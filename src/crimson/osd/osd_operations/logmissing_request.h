@@ -61,7 +61,7 @@ public:
 private:
   RepRequest::PGPipeline &pp(PG &pg);
 
-  crimson::net::ConnectionRef conn;
+  const seastar::foreign_ptr<crimson::net::ConnectionRef> conn;
   // must be after `conn` to ensure the ConnectionPipeline's is alive
   PipelineHandle handle;
   Ref<MOSDPGUpdateLogMissing> req;
