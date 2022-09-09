@@ -55,7 +55,7 @@ public:
   > tracking_events;
 
 private:
-  const seastar::foreign_ptr<crimson::net::ConnectionRef> conn;
+  crimson::net::ConnectionFRef conn;
   // must be after `conn` to ensure the ConnectionPipeline's is alive
   PipelineHandle handle;
   Ref<MOSDFastDispatchOp> m;

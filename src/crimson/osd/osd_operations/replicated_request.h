@@ -60,7 +60,7 @@ public:
 private:
   PGPipeline &pp(PG &pg);
 
-  const seastar::foreign_ptr<crimson::net::ConnectionRef> conn;
+  crimson::net::ConnectionFRef conn;
   PipelineHandle handle;
   Ref<MOSDRepOp> req;
 };
