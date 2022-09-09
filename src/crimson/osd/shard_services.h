@@ -451,20 +451,59 @@ public:
     get_cached_obc, get_cached_obc, local_state.obc_registry)
 
   FORWARD_TO_OSD_SINGLETON_TARGET(
-    local_request_reservation,
-    local_reserver.request_reservation)
-  FORWARD_TO_OSD_SINGLETON_TARGET(
     local_update_priority,
     local_reserver.update_priority)
   FORWARD_TO_OSD_SINGLETON_TARGET(
     local_cancel_reservation,
     local_reserver.cancel_reservation)
   FORWARD_TO_OSD_SINGLETON_TARGET(
-    remote_request_reservation,
-    remote_reserver.request_reservation)
-  FORWARD_TO_OSD_SINGLETON_TARGET(
     remote_cancel_reservation,
     remote_reserver.cancel_reservation)
+
+  Context *invoke_context_on_core(core_id_t core, Context *c) {
+    if (!c) return nullptr;
+    return new LambdaContext([core, c](int code) {
+      std::ignore = seastar::smp::submit_to(
+	core,
+	[c, code] {
+	  c->complete(code);
+	});
+    });
+  }
+  seastar::future<> local_request_reservation(
+    spg_t item,
+    Context *on_reserved,
+    unsigned prio,
+    Context *on_preempt) {
+    return with_singleton(
+      [item, prio](OSDSingletonState &singleton,
+		   Context *wrapped_on_reserved, Context *wrapped_on_preempt) {
+	return singleton.local_reserver.request_reservation(
+	  item,
+	  wrapped_on_reserved,
+	  prio,
+	  wrapped_on_preempt);
+      },
+      invoke_context_on_core(seastar::this_shard_id(), on_reserved),
+      invoke_context_on_core(seastar::this_shard_id(), on_preempt));
+  }
+  seastar::future<> remote_request_reservation(
+    spg_t item,
+    Context *on_reserved,
+    unsigned prio,
+    Context *on_preempt) {
+    return with_singleton(
+      [item, prio](OSDSingletonState &singleton,
+		   Context *wrapped_on_reserved, Context *wrapped_on_preempt) {
+	return singleton.remote_reserver.request_reservation(
+	  item,
+	  wrapped_on_reserved,
+	  prio,
+	  wrapped_on_preempt);
+      },
+      invoke_context_on_core(seastar::this_shard_id(), on_reserved),
+      invoke_context_on_core(seastar::this_shard_id(), on_preempt));
+  }
 
 #undef FORWARD_CONST
 #undef FORWARD
