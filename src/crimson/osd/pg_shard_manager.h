@@ -138,7 +138,7 @@ public:
   seastar::future<> set_up_epoch(epoch_t e);
 
   template <typename F>
-  seastar::future<> with_remote_shard_state(core_id_t core, F &&f) {
+  auto with_remote_shard_state(core_id_t core, F &&f) {
     ceph_assert(seastar::this_shard_id() == PRIMARY_CORE);
     return shard_services.invoke_on(
       core, [f=std::move(f)](auto &target_shard_services) mutable {
