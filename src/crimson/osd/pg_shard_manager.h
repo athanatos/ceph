@@ -264,10 +264,14 @@ public:
 
   template <typename F>
   auto with_pg(spg_t pgid, F &&f) {
-    assert(0 == "not implemented");
-    return std::invoke(
-      std::forward<F>(f),
-      get_local_state().pg_map.get_pg(pgid));
+    core_id_t mapping = get_pg_mapping(pgid);
+    return with_remote_shared_state(
+      mapping,
+      [pgid, f=std::move(f)](auto &local_state) {
+	return std::invoke(
+	  std::forward<F>(f),
+	  local_state.pg_map.get_pg(pgid));
+      });
   }
 
   template <typename T, typename... Args>
