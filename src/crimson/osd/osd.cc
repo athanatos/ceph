@@ -910,6 +910,7 @@ seastar::future<> OSD::handle_osd_map(crimson::net::ConnectionRef conn,
         superblock.clean_thru = last;
       }
       pg_shard_manager.get_meta_coll().store_superblock(t, superblock);
+      pg_shard_manager.set_superblock(superblock);
       logger().debug("OSD::handle_osd_map: do_transaction...");
       return store.do_transaction(
 	pg_shard_manager.get_meta_coll().collection(),
