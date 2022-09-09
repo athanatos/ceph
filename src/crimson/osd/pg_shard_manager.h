@@ -264,12 +264,13 @@ public:
 
   template <typename F>
   auto with_pg(spg_t pgid, F &&f) {
-    core_id_t mapping = get_pg_mapping(pgid);
-    return with_remote_shared_state(
-      mapping,
-      [pgid, f=std::move(f)](auto &local_state) {
+    core_id_t core = get_osd_singleton_state(
+    ).pg_to_shard_mapping.get_pg_mapping(pgid);
+    return with_remote_shard_state(
+      core,
+      [pgid, f=std::move(f)](auto &local_state, auto &local_service) mutable {
 	return std::invoke(
-	  std::forward<F>(f),
+	  std::move(f),
 	  local_state.pg_map.get_pg(pgid));
       });
   }
