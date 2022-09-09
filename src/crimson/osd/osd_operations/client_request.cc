@@ -119,6 +119,8 @@ seastar::future<> ClientRequest::with_pg_int(
     [this, pgref, this_instance_id, &ihref, &shard_services]() mutable {
       PG &pg = *pgref;
       if (pg.can_discard_op(*m)) {
+	logger().debug("{}.{}: sending incrementals from epoch {}",
+		       *this, this_instance_id, m->get_map_epoch());
 	return shard_services.send_incremental_map(
 	  std::ref(*conn), m->get_map_epoch()
 	).then([this, this_instance_id, pgref] {
