@@ -54,7 +54,7 @@ ClientRequest::ClientRequest(
   : put_historic_shard_services(&shard_services),
     conn(std::move(conn)),
     m(std::move(m)),
-    instance_handle(seastar::make_lw_shared<instance_handle_t>())
+    instance_handle(new instance_handle_t)
 {}
 
 ClientRequest::~ClientRequest()
