@@ -156,6 +156,23 @@ public:
     omap_list_config_t config = omap_list_config_t()) = 0;
 
   /**
+   * remove key value mappings in a key range from omap tree
+   *
+   * @param omap_root_t &omap_root,  omap btree root information
+   * @param Transaction &t,  current transaction
+   * @param string &first, range start
+   * @param string &last, range end
+   */
+  using omap_rm_key_range_iertr = base_iertr;
+  using omap_rm_key_range_ret = omap_rm_key_range_iertr::future<>;
+  virtual omap_rm_key_range_ret omap_rm_key_range(
+    omap_root_t &omap_root,
+    Transaction &t,
+    const std::string &first,
+    const std::string &last,
+    omap_list_config_t config) = 0;
+
+  /**
    * clear all omap tree key->value mapping
    *
    * @param omap_root_t &omap_root,  omap btree root information
