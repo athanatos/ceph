@@ -137,6 +137,39 @@ struct omap_manager_test_t :
     test_omap_mappings.erase(test_omap_mappings.find(key));
   }
 
+  std::vector<std::string> rm_key_range(
+    omap_root_t &omap_root,
+    Transaction &t,
+    const std::string &first,
+    const std::string &last) {
+    logger().debug("rm keys in range {} ~ {}", first, last);
+    auto config = OMapManager::omap_list_config_t();
+    config.max_result_size =400;
+    config.inclusive = true;
+
+    with_trans_intr(
+      t,
+      [&, this](auto &t) {
+      return omap_manager->omap_rm_key_range(
+	omap_root, t, first, last, config);
+    }).unsafe_get0();
+
+    std::vector<std::string> keys;
+    size_t count = 0;
+    for (auto iter = test_omap_mappings.begin();
+	iter != test_omap_mappings.end(); ) {
+      if (iter->first >= first && iter->first <= last) {
+	keys.push_back(iter->first);
+	test_omap_mappings.erase(iter);
+      }
+      iter++;
+      count++;
+      if (count == config.max_result_size)
+	break;
+    }
+    return keys;
+  }
+
   void list(
     const omap_root_t &omap_root,
     Transaction &t,
@@ -386,7 +419,7 @@ TEST_F(omap_manager_test_t, force_leafnode_split_merge_fullandbalanced)
   });
 }
 
-TEST_F(omap_manager_test_t, force_split_listkeys_list_clear)
+TEST_F(omap_manager_test_t, force_split_listkeys_list_rmkey_range_clear)
 {
   run_async([this] {
     omap_root_t omap_root = initialize();
@@ -439,6 +472,19 @@ TEST_F(omap_manager_test_t, force_split_listkeys_list_clear)
     }
 
     {
+      auto t = create_read_transaction();
+      list(omap_root, *t, first, last, 10240, true);
+    }
+
+    {
+      auto t = create_mutate_transaction();
+      auto keys = rm_key_range(omap_root, *t, first, last);
+      for (const auto& key : keys)
+	get_value(omap_root, *t, key);
+      submit_transaction(std::move(t));
+    }
+
+    {
       auto t = create_mutate_transaction();
       clear(omap_root, *t);
       submit_transaction(std::move(t));
@@ -446,7 +492,7 @@ TEST_F(omap_manager_test_t, force_split_listkeys_list_clear)
   });
 }
 
-TEST_F(omap_manager_test_t, force_inner_node_split_list)
+TEST_F(omap_manager_test_t, force_inner_node_split_list_rmkey_range)
 {
   run_async([this] {
     omap_root_t omap_root = initialize();
@@ -487,6 +533,14 @@ TEST_F(omap_manager_test_t, force_inner_node_split_list)
     {
       auto t = create_read_transaction();
       list(omap_root, *t, first, last, 10240, true);
+    }
+
+    {
+      auto t = create_mutate_transaction();
+      auto keys = rm_key_range(omap_root, *t, first, last);
+      for (const auto& key : keys)
+	get_value(omap_root, *t, key);
+      submit_transaction(std::move(t));
     }
 
     {
