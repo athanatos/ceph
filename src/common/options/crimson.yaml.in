@@ -80,3 +80,8 @@ options:
   level: advanced
   desc: split extent if ratio of total extent size to write size exceeds this value
   default: 1.25
+- name: seastore_omap_max_range_remove_size
+  type: uint
+  level: dev
+  desc: The max size of keys range to remove
+  default: 400
