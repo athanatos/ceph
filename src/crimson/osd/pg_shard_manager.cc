@@ -47,6 +47,7 @@ seastar::future<> PGShardManager::stop()
 
 seastar::future<> PGShardManager::load_pgs()
 {
+  ceph_assert(seastar::this_shard_id() == PRIMARY_CORE);
   return get_local_state().store.list_collections(
   ).then([this](auto colls) {
     return seastar::parallel_for_each(
@@ -87,6 +88,7 @@ seastar::future<> PGShardManager::load_pgs()
 
 seastar::future<> PGShardManager::stop_pgs()
 {
+  ceph_assert(seastar::this_shard_id() == PRIMARY_CORE);
   return shard_services.invoke_on_all([](auto &local_service) {
     return local_service.local_state.stop_pgs();
   });
@@ -95,6 +97,7 @@ seastar::future<> PGShardManager::stop_pgs()
 seastar::future<std::map<pg_t, pg_stat_t>>
 PGShardManager::get_pg_stats() const
 {
+  ceph_assert(seastar::this_shard_id() == PRIMARY_CORE);
   return shard_services.map_reduce0(
     [](auto &local) {
       return local.local_state.get_pg_stats();
@@ -108,6 +111,7 @@ PGShardManager::get_pg_stats() const
 
 seastar::future<> PGShardManager::broadcast_map_to_pgs(epoch_t epoch)
 {
+  ceph_assert(seastar::this_shard_id() == PRIMARY_CORE);
   return shard_services.invoke_on_all([epoch](auto &local_service) {
     return local_service.local_state.broadcast_map_to_pgs(
       local_service, epoch
@@ -119,6 +123,7 @@ seastar::future<> PGShardManager::broadcast_map_to_pgs(epoch_t epoch)
 }
 
 seastar::future<> PGShardManager::set_up_epoch(epoch_t e) {
+  ceph_assert(seastar::this_shard_id() == PRIMARY_CORE);
   return shard_services.invoke_on_all(
     seastar::smp_submit_to_options{},
     [e](auto &local_service) {
