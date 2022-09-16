@@ -3,6 +3,8 @@ add_executable(crimson-store-nbd
 	store_nbd/tm_driver.cc
 	store_nbd/fs_driver.cc
 	store_nbd/block_driver.cc
+	store_nbd/iofrontend.cc
+	store_nbd/nbd_frontend.cc
   )
 target_link_libraries(crimson-store-nbd
   crimson-os)
