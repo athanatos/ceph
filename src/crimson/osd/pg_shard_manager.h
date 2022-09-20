@@ -285,20 +285,28 @@ public:
 
     auto &opref = *op;
     auto id = op->get_id();
+    void *connptr = (void*)&(opref.get_connection_pipeline());
     auto fut = opref.template enter_stage<>(
       opref.get_connection_pipeline().await_active
-    ).then([this, &opref, &logger] {
+    ).then([this, connptr, &opref, &logger] {
       ceph_assert(seastar::this_shard_id() == PRIMARY_CORE);
-      logger.debug("{}: start_pg_operation in await_active stage", opref);
+      logger.debug(
+	"{}: {}, start_pg_operation in await_active stage",
+	opref, connptr);
       return get_osd_singleton_state().osd_state.when_active();
-    }).then([&logger, &opref] {
+    }).then([connptr, &logger, &opref] {
       ceph_assert(seastar::this_shard_id() == PRIMARY_CORE);
-      logger.debug("{}: start_pg_operation active, entering await_map", opref);
+      logger.debug(
+	"{}: {} start_pg_operation active, entering await_map",
+	opref, connptr);
       return opref.template enter_stage<>(
 	opref.get_connection_pipeline().await_map);
-    }).then([this, &logger, &opref] {
+    }).then([this, connptr, &logger, &opref] {
       ceph_assert(seastar::this_shard_id() == PRIMARY_CORE);
-      logger.debug("{}: start_pg_operation await_map stage", opref);
+      logger.debug(
+	"{}: {} start_pg_operation await_map stage",
+	opref,
+	connptr);
       using OSDMapBlockingEvent =
 	OSD_OSDMapGate::OSDMapBlocker::BlockingEvent;
       return opref.template with_blocking_event<OSDMapBlockingEvent>(
@@ -309,13 +317,15 @@ public:
 	    opref.get_epoch(),
 	    &get_shard_services());
 	});
-    }).then([&logger, &opref](auto epoch) {
+    }).then([connptr, &logger, &opref](auto epoch) {
       ceph_assert(seastar::this_shard_id() == PRIMARY_CORE);
-      logger.debug("{}: got map {}, entering get_pg", opref, epoch);
+      logger.debug("{}: {}, got map {}, entering get_pg", opref, connptr, epoch);
       return opref.template enter_stage<>(
 	opref.get_connection_pipeline().get_pg);
-    }).then([this, &logger, &opref, op=std::move(op)]() mutable {
-      logger.debug("{}: in get_pg core {}", opref, seastar::this_shard_id());
+    }).then([this, connptr, &logger, &opref, op=std::move(op)]() mutable {
+      logger.debug(
+	"{}: {} in get_pg core {}",
+	opref, connptr, seastar::this_shard_id());
       ceph_assert(seastar::this_shard_id() == PRIMARY_CORE);
       logger.debug("{}: in get_pg", opref);
       if constexpr (T::can_create()) {
@@ -325,6 +335,8 @@ public:
 	logger.debug("{}: !can_create", opref);
 	return run_with_pg_maybe_wait<T>(std::move(op));
       }
+    }).finally([connptr, id, &logger] {
+      logger.debug("op id {}, connptr {} complete", id, connptr);
     });
     return std::make_pair(id, std::move(fut));
   }
