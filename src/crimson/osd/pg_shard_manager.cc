@@ -12,6 +12,20 @@ namespace {
 
 namespace crimson::osd {
 
+PGShardManager::PGShardManager()
+  : op_dump_timer(
+    [this] {
+      std::ignore = log_long_running_ops(
+      ).then([this] {
+	auto period = crimson::common::local_conf().get_val<uint64_t>(
+	    "crimson_osd_op_dump_period");
+	if (period != 0) {
+	  op_dump_timer.arm(std::chrono::seconds(period));
+	}
+	return seastar::now();
+      });
+    }) {}
+
 seastar::future<> PGShardManager::start(
   const int whoami,
   crimson::net::Messenger &cluster_msgr,
@@ -33,12 +47,20 @@ seastar::future<> PGShardManager::start(
       osd_singleton_state.local().perf,
       osd_singleton_state.local().recoverystate_perf,
       std::ref(store));
+  }).then([this] {
+    auto period = crimson::common::local_conf().get_val<uint64_t>(
+	"crimson_osd_op_dump_period");
+    if (period != 0) {
+      op_dump_timer.arm(std::chrono::seconds(period));
+    }
+    return seastar::now();
   });
 }
 
 seastar::future<> PGShardManager::stop()
 {
   ceph_assert(seastar::this_shard_id() == PRIMARY_CORE);
+  op_dump_timer.cancel();
   return shard_services.stop(
   ).then([this] {
     return osd_singleton_state.stop();

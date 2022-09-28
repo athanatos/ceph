@@ -50,6 +50,26 @@ PerShardState::PerShardState(
     startup_time(startup_time)
 {}
 
+seastar::future<> PerShardState::log_long_running_ops() const
+{
+  auto threshhold = crimson::common::local_conf().get_val<uint64_t>(
+    "crimson_osd_op_dump_age_threshhold");
+  registry.for_each_op([threshhold](const auto &op) {
+    if (op.get_age_seconds() > threshhold) {
+      ceph::JSONFormatter f;
+      op.dump(&f);
+      std::stringstream oss;
+      f.flush(oss);
+      logger().info(
+	"PerShardState::log_long_running_ops: {} older than {}s, dump: {}",
+	op,
+	threshhold,
+	oss.str());
+    }
+  });
+  return seastar::now();
+}
+
 seastar::future<> PerShardState::dump_ops_in_flight(Formatter *f) const
 {
   registry.for_each_op([f](const auto &op) {
