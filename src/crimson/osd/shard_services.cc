@@ -50,6 +50,16 @@ PerShardState::PerShardState(
     startup_time(startup_time)
 {}
 
+seastar::future<> PerShardState::log_long_running_ops() const
+{
+  registry.for_each_op([](const auto &op) {
+    logger().debug(
+      "PerShardState::log_long_running_ops: {} still live",
+      op);
+  });
+  return seastar::now();
+}
+
 seastar::future<> PerShardState::stop_pgs()
 {
   assert_core();
