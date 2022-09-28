@@ -24,6 +24,9 @@ class PGShardManager {
   seastar::sharded<OSDSingletonState> osd_singleton_state;
   seastar::sharded<ShardServices> shard_services;
 
+  // Schedules callback to iterate over cores and dump live ops
+  seastar::timer<seastar::lowres_clock> op_dump_timer;
+
 #define FORWARD_CONST(FROM_METHOD, TO_METHOD, TARGET)		\
   template <typename... Args>					\
   auto FROM_METHOD(Args&&... args) const {			\
@@ -43,7 +46,7 @@ public:
   using cached_map_t = OSDMapService::cached_map_t;
   using local_cached_map_t = OSDMapService::local_cached_map_t;
 
-  PGShardManager() = default;
+  PGShardManager();
 
   seastar::future<> start(
     const int whoami,
@@ -101,6 +104,14 @@ public:
     return shard_services.invoke_on_all([](auto &local) {
       return local.local_state.stop_registry();
     });
+  }
+
+  seastar::future<> log_long_running_ops() const {
+    return sharded_map_seq(
+      shard_services,
+      [](const auto &local_service) {
+	return local_service.log_long_running_ops();
+      });
   }
 
   FORWARD_TO_OSD_SINGLETON(send_pg_created)
