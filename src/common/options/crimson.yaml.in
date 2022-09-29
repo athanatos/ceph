@@ -11,7 +11,7 @@ options:
   type: uint
   level: advanced
   desc: The osd will dump live ops to the log every <crimson_osd_op_dump_period> seconds.  0 to disable.
-  default: 0
+  default: 30
 - name: crimson_osd_scheduler_concurrency
   type: uint
   level: advanced
