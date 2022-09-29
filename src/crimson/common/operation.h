@@ -635,8 +635,6 @@ class OrderedConcurrentPhaseT : public PipelineStageIT<T> {
   using base_t = PipelineStageIT<T>;
 public:
   struct BlockingEvent : base_t::BlockingEvent {
-    using base_t::BlockingEvent::BlockingEvent;
-
     struct ExitBarrierEvent : TimeEvent<ExitBarrierEvent> {};
 
     template <class OpT>
