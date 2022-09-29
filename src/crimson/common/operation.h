@@ -477,7 +477,7 @@ public:
 };
 
 template <class T>
-class PipelineStageIT : public BlockerT<T> {
+class PipelineStageIT {
   const core_id_t core = seastar::this_shard_id();
 public:
   core_id_t get_core() const { return core; }
@@ -551,7 +551,7 @@ public:
  * the op ordering is preserved.
  */
 template <class T>
-class OrderedExclusivePhaseT : public PipelineStageIT<T> {
+class OrderedExclusivePhaseT : public PipelineStageIT<T>, public BlockerT<T> {
   void dump_detail(ceph::Formatter *f) const final {
     f->dump_unsigned("waiting", waiting);
     if (held_by != Operation::NULL_ID) {
@@ -631,8 +631,8 @@ private:
  * enter.
  */
 template <class T>
-class OrderedConcurrentPhaseT : public PipelineStageIT<T> {
-  using base_t = PipelineStageIT<T>;
+class OrderedConcurrentPhaseT : public PipelineStageIT<T>, public BlockerT<T> {
+  using base_t = BlockerT<T>;
 public:
   struct BlockingEvent : base_t::BlockingEvent {
     struct ExitBarrierEvent : TimeEvent<ExitBarrierEvent> {};
@@ -718,7 +718,7 @@ private:
  * stages with constraints.
  */
 template <class T>
-class UnorderedStageT : public PipelineStageIT<T> {
+class UnorderedStageT : public PipelineStageIT<T>, public BlockerT<T> {
   void dump_detail(ceph::Formatter *f) const final {}
 
   class ExitBarrier final : public PipelineExitBarrierI {
