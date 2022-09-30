@@ -76,6 +76,7 @@ class PerShardState {
   OperationThrottler throttler;
 
   seastar::future<> log_long_running_ops() const;
+  seastar::future<> dump_ops_in_flight(Formatter *f) const;
 
   epoch_t up_epoch = 0;
   OSDMapService::cached_map_t osdmap;
@@ -374,6 +375,7 @@ public:
 
   // Diagnostics
   FORWARD_TO_LOCAL_CONST(log_long_running_ops);
+  FORWARD_TO_LOCAL_CONST(dump_ops_in_flight);
 
   // Local PG Management
   seastar::future<Ref<PG>> make_pg(
