@@ -131,20 +131,8 @@ struct TimeEvent : Event<T> {
 template <typename T>
 class BlockerT : public Blocker {
 public:
-  struct BlockingEvent : Event<typename T::BlockingEvent> {
+  struct BlockingEvent : TimeEvent<typename T::BlockingEvent> {
     using Blocker = std::decay_t<T>;
-
-    struct InternalBackend {
-      void handle(typename T::BlockingEvent&,
-                  const Operation&,
-                  const T& blocker) {
-        this->timestamp = ceph_clock_now();
-        this->blocker = &blocker;
-      }
-
-      utime_t timestamp;
-      const T* blocker;
-    } internal_backend;
 
     // we don't want to make any BlockerT to be aware and coupled with
     // an operation. to not templatize an entire path from an op to
@@ -155,28 +143,22 @@ public:
       template <class FutureT>
       auto maybe_record_blocking(FutureT&& fut, const T& blocker) {
         if (!fut.available()) {
-	  // a full blown call via vtable. that's the cost for templatization
-	  // avoidance. anyway, most of the things actually have the type
-	  // knowledge.
-	  record_blocking(blocker);
-	  return std::forward<FutureT>(fut).finally(
-	    [&event=this->event, &blocker] () mutable {
-	    // beware trigger instance may be already dead when this
-	    // is executed!
-	    record_unblocking(event, blocker);
+	  event.set_blocked_by(blocker);
+	  // vtable call
+	  trigger_event();
+	  return std::forward<FutureT>(fut
+	  ).finally([&captured_event=event, &blocker]() mutable {
+	    // trigger instance (this) may no longer be live
+	    captured_event.clear_blocked_by(blocker);
 	  });
+	} else {
+	  return std::forward<FutureT>(fut);
 	}
-	return std::forward<FutureT>(fut);
       }
       virtual ~TriggerI() = default;
     protected:
-      // it's for the sake of erasing the OpT type
-      virtual void record_blocking(const T& blocker) = 0;
-
-      static void record_unblocking(BlockingEvent& event, const T& blocker) {
-	assert(event.internal_backend.blocker == &blocker);
-	event.internal_backend.blocker = nullptr;
-      }
+      // TriggerI erases OpT
+      virtual void trigger_event() = 0;
 
       BlockingEvent& event;
     };
@@ -188,22 +170,24 @@ public:
       template <class FutureT>
       auto maybe_record_blocking(FutureT&& fut, const T& blocker) {
         if (!fut.available()) {
-	  // no need for the dynamic dispatch! if we're lucky, a compiler
-	  // should collapse all these abstractions into a bunch of movs.
-	  this->Trigger::record_blocking(blocker);
-	  return std::forward<FutureT>(fut).finally(
-	    [&event=this->event, &blocker] () mutable {
-	    Trigger::record_unblocking(event, blocker);
+	  this->event.set_blocked_by(blocker);
+	  // should be a direct call, trigger_event is final
+	  Trigger::trigger_event();
+	  return std::forward<FutureT>(fut
+	  ).finally([&captured_event=this->event, &blocker]() mutable {
+	    // trigger instance (this) may no longer be live
+	    captured_event.clear_blocked_by(blocker);
 	  });
+	} else {
+	  return std::forward<FutureT>(fut);
 	}
-	return std::forward<FutureT>(fut);
       }
 
       const OpT &get_op() { return op; }
 
     protected:
-      void record_blocking(const T& blocker) override {
-	this->event.trigger(op, blocker);
+      void trigger_event() final {
+	this->event.trigger(op);
       }
 
       const OpT& op;
@@ -213,10 +197,23 @@ public:
       auto demangled_name = boost::core::demangle(typeid(T).name());
       detail::dump_blocking_event(
 	demangled_name.c_str(),
-	internal_backend.timestamp,
-	internal_backend.blocker,
+	this->internal_backend.timestamp,
+	blocked_by,
 	f);
     }
+
+  private:
+    void set_blocked_by(const Blocker &blocker) {
+      ceph_assert_always(!blocked_by);
+      blocked_by = &blocker;
+    }
+
+    void clear_blocked_by(const Blocker &blocker) {
+      ceph_assert_always(blocked_by == &blocker);
+      blocked_by = nullptr;
+    }
+
+    const Blocker *blocked_by = nullptr;
   };
 
   virtual ~BlockerT() = default;
