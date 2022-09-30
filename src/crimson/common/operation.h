@@ -107,15 +107,9 @@ struct Event {
 // of TrackableOperation's life.
 template <class T>
 struct TimeEvent : Event<T> {
-  struct Backend {
-    // `T` is passed solely to let implementations to discriminate
-    // basing on the type-of-event.
-    virtual void handle(T&, const Operation&) = 0;
-  };
-
   // for the sake of dumping ops-in-flight.
-  struct InternalBackend final : Backend {
-    void handle(T&, const Operation&) override {
+  struct InternalBackend {
+    void handle(T&, const Operation&) {
       timestamp = ceph_clock_now();
     }
     utime_t timestamp;
@@ -140,16 +134,10 @@ public:
   struct BlockingEvent : Event<typename T::BlockingEvent> {
     using Blocker = std::decay_t<T>;
 
-    struct Backend {
-      // `T` is based solely to let implementations to discriminate
-      // basing on the type-of-event.
-      virtual void handle(typename T::BlockingEvent&, const Operation&, const T&) = 0;
-    };
-
-    struct InternalBackend : Backend {
+    struct InternalBackend {
       void handle(typename T::BlockingEvent&,
                   const Operation&,
-                  const T& blocker) override {
+                  const T& blocker) {
         this->timestamp = ceph_clock_now();
         this->blocker = &blocker;
       }
