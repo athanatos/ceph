@@ -7,6 +7,7 @@
 #include <array>
 #include <set>
 #include <vector>
+#include <boost/core/demangle.hpp>
 #include <boost/intrusive/list.hpp>
 #include <boost/intrusive_ptr.hpp>
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
@@ -115,7 +116,10 @@ struct TimeEvent : Event<T> {
   } internal_backend;
 
   void dump(ceph::Formatter *f) const {
-    detail::dump_time_event(typeid(T).name(), internal_backend.timestamp, f);
+    auto demangled_name = boost::core::demangle(typeid(T).name());
+    detail::dump_time_event(
+      demangled_name.c_str(),
+      internal_backend.timestamp, f);
   }
 
   auto get_timestamp() const {
@@ -190,8 +194,9 @@ public:
     };
 
     void dump(ceph::Formatter *f) const {
+      auto demangled_name = boost::core::demangle(typeid(T).name());
       detail::dump_blocking_event(
-	typeid(T).name(),
+	demangled_name.c_str(),
 	this->internal_backend.timestamp,
 	blocked_by,
 	f);
