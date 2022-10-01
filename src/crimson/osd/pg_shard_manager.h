@@ -184,16 +184,22 @@ public:
 	auto &opref = *op;
 	return opref.template with_blocking_event<
 	  PGMap::PGCreationBlockingEvent
-	  >([&shard_services, &opref](
+	  >([&shard_services, &opref, &logger](
 	      auto &&trigger) {
 	    return shard_services.get_or_create_pg(
 	      std::move(trigger),
 	      opref.get_pgid(), opref.get_epoch(),
-	      std::move(opref.get_create_info()));
-	  }).then([&logger, &shard_services, &opref](Ref<PG> pgref) {
+	      std::move(opref.get_create_info())
+	    );
+	  }).safe_then([&logger, &shard_services, &opref](Ref<PG> pgref) {
 	    logger.debug("{}: have_pg", opref);
 	    return opref.with_pg(shard_services, pgref);
-	  }).then([op=std::move(op)] {});
+	  }).handle_error(
+	    crimson::ct_error::ecanceled::handle([&logger, &opref](auto) {
+	      logger.debug("{}: pg creation canceled, dropping", opref);
+	      return seastar::now();
+	    })
+	  ).then([op=std::move(op)] {});
       });
   }
 
@@ -226,10 +232,15 @@ public:
 	      auto &&trigger) {
 	    return shard_services.wait_for_pg(
 	      std::move(trigger), opref.get_pgid());
-	  }).then([&logger, &shard_services, &opref](Ref<PG> pgref) {
+	  }).safe_then([&logger, &shard_services, &opref](Ref<PG> pgref) {
 	    logger.debug("{}: have_pg", opref);
 	    return opref.with_pg(shard_services, pgref);
-	  }).then([op=std::move(op)] {});
+	  }).handle_error(
+	    crimson::ct_error::ecanceled::handle([&logger, &opref](auto) {
+	      logger.debug("{}: pg creation canceled, dropping", opref);
+	      return seastar::now();
+	    })
+	  ).then([op=std::move(op)] {});
       });
   }
 
