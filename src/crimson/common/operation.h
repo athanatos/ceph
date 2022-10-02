@@ -319,6 +319,8 @@ private:
  */
 class Operation : public boost::intrusive_ref_counter<
   Operation, boost::thread_unsafe_counter> {
+  using clock = ceph::coarse_mono_clock;
+  const clock::time_point start_time = clock::now();
  public:
   using id_t = uint64_t;
   static constexpr id_t NULL_ID = std::numeric_limits<uint64_t>::max();
@@ -333,6 +335,14 @@ class Operation : public boost::intrusive_ref_counter<
   void dump(ceph::Formatter *f) const;
   void dump_brief(ceph::Formatter *f) const;
   virtual ~Operation() = default;
+
+  auto get_age() const { return clock::now() - start_time; }
+  uint64_t get_age_seconds() const {
+    auto ret = std::chrono::duration_cast<std::chrono::seconds>(
+      get_age()).count();
+    assert(ret >= 0);
+    return static_cast<uint64_t>(ret);
+  }
 
  private:
   virtual void dump_detail(ceph::Formatter *f) const = 0;

@@ -9,6 +9,7 @@ void Operation::dump(ceph::Formatter* f) const
 {
   f->open_object_section("operation");
   f->dump_string("type", get_type_name());
+  f->dump_unsigned("age_seconds", get_age_seconds());
   f->dump_unsigned("id", id);
   {
     f->open_object_section("detail");
@@ -27,7 +28,10 @@ void Operation::dump_brief(ceph::Formatter* f) const
 }
 
 std::ostream &operator<<(std::ostream &lhs, const Operation &rhs) {
-  lhs << rhs.get_type_name() << "(id=" << rhs.get_id() << ", detail=";
+  lhs << rhs.get_type_name()
+      << "(id=" << rhs.get_id()
+      << ", age_seconds=" << rhs.get_age_seconds()
+      << ", detail=";
   rhs.print(lhs);
   lhs << ")";
   return lhs;
