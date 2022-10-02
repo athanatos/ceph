@@ -3,6 +3,8 @@ overrides:
     conf:
       global:
         osd pool default pg autoscale mode: off
+      osd:
+        crimson osd op dump period: 30
   workunit:
     env:
       CRIMSON_COMPAT: true
