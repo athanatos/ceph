@@ -3,3 +3,6 @@ overrides:
     conf:
       global:
         osd pool default pg autoscale mode: off
+  workunit:
+    env:
+      CRIMSON_COMPAT: true
