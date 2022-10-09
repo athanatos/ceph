@@ -3552,6 +3552,21 @@ bool OSDMonitor::preprocess_boot(MonOpRequestRef op)
     goto ignore;
   }
 
+  // See crimson/osd/osd.cc: OSD::_send_boot
+  if (m->metadata.contains("osd_type")) {
+    // m->metadata["osd_type"] must be "crimson", classic doesn't send osd_type
+    if (!osdmap.get_allow_crimson()) {
+      mon.clog->info()
+	<< "Disallowing boot of crimson-osd without allow_crimson "
+	<< "OSDMap flag.  Run ceph osd set_allow_crimson to set "
+	<< "allow_crimson flag.  Note that crimson-osd is "
+	<< "considered unstable and may result in crashes or "
+	<< "data loss.  Its usage should be restricted to "
+	<< "testing and development.";
+      goto ignore;
+    }
+  }
+
   if (osdmap.stretch_mode_enabled &&
       !(m->osd_features & CEPH_FEATUREMASK_STRETCH_MODE)) {
     mon.clog->info() << "disallowing boot of OSD "
