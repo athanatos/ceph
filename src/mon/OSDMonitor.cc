@@ -7375,6 +7375,7 @@ int OSDMonitor::prepare_new_pool(MonOpRequestRef op)
 			 0, 0, 0, 0, 0, 0, 0.0,
 			 erasure_code_profile,
 			 pg_pool_t::TYPE_REPLICATED, 0, FAST_READ_OFF, {}, bulk,
+			 cct->_conf.get_val<bool>("osd_pool_default_crimson"),
 			 &ss);
 
   if (ret < 0) {
@@ -7980,6 +7981,9 @@ int OSDMonitor::check_pg_num(int64_t pool, int pg_num, int size, int crush_rule,
  * @param pool_type TYPE_ERASURE, or TYPE_REP
  * @param expected_num_objects expected number of objects on the pool
  * @param fast_read fast read type. 
+ * @param pg_autoscale_mode autoscale mode, one of on, off, warn
+ * @param bool bulk indicates whether pool should be a bulk pool
+ * @param bool crimson indicates whether pool is a crimson pool
  * @param ss human readable error message, if any.
  *
  * @return 0 on success, negative errno on failure.
@@ -7997,12 +8001,21 @@ int OSDMonitor::prepare_new_pool(string& name,
                                  const unsigned pool_type,
                                  const uint64_t expected_num_objects,
                                  FastReadType fast_read,
-				 const string& pg_autoscale_mode,
+				 string pg_autoscale_mode,
 				 bool bulk,
+				 bool crimson,
 				 ostream *ss)
 {
+  if (crimson && pg_autoscale_mode.empty()) {
+    // default pg_autoscale_mode to off for crimson, we'll error out below if
+    // the user tried to actually set pg_autoscale_mode to something other than
+    // "off"
+    pg_autoscale_mode = "off";
+  }
+
   if (name.length() == 0)
     return -EINVAL;
+
   if (pg_num == 0) {
     auto pg_num_from_mode =
       [pg_num=g_conf().get_val<uint64_t>("osd_pool_default_pg_num")]
@@ -8029,6 +8042,25 @@ int OSDMonitor::prepare_new_pool(string& name,
         << ", which in this case is " << pg_num;
     return -ERANGE;
   }
+
+  if (crimson) {
+    /* crimson-osd requires that the pool be replicated and that pg_num/pgp_num
+     * be static.  User must also have specified set-allow-crimson */
+    const auto *suffix = " (--crimson specified or osd_pool_default_crimson set)";
+    if (pool_type != pg_pool_t::TYPE_REPLICATED) {
+      *ss << "crimson-osd only supports replicated pools" << suffix;
+      return -EINVAL;
+    } else if (pg_autoscale_mode != "off") {
+      *ss << "crimson-osd does not support changing pg_num or pgp_num, "
+	  << "pg_autoscale_mode must be set to 'off'" << suffix;
+      return -EINVAL;
+    } else if (!osdmap.get_allow_crimson()) {
+      *ss << "set-allow-crimson must be set to create a pool with the "
+	  << "crimson flag" << suffix;
+      return -EINVAL;
+    }
+  }
+
   if (pool_type == pg_pool_t::TYPE_REPLICATED && fast_read == FAST_READ_ON) {
     *ss << "'fast_read' can only apply to erasure coding pool";
     return -EINVAL;
@@ -8137,6 +8169,10 @@ int OSDMonitor::prepare_new_pool(string& name,
     pi->use_gmt_hitset = true;
   else
     pi->use_gmt_hitset = false;
+  if (crimson) {
+    pi->set_flag(pg_pool_t::FLAG_CRIMSON);
+    pi->set_flag(pg_pool_t::FLAG_NOPGCHANGE);
+  }
 
   pi->size = size;
   pi->min_size = min_size;
@@ -8385,6 +8421,10 @@ int OSDMonitor::prepare_command_pool_set(const cmdmap_t& cmdmap,
     }
     p.min_size = n;
   } else if (var == "pg_num_actual") {
+    if (p.has_flag(pg_pool_t::FLAG_NOPGCHANGE)) {
+      ss << "pool pg_num change is disabled; you must unset nopgchange flag for the pool first";
+      return -EPERM;
+    }
     if (interr.length()) {
       ss << "error parsing integer value '" << val << "': " << interr;
       return -EINVAL;
@@ -8580,6 +8620,10 @@ int OSDMonitor::prepare_command_pool_set(const cmdmap_t& cmdmap,
     if (val == "true" || (interr.empty() && n == 1)) {
       p.set_flag(flag);
     } else if (val == "false" || (interr.empty() && n == 0)) {
+      if (flag == pg_pool_t::FLAG_NOPGCHANGE && p.is_crimson()) {
+	ss << "cannot clear FLAG_NOPGCHANGE on a crimson pool";
+	return -EINVAL;
+      }
       p.unset_flag(flag);
     } else {
       ss << "expecting value 'true', 'false', '0', or '1'";
@@ -13106,6 +13150,10 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
     cmd_getval(cmdmap, "autoscale_mode", pg_autoscale_mode);
 
     bool bulk = cmd_getval_or<bool>(cmdmap, "bulk", 0);
+
+    bool crimson = cmd_getval_or<bool>(cmdmap, "crimson", false) ||
+      cct->_conf.get_val<bool>("osd_pool_default_crimson");
+
     err = prepare_new_pool(poolstr,
 			   -1, // default crush rule
 			   rule_name,
@@ -13116,6 +13164,7 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
                            fast_read,
 			   pg_autoscale_mode,
 			   bulk,
+			   crimson,
 			   &ss);
     if (err < 0) {
       switch(err) {
@@ -14288,6 +14337,19 @@ bool OSDMonitor::_check_become_tier(
 {
   const std::string &tier_pool_name = osdmap.get_pool_name(tier_pool_id);
   const std::string &base_pool_name = osdmap.get_pool_name(base_pool_id);
+
+  if (tier_pool->is_crimson()) {
+    *ss << "pool '" << tier_pool_name << "' is a crimson pool, tiering "
+	<< "features are not supported";
+    *err = -EINVAL;
+    return false;
+  }
+  if (base_pool->is_crimson()) {
+    *ss << "pool '" << base_pool_name << "' is a crimson pool, tiering "
+	<< "features are not supported";
+    *err = -EINVAL;
+    return false;
+  }
 
   const FSMap &pending_fsmap = mon.mdsmon()->get_pending_fsmap();
   if (pending_fsmap.pool_in_use(tier_pool_id)) {

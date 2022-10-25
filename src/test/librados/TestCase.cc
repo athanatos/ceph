@@ -65,12 +65,14 @@ rados_t RadosTestECNS::s_cluster = NULL;
 
 void RadosTestECNS::SetUpTestCase()
 {
+  SKIP_IF_CRIMSON();
   pool_name = get_temp_pool_name();
   ASSERT_EQ("", create_one_ec_pool(pool_name, &s_cluster));
 }
 
 void RadosTestECNS::TearDownTestCase()
 {
+  SKIP_IF_CRIMSON();
   ASSERT_EQ(0, destroy_one_ec_pool(pool_name, &s_cluster));
 }
 
@@ -159,17 +161,20 @@ rados_t RadosTestEC::s_cluster = NULL;
 
 void RadosTestEC::SetUpTestCase()
 {
+  SKIP_IF_CRIMSON();
   pool_name = get_temp_pool_name();
   ASSERT_EQ("", create_one_ec_pool(pool_name, &s_cluster));
 }
 
 void RadosTestEC::TearDownTestCase()
 {
+  SKIP_IF_CRIMSON();
   ASSERT_EQ(0, destroy_one_ec_pool(pool_name, &s_cluster));
 }
 
 void RadosTestEC::SetUp()
 {
+  SKIP_IF_CRIMSON();
   cluster = RadosTestEC::s_cluster;
   ASSERT_EQ(0, rados_ioctx_create(cluster, pool_name.c_str(), &ioctx));
   nspace = get_temp_pool_name();
@@ -183,6 +188,7 @@ void RadosTestEC::SetUp()
 
 void RadosTestEC::TearDown()
 {
+  SKIP_IF_CRIMSON();
   if (cleanup) {
     cleanup_default_namespace(ioctx);
     cleanup_namespace(ioctx, nspace);

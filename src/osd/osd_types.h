@@ -1231,6 +1231,10 @@ struct pg_pool_t {
     FLAG_CREATING = 1<<15,          // initial pool PGs are being created
     FLAG_EIO = 1<<16,               // return EIO for all client ops
     FLAG_BULK = 1<<17, //pool is large
+    // PGs from this pool are allowed to be created on crimson osds.
+    // Pool features are restricted to those supported by crimson-osd.
+    // Note, does not prohibit being created on classic osd.
+    FLAG_CRIMSON = 1<<18,
   };
 
   static const char *get_flag_name(uint64_t f) {
@@ -1253,6 +1257,7 @@ struct pg_pool_t {
     case FLAG_CREATING: return "creating";
     case FLAG_EIO: return "eio";
     case FLAG_BULK: return "bulk";
+    case FLAG_CRIMSON: return "crimson";
     default: return "???";
     }
   }
@@ -1307,6 +1312,8 @@ struct pg_pool_t {
       return FLAG_EIO;
     if (name == "bulk")
       return FLAG_BULK;
+    if (name == "crimson")
+      return FLAG_CRIMSON;
     return 0;
   }
 
@@ -1703,6 +1710,10 @@ public:
 
   bool allows_ecoverwrites() const {
     return has_flag(FLAG_EC_OVERWRITES);
+  }
+
+  bool is_crimson() const {
+    return has_flag(FLAG_CRIMSON);
   }
 
   bool can_shift_osds() const {
