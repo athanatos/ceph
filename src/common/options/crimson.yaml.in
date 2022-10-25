@@ -19,6 +19,13 @@ options:
   default: 6
   flags:
   - startup
+- name: crimson_seastar_smp
+  type: uint
+  level: advanced
+  desc: The number of threads for serving alienized ObjectStore
+  default: 1
+  flags:
+  - startup
 - name: crimson_alien_thread_cpu_cores
   type: str
   level: advanced
