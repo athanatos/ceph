@@ -3552,6 +3552,21 @@ bool OSDMonitor::preprocess_boot(MonOpRequestRef op)
     goto ignore;
   }
 
+  // See crimson/osd/osd.cc: OSD::_send_boot
+  if (m->metadata.contains("osd_type")) {
+    // m->metadata["osd_type"] must be "crimson", classic doesn't send osd_type
+    if (!osdmap.get_allow_crimson()) {
+      mon.clog->info()
+	<< "Disallowing boot of crimson-osd without allow_crimson "
+	<< "OSDMap flag.  Run ceph osd set_allow_crimson to set "
+	<< "allow_crimson flag.  Note that crimson-osd is "
+	<< "considered unstable and may result in crashes or "
+	<< "data loss.  Its usage should be restricted to "
+	<< "testing and development.";
+      goto ignore;
+    }
+  }
+
   if (osdmap.stretch_mode_enabled &&
       !(m->osd_features & CEPH_FEATUREMASK_STRETCH_MODE)) {
     mon.clog->info() << "disallowing boot of OSD "
@@ -13824,6 +13839,31 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
     ss << "Triggering recovery stretch mode";
     err = 0;
     goto reply;
+  } else if (prefix == "osd set-allow-crimson") {
+
+    bool sure = false;
+    cmd_getval(cmdmap, "yes_i_really_mean_it", sure);
+
+    bool experimental_enabled =
+      g_ceph_context->check_experimental_feature_enabled("crimson");
+    if (!sure || !experimental_enabled) {
+      ss << "This command will allow usage of crimson-osd osd daemons.  "
+	 << "crimson-osd is not considered stable and will likely cause "
+	 << "crashes or data corruption.  At this time, crimson-osd is mainly "
+	 << "useful for performance evaluation, testing, and development.  "
+	 << "If you are sure, add --yes-i-really-mean-it and add 'crimson' to "
+	 << "the experimental features config.  This setting is irrevocable.";
+      err = -EPERM;
+      goto reply;
+    }
+
+    err = 0;
+    if (osdmap.get_allow_crimson()) {
+      goto reply;
+    } else {
+      pending_inc.set_toggle_allow_crimson();
+      goto update;
+    }
   } else {
     err = -EINVAL;
   }
