@@ -24,7 +24,6 @@ namespace Scrub {
 class ScrubberPasskey {
 private:
   friend class Scrub::ReplicaReservations;
-  friend class PrimaryLogScrub;
   friend class PgScrubber;
   friend class ScrubBackend;
   ScrubberPasskey() {}

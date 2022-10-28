@@ -52,7 +52,6 @@
 #include "objclass/objclass.h"
 #include "osd/ClassHandler.h"
 #include "osdc/Objecter.h"
-#include "osd/scrubber/PrimaryLogScrub.h"
 #include "osd/scrubber/ScrubStore.h"
 #include "osd/scrubber/pg_scrubber.h"
 
@@ -1760,7 +1759,7 @@ PrimaryLogPG::PrimaryLogPG(OSDService *o, OSDMapRef curmap,
     pgbackend->get_is_recoverable_predicate());
   snap_trimmer_machine.initiate();
 
-  m_scrubber = make_unique<PrimaryLogScrub>(this);
+  m_scrubber = make_unique<PgScrubber>(this);
 }
 
 PrimaryLogPG::~PrimaryLogPG()
