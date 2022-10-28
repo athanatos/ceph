@@ -58,7 +58,7 @@ struct inconsistent_snapset_wrapper;
 class PrimaryLogPG : public PG, public PGBackend::Listener {
   friend class OSD;
   friend class Watch;
-  friend class PrimaryLogScrub;
+  friend class PgScrubber;
 
 public:
   MEMPOOL_CLASS_HELPERS();

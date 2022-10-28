@@ -33,15 +33,12 @@ Main Scrubber interfaces:
                             │
                             │
                             │
-┌───────────────────────────┴───────────────┬───────┐
-│                                           │       │
-│         PgScrubber                        │       │
-│                                           │       │
-│                                           │       ├───────┐
-├───────────────────────────────────────────┘       │       │
-│                                                   │       │
-│         PrimaryLogScrub                           │       │
-└─────┬───────────────────┬─────────────────────────┘       │
+┌───────────────────────────┴──────────────────────┐
+│                                                  │
+│         PgScrubber                               │
+│                                                  ├────────┐
+│                                                  │        │
+└─────┬───────────────────┬────────────────────────┘        │
       │                   │                         implements
       │    ownes & uses   │                                 │
       │                   │       ┌─────────────────────────▼──────┐
@@ -75,7 +72,7 @@ Main Scrubber interfaces:
 #include <string_view>
 #include <vector>
 
-#include "osd/PG.h"
+#include "osd/PrimaryLogPG.h"
 #include "osd/scrubber_common.h"
 
 #include "ScrubStore.h"
@@ -277,7 +274,7 @@ class PgScrubber : public ScrubPgIF,
                    public ScrubMachineListener,
                    public ScrubBeListener {
  public:
-  explicit PgScrubber(PG* pg);
+  explicit PgScrubber(PrimaryLogPG* pg);
 
   friend class ScrubBackend;  // will be replaced by a limited interface
 
@@ -420,10 +417,7 @@ class PgScrubber : public ScrubPgIF,
    *  add to scrub statistics, but only if the soid is below the scrub start
    */
   void stats_of_handled_objects(const object_stat_sum_t& delta_stats,
-				const hobject_t& soid) override
-  {
-    ceph_assert(false);
-  }
+				const hobject_t& soid) final;
 
   /**
    * finalize the parameters of the initiated scrubbing session:
@@ -437,10 +431,7 @@ class PgScrubber : public ScrubPgIF,
   void cleanup_store(ObjectStore::Transaction* t) final;
 
   bool get_store_errors(const scrub_ls_arg_t& arg,
-			scrub_ls_result_t& res_inout) const override
-  {
-    return false;
-  }
+			scrub_ls_result_t& res_inout) const final;
 
   void update_scrub_stats(ceph::coarse_real_clock::time_point now_is) final;
 
@@ -583,7 +574,7 @@ class PgScrubber : public ScrubPgIF,
 
   void log_cluster_warning(const std::string& warning) const final;
 
- protected:
+ private:
   bool state_test(uint64_t m) const { return m_pg->state_test(m); }
   void state_set(uint64_t m) { m_pg->state_set(m); }
   void state_clear(uint64_t m) { m_pg->state_clear(m); }
@@ -594,11 +585,12 @@ class PgScrubber : public ScrubPgIF,
   /// status
   std::string_view registration_state() const;
 
-  virtual void _scrub_clear_state() {}
+  void _scrub_clear_state();
 
   utime_t m_scrub_reg_stamp;		///< stamp we registered for
   ScrubQueue::ScrubJobRef m_scrub_job;	///< the scrub-job used by the OSD to
 					///< schedule us
+  object_stat_collection_t m_scrub_cstat;
 
   ostream& show(ostream& out) const override;
 
@@ -609,15 +601,9 @@ class PgScrubber : public ScrubPgIF,
   //  artificial PG vs. PrimaryLogPG distinction. Some of the services used
   //  by the scrubber backend are PrimaryLog-specific.
 
-  void add_to_stats(const object_stat_sum_t& stat) override
-  {
-    ceph_assert(0 && "expecting a PrimaryLogScrub object");
-  }
+  void add_to_stats(const object_stat_sum_t& stat) final;
 
-  void submit_digest_fixes(const digests_fixes_t& fixes) override
-  {
-    ceph_assert(0 && "expecting a PrimaryLogScrub object");
-  }
+  void submit_digest_fixes(const digests_fixes_t& fixes) final;
 
   CephContext* get_pg_cct() const final { return m_pg->cct; }
  
@@ -720,12 +706,10 @@ class PgScrubber : public ScrubPgIF,
 			     // Active->NotActive
 
  protected:
-  PG* const m_pg;
+  PrimaryLogPG* const m_pg;
 
-  /**
-   * the derivative-specific scrub-finishing touches:
-   */
-  virtual void _scrub_finish() {}
+  /// scrub-finishing touches:
+  void _scrub_finish();
 
   // common code used by build_primary_map_chunk() and
   // build_replica_map_chunk():

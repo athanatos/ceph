@@ -18,7 +18,7 @@
 #include "messages/MOSDRepScrubMap.h"
 #include "messages/MOSDScrubReserve.h"
 #include "osd/OSD.h"
-#include "osd/PG.h"
+#include "osd/PrimaryLogPG.h"
 #include "include/utime_fmt.h"
 #include "osd/osd_types_fmt.h"
 
@@ -1007,6 +1007,25 @@ void PgScrubber::cleanup_store(ObjectStore::Transaction* t)
   ceph_assert(!m_store);
 }
 
+bool PgScrubber::get_store_errors(const scrub_ls_arg_t& arg,
+				  scrub_ls_result_t& res_inout) const
+{
+  if (!m_store) {
+    return false;
+  }
+
+  if (arg.get_snapsets) {
+    res_inout.vals = m_store->get_snap_errors(m_pg->get_pgid().pool(),
+					      arg.start_after,
+					      arg.max_return);
+  } else {
+    res_inout.vals = m_store->get_object_errors(m_pg->get_pgid().pool(),
+						arg.start_after,
+						arg.max_return);
+  }
+  return true;
+}
+
 void PgScrubber::on_init()
 {
   // going upwards from 'inactive'
@@ -1142,6 +1161,122 @@ int PgScrubber::build_replica_map_chunk()
 
   return ret;
 }
+
+void PgScrubber::_scrub_finish()
+{
+  auto& info = m_pg->get_pg_info(ScrubberPasskey{});  ///< a temporary alias
+
+  dout(10) << __func__ << " info stats: "
+	   << (info.stats.stats_invalid ? "invalid" : "valid")
+	   << " m_is_repair: " << m_is_repair << dendl;
+
+  if (info.stats.stats_invalid) {
+    m_pg->recovery_state.update_stats([=, this](auto& history, auto& stats) {
+      stats.stats = m_scrub_cstat;
+      stats.stats_invalid = false;
+      return false;
+    });
+
+    if (m_pg->agent_state) {
+      m_pg->agent_choose_mode();
+    }
+  }
+
+  dout(10) << m_mode_desc << " got " << m_scrub_cstat.sum.num_objects << "/"
+	   << info.stats.stats.sum.num_objects << " objects, "
+	   << m_scrub_cstat.sum.num_object_clones << "/"
+	   << info.stats.stats.sum.num_object_clones << " clones, "
+	   << m_scrub_cstat.sum.num_objects_dirty << "/"
+	   << info.stats.stats.sum.num_objects_dirty << " dirty, "
+	   << m_scrub_cstat.sum.num_objects_omap << "/"
+	   << info.stats.stats.sum.num_objects_omap << " omap, "
+	   << m_scrub_cstat.sum.num_objects_pinned << "/"
+	   << info.stats.stats.sum.num_objects_pinned << " pinned, "
+	   << m_scrub_cstat.sum.num_objects_hit_set_archive << "/"
+	   << info.stats.stats.sum.num_objects_hit_set_archive
+	   << " hit_set_archive, " << m_scrub_cstat.sum.num_bytes << "/"
+	   << info.stats.stats.sum.num_bytes << " bytes, "
+	   << m_scrub_cstat.sum.num_objects_manifest << "/"
+	   << info.stats.stats.sum.num_objects_manifest << " manifest objects, "
+	   << m_scrub_cstat.sum.num_bytes_hit_set_archive << "/"
+	   << info.stats.stats.sum.num_bytes_hit_set_archive
+	   << " hit_set_archive bytes." << dendl;
+
+  if (m_scrub_cstat.sum.num_objects != info.stats.stats.sum.num_objects ||
+      m_scrub_cstat.sum.num_object_clones !=
+	info.stats.stats.sum.num_object_clones ||
+      (m_scrub_cstat.sum.num_objects_dirty !=
+	 info.stats.stats.sum.num_objects_dirty &&
+       !info.stats.dirty_stats_invalid) ||
+      (m_scrub_cstat.sum.num_objects_omap !=
+	 info.stats.stats.sum.num_objects_omap &&
+       !info.stats.omap_stats_invalid) ||
+      (m_scrub_cstat.sum.num_objects_pinned !=
+	 info.stats.stats.sum.num_objects_pinned &&
+       !info.stats.pin_stats_invalid) ||
+      (m_scrub_cstat.sum.num_objects_hit_set_archive !=
+	 info.stats.stats.sum.num_objects_hit_set_archive &&
+       !info.stats.hitset_stats_invalid) ||
+      (m_scrub_cstat.sum.num_bytes_hit_set_archive !=
+	 info.stats.stats.sum.num_bytes_hit_set_archive &&
+       !info.stats.hitset_bytes_stats_invalid) ||
+      (m_scrub_cstat.sum.num_objects_manifest !=
+	 info.stats.stats.sum.num_objects_manifest &&
+       !info.stats.manifest_stats_invalid) ||
+      m_scrub_cstat.sum.num_whiteouts != info.stats.stats.sum.num_whiteouts ||
+      m_scrub_cstat.sum.num_bytes != info.stats.stats.sum.num_bytes) {
+
+    m_osds->clog->error() << info.pgid << " " << m_mode_desc
+			  << " : stat mismatch, got "
+			  << m_scrub_cstat.sum.num_objects << "/"
+			  << info.stats.stats.sum.num_objects << " objects, "
+			  << m_scrub_cstat.sum.num_object_clones << "/"
+			  << info.stats.stats.sum.num_object_clones
+			  << " clones, " << m_scrub_cstat.sum.num_objects_dirty
+			  << "/" << info.stats.stats.sum.num_objects_dirty
+			  << " dirty, " << m_scrub_cstat.sum.num_objects_omap
+			  << "/" << info.stats.stats.sum.num_objects_omap
+			  << " omap, " << m_scrub_cstat.sum.num_objects_pinned
+			  << "/" << info.stats.stats.sum.num_objects_pinned
+			  << " pinned, "
+			  << m_scrub_cstat.sum.num_objects_hit_set_archive
+			  << "/"
+			  << info.stats.stats.sum.num_objects_hit_set_archive
+			  << " hit_set_archive, "
+			  << m_scrub_cstat.sum.num_whiteouts << "/"
+			  << info.stats.stats.sum.num_whiteouts
+			  << " whiteouts, " << m_scrub_cstat.sum.num_bytes
+			  << "/" << info.stats.stats.sum.num_bytes << " bytes, "
+			  << m_scrub_cstat.sum.num_objects_manifest << "/"
+			  << info.stats.stats.sum.num_objects_manifest
+			  << " manifest objects, "
+			  << m_scrub_cstat.sum.num_bytes_hit_set_archive << "/"
+			  << info.stats.stats.sum.num_bytes_hit_set_archive
+			  << " hit_set_archive bytes.";
+    ++m_shallow_errors;
+
+    if (m_is_repair) {
+      ++m_fixed_count;
+      m_pg->recovery_state.update_stats([this](auto& history, auto& stats) {
+	stats.stats = m_scrub_cstat;
+	stats.dirty_stats_invalid = false;
+	stats.omap_stats_invalid = false;
+	stats.hitset_stats_invalid = false;
+	stats.hitset_bytes_stats_invalid = false;
+	stats.pin_stats_invalid = false;
+	stats.manifest_stats_invalid = false;
+	return false;
+      });
+      m_pg->publish_stats_to_osd();
+      m_pg->recovery_state.share_pg_info();
+    }
+  }
+  // Clear object context cache to get repair information
+  if (m_is_repair)
+    m_pg->object_contexts.clear();
+}
+
+
 
 int PgScrubber::build_scrub_map_chunk(ScrubMap& map,
 				      ScrubMapBuilder& pos,
@@ -1727,6 +1862,31 @@ bool PgScrubber::is_queued_or_active() const
   return m_queued_or_active;
 }
 
+void PgScrubber::stats_of_handled_objects(
+  const object_stat_sum_t& delta_stats,
+  const hobject_t& soid)
+{
+  // We scrub objects in hobject_t order, so objects before m_start have already
+  // been scrubbed and their stats have already been added to the scrubber.
+  // Objects after that point haven't been included in the scrubber's stats
+  // accounting yet, so they will be included when the scrubber gets to that
+  // object.
+  if (is_primary() && is_scrub_active()) {
+    if (soid < m_start) {
+
+      dout(20) << fmt::format("{} {} < [{},{})", __func__, soid, m_start, m_end)
+	       << dendl;
+      m_scrub_cstat.add(delta_stats);
+
+    } else {
+
+      dout(25)
+	<< fmt::format("{} {} >= [{},{})", __func__, soid, m_start, m_end)
+	<< dendl;
+    }
+  }
+}
+
 void PgScrubber::set_scrub_blocked(utime_t since)
 {
   ceph_assert(!m_scrub_job->blocked);
@@ -2168,7 +2328,7 @@ PgScrubber::~PgScrubber()
   }
 }
 
-PgScrubber::PgScrubber(PG* pg)
+PgScrubber::PgScrubber(PrimaryLogPG* pg)
     : m_pg{pg}
     , m_pg_id{pg->pg_id}
     , m_osds{m_pg->osd}
@@ -2332,6 +2492,71 @@ const OSDMapRef& PgScrubber::get_osdmap() const
   return m_pg->get_osdmap();
 }
 
+/// \todo combine the multiple transactions into a single one
+void PgScrubber::submit_digest_fixes(const digests_fixes_t& fixes)
+{
+  // note: the following line was modified from '+=' to '=', as we should not
+  // encounter previous-chunk digest updates after starting a new chunk
+  num_digest_updates_pending = fixes.size();
+  dout(10) << __func__
+	   << ": num_digest_updates_pending: " << num_digest_updates_pending
+	   << dendl;
+
+  for (auto& [obj, dgs] : fixes) {
+
+    ObjectContextRef obc = m_pg->get_object_context(obj, false);
+    if (!obc) {
+      m_osds->clog->error() << m_pg_id << " " << m_mode_desc
+			    << " cannot get object context for object " << obj;
+      num_digest_updates_pending--;
+      continue;
+    }
+    dout(15) << fmt::format(
+		  "{}: {}, pg[{}] {}/{}", __func__, num_digest_updates_pending,
+		  m_pg_id, obj, dgs)
+	     << dendl;
+    if (obc->obs.oi.soid != obj) {
+      m_osds->clog->error()
+	<< m_pg_id << " " << m_mode_desc << " " << obj
+	<< " : object has a valid oi attr with a mismatched name, "
+	<< " obc->obs.oi.soid: " << obc->obs.oi.soid;
+      num_digest_updates_pending--;
+      continue;
+    }
+
+    PrimaryLogPG::OpContextUPtr ctx = m_pg->simple_opc_create(obc);
+    ctx->at_version = m_pg->get_next_version();
+    ctx->mtime = utime_t();  // do not update mtime
+    if (dgs.first) {
+      ctx->new_obs.oi.set_data_digest(*dgs.first);
+    } else {
+      ctx->new_obs.oi.clear_data_digest();
+    }
+    if (dgs.second) {
+      ctx->new_obs.oi.set_omap_digest(*dgs.second);
+    } else {
+      ctx->new_obs.oi.clear_omap_digest();
+    }
+    m_pg->finish_ctx(ctx.get(), pg_log_entry_t::MODIFY);
+
+
+    ctx->register_on_success([this]() {
+      if ((num_digest_updates_pending >= 1) &&
+	  (--num_digest_updates_pending == 0)) {
+	m_osds->queue_scrub_digest_update(m_pg,
+					  m_pg->is_scrub_blocking_ops());
+      }
+    });
+
+    m_pg->simple_opc_submit(std::move(ctx));
+  }
+}
+
+void PgScrubber::add_to_stats(const object_stat_sum_t& stat)
+{
+  m_scrub_cstat.add(stat);
+}
+
 LoggerSinkSet& PgScrubber::get_logger() const { return *m_osds->clog.get(); }
 
 ostream &operator<<(ostream &out, const PgScrubber &scrubber) {
@@ -2350,6 +2575,11 @@ std::ostream& PgScrubber::gen_prefix(std::ostream& out) const
 void PgScrubber::log_cluster_warning(const std::string& warning) const
 {
   m_osds->clog->do_log(CLOG_WARN, warning);
+}
+
+void PgScrubber::_scrub_clear_state()
+{
+  m_scrub_cstat = object_stat_collection_t();
 }
 
 ostream& PgScrubber::show(ostream& out) const
