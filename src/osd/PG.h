@@ -40,6 +40,7 @@
 #include "recovery_types.h"
 #include "MissingLoc.h"
 #include "scrubber_common.h"
+#include "scrubber/scrub_listener.h"
 
 #include "mgr/OSDPerfMetricTypes.h"
 
@@ -165,6 +166,7 @@ class PGRecoveryStats {
 
 class PG : public DoutPrefixProvider,
 	   public PeeringState::PeeringListener,
+	   public Scrub::ScrubListener,
 	   public Scrub::PgScrubBeListener {
   friend struct NamedState;
   friend class PeeringState;

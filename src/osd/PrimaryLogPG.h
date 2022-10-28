@@ -1935,6 +1935,10 @@ public:
 
 private:
   DynamicPerfStats m_dynamic_perf_stats;
+
+public:
+  // Scrub::ScrubListener method implementations
+  spg_t sl_get_spgid() const final { return pg_id; }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)

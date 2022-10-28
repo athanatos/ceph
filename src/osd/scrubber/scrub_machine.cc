@@ -20,13 +20,13 @@
 using namespace std::chrono;
 using namespace std::chrono_literals;
 
-#define DECLARE_LOCALS                                           \
-  auto& machine = context<ScrubMachine>();			 \
-  std::ignore = machine;					 \
-  ScrubMachineListener* scrbr = machine.m_scrbr;		 \
-  std::ignore = scrbr;                                           \
-  auto pg_id = machine.m_pg_id;					 \
-  std::ignore = pg_id;
+#define DECLARE_LOCALS						  \
+  ScrubListener* listener = context<ScrubMachine>().m_listener;   \
+  std::ignore = listener;                                         \
+  auto& machine = context<ScrubMachine>();			  \
+  std::ignore = machine;					  \
+  ScrubMachineListener* scrbr = machine.m_scrbr;		  \
+  std::ignore = scrbr;
 
 NamedSimply::NamedSimply(ScrubMachineListener* scrubber, const char* name)
 {
@@ -597,9 +597,10 @@ sc::result WaitDigestUpdate::react(const ScrubFinished&)
   return transit<NotActive>();
 }
 
-ScrubMachine::ScrubMachine(PG* pg, ScrubMachineListener* pg_scrub)
-    : m_pg_id{pg->pg_id}
-    , m_scrbr{pg_scrub}
+ScrubMachine::ScrubMachine(
+  ScrubListener* listener, ScrubMachineListener* pg_scrub)
+  : m_listener{listener}
+  , m_scrbr{pg_scrub}
 {}
 
 ScrubMachine::~ScrubMachine() = default;

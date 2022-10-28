@@ -1015,11 +1015,11 @@ bool PgScrubber::get_store_errors(const scrub_ls_arg_t& arg,
   }
 
   if (arg.get_snapsets) {
-    res_inout.vals = m_store->get_snap_errors(m_pg->get_pgid().pool(),
+    res_inout.vals = m_store->get_snap_errors(m_listener->sl_get_spgid().pool(),
 					      arg.start_after,
 					      arg.max_return);
   } else {
-    res_inout.vals = m_store->get_object_errors(m_pg->get_pgid().pool(),
+    res_inout.vals = m_store->get_object_errors(m_listener->sl_get_spgid().pool(),
 						arg.start_after,
 						arg.max_return);
   }
@@ -1529,7 +1529,7 @@ void PgScrubber::replica_scrub_op(OpRequestRef op)
 {
   op->mark_started();
   auto msg = op->get_req<MOSDRepScrub>();
-  dout(10) << __func__ << " pg:" << m_pg->pg_id
+  dout(10) << __func__ << " pg:" << m_listener->sl_get_spgid()
 	   << " Msg: map_epoch:" << msg->map_epoch
 	   << " min_epoch:" << msg->min_epoch << " deep?" << msg->deep << dendl;
 
@@ -2328,19 +2328,22 @@ PgScrubber::~PgScrubber()
   }
 }
 
-PgScrubber::PgScrubber(PrimaryLogPG* pg)
-    : m_pg{pg}
+PgScrubber::PgScrubber(
+  Scrub::ScrubListener* scrub_listener,
+  PrimaryLogPG* pg)
+    : m_listener{scrub_listener}
+    , m_pg{pg}
     , m_pg_id{pg->pg_id}
     , m_osds{m_pg->osd}
     , m_pg_whoami{pg->pg_whoami}
     , m_planned_scrub{pg->get_planned_scrub(ScrubberPasskey{})}
-    , preemption_data{pg}
+    , preemption_data{scrub_listener, pg}
 {
-  m_fsm = std::make_unique<ScrubMachine>(m_pg, this);
+  m_fsm = std::make_unique<ScrubMachine>(scrub_listener, this);
   m_fsm->initiate();
 
   m_scrub_job = ceph::make_ref<ScrubQueue::ScrubJob>(m_osds->cct,
-						     m_pg->pg_id,
+						     m_listener->sl_get_spgid(),
 						     m_osds->get_nodeid());
 }
 
@@ -2368,7 +2371,7 @@ void PgScrubber::reserve_replicas()
 {
   dout(10) << __func__ << dendl;
   m_reservations.emplace(
-    m_pg, m_pg_whoami, m_scrub_job, m_pg->get_cct()->_conf);
+    m_listener, m_pg, m_pg_whoami, m_scrub_job, m_pg->get_cct()->_conf);
 }
 
 void PgScrubber::cleanup_on_finish()
@@ -2677,7 +2680,10 @@ void PgScrubber::update_scrub_stats(ceph::coarse_real_clock::time_point now_is)
 
 // ///////////////////// preemption_data_t //////////////////////////////////
 
-PgScrubber::preemption_data_t::preemption_data_t(PG* pg) : m_pg{pg}
+PgScrubber::preemption_data_t::preemption_data_t(
+  Scrub::ScrubListener* listener, PG* pg)
+  : m_listener{listener}
+  , m_pg{pg}
 {
   m_left = static_cast<int>(
     m_pg->get_cct()->_conf.get_val<uint64_t>("osd_scrub_max_preemptions"));
@@ -2708,11 +2714,13 @@ void ReplicaReservations::release_replica(pg_shard_t peer, epoch_t epoch)
 }
 
 ReplicaReservations::ReplicaReservations(
+  Scrub::ScrubListener* listener,
   PG* pg,
   pg_shard_t whoami,
   ScrubQueue::ScrubJobRef scrubjob,
   const ConfigProxy& conf)
-    : m_pg{pg}
+    : m_listener{m_listener}
+    , m_pg{pg}
     , m_acting_set{pg->get_actingset()}
     , m_osds{m_pg->get_pg_osd(ScrubberPasskey())}
     , m_pending{static_cast<int>(m_acting_set.size()) - 1}

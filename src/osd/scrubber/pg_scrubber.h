@@ -79,6 +79,7 @@ Main Scrubber interfaces:
 #include "osd_scrub_sched.h"
 #include "scrub_backend.h"
 #include "scrub_machine_lstnr.h"
+#include "scrub_listener.h"
 
 namespace Scrub {
 class ScrubMachine;
@@ -120,6 +121,7 @@ class ReplicaReservations {
   using clock = std::chrono::system_clock;
   using tpoint_t = std::chrono::time_point<clock>;
 
+  Scrub::ScrubListener* const m_listener;
   PG* m_pg;
   std::set<pg_shard_t> m_acting_set;
   OSDService* m_osds;
@@ -156,7 +158,8 @@ class ReplicaReservations {
    */
   void discard_all();
 
-  ReplicaReservations(PG* pg,
+  ReplicaReservations(Scrub::ScrubListener* listener,
+		      PG* pg,
                       pg_shard_t whoami,
                       ScrubQueue::ScrubJobRef scrubjob,
                       const ConfigProxy& conf); 
@@ -274,7 +277,9 @@ class PgScrubber : public ScrubPgIF,
                    public ScrubMachineListener,
                    public ScrubBeListener {
  public:
-  explicit PgScrubber(PrimaryLogPG* pg);
+  explicit PgScrubber(
+    Scrub::ScrubListener* scrub_listener,
+    PrimaryLogPG* pg);
 
   friend class ScrubBackend;  // will be replaced by a limited interface
 
@@ -706,6 +711,7 @@ class PgScrubber : public ScrubPgIF,
 			     // Active->NotActive
 
  protected:
+  Scrub::ScrubListener* const m_listener;
   PrimaryLogPG* const m_pg;
 
   /// scrub-finishing touches:
@@ -910,8 +916,9 @@ class PgScrubber : public ScrubPgIF,
    */
   class preemption_data_t : public Scrub::preemption_t {
    public:
-    explicit preemption_data_t(PG* pg);	 // the PG access is used for conf
-					 // access (and logs)
+    explicit preemption_data_t(
+      Scrub::ScrubListener* listener,
+      PG* pg);	 // the PG access is used for conf access (and logs)
 
     [[nodiscard]] bool is_preemptable() const final { return m_preemptable; }
 
@@ -978,6 +985,7 @@ class PgScrubber : public ScrubPgIF,
     }
 
    private:
+    Scrub::ScrubListener* const m_listener;
     PG* m_pg;
     mutable ceph::mutex m_preemption_lock = ceph::make_mutex("preemption_lock");
     bool m_preemptable{false};

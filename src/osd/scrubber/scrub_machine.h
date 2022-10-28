@@ -18,6 +18,7 @@
 #include "include/Context.h"
 #include "osd/scrubber_common.h"
 
+#include "scrub_listener.h"
 #include "scrub_machine_lstnr.h"
 
 /// a wrapper that sets the FSM state description used by the
@@ -155,10 +156,11 @@ class ScrubMachine : public sc::state_machine<ScrubMachine, NotActive> {
   friend class PgScrubber;
 
  public:
-  explicit ScrubMachine(PG* pg, ScrubMachineListener* pg_scrub);
+  explicit ScrubMachine(
+    ScrubListener* listener, ScrubMachineListener* pg_scrub);
   ~ScrubMachine();
 
-  spg_t m_pg_id;
+  ScrubListener* m_listener;
   ScrubMachineListener* m_scrbr;
   std::ostream& gen_prefix(std::ostream& out) const;
 
