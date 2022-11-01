@@ -33,6 +33,9 @@ public:
   /// get config reference
   virtual const ConfigProxy &sl_get_config() const = 0;
 
+  /// get reference to current pg info
+  virtual const pg_info_t &sl_get_info() const = 0;
+
   virtual ~ScrubListener() = default;
 };
 

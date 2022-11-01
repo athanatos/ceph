@@ -1952,6 +1952,9 @@ public:
   const ConfigProxy &sl_get_config() const final {
     return get_cct()->_conf;
   }
+  const pg_info_t &sl_get_info() const final {
+    return info;
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
