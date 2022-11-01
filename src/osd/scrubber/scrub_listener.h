@@ -30,6 +30,9 @@ public:
   /// get reference to PGPool
   virtual const PGPool &sl_get_pool() const = 0;
 
+  /// get config reference
+  virtual const ConfigProxy &sl_get_config() const = 0;
+
   virtual ~ScrubListener() = default;
 };
 

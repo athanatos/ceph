@@ -447,7 +447,7 @@ unsigned int PgScrubber::scrub_requeue_priority(
   if (with_priority == Scrub::scrub_prio_t::high_priority) {
     qu_priority =
       std::max(qu_priority,
-	       (unsigned int)m_pg->get_cct()->_conf->osd_client_op_priority);
+	       (unsigned int)m_listener->sl_get_config()->osd_client_op_priority);
   }
   return qu_priority;
 }
@@ -459,7 +459,7 @@ unsigned int PgScrubber::scrub_requeue_priority(
   if (with_priority == Scrub::scrub_prio_t::high_priority) {
     suggested_priority =
       std::max(suggested_priority,
-	       (unsigned int)m_pg->get_cct()->_conf->osd_client_op_priority);
+	       (unsigned int)m_listener->sl_get_config()->osd_client_op_priority);
   }
   return suggested_priority;
 }
@@ -736,8 +736,7 @@ bool PgScrubber::select_range()
    * left end of the range if we are a tier because they may legitimately
    * not exist (see _scrub).
    */
-
-  const auto& conf = m_pg->get_cct()->_conf;
+  const auto& conf = m_listener->sl_get_config();
   dout(20) << fmt::format(
 		  "{} {} mins: {}d {}s, max: {}d {}s", __func__,
 		  (m_is_deep ? "D" : "S"),
@@ -1572,7 +1571,7 @@ void PgScrubber::set_op_parameters(const requested_scrub_t& request)
   m_flags.required = request.req_scrub || request.must_scrub;
 
   m_flags.priority = (request.must_scrub || request.need_auto)
-		       ? get_pg_cct()->_conf->osd_requested_scrub_priority
+		       ? m_listener->sl_get_config()->osd_requested_scrub_priority
 		       : m_pg->get_scrub_priority();
 
   state_set(PG_STATE_SCRUBBING);
@@ -1921,7 +1920,7 @@ void PgScrubber::scrub_finish()
   // we would like to cancel auto-repair
   if (m_is_repair && m_flags.auto_repair &&
       m_be->authoritative_peers_count() >
-	static_cast<int>(m_pg->cct->_conf->osd_scrub_auto_repair_num_errors)) {
+      static_cast<int>(m_listener->sl_get_config()->osd_scrub_auto_repair_num_errors)) {
 
     dout(10) << __func__ << " undoing the repair" << dendl;
     state_clear(PG_STATE_REPAIR);  // not expected to be set, anyway
@@ -1936,7 +1935,7 @@ void PgScrubber::scrub_finish()
   bool do_auto_scrub = false;
   if (m_flags.deep_scrub_on_error && m_be->authoritative_peers_count() &&
       m_be->authoritative_peers_count() <=
-	static_cast<int>(m_pg->cct->_conf->osd_scrub_auto_repair_num_errors)) {
+      static_cast<int>(m_listener->sl_get_config()->osd_scrub_auto_repair_num_errors)) {
     ceph_assert(!m_is_deep);
     do_auto_scrub = true;
     dout(15) << __func__ << " Try to auto repair after scrub errors" << dendl;
@@ -2626,14 +2625,14 @@ void PgScrubber::update_scrub_stats(ceph::coarse_real_clock::time_point now_is)
   using clock = ceph::coarse_real_clock;
   using namespace std::chrono;
 
-  const seconds period_active = seconds(m_pg->get_cct()->_conf.get_val<int64_t>(
+  const seconds period_active = seconds(m_listener->sl_get_config().get_val<int64_t>(
     "osd_stats_update_period_scrubbing"));
   if (!period_active.count()) {
     // a way for the operator to disable these stats updates
     return;
   }
   const seconds period_inactive =
-    seconds(m_pg->get_cct()->_conf.get_val<int64_t>(
+    seconds(m_listener->sl_get_config().get_val<int64_t>(
 	      "osd_stats_update_period_not_scrubbing") +
 	    m_pg_id.pgid.m_seed % 30);
 
@@ -2675,7 +2674,7 @@ PgScrubber::preemption_data_t::preemption_data_t(
   , m_pg{pg}
 {
   m_left = static_cast<int>(
-    m_pg->get_cct()->_conf.get_val<uint64_t>("osd_scrub_max_preemptions"));
+    m_listener->sl_get_config().get_val<uint64_t>("osd_scrub_max_preemptions"));
 }
 
 void PgScrubber::preemption_data_t::reset()
@@ -2685,7 +2684,8 @@ void PgScrubber::preemption_data_t::reset()
   m_preemptable = false;
   m_preempted = false;
   m_left = static_cast<int>(
-    m_pg->cct->_conf.get_val<uint64_t>("osd_scrub_max_preemptions"));
+    m_listener->sl_get_config().get_val<uint64_t>(
+      "osd_scrub_max_preemptions"));
   m_size_divisor = 1;
 }
 

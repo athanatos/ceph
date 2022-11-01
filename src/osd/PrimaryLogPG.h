@@ -1949,6 +1949,9 @@ public:
   const PGPool &sl_get_pool() const final {
     return pool;
   }
+  const ConfigProxy &sl_get_config() const final {
+    return get_cct()->_conf;
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
