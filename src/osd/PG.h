@@ -326,7 +326,7 @@ public:
   bool is_primary() const {
     return recovery_state.is_primary();
   }
-  bool pg_has_reset_since(epoch_t e) {
+  bool pg_has_reset_since(epoch_t e) const {
     ceph_assert(is_locked());
     return recovery_state.pg_has_reset_since(e);
   }
