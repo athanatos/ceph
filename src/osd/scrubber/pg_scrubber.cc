@@ -435,7 +435,7 @@ unsigned int PgScrubber::scrub_requeue_priority(
   if (with_priority == Scrub::scrub_prio_t::high_priority) {
     qu_priority =
       std::max(qu_priority,
-	       (unsigned int)m_pg->get_cct()->_conf->osd_client_op_priority);
+	       (unsigned int)m_listener->sl_get_config()->osd_client_op_priority);
   }
   return qu_priority;
 }
@@ -447,7 +447,7 @@ unsigned int PgScrubber::scrub_requeue_priority(
   if (with_priority == Scrub::scrub_prio_t::high_priority) {
     suggested_priority =
       std::max(suggested_priority,
-	       (unsigned int)m_pg->get_cct()->_conf->osd_client_op_priority);
+	       (unsigned int)m_listener->sl_get_config()->osd_client_op_priority);
   }
   return suggested_priority;
 }
@@ -644,12 +644,12 @@ bool PgScrubber::select_range()
    */
   int min_idx = static_cast<int>(
     std::max<int64_t>(3,
-		      m_pg->get_cct()->_conf->osd_scrub_chunk_min /
+		      m_listener->sl_get_config()->osd_scrub_chunk_min /
 			(int)preemption_data.chunk_divisor()));
 
   int max_idx = static_cast<int>(
     std::max<int64_t>(min_idx,
-		      m_pg->get_cct()->_conf->osd_scrub_chunk_max /
+		      m_listener->sl_get_config()->osd_scrub_chunk_max /
 			(int)preemption_data.chunk_divisor()));
 
   dout(10) << __func__ << " Min: " << min_idx << " Max: " << max_idx
@@ -2682,14 +2682,14 @@ void PgScrubber::update_scrub_stats(ceph::coarse_real_clock::time_point now_is)
   using clock = ceph::coarse_real_clock;
   using namespace std::chrono;
 
-  const seconds period_active = seconds(m_pg->get_cct()->_conf.get_val<int64_t>(
+  const seconds period_active = seconds(m_listener->sl_get_config().get_val<int64_t>(
     "osd_stats_update_period_scrubbing"));
   if (!period_active.count()) {
     // a way for the operator to disable these stats updates
     return;
   }
   const seconds period_inactive =
-    seconds(m_pg->get_cct()->_conf.get_val<int64_t>(
+    seconds(m_listener->sl_get_config().get_val<int64_t>(
 	      "osd_stats_update_period_not_scrubbing") +
 	    m_pg_id.pgid.m_seed % 30);
 
@@ -2731,7 +2731,7 @@ PgScrubber::preemption_data_t::preemption_data_t(
   , m_pg{pg}
 {
   m_left = static_cast<int>(
-    m_pg->get_cct()->_conf.get_val<uint64_t>("osd_scrub_max_preemptions"));
+    m_listener->sl_get_config().get_val<uint64_t>("osd_scrub_max_preemptions"));
 }
 
 void PgScrubber::preemption_data_t::reset()
