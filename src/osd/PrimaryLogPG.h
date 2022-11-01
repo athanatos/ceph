@@ -1939,6 +1939,9 @@ public:
   const OSDMapRef &sl_get_osdmap() const final {
     return get_osdmap();
   }
+  const PGPool &sl_get_pool() const final {
+    return pool;
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
