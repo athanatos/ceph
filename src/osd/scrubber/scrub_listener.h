@@ -27,6 +27,9 @@ public:
   /// get current osdmap epoch
   epoch_t sl_get_osdmap_epoch() const { return sl_get_osdmap()->get_epoch(); }
 
+  /// get reference to PGPool
+  virtual const PGPool &sl_get_pool() const = 0;
+
   virtual ~ScrubListener() = default;
 };
 

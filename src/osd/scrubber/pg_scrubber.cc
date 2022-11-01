@@ -153,12 +153,12 @@ bool PgScrubber::should_abort() const
   // 'no-deepscrub')
   if (m_is_deep) {
     if (m_listener->sl_get_osdmap()->test_flag(CEPH_OSDMAP_NODEEP_SCRUB) ||
-	m_pg->pool.info.has_flag(pg_pool_t::FLAG_NODEEP_SCRUB)) {
+	m_listener->sl_get_pool().info.has_flag(pg_pool_t::FLAG_NODEEP_SCRUB)) {
       dout(10) << "nodeep_scrub set, aborting" << dendl;
       return true;
     }
   } else if (m_listener->sl_get_osdmap()->test_flag(CEPH_OSDMAP_NOSCRUB) ||
-	     m_pg->pool.info.has_flag(pg_pool_t::FLAG_NOSCRUB)) {
+	     m_listener->sl_get_pool().info.has_flag(pg_pool_t::FLAG_NOSCRUB)) {
     dout(10) << "noscrub set, aborting" << dendl;
     return true;
   }
@@ -562,7 +562,7 @@ void PgScrubber::update_scrub_job(const requested_scrub_t& request_flags)
   if (is_primary() && m_scrub_job) {
     ceph_assert(m_pg->is_locked());
     auto suggested = m_osds->get_scrub_services().determine_scrub_time(
-	request_flags, m_pg->info, m_pg->get_pgpool().info.opts);
+      request_flags, m_pg->info, m_listener->sl_get_pool().info.opts);
     m_osds->get_scrub_services().update_job(m_scrub_job, suggested);
     m_pg->publish_stats_to_osd();
   }
@@ -1391,7 +1391,9 @@ void PgScrubber::persist_scrub_results(inconsistent_objs_t&& all_errors)
   dout(10) << __func__ << " " << all_errors.size() << " errors" << dendl;
 
   for (auto& e : all_errors) {
-    std::visit([this](auto& e) { m_store->add_error(m_pg->pool.id, e); }, e);
+    std::visit([this](auto& e) {
+      m_store->add_error(m_listener->sl_get_pool().id, e);
+    }, e);
   }
 
   ObjectStore::Transaction t;
