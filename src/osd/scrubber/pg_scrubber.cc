@@ -644,7 +644,8 @@ void PgScrubber::on_applied_when_primary(const eversion_t& applied_version)
   // WaitLastUpdate
   if (m_fsm->is_accepting_updates() &&
       (applied_version >= m_subset_last_update)) {
-    m_osds->queue_scrub_applied_update(m_pg, m_pg->is_scrub_blocking_ops());
+    m_osds->queue_scrub_applied_update(
+      m_pg, m_listener->sl_get_block_priority());
     dout(15) << __func__ << " update: " << applied_version
 	     << " vs. required: " << m_subset_last_update << dendl;
   }
@@ -974,7 +975,7 @@ void PgScrubber::_request_scrub_map(pg_shard_t replica,
 				     deep,
 				     allow_preemption,
 				     m_flags.priority,
-				     m_pg->ops_blocked_by_scrub());
+				     m_listener->sl_ops_blocked_by_scrub());
 
   // default priority. We want the replica-scrub processed prior to any recovery
   // or client io messages (we are holding a lock!)
@@ -1687,7 +1688,8 @@ void PgScrubber::map_from_replica(OpRequestRef op)
 
   if (m_maps_status.are_all_maps_available()) {
     dout(15) << __func__ << " all repl-maps available" << dendl;
-    m_osds->queue_scrub_got_repl_maps(m_pg, m_pg->is_scrub_blocking_ops());
+    m_osds->queue_scrub_got_repl_maps(
+      m_pg, m_listener->sl_get_block_priority());
   }
 }
 
@@ -2131,7 +2133,8 @@ void PgScrubber::on_digest_updates()
   } else {
     // go get a new chunk (via "requeue")
     preemption_data.reset();
-    m_osds->queue_scrub_next_chunk(m_pg, m_pg->is_scrub_blocking_ops());
+    m_osds->queue_scrub_next_chunk(
+      m_pg, m_listener->sl_get_block_priority());
   }
 }
 
@@ -2536,8 +2539,9 @@ void PgScrubber::submit_digest_fixes(const digests_fixes_t& fixes)
     ctx->register_on_success([this]() {
       if ((num_digest_updates_pending >= 1) &&
 	  (--num_digest_updates_pending == 0)) {
-	m_osds->queue_scrub_digest_update(m_pg,
-					  m_pg->is_scrub_blocking_ops());
+	m_osds->queue_scrub_digest_update(
+	  m_pg,
+	  m_listener->sl_get_block_priority());
       }
     });
 
