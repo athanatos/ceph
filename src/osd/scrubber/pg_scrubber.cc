@@ -529,7 +529,7 @@ void PgScrubber::update_scrub_job(const requested_scrub_t& request_flags)
     auto suggested = m_osds->get_scrub_services().determine_scrub_time(
       request_flags, m_listener->sl_get_info(), m_listener->sl_get_pool().info.opts);
     m_osds->get_scrub_services().update_job(m_scrub_job, suggested);
-    m_pg->publish_stats_to_osd();
+    m_listener->sl_publish_stats_to_osd();
   }
 
   dout(15) << __func__ << ": done " << registration_state() << dendl;
@@ -1003,7 +1003,7 @@ void PgScrubber::on_init()
   ceph_assert(!is_scrub_active());
   m_pg->reset_objects_scrubbed();
   preemption_data.reset();
-  m_pg->publish_stats_to_osd();
+  m_listener->sl_publish_stats_to_osd();
   m_interval_start = m_pg->get_history().same_interval_since;
 
   dout(10) << __func__ << " start same_interval:" << m_interval_start << dendl;
@@ -1029,7 +1029,7 @@ void PgScrubber::on_init()
   m_start = m_listener->sl_get_info().pgid.pgid.get_hobj_start();
   m_active = true;
   ++m_sessions_counter;
-  m_pg->publish_stats_to_osd();
+  m_listener->sl_publish_stats_to_osd();
 }
 
 /*
@@ -1240,7 +1240,7 @@ void PgScrubber::_scrub_finish()
 	stats.manifest_stats_invalid = false;
 	return false;
       });
-      m_pg->publish_stats_to_osd();
+      m_listener->sl_publish_stats_to_osd();
       m_pg->recovery_state.share_pg_info();
     }
   }
@@ -1614,7 +1614,7 @@ void PgScrubber::set_op_parameters(const requested_scrub_t& request)
   }
 
   // the publishing here is required for tests synchronization
-  m_pg->publish_stats_to_osd();
+  m_listener->sl_publish_stats_to_osd();
   m_flags.deep_scrub_on_error = request.deep_scrub_on_error;
 }
 
@@ -1940,7 +1940,7 @@ void PgScrubber::set_scrub_blocked(utime_t since)
   m_osds->get_scrub_services().mark_pg_scrub_blocked(m_pg_id);
   m_scrub_job->blocked_since = since;
   m_scrub_job->blocked = true;
-  m_pg->publish_stats_to_osd();
+  m_listener->sl_publish_stats_to_osd();
   pg->unlock();
 }
 
@@ -1949,7 +1949,7 @@ void PgScrubber::clear_scrub_blocked()
   ceph_assert(m_scrub_job->blocked);
   m_osds->get_scrub_services().clear_pg_scrub_blocked(m_pg_id);
   m_scrub_job->blocked = false;
-  m_pg->publish_stats_to_osd();
+  m_listener->sl_publish_stats_to_osd();
 }
 
 /*
@@ -2422,15 +2422,15 @@ void PgScrubber::cleanup_on_finish()
 
   state_clear(PG_STATE_SCRUBBING);
   state_clear(PG_STATE_DEEP_SCRUB);
-  m_pg->publish_stats_to_osd();
+  m_listener->sl_publish_stats_to_osd();
 
   clear_scrub_reservations();
-  m_pg->publish_stats_to_osd();
+  m_listener->sl_publish_stats_to_osd();
 
   requeue_waiting();
 
   reset_internal_state();
-  m_pg->publish_stats_to_osd();
+  m_listener->sl_publish_stats_to_osd();
   m_flags = scrub_flags_t{};
 
   // type-specific state clear
@@ -2460,7 +2460,7 @@ void PgScrubber::clear_pgscrub_state()
   state_clear(PG_STATE_REPAIR);
 
   clear_scrub_reservations();
-  m_pg->publish_stats_to_osd();
+  m_listener->sl_publish_stats_to_osd();
 
   requeue_waiting();
 
@@ -2469,7 +2469,7 @@ void PgScrubber::clear_pgscrub_state()
 
   // type-specific state clear
   _scrub_clear_state();
-  m_pg->publish_stats_to_osd();
+  m_listener->sl_publish_stats_to_osd();
 }
 
 void PgScrubber::replica_handling_done()
@@ -2718,7 +2718,7 @@ void PgScrubber::update_scrub_stats(ceph::coarse_real_clock::time_point now_is)
   }
 
   if (now_is - m_last_stat_upd > period) {
-    m_pg->publish_stats_to_osd();
+    m_listener->sl_publish_stats_to_osd();
     m_last_stat_upd = now_is;
   }
 }
