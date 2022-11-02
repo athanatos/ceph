@@ -659,11 +659,11 @@ bool PgScrubber::select_range()
   hobject_t start = m_start;
   hobject_t candidate_end;
   std::vector<hobject_t> objects;
-  int ret = m_pg->get_pgbackend()->objects_list_partial(start,
-							min_idx,
-							max_idx,
-							&objects,
-							&candidate_end);
+  int ret = m_listener->sl_objects_list_partial(start,
+						min_idx,
+						max_idx,
+						&objects,
+						&candidate_end);
   ceph_assert(ret >= 0);
 
   if (!objects.empty()) {
@@ -1269,10 +1269,10 @@ int PgScrubber::build_scrub_map_chunk(ScrubMap& map,
 
     // objects
     vector<ghobject_t> rollback_obs;
-    pos.ret = m_pg->get_pgbackend()->objects_list_range(start,
-							end,
-							&pos.ls,
-							&rollback_obs);
+    pos.ret = m_listener->sl_objects_list_range(start,
+						end,
+						&pos.ls,
+						&rollback_obs);
     dout(10) << __func__ << " while pos empty " << pos.ret << dendl;
     if (pos.ret < 0) {
       dout(5) << "objects_list_range error: " << pos.ret << dendl;
@@ -1291,7 +1291,7 @@ int PgScrubber::build_scrub_map_chunk(ScrubMap& map,
   // scan objects
   while (!pos.done()) {
 
-    int r = m_pg->get_pgbackend()->be_scan_list(map, pos);
+    int r = m_listener->sl_scan_list(map, pos);
     dout(30) << __func__ << " BE returned " << r << dendl;
     if (r == -EINPROGRESS) {
       dout(20) << __func__ << " in progress" << dendl;
