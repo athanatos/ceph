@@ -487,11 +487,6 @@ class PgScrubber : public ScrubPgIF,
   /// walk the log to find the latest update that affects our chunk
   eversion_t search_log_for_updates() const final;
 
-  eversion_t get_last_update_applied() const final
-  {
-    return m_pg->recovery_state.get_last_update_applied();
-  }
-
   int pending_active_pushes() const final { return m_pg->active_pushes; }
 
   void on_init() final;
