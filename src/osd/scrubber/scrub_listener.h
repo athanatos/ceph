@@ -54,6 +54,34 @@ public:
   /// returns target priority based on whether ops are blocked
   virtual Scrub::scrub_prio_t sl_get_block_priority() const = 0;
 
+  /**
+   * sl_objects_list_partial
+   *
+   * Lists n objects in pg starting at begin (inclusive) where
+   * min <= n <= max.
+   */
+  virtual int sl_objects_list_partial(
+    const hobject_t& begin,     ///< [in] start object
+    int min,                    ///< [in] min to list
+    int max,                    ///< [in] max to list
+    std::vector<hobject_t>* ls, ///< [out] results
+    hobject_t* next             ///< [out] next after results
+  ) = 0; ///< @return error code
+
+  /// list objects in [start, end)
+  virtual int sl_objects_list_range(
+    const hobject_t& start,            /// [in] start bound
+    const hobject_t& end,              /// [in] end bound (exclusive)
+    std::vector<hobject_t>* ls,        /// [out] results
+    std::vector<ghobject_t>* gen_obs=0 /// [out] non-max generation results
+  ) = 0; /// @return error code
+
+  /// scan next object pointed to by pos, increment pos
+  virtual int sl_scan_list(
+    ScrubMap& map,       ///< [out] results
+    ScrubMapBuilder& pos ///< [in] objects to scan + iterator into that list
+  ) = 0; /// @return error code
+
   virtual ~ScrubListener() = default;
 };
 
