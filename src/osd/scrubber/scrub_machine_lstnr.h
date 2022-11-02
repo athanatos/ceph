@@ -93,8 +93,6 @@ struct ScrubMachineListener {
   /// state.
   virtual void set_state_name(const char* name) = 0;
 
-  [[nodiscard]] virtual bool is_primary() const = 0;
-
   virtual void select_range_n_notify() = 0;
 
   /// walk the log to find the latest update that affects our chunk

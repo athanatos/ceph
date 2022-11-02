@@ -117,7 +117,7 @@ bool PgScrubber::is_message_relevant(epoch_t epoch_to_verify)
     return false;
   }
 
-  ceph_assert(is_primary());
+  ceph_assert(m_listener->sl_is_primary());
 
   // were we instructed to abort?
   return verify_against_abort(epoch_to_verify);
@@ -256,7 +256,7 @@ void PgScrubber::send_start_replica(epoch_t epoch_queued,
 {
   dout(10) << "scrubber event -->> " << __func__ << " epoch: " << epoch_queued
 	   << " token: " << token << dendl;
-  if (is_primary()) {
+  if (m_listener->sl_is_primary()) {
     // shouldn't happen. Ignore
     dout(1) << "got a replica scrub request while Primary!" << dendl;
     return;
@@ -519,7 +519,8 @@ void PgScrubber::on_pg_activate(const requested_scrub_t& request_flags)
     // we won't have a chance to see more logs from this function, thus:
     dout(2) << fmt::format(
 		   "{}: flags:<{}> {}.Reg-state:{:.7}. No scrub-job", __func__,
-		   request_flags, (is_primary() ? "Primary" : "Replica/other"),
+		   request_flags,
+		   (m_listener->sl_is_primary() ? "Primary" : "Replica/other"),
 		   registration_state())
 	    << dendl;
     return;
@@ -536,7 +537,7 @@ void PgScrubber::on_pg_activate(const requested_scrub_t& request_flags)
   dout(10) << fmt::format(
 		  "{}: <flags:{}> {} <{:.5}>&<{:.10}> --> <{:.5}>&<{:.14}>",
 		  __func__, request_flags,
-		  (is_primary() ? "Primary" : "Replica/other"), pre_reg,
+		  (m_listener->sl_is_primary() ? "Primary" : "Replica/other"), pre_reg,
 		  pre_state, registration_state(), m_scrub_job->state_desc())
 	   << dendl;
 }
@@ -555,11 +556,11 @@ void PgScrubber::update_scrub_job(const requested_scrub_t& request_flags)
 {
   dout(10) << fmt::format("{}: flags:<{}>", __func__, request_flags) << dendl;
   // verify that the 'in_q' status matches our "Primariority"
-  if (m_scrub_job && is_primary() && !m_scrub_job->in_queues) {
+  if (m_scrub_job && m_listener->sl_is_primary() && !m_scrub_job->in_queues) {
     dout(1) << __func__ << " !!! primary but not scheduled! " << dendl;
   }
 
-  if (is_primary() && m_scrub_job) {
+  if (m_listener->sl_is_primary() && m_scrub_job) {
     ceph_assert(m_listener->sl_is_locked());
     auto suggested = m_osds->get_scrub_services().determine_scrub_time(
       request_flags, m_listener->sl_get_info(), m_listener->sl_get_pool().info.opts);
@@ -1865,7 +1866,7 @@ void PgScrubber::stats_of_handled_objects(
   // Objects after that point haven't been included in the scrubber's stats
   // accounting yet, so they will be included when the scrubber gets to that
   // object.
-  if (is_primary() && is_scrub_active()) {
+  if (m_listener->sl_is_primary() && is_scrub_active()) {
     if (soid < m_start) {
 
       dout(20) << fmt::format("{} {} < [{},{})", __func__, soid, m_start, m_end)
@@ -2107,7 +2108,7 @@ void PgScrubber::scrub_finish()
     request_rescrubbing(m_planned_scrub);
   }
 
-  if (m_pg->is_active() && m_pg->is_primary()) {
+  if (m_pg->is_active() && m_listener->sl_is_primary()) {
     m_pg->recovery_state.share_pg_info();
   }
 }
