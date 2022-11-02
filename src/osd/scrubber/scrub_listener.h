@@ -82,6 +82,18 @@ public:
     ScrubMapBuilder& pos ///< [in] objects to scan + iterator into that list
   ) = 0; /// @return error code
 
+  /**
+   * sl_range_available_for_scrub
+   *
+   * Returns whether the passed range is ready to be scrubbed.  If
+   * unavailable, it will return false *and* arrange for scrub to
+   * be rescheduled when that changes.
+   */
+  virtual bool sl_range_available_for_scrub(
+    const hobject_t &begin, ///< [in] range start, inclusive
+    const hobject_t &end    ///< [in] range end, exclusive
+  ) = 0;
+
   virtual ~ScrubListener() = default;
 };
 
