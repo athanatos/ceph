@@ -18,6 +18,9 @@ public:
   /// get spg_t for pg
   virtual spg_t sl_get_spgid() const = 0;
 
+  /// returns true iff pg has reset peering since e.
+  virtual bool sl_has_reset_since(epoch_t e) const = 0;
+
   virtual ~ScrubListener() = default;
 };
 

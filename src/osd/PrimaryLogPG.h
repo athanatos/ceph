@@ -1939,6 +1939,10 @@ private:
 public:
   // Scrub::ScrubListener method implementations
   spg_t sl_get_spgid() const final { return pg_id; }
+
+  bool sl_has_reset_since(epoch_t e) const final {
+    return pg_has_reset_since(e);
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)

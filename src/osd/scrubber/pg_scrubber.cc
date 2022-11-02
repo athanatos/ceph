@@ -84,19 +84,9 @@ ostream& operator<<(ostream& out, const requested_scrub_t& sf)
   return out;
 }
 
-/*
- * if the incoming message is from a previous interval, it must mean
- * PrimaryLogPG::on_change() was called when that interval ended. We can safely
- * discard the stale message.
- */
-bool PgScrubber::check_interval(epoch_t epoch_to_verify) const
-{
-  return epoch_to_verify >= m_pg->get_same_interval_since();
-}
-
 bool PgScrubber::should_drop_message(OpRequestRef &op) const
 {
-  if (check_interval(op->sent_epoch)) {
+  if (!m_listener->sl_has_reset_since(op->sent_epoch)) {
     return false;
   } else {
     dout(10) << __func__ <<  ": discarding message " << *(op->get_req())
@@ -121,7 +111,7 @@ bool PgScrubber::is_message_relevant(epoch_t epoch_to_verify)
   }
 
   // has a new interval started?
-  if (!check_interval(epoch_to_verify)) {
+  if (!m_listener->sl_has_reset_since(epoch_to_verify)) {
     // if this is a new interval, on_change() has already terminated that
     // old scrub.
     return false;
@@ -185,7 +175,7 @@ bool PgScrubber::should_abort() const
  * possibly were in the queue while the PG changed state and became unavailable
  * for scrubbing:
  *
- * The check_interval() catches all major changes to the PG. As for the other
+ * The sl_has_reset_since() catches all major changes to the PG. As for the other
  * conditions we may check (and see is_message_relevant() above):
  *
  * - we are not 'active' yet, so must not check against is_active(), and:
@@ -204,7 +194,7 @@ void PgScrubber::initiate_regular_scrub(epoch_t epoch_queued)
   dout(15) << __func__ << " epoch: " << epoch_queued << dendl;
   // we may have lost our Primary status while the message languished in the
   // queue
-  if (check_interval(epoch_queued)) {
+  if (m_listener->sl_has_reset_since(epoch_queued)) {
     dout(10) << "scrubber event -->> StartScrub epoch: " << epoch_queued
 	     << dendl;
     reset_epoch(epoch_queued);
@@ -230,7 +220,7 @@ void PgScrubber::initiate_scrub_after_repair(epoch_t epoch_queued)
   dout(15) << __func__ << " epoch: " << epoch_queued << dendl;
   // we may have lost our Primary status while the message languished in the
   // queue
-  if (check_interval(epoch_queued)) {
+  if (m_listener->sl_has_reset_since(epoch_queued)) {
     dout(10) << "scrubber event -->> AfterRepairScrub epoch: " << epoch_queued
 	     << dendl;
     reset_epoch(epoch_queued);
@@ -272,7 +262,7 @@ void PgScrubber::send_start_replica(epoch_t epoch_queued,
     return;
   }
 
-  if (check_interval(epoch_queued) && is_token_current(token)) {
+  if (m_listener->sl_has_reset_since(epoch_queued) && is_token_current(token)) {
     // save us some time by not waiting for updates if there are none
     // to wait for. Affects the transition from NotActive into either
     // ReplicaWaitUpdates or ActiveReplica.
@@ -289,7 +279,7 @@ void PgScrubber::send_sched_replica(epoch_t epoch_queued,
 {
   dout(10) << "scrubber event -->> " << __func__ << " epoch: " << epoch_queued
 	   << " token: " << token << dendl;
-  if (check_interval(epoch_queued) && is_token_current(token)) {
+  if (m_listener->sl_has_reset_since(epoch_queued) && is_token_current(token)) {
     m_fsm->process_event(SchedReplica{});  // retest for map availability
   }
   dout(10) << "scrubber event --<< " << __func__ << dendl;
@@ -352,7 +342,7 @@ void PgScrubber::send_replica_pushes_upd(epoch_t epoch_queued)
 {
   dout(10) << "scrubber event -->> " << __func__ << " epoch: " << epoch_queued
 	   << dendl;
-  if (check_interval(epoch_queued)) {
+  if (m_listener->sl_has_reset_since(epoch_queued)) {
     m_fsm->process_event(ReplicaPushesUpd{});
   }
   dout(10) << "scrubber event --<< " << __func__ << dendl;
@@ -363,7 +353,7 @@ void PgScrubber::send_remotes_reserved(epoch_t epoch_queued)
   dout(10) << "scrubber event -->> " << __func__ << " epoch: " << epoch_queued
 	   << dendl;
   // note: scrub is not active yet
-  if (check_interval(epoch_queued)) {
+  if (m_listener->sl_has_reset_since(epoch_queued)) {
     m_fsm->process_event(RemotesReserved{});
   }
   dout(10) << "scrubber event --<< " << __func__ << dendl;
@@ -373,7 +363,7 @@ void PgScrubber::send_reservation_failure(epoch_t epoch_queued)
 {
   dout(10) << "scrubber event -->> " << __func__ << " epoch: " << epoch_queued
 	   << dendl;
-  if (check_interval(epoch_queued)) {  // do not check for 'active'!
+  if (m_listener->sl_has_reset_since(epoch_queued)) {  // do not check for 'active'!
     m_fsm->process_event(ReservationFailure{});
   }
   dout(10) << "scrubber event --<< " << __func__ << dendl;
@@ -383,7 +373,7 @@ void PgScrubber::send_chunk_free(epoch_t epoch_queued)
 {
   dout(10) << "scrubber event -->> " << __func__ << " epoch: " << epoch_queued
 	   << dendl;
-  if (check_interval(epoch_queued)) {
+  if (m_listener->sl_has_reset_since(epoch_queued)) {
     m_fsm->process_event(Scrub::SelectedChunkFree{});
   }
   dout(10) << "scrubber event --<< " << __func__ << dendl;
@@ -393,7 +383,7 @@ void PgScrubber::send_chunk_busy(epoch_t epoch_queued)
 {
   dout(10) << "scrubber event -->> " << __func__ << " epoch: " << epoch_queued
 	   << dendl;
-  if (check_interval(epoch_queued)) {
+  if (m_listener->sl_has_reset_since(epoch_queued)) {
     m_fsm->process_event(Scrub::ChunkIsBusy{});
   }
   dout(10) << "scrubber event --<< " << __func__ << dendl;
@@ -694,7 +684,7 @@ PgScrubber::schedule_callback_after(
     new LambdaContext(
       [this, pg=PGRef(m_pg), cb=std::move(cb), epoch=get_osdmap_epoch()] {
 	pg->lock();
-	if (check_interval(epoch)) {
+	if (!m_listener->sl_has_reset_since(epoch)) {
 	  cb();
 	}
 	pg->unlock();
