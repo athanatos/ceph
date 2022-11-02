@@ -48,6 +48,12 @@ public:
   /// returns greatest log entry version applied locally
   virtual eversion_t sl_get_last_update_applied() const = 0;
 
+  /// returns true if there are active ops blocked by scrub
+  virtual bool sl_ops_blocked_by_scrub() const = 0;
+
+  /// returns target priority based on whether ops are blocked
+  virtual Scrub::scrub_prio_t sl_get_block_priority() const = 0;
+
   virtual ~ScrubListener() = default;
 };
 
