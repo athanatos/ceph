@@ -2174,15 +2174,9 @@ void PG::replica_scrub(epoch_t epoch_queued,
 		      "StartReplica/nw");
 }
 
-bool PG::ops_blocked_by_scrub() const
+bool PG::sl_ops_blocked_by_scrub() const
 {
   return !waiting_for_scrub.empty();
-}
-
-Scrub::scrub_prio_t PG::is_scrub_blocking_ops() const
-{
-  return waiting_for_scrub.empty() ? Scrub::scrub_prio_t::low_priority
-				   : Scrub::scrub_prio_t::high_priority;
 }
 
 bool PG::old_peering_msg(epoch_t reply_epoch, epoch_t query_epoch)

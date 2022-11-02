@@ -12232,7 +12232,7 @@ void PrimaryLogPG::kick_object_context_blocked(ObjectContextRef obc)
     // only requeue if we are still active: we may be unblocking
     // because we are resetting for a new peering interval
     if (is_active()) {
-      osd->queue_scrub_unblocking(this, is_scrub_blocking_ops());
+      osd->queue_scrub_unblocking(this, sl_get_block_priority());
     }
   }
 }
@@ -12472,7 +12472,7 @@ void PrimaryLogPG::_applied_recovered_object(ObjectContextRef obc)
   if (!recovery_state.is_deleting() && active_pushes == 0 &&
       is_scrub_active()) {
 
-    osd->queue_scrub_pushes_update(this, is_scrub_blocking_ops());
+    osd->queue_scrub_pushes_update(this, sl_get_block_priority());
   }
 }
 

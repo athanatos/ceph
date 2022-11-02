@@ -1249,8 +1249,13 @@ protected:
 
   int active_pushes;
 
-  [[nodiscard]] bool ops_blocked_by_scrub() const;
-  [[nodiscard]] Scrub::scrub_prio_t is_scrub_blocking_ops() const;
+  bool sl_ops_blocked_by_scrub() const final;
+
+  Scrub::scrub_prio_t sl_get_block_priority() const final {
+    return sl_ops_blocked_by_scrub()
+      ? Scrub::scrub_prio_t::low_priority
+      : Scrub::scrub_prio_t::high_priority;
+  }
 
   void _scan_rollback_obs(const std::vector<ghobject_t> &rollback_obs);
   /**
