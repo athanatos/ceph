@@ -617,8 +617,9 @@ class PgScrubber : public ScrubPgIF,
   spg_t get_pgid() const final { return m_pg->get_pgid(); }
 
   /// Returns reference to current osdmap
-  const OSDMapRef& get_osdmap() const final;
-
+  const OSDMapRef& get_osdmap() const final {
+    return m_listener->sl_get_osdmap();
+  }
 
   // ---------------------------------------------------------------------------
 
@@ -796,9 +797,6 @@ class PgScrubber : public ScrubPgIF,
 
   int num_digest_updates_pending{0};
   hobject_t m_start, m_end;  ///< note: half-closed: [start,end)
-
-  /// Returns epoch of current osdmap
-  epoch_t get_osdmap_epoch() const { return get_osdmap()->get_epoch(); }
 
   // collected statistics
   int m_shallow_errors{0};

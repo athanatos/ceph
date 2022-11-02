@@ -1943,6 +1943,9 @@ public:
   bool sl_has_reset_since(epoch_t e) const final {
     return pg_has_reset_since(e);
   }
+  const OSDMapRef &sl_get_osdmap() const final {
+    return get_osdmap();
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)

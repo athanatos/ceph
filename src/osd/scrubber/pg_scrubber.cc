@@ -152,12 +152,12 @@ bool PgScrubber::should_abort() const
   // note: deep scrubs are allowed even if 'no-scrub' is set (but not
   // 'no-deepscrub')
   if (m_is_deep) {
-    if (get_osdmap()->test_flag(CEPH_OSDMAP_NODEEP_SCRUB) ||
+    if (m_listener->sl_get_osdmap()->test_flag(CEPH_OSDMAP_NODEEP_SCRUB) ||
 	m_pg->pool.info.has_flag(pg_pool_t::FLAG_NODEEP_SCRUB)) {
       dout(10) << "nodeep_scrub set, aborting" << dendl;
       return true;
     }
-  } else if (get_osdmap()->test_flag(CEPH_OSDMAP_NOSCRUB) ||
+  } else if (m_listener->sl_get_osdmap()->test_flag(CEPH_OSDMAP_NOSCRUB) ||
 	     m_pg->pool.info.has_flag(pg_pool_t::FLAG_NOSCRUB)) {
     dout(10) << "noscrub set, aborting" << dendl;
     return true;
@@ -682,7 +682,8 @@ PgScrubber::schedule_callback_after(
   return m_osds->sleep_timer.add_event_after(
     duration,
     new LambdaContext(
-      [this, pg=PGRef(m_pg), cb=std::move(cb), epoch=get_osdmap_epoch()] {
+      [this, pg=PGRef(m_pg), cb=std::move(cb),
+       epoch=m_listener->sl_get_osdmap_epoch()] {
 	pg->lock();
 	if (!m_listener->sl_has_reset_since(epoch)) {
 	  cb();
@@ -966,7 +967,7 @@ void PgScrubber::_request_scrub_map(pg_shard_t replica,
 
   auto repscrubop = new MOSDRepScrub(spg_t(m_pg->info.pgid.pgid, replica.shard),
 				     version,
-				     get_osdmap_epoch(),
+				     m_listener->sl_get_osdmap_epoch(),
 				     m_pg->get_last_peering_reset(),
 				     start,
 				     end,
@@ -977,7 +978,7 @@ void PgScrubber::_request_scrub_map(pg_shard_t replica,
 
   // default priority. We want the replica-scrub processed prior to any recovery
   // or client io messages (we are holding a lock!)
-  m_osds->send_message_osd_cluster(replica.osd, repscrubop, get_osdmap_epoch());
+  m_osds->send_message_osd_cluster(replica.osd, repscrubop, m_listener->sl_get_osdmap_epoch());
 }
 
 void PgScrubber::cleanup_store(ObjectStore::Transaction* t)
@@ -1071,7 +1072,7 @@ void PgScrubber::on_replica_init()
 
 int PgScrubber::build_primary_map_chunk()
 {
-  epoch_t map_building_since = m_pg->get_osdmap_epoch();
+  epoch_t map_building_since = m_listener->sl_get_osdmap_epoch();
   dout(20) << __func__ << ": initiated at epoch " << map_building_since
 	   << dendl;
 
@@ -1357,8 +1358,9 @@ void PgScrubber::repair_oinfo_oid(ScrubMap& smap)
       oi.soid = hoid;
       bl.clear();
       encode(oi,
-             bl,
-             m_pg->get_osdmap()->get_features(CEPH_ENTITY_TYPE_OSD, nullptr));
+	     bl,
+	     m_listener->sl_get_osdmap(
+	     )->get_features(CEPH_ENTITY_TYPE_OSD, nullptr));
 
       bufferptr bp(bl.c_str(), bl.length());
       o.attrs[OI_ATTR] = bp;
@@ -1561,7 +1563,7 @@ void PgScrubber::set_op_parameters(const requested_scrub_t& request)
 
   // write down the epoch of starting a new scrub. Will be used
   // to discard stale messages from previous aborted scrubs.
-  m_epoch_start = m_pg->get_osdmap_epoch();
+  m_epoch_start = m_listener->sl_get_osdmap_epoch();
 
   m_flags.check_repair = request.check_repair;
   m_flags.auto_repair = request.auto_repair || request.need_auto;
@@ -1789,7 +1791,7 @@ void PgScrubber::message_all_replicas(int32_t opcode, std::string_view op_text)
   std::vector<pair<int, Message*>> messages;
   messages.reserve(m_pg->get_actingset().size());
 
-  epoch_t epch = get_osdmap_epoch();
+  epoch_t epch = m_listener->sl_get_osdmap_epoch();
 
   for (auto& p : m_pg->get_actingset()) {
 
@@ -2089,8 +2091,8 @@ void PgScrubber::scrub_finish()
 
   if (has_error) {
     m_pg->queue_peering_event(PGPeeringEventRef(
-      std::make_shared<PGPeeringEvent>(get_osdmap_epoch(),
-				       get_osdmap_epoch(),
+      std::make_shared<PGPeeringEvent>(m_listener->sl_get_osdmap_epoch(),
+				       m_listener->sl_get_osdmap_epoch(),
 				       PeeringState::DoRecovery())));
   } else {
     m_is_repair = false;
@@ -2480,11 +2482,6 @@ bool PgScrubber::is_token_current(Scrub::act_token_t received_token)
   return false;
 }
 
-const OSDMapRef& PgScrubber::get_osdmap() const
-{
-  return m_pg->get_osdmap();
-}
-
 /// \todo combine the multiple transactions into a single one
 void PgScrubber::submit_digest_fixes(const digests_fixes_t& fixes)
 {
@@ -2718,7 +2715,7 @@ ReplicaReservations::ReplicaReservations(
     , m_scrub_job{scrubjob}
     , m_conf{conf}
 {
-  epoch_t epoch = m_pg->get_osdmap_epoch();
+  epoch_t epoch = m_listener->sl_get_osdmap_epoch();
   m_log_msg_prefix = fmt::format(
       "osd.{} ep: {} scrubber::ReplicaReservations pg[{}]: ", m_osds->whoami,
       epoch, pg->pg_id);
@@ -2795,7 +2792,7 @@ ReplicaReservations::~ReplicaReservations()
   // send un-reserve messages to all reserved replicas. We do not wait for
   // answer (there wouldn't be one). Other incoming messages will be discarded
   // on the way, by our owner.
-  epoch_t epoch = m_pg->get_osdmap_epoch();
+  epoch_t epoch = m_listener->sl_get_osdmap_epoch();
 
   for (auto& p : m_reserved_peers) {
     release_replica(p, epoch);
@@ -2833,7 +2830,7 @@ void ReplicaReservations::handle_reserve_grant(OpRequestRef op, pg_shard_t from)
 
     dout(10) << __func__ << ": rejecting late-coming reservation from " << from
 	     << dendl;
-    release_replica(from, m_pg->get_osdmap_epoch());
+    release_replica(from, m_listener->sl_get_osdmap_epoch());
 
   } else if (std::find(m_reserved_peers.begin(),
 		       m_reserved_peers.end(),
