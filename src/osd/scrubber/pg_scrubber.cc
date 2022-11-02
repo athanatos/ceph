@@ -795,7 +795,7 @@ bool PgScrubber::select_range()
   // is that range free for us? if not - we will be rescheduled later by whoever
   // triggered us this time
 
-  if (!m_pg->_range_available_for_scrub(m_start, candidate_end)) {
+  if (!m_listener->sl_range_available_for_scrub(m_start, candidate_end)) {
     // we'll be requeued by whatever made us unavailable for scrub
     dout(10) << __func__ << ": scrub blocked somewhere in range "
 	     << "[" << m_start << ", " << candidate_end << ")" << dendl;

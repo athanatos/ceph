@@ -1370,10 +1370,6 @@ protected:
   void cancel_cls_gather(std::map<hobject_t,CLSGatherOp>::iterator iter, bool requeue, std::vector<ceph_tid_t> *tids);
   void cancel_cls_gather_ops(bool requeue, std::vector<ceph_tid_t> *tids);
 
-  // -- scrub --
-  bool _range_available_for_scrub(
-    const hobject_t &begin, const hobject_t &end) override;
-
   void _split_into(pg_t child_pgid, PG *child,
                    unsigned split_bits) override;
   void apply_and_flush_repops(bool requeue);
@@ -1985,6 +1981,9 @@ public:
     ScrubMapBuilder& pos) final {
     return pgbackend->be_scan_list(map, pos);
   }
+
+  bool sl_range_available_for_scrub(
+    const hobject_t &begin, const hobject_t &end) final;
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)

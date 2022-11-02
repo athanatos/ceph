@@ -1258,13 +1258,6 @@ protected:
   }
 
   void _scan_rollback_obs(const std::vector<ghobject_t> &rollback_obs);
-  /**
-   * returns true if [begin, end) is good to scrub at this time
-   * a false return value obliges the implementer to requeue scrub when the
-   * condition preventing scrub clears
-   */
-  virtual bool _range_available_for_scrub(
-    const hobject_t &begin, const hobject_t &end) = 0;
 
   /**
    * Initiate the process that will create our scrub map for the Primary.
