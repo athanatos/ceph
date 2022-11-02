@@ -1955,6 +1955,7 @@ public:
   const pg_info_t &sl_get_info() const final {
     return info;
   }
+  bool sl_is_locked() const final { return is_locked(); }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)

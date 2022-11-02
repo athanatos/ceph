@@ -560,7 +560,7 @@ void PgScrubber::update_scrub_job(const requested_scrub_t& request_flags)
   }
 
   if (is_primary() && m_scrub_job) {
-    ceph_assert(m_pg->is_locked());
+    ceph_assert(m_listener->sl_is_locked());
     auto suggested = m_osds->get_scrub_services().determine_scrub_time(
       request_flags, m_listener->sl_get_info(), m_listener->sl_get_pool().info.opts);
     m_osds->get_scrub_services().update_job(m_scrub_job, suggested);
@@ -1912,7 +1912,7 @@ void PgScrubber::scrub_finish()
 	   << (state_test(PG_STATE_REPAIR) ? "repair" : "no-repair")
 	   << ". deep_scrub_on_error: " << m_flags.deep_scrub_on_error << dendl;
 
-  ceph_assert(m_pg->is_locked());
+  ceph_assert(m_listener->sl_is_locked());
   ceph_assert(is_queued_or_active());
 
   m_planned_scrub = requested_scrub_t{};
@@ -2371,7 +2371,7 @@ void PgScrubber::reserve_replicas()
 void PgScrubber::cleanup_on_finish()
 {
   dout(10) << __func__ << dendl;
-  ceph_assert(m_pg->is_locked());
+  ceph_assert(m_listener->sl_is_locked());
 
   state_clear(PG_STATE_SCRUBBING);
   state_clear(PG_STATE_DEEP_SCRUB);
@@ -2403,7 +2403,7 @@ void PgScrubber::scrub_clear_state()
 void PgScrubber::clear_pgscrub_state()
 {
   dout(10) << __func__ << dendl;
-  ceph_assert(m_pg->is_locked());
+  ceph_assert(m_listener->sl_is_locked());
 
   state_clear(PG_STATE_SCRUBBING);
   state_clear(PG_STATE_DEEP_SCRUB);
