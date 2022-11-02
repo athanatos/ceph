@@ -45,6 +45,9 @@ public:
   /// forces osd to notice pg stat updates (including pg state)
   virtual void sl_publish_stats_to_osd() = 0;
 
+  /// returns greatest log entry version applied locally
+  virtual eversion_t sl_get_last_update_applied() const = 0;
+
   virtual ~ScrubListener() = default;
 };
 
