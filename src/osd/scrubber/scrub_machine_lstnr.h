@@ -98,8 +98,6 @@ struct ScrubMachineListener {
   /// walk the log to find the latest update that affects our chunk
   virtual eversion_t search_log_for_updates() const = 0;
 
-  virtual eversion_t get_last_update_applied() const = 0;
-
   virtual int pending_active_pushes() const = 0;
 
   virtual int build_primary_map_chunk() = 0;

@@ -625,7 +625,7 @@ bool PgScrubber::reserve_local()
 
 bool PgScrubber::has_pg_marked_new_updates() const
 {
-  auto last_applied = m_pg->recovery_state.get_last_update_applied();
+  auto last_applied = m_listener->sl_get_last_update_applied();
   dout(10) << __func__ << " recovery last: " << last_applied
 	   << " vs. scrub's: " << m_subset_last_update << dendl;
 
