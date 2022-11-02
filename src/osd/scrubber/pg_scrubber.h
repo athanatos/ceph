@@ -473,11 +473,6 @@ class PgScrubber : public ScrubPgIF,
     return grace_period;
   }
 
-  [[nodiscard]] bool is_primary() const final
-  {
-    return m_pg->recovery_state.is_primary();
-  }
-
   void set_state_name(const char* name) final
   {
     m_fsm_state_name = name;
@@ -613,6 +608,8 @@ class PgScrubber : public ScrubPgIF,
   CephContext* get_pg_cct() const final { return m_pg->cct; }
  
   LoggerSinkSet& get_logger() const final;
+
+  bool is_primary() const final { return m_listener->sl_is_primary(); }
 
   spg_t get_pgid() const final { return m_pg->get_pgid(); }
 

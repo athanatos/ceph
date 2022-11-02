@@ -1956,6 +1956,7 @@ public:
     return info;
   }
   bool sl_is_locked() const final { return is_locked(); }
+  bool sl_is_primary() const final { return recovery_state.is_primary(); }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
