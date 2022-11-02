@@ -42,6 +42,9 @@ public:
   /// returns whether this osd is currently the primary for the pg
   virtual bool sl_is_primary() const = 0;
 
+  /// forces osd to notice pg stat updates (including pg state)
+  virtual void sl_publish_stats_to_osd() = 0;
+
   virtual ~ScrubListener() = default;
 };
 

@@ -1957,6 +1957,7 @@ public:
   }
   bool sl_is_locked() const final { return is_locked(); }
   bool sl_is_primary() const final { return recovery_state.is_primary(); }
+  void sl_publish_stats_to_osd() final { return publish_stats_to_osd(); }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
