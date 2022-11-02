@@ -39,6 +39,9 @@ public:
   /// return false if other threads may access concurrently
   virtual bool sl_is_locked() const = 0;
 
+  /// returns whether this osd is currently the primary for the pg
+  virtual bool sl_is_primary() const = 0;
+
   virtual ~ScrubListener() = default;
 };
 
