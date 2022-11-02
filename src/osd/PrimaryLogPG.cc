@@ -15451,8 +15451,8 @@ void PrimaryLogPG::do_replica_scrub_map(OpRequestRef op)
   m_scrubber->map_from_replica(op);
 }
 
-bool PrimaryLogPG::_range_available_for_scrub(const hobject_t& begin,
-					      const hobject_t& end)
+bool PrimaryLogPG::sl_range_available_for_scrub(const hobject_t& begin,
+						const hobject_t& end)
 {
   pair<hobject_t, ObjectContextRef> next;
   next.second = object_contexts.lookup(begin);
