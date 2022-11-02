@@ -36,6 +36,9 @@ public:
   /// get reference to current pg info
   virtual const pg_info_t &sl_get_info() const = 0;
 
+  /// return false if other threads may access concurrently
+  virtual bool sl_is_locked() const = 0;
+
   virtual ~ScrubListener() = default;
 };
 
