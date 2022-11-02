@@ -1961,6 +1961,30 @@ public:
   eversion_t sl_get_last_update_applied() const {
     return recovery_state.get_last_update_applied();
   }
+
+  int sl_objects_list_partial(
+    const hobject_t& begin,
+    int min,
+    int max,
+    std::vector<hobject_t>* ls,
+    hobject_t* next) final {
+    return pgbackend->objects_list_partial(begin, min, max, ls, next);
+  }
+
+  int sl_objects_list_range(
+    const hobject_t& start,
+    const hobject_t& end,
+    std::vector<hobject_t>* ls,
+    std::vector<ghobject_t>* gen_obs) final {
+    return pgbackend->objects_list_range(
+      start, end, ls, gen_obs);
+  }
+
+  int sl_scan_list(
+    ScrubMap& map,
+    ScrubMapBuilder& pos) final {
+    return pgbackend->be_scan_list(map, pos);
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
