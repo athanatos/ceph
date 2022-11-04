@@ -817,7 +817,7 @@ void PgScrubber::add_delayed_scheduling()
 
     // the 'delayer' for crimson is different. Will be factored out.
 
-    spg_t pgid = m_listener->sl_get_pgid();
+    spg_t pgid = m_listener->sl_get_spgid();
     auto callbk = new LambdaContext([osds = m_osds, pgid, scrbr = this](
 				      [[maybe_unused]] int r) mutable {
       PGRef pg = osds->osd->lookup_lock_pg(pgid);
@@ -846,31 +846,6 @@ void PgScrubber::add_delayed_scheduling()
     // just a requeue
     m_osds->queue_for_scrub_resched(m_pg, Scrub::scrub_prio_t::high_priority);
   }
-}
-
-eversion_t PgScrubber::search_log_for_updates() const
-{
-  auto& projected = m_pg->projected_log.log;
-  auto pi = find_if(projected.crbegin(),
-		    projected.crend(),
-		    [this](const auto& e) -> bool {
-		      return e.soid >= m_start && e.soid < m_end;
-		    });
-
-  if (pi != projected.crend())
-    return pi->version;
-
-  // there was no relevant update entry in the log
-
-  auto& log = m_pg->recovery_state.get_pg_log().get_log().log;
-  auto p = find_if(log.crbegin(), log.crend(), [this](const auto& e) -> bool {
-    return e.soid >= m_start && e.soid < m_end;
-  });
-
-  if (p == log.crend())
-    return eversion_t{};
-  else
-    return p->version;
 }
 
 void PgScrubber::get_replicas_maps(bool replica_can_preempt)
@@ -987,11 +962,11 @@ bool PgScrubber::get_store_errors(const scrub_ls_arg_t& arg,
   }
 
   if (arg.get_snapsets) {
-    res_inout.vals = m_store->get_snap_errors(m_listener->sl_get_pgid().pool(),
+    res_inout.vals = m_store->get_snap_errors(m_listener->sl_get_spgid().pool(),
 					      arg.start_after,
 					      arg.max_return);
   } else {
-    res_inout.vals = m_store->get_object_errors(m_listener->sl_get_pgid().pool(),
+    res_inout.vals = m_store->get_object_errors(m_listener->sl_get_spgid().pool(),
 						arg.start_after,
 						arg.max_return);
   }
