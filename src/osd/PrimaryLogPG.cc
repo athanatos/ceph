@@ -15471,6 +15471,30 @@ bool PrimaryLogPG::sl_range_available_for_scrub(const hobject_t& begin,
   return true;
 }
 
+eversion_t PrimaryLogPG::sl_get_latest_update_in_range(const hobject_t& start,
+						       const hobject_t& end)
+{
+  auto check_log = [&start, &end](auto &log) {
+    return find_if(
+      log.crbegin(),
+      log.crend(),
+      [&start, &end](const auto& e) -> bool {
+	return e.soid >= start && e.soid < end;
+      });
+  };
+
+  auto pi = check_log(projected_log.log);
+  if (pi != projected_log.log.crend())
+    return pi->version;
+
+  auto& log = recovery_state.get_pg_log().get_log().log;
+  pi = check_log(log);
+  if (pi == log.crend())
+    return eversion_t{};
+  else
+    return pi->version;
+}
+
 
 int PrimaryLogPG::rep_repair_primary_object(const hobject_t& soid, OpContext *ctx)
 {
