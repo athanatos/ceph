@@ -1984,6 +1984,10 @@ public:
 
   bool sl_range_available_for_scrub(
     const hobject_t &begin, const hobject_t &end) final;
+
+  eversion_t sl_get_latest_update_in_range(
+    const hobject_t& start,
+    const hobject_t& end) final;
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)

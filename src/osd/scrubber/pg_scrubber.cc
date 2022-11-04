@@ -868,31 +868,6 @@ bool PgScrubber::range_intersects_scrub(const hobject_t& start,
   return (start < m_max_end && end >= m_start);
 }
 
-eversion_t PgScrubber::search_log_for_updates() const
-{
-  auto& projected = m_pg->projected_log.log;
-  auto pi = find_if(projected.crbegin(),
-		    projected.crend(),
-		    [this](const auto& e) -> bool {
-		      return e.soid >= m_start && e.soid < m_end;
-		    });
-
-  if (pi != projected.crend())
-    return pi->version;
-
-  // there was no relevant update entry in the log
-
-  auto& log = m_pg->recovery_state.get_pg_log().get_log().log;
-  auto p = find_if(log.crbegin(), log.crend(), [this](const auto& e) -> bool {
-    return e.soid >= m_start && e.soid < m_end;
-  });
-
-  if (p == log.crend())
-    return eversion_t{};
-  else
-    return p->version;
-}
-
 void PgScrubber::get_replicas_maps(bool replica_can_preempt)
 {
   dout(10) << __func__ << " started in epoch/interval: " << m_epoch_start << "/"

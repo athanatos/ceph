@@ -88,10 +88,28 @@ public:
    * Returns whether the passed range is ready to be scrubbed.  If
    * unavailable, it will return false *and* arrange for scrub to
    * be rescheduled when that changes.
+   *
+   * @return whether objects in [begin, end) are available for scrub
    */
   virtual bool sl_range_available_for_scrub(
-    const hobject_t &begin, ///< [in] range start, inclusive
-    const hobject_t &end    ///< [in] range end, exclusive
+    const hobject_t& begin, ///< [in] range start, inclusive
+    const hobject_t& end    ///< [in] range end, exclusive
+  ) = 0;
+
+  /**
+   * sl_get_latest_update_in_range
+   *
+   * Returns the version of the most recent update to an object
+   * in [begin, end).
+   *
+   * @return version of most recent update affecting an object in
+   *         [start, end).  eversion_t{} if no such event is found.
+   *         If there is such an event >= get_last_update_applied(),
+   *         it is guarranteed to be found.
+   */
+  virtual eversion_t sl_get_latest_update_in_range(
+    const hobject_t& start, ///< [in] start of range, inclusive
+    const hobject_t& end    ///< [in] end of range, exclusive
   ) = 0;
 
   virtual ~ScrubListener() = default;
