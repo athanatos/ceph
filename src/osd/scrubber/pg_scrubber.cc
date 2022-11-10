@@ -877,7 +877,7 @@ void PgScrubber::get_replicas_maps(bool replica_can_preempt)
   m_primary_scrubmap_pos.reset();
 
   // ask replicas to scan and send maps
-  for (const auto& i : m_pg->get_actingset()) {
+  for (const auto& i : m_listener->sl_get_actingset()) {
 
     if (i == m_pg_whoami)
       continue;
@@ -1008,7 +1008,7 @@ void PgScrubber::on_init()
     m_pg_whoami,
     m_is_repair,
     m_is_deep ? scrub_level_t::deep : scrub_level_t::shallow,
-    m_pg->get_actingset());
+    m_listener->sl_get_actingset());
 
   //  create a new store
   {
@@ -1769,11 +1769,11 @@ void PgScrubber::message_all_replicas(int32_t opcode, std::string_view op_text)
   ceph_assert(m_pg->recovery_state.get_backfill_targets().empty());
 
   std::vector<pair<int, Message*>> messages;
-  messages.reserve(m_pg->get_actingset().size());
+  messages.reserve(m_listener->sl_get_actingset().size());
 
   epoch_t epch = m_listener->sl_get_osdmap_epoch();
 
-  for (auto& p : m_pg->get_actingset()) {
+  for (auto& p : m_listener->sl_get_actingset()) {
 
     if (p == m_pg_whoami)
       continue;
