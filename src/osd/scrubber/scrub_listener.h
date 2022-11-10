@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <set>
+
 #include "osd/osd_types.h"
 
 namespace Scrub {
@@ -111,6 +113,9 @@ public:
     const hobject_t& start, ///< [in] start of range, inclusive
     const hobject_t& end    ///< [in] end of range, exclusive
   ) = 0;
+
+  /// get current acting set for pg
+  virtual std::set<pg_shard_t> sl_get_actingset() const = 0;
 
   virtual ~ScrubListener() = default;
 };
