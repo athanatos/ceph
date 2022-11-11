@@ -991,6 +991,7 @@ void PgScrubber::on_init()
   m_pg->reset_objects_scrubbed();
   preemption_data.reset();
   m_listener->sl_publish_stats_to_osd();
+  m_epoch_start = m_listener->sl_get_osdmap_epoch();
 
   dout(10) << __func__ << " start m_epoch_start:" << m_epoch_start << dendl;
 
