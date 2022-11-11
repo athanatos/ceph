@@ -723,9 +723,6 @@ class PgScrubber : public ScrubPgIF,
   OSDService* const m_osds;
   const pg_shard_t m_pg_whoami;	 ///< a local copy of m_pg->pg_whoami;
 
-  epoch_t m_interval_start{0};	///< interval's 'from' of when scrubbing was
-				///< first scheduled
-
   void repair_oinfo_oid(ScrubMap& smap);
 
   /*
