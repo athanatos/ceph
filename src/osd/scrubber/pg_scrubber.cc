@@ -1132,7 +1132,7 @@ void PgScrubber::_scrub_finish()
 	   << " m_is_repair: " << m_is_repair << dendl;
 
   if (info.stats.stats_invalid) {
-    m_pg->recovery_state.update_stats([=, this](auto& history, auto& stats) {
+    m_listener->sl_update_stats([=, this](auto& history, auto& stats) {
       stats.stats = m_scrub_cstat;
       stats.stats_invalid = false;
       return false;
@@ -1218,7 +1218,7 @@ void PgScrubber::_scrub_finish()
 
     if (m_is_repair) {
       ++m_fixed_count;
-      m_pg->recovery_state.update_stats([this](auto& history, auto& stats) {
+      m_listener->sl_update_stats([this](auto& history, auto& stats) {
 	stats.stats = m_scrub_cstat;
 	stats.dirty_stats_invalid = false;
 	stats.omap_stats_invalid = false;
@@ -2005,9 +2005,9 @@ void PgScrubber::scrub_finish()
   {
     // finish up
     ObjectStore::Transaction t;
-    m_pg->recovery_state.update_stats(
+    m_listener->sl_update_stats(
       [this](auto& history, auto& stats) {
-	dout(10) << "m_pg->recovery_state.update_stats() errors:"
+	dout(10) << "m_listener->sl_update_stats() errors:"
 		 << m_shallow_errors << "/" << m_deep_errors << " deep? "
 		 << m_is_deep << dendl;
 	utime_t now = ceph_clock_now();
@@ -2327,7 +2327,7 @@ void PgScrubber::set_scrub_duration()
 {
   utime_t stamp = ceph_clock_now();
   utime_t duration = stamp - scrub_begin_stamp;
-  m_pg->recovery_state.update_stats([=](auto& history, auto& stats) {
+  m_listener->sl_update_stats([=](auto& history, auto& stats) {
     stats.last_scrub_duration = ceill(duration.to_msec() / 1000.0);
     stats.scrub_duration = double(duration);
     return true;

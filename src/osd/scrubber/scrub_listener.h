@@ -126,6 +126,11 @@ public:
   /// add <count> objects scrubbed to in progress stats
   virtual void sl_report_objects_scrubbed(int64_t count) = 0;
 
+  /// Update history and stats
+  virtual void sl_update_stats(
+    std::function<bool(pg_history_t &, pg_stat_t &)> &&f,
+    ObjectStore::Transaction *t = nullptr) = 0;
+
   virtual ~ScrubListener() = default;
 };
 
