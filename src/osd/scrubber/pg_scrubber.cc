@@ -850,8 +850,8 @@ void PgScrubber::add_delayed_scheduling()
 
 void PgScrubber::get_replicas_maps(bool replica_can_preempt)
 {
-  dout(10) << __func__ << " started in epoch/interval: " << m_epoch_start << "/"
-	   << m_interval_start << " pg same_interval_since: "
+  dout(10) << __func__ << " started in epoch: " << m_epoch_start
+	   << " pg same_interval_since: "
 	   << m_listener->sl_get_info().history.same_interval_since << dendl;
 
   m_primary_scrubmap_pos.reset();
@@ -971,9 +971,8 @@ void PgScrubber::on_init()
   m_pg->reset_objects_scrubbed();
   preemption_data.reset();
   m_listener->sl_publish_stats_to_osd();
-  m_interval_start = m_pg->get_history().same_interval_since;
 
-  dout(10) << __func__ << " start same_interval:" << m_interval_start << dendl;
+  dout(10) << __func__ << " start m_epoch_start:" << m_epoch_start << dendl;
 
   m_be = std::make_unique<ScrubBackend>(
     *this,
@@ -1041,7 +1040,7 @@ int PgScrubber::build_primary_map_chunk()
 
 int PgScrubber::build_replica_map_chunk()
 {
-  dout(10) << __func__ << " interval start: " << m_interval_start
+  dout(10) << __func__ << " epoch start: " << m_epoch_start
 	   << " current token: " << m_current_token
 	   << " epoch: " << m_epoch_start << " deep: " << m_is_deep << dendl;
 
@@ -1518,7 +1517,6 @@ void PgScrubber::replica_scrub_op(OpRequestRef op)
   m_end = msg->end;
   m_max_end = msg->end;
   m_is_deep = msg->deep;
-  m_interval_start = m_listener->sl_get_info().history.same_interval_since;
   m_replica_request_priority = msg->high_priority
 				 ? Scrub::scrub_prio_t::high_priority
 				 : Scrub::scrub_prio_t::low_priority;
@@ -2194,7 +2192,7 @@ void PgScrubber::dump_scrubber(ceph::Formatter* f,
 
 void PgScrubber::dump_active_scrubber(ceph::Formatter* f, bool is_deep) const
 {
-  f->dump_stream("epoch_start") << m_interval_start;
+  f->dump_stream("epoch_start") << m_epoch_start;
   f->dump_stream("start") << m_start;
   f->dump_stream("end") << m_end;
   f->dump_stream("max_end") << m_max_end;
@@ -2310,7 +2308,7 @@ void PgScrubber::handle_query_state(ceph::Formatter* f)
   dout(15) << __func__ << dendl;
 
   f->open_object_section("scrub");
-  f->dump_stream("scrubber.epoch_start") << m_interval_start;
+  f->dump_stream("scrubber.epoch_start") << m_epoch_start;
   f->dump_bool("scrubber.active", m_active);
   f->dump_stream("scrubber.start") << m_start;
   f->dump_stream("scrubber.end") << m_end;
