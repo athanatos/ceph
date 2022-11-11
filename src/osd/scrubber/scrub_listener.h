@@ -117,6 +117,9 @@ public:
   /// get current acting set for pg
   virtual std::set<pg_shard_t> sl_get_actingset() const = 0;
 
+  /// returns last_peering_reset
+  virtual epoch_t sl_get_last_peering_reset() const = 0;
+
   virtual ~ScrubListener() = default;
 };
 
