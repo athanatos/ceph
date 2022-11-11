@@ -120,6 +120,12 @@ public:
   /// returns last_peering_reset
   virtual epoch_t sl_get_last_peering_reset() const = 0;
 
+  /// reset stat fields related to scrub progress
+  virtual void sl_reset_in_progress_scrub_stats() = 0;
+
+  /// add <count> objects scrubbed to in progress stats
+  virtual void sl_report_objects_scrubbed(int64_t count) = 0;
+
   virtual ~ScrubListener() = default;
 };
 

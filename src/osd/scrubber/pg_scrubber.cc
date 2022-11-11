@@ -988,7 +988,7 @@ void PgScrubber::on_init()
 {
   // going upwards from 'inactive'
   ceph_assert(!is_scrub_active());
-  m_pg->reset_objects_scrubbed();
+  m_listener->sl_reset_in_progress_scrub_stats();
   preemption_data.reset();
   m_listener->sl_publish_stats_to_osd();
   m_epoch_start = m_listener->sl_get_osdmap_epoch();
@@ -1451,7 +1451,9 @@ void PgScrubber::apply_snap_mapper_fixes(
 
 void PgScrubber::maps_compare_n_cleanup()
 {
-  m_pg->add_objects_scrubbed_count(m_be->get_primary_scrubmap().objects.size());
+  m_listener->sl_report_objects_scrubbed(
+    m_be->get_primary_scrubmap().objects.size()
+  );
 
   auto required_fixes =
     m_be->scrub_compare_maps(m_end.is_max(), get_snap_mapper_accessor());

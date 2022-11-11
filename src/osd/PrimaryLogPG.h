@@ -1994,6 +1994,21 @@ public:
   epoch_t sl_get_last_peering_reset() const final {
     return get_last_peering_reset();
   }
+
+  void sl_reset_in_progress_scrub_stats() final {
+    recovery_state.update_stats([](auto& history, auto& stats) {
+      stats.objects_scrubbed = 0;
+      return true;
+    });
+  }
+
+  void sl_report_objects_scrubbed(int64_t count) final {
+    recovery_state.update_stats(
+      [count](auto &history, auto &stats) {
+	stats.objects_scrubbed += count;
+	return true;
+      });
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
