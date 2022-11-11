@@ -2009,6 +2009,12 @@ public:
 	return true;
       });
   }
+
+  void sl_update_stats(
+    std::function<bool(pg_history_t &, pg_stat_t &)> &&f,
+    ObjectStore::Transaction *t) final {
+    return recovery_state.update_stats(std::move(f), t);
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
