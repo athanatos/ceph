@@ -540,8 +540,6 @@ class PgScrubber : public ScrubPgIF,
   void set_reserving_now() final;
   void clear_reserving_now() final;
 
-  [[nodiscard]] bool was_epoch_changed() const final;
-
   void set_queued_or_active() final;
   /// Clears `m_queued_or_active` and restarts snaptrimming
   void clear_queued_or_active() final;
