@@ -154,8 +154,6 @@ struct ScrubMachineListener {
 
   virtual void set_subset_last_update(eversion_t e) = 0;
 
-  [[nodiscard]] virtual bool was_epoch_changed() const = 0;
-
   virtual Scrub::preemption_t& get_preemptor() = 0;
 
   /**

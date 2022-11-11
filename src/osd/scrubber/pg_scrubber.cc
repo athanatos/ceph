@@ -894,15 +894,6 @@ void PgScrubber::get_replicas_maps(bool replica_can_preempt)
   dout(10) << __func__ << " awaiting" << m_maps_status << dendl;
 }
 
-bool PgScrubber::was_epoch_changed() const
-{
-  // for crimson we have m_pg->get_info().history.same_interval_since
-  dout(10) << __func__ << " epoch_start: " << m_interval_start
-	   << " from pg: " << m_pg->get_history().same_interval_since << dendl;
-
-  return m_interval_start < m_pg->get_history().same_interval_since;
-}
-
 void PgScrubber::mark_local_map_ready()
 {
   m_maps_status.mark_local_map_ready();
