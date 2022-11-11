@@ -1990,6 +1990,10 @@ public:
     const hobject_t& end) final;
 
   std::set<pg_shard_t> sl_get_actingset() const final { return get_actingset(); }
+
+  epoch_t sl_get_last_peering_reset() const final {
+    return get_last_peering_reset();
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
