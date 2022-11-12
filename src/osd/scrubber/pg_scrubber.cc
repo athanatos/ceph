@@ -1318,7 +1318,6 @@ void PgScrubber::repair_oinfo_oid(ScrubMap& smap)
 
     if (oi.soid != hoid) {
       ObjectStore::Transaction t;
-      OSDriver::OSTransaction _t(m_pg->osdriver.get_transaction(&t));
 
       m_osds->clog->error()
         << "osd." << m_pg_whoami << " found object info error on pg " << m_pg_id
