@@ -5,6 +5,7 @@
 
 #include <set>
 
+#include "osd/scrubber/ScrubStore.h"
 #include "osd/osd_types.h"
 
 namespace Scrub {
@@ -130,6 +131,11 @@ public:
   virtual void sl_update_stats(
     std::function<bool(pg_history_t &, pg_stat_t &)> &&f,
     ObjectStore::Transaction *t = nullptr) = 0;
+
+  /// Get ScrubStore instance
+  virtual Scrub::Store::Ref sl_get_scrub_store(
+    ObjectStore::Transaction &t
+  ) = 0;
 
   virtual ~ScrubListener() = default;
 };

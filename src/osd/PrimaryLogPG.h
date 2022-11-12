@@ -2015,6 +2015,14 @@ public:
     ObjectStore::Transaction *t) final {
     return recovery_state.update_stats(std::move(f), t);
   }
+
+  Scrub::Store::Ref sl_get_scrub_store(ObjectStore::Transaction &t) final {
+    return Scrub::Store::create(
+      osd->store,
+      &t,
+      get_pgid(),
+      coll);
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)

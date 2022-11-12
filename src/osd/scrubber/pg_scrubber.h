@@ -782,7 +782,7 @@ class PgScrubber : public ScrubPgIF,
 
   eversion_t m_subset_last_update{};
 
-  std::unique_ptr<Scrub::Store> m_store;
+  Scrub::Store::Ref m_store;
 
   int num_digest_updates_pending{0};
   hobject_t m_start, m_end;  ///< note: half-closed: [start,end)
