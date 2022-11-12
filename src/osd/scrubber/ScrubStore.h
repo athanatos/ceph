@@ -18,11 +18,13 @@ namespace Scrub {
 
 class Store {
  public:
+  using Ref = std::unique_ptr<Store>;
+
   ~Store();
-  static Store* create(ObjectStore* store,
-		       ObjectStore::Transaction* t,
-		       const spg_t& pgid,
-		       const coll_t& coll);
+  static Ref create(ObjectStore* store,
+		    ObjectStore::Transaction* t,
+		    const spg_t& pgid,
+		    const coll_t& coll);
   void add_object_error(int64_t pool, const inconsistent_obj_wrapper& e);
   void add_snap_error(int64_t pool, const inconsistent_snapset_wrapper& e);
 
@@ -58,6 +60,7 @@ class Store {
   mutable MapCacher::MapCacher<std::string, ceph::buffer::list> backend;
   std::map<std::string, ceph::buffer::list> results;
 };
+
 }  // namespace Scrub
 
 #endif	// CEPH_SCRUB_RESULT_H

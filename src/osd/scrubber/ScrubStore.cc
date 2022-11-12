@@ -99,7 +99,7 @@ string last_snap_key(int64_t pool)
 
 namespace Scrub {
 
-Store*
+Store::Ref
 Store::create(ObjectStore* store,
 	      ObjectStore::Transaction* t,
 	      const spg_t& pgid,
@@ -109,7 +109,7 @@ Store::create(ObjectStore* store,
   ceph_assert(t);
   ghobject_t oid = make_scrub_object(pgid);
   t->touch(coll, oid);
-  return new Store{coll, oid, store};
+  return std::unique_ptr<Store>(new Store{coll, oid, store});
 }
 
 Store::Store(const coll_t& coll, const ghobject_t& oid, ObjectStore* store)

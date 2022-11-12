@@ -1007,9 +1007,7 @@ void PgScrubber::on_init()
   {
     ObjectStore::Transaction t;
     cleanup_store(&t);
-    m_store.reset(
-      Scrub::Store::create(m_pg->osd->store, &t, m_listener->sl_get_info().pgid,
-			   m_pg->coll));
+    m_store = m_listener->sl_get_scrub_store(t);
     m_pg->osd->store->queue_transaction(m_pg->ch, std::move(t), nullptr);
   }
 
