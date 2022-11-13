@@ -2023,6 +2023,14 @@ public:
       get_pgid(),
       coll);
   }
+
+  void sl_queue_transaction(ObjectStore::Transaction &&t) final {
+    int r = osd->store->queue_transaction(
+      ch,
+      std::move(t));
+    ceph_assert(r == 0);
+  }
+
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
