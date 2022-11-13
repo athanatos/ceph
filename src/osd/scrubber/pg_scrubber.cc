@@ -1315,29 +1315,15 @@ void PgScrubber::repair_oinfo_oid(ScrubMap& smap)
     }
 
     if (oi.soid != hoid) {
-      ObjectStore::Transaction t;
-
       m_osds->clog->error()
         << "osd." << m_pg_whoami << " found object info error on pg " << m_pg_id
         << " oid " << hoid << " oid in object info: " << oi.soid
-        << "...repaired";
-      // Fix object info
-      oi.soid = hoid;
-      bl.clear();
-      encode(oi,
-	     bl,
-	     m_listener->sl_get_osdmap(
-	     )->get_features(CEPH_ENTITY_TYPE_OSD, nullptr));
+        << "...repairing";
 
+      oi.soid = hoid;
+      bl = m_listener->sl_repair_object_info(hoid, oi);
       bufferptr bp(bl.c_str(), bl.length());
       o.attrs[OI_ATTR] = bp;
-
-      t.setattr(m_pg->coll, ghobject_t(hoid), OI_ATTR, bl);
-      int r = m_pg->osd->store->queue_transaction(m_pg->ch, std::move(t));
-      if (r != 0) {
-        derr << __func__ << ": queue_transaction got " << cpp_strerror(r)
-             << dendl;
-      }
     }
   }
 }
