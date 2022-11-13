@@ -140,6 +140,11 @@ public:
   /// Submit t to backing store
   virtual void sl_queue_transaction(ObjectStore::Transaction &&t) = 0;
 
+  /// Asyncronously repair object info on hoid, returns encoded oi
+  virtual bufferlist sl_repair_object_info(
+    const hobject_t &hoid,
+    const object_info_t &oi) = 0;
+
   virtual ~ScrubListener() = default;
 };
 
