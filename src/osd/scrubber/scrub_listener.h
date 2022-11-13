@@ -137,6 +137,9 @@ public:
     ObjectStore::Transaction &t
   ) = 0;
 
+  /// Submit t to backing store
+  virtual void sl_queue_transaction(ObjectStore::Transaction &&t) = 0;
+
   virtual ~ScrubListener() = default;
 };
 
