@@ -15495,6 +15495,20 @@ eversion_t PrimaryLogPG::sl_get_latest_update_in_range(const hobject_t& start,
     return pi->version;
 }
 
+bufferlist PrimaryLogPG::sl_repair_object_info(const hobject_t &hoid,
+					       const object_info_t &oi)
+{
+  ObjectStore::Transaction t;
+  bufferlist bl;
+  encode(oi, bl, get_osdmap()->get_features(CEPH_ENTITY_TYPE_OSD, nullptr));
+  t.setattr(coll, ghobject_t(hoid), OI_ATTR, bl);
+  int r = osd->store->queue_transaction(ch, std::move(t));
+  if (r != 0) {
+    derr << __func__ << ": queue_transaction got " << cpp_strerror(r)
+	 << dendl;
+  }
+  return bl;
+}
 
 int PrimaryLogPG::rep_repair_primary_object(const hobject_t& soid, OpContext *ctx)
 {

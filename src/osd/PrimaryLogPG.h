@@ -2031,6 +2031,9 @@ public:
     ceph_assert(r == 0);
   }
 
+  bufferlist sl_repair_object_info(
+    const hobject_t &hoid,
+    const object_info_t &oi) final;
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
