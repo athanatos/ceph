@@ -988,7 +988,7 @@ void PgScrubber::on_init()
     ObjectStore::Transaction t;
     cleanup_store(&t);
     m_store = m_listener->sl_get_scrub_store(t);
-    m_pg->osd->store->queue_transaction(m_pg->ch, std::move(t), nullptr);
+    m_listener->sl_queue_transaction(std::move(t));
   }
 
   m_start = m_listener->sl_get_info().pgid.pgid.get_hobj_start();
@@ -1344,7 +1344,7 @@ void PgScrubber::persist_scrub_results(inconsistent_objs_t&& all_errors)
 
   ObjectStore::Transaction t;
   m_store->flush(&t);
-  m_osds->store->queue_transaction(m_pg->ch, std::move(t), nullptr);
+  m_listener->sl_queue_transaction(std::move(t));
 }
 
 void PgScrubber::apply_snap_mapper_fixes(
@@ -2101,8 +2101,7 @@ void PgScrubber::scrub_finish()
 	return true;
       },
       &t);
-    int tr = m_osds->store->queue_transaction(m_pg->ch, std::move(t), nullptr);
-    ceph_assert(tr == 0);
+    m_listener->sl_queue_transaction(std::move(t));
   }
 
   if (has_error) {
