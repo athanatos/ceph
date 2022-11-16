@@ -2047,6 +2047,10 @@ public:
   void sl_on_repair_finish() final {
     object_contexts.clear();
   }
+
+  void sl_share_pg_info() final {
+    recovery_state.share_pg_info();
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)

@@ -1226,7 +1226,7 @@ void PgScrubber::_scrub_finish()
 	return false;
       });
       m_listener->sl_publish_stats_to_osd();
-      m_pg->recovery_state.share_pg_info();
+      m_listener->sl_share_pg_info();
     }
   }
 
@@ -1985,7 +1985,7 @@ void PgScrubber::scrub_finish()
     request_rescrubbing(m_planned_scrub);
   }
 
-  m_pg->recovery_state.share_pg_info();
+  m_listener->sl_share_pg_info();
 }
 
 void PgScrubber::on_digest_updates()
