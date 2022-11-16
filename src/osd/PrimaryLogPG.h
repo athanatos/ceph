@@ -2043,6 +2043,10 @@ public:
       agent_choose_mode();
     }
   }
+
+  void sl_on_repair_finish() final {
+    object_contexts.clear();
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)

@@ -152,6 +152,9 @@ public:
   /// Notify that stats have become valid
   virtual void sl_on_stats_valid() = 0;
 
+  /// Notify that a repair has completed
+  virtual void sl_on_repair_finish() = 0;
+
   virtual ~ScrubListener() = default;
 };
 
