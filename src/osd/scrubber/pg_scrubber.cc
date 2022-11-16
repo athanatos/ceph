@@ -1229,9 +1229,11 @@ void PgScrubber::_scrub_finish()
       m_pg->recovery_state.share_pg_info();
     }
   }
+
   // Clear object context cache to get repair information
-  if (m_is_repair)
-    m_pg->object_contexts.clear();
+  if (m_is_repair) {
+    m_listener->sl_on_repair_finish();
+  }
 }
 
 
