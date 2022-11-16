@@ -129,7 +129,7 @@ class ReplicaReservations {
   std::vector<pg_shard_t> m_reserved_peers;
   bool m_had_rejections{false};
   int m_pending{-1};
-  const pg_info_t& m_pg_info;
+  const pg_t m_pgid;
   ScrubQueue::ScrubJobRef m_scrub_job;	///< a ref to this PG's scrub job
   const ConfigProxy& m_conf;
 
