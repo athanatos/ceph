@@ -2034,6 +2034,9 @@ public:
   bufferlist sl_repair_object_info(
     const hobject_t &hoid,
     const object_info_t &oi) final;
+
+  void sl_submit_snap_mapper_repairs(
+    const std::vector<Scrub::snap_mapper_fix_t> &fix_list) final;
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)

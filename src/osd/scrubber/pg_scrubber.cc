@@ -1092,7 +1092,8 @@ int PgScrubber::build_replica_map_chunk()
 						     m_start,
 						     get_snap_mapper_accessor());
       // actuate snap-mapper changes:
-      apply_snap_mapper_fixes(required_fixes);
+      m_listener->sl_submit_snap_mapper_repairs(
+	required_fixes);
 
       // the local map has been created. Send it to the primary.
       // Note: once the message reaches the Primary, it may ask us for another
@@ -1354,84 +1355,6 @@ void PgScrubber::persist_scrub_results(inconsistent_objs_t&& all_errors)
   m_listener->sl_queue_transaction(std::move(t));
 }
 
-void PgScrubber::apply_snap_mapper_fixes(
-  const std::vector<snap_mapper_fix_t>& fix_list)
-{
-  dout(15) << __func__ << " " << fix_list.size() << " fixes" << dendl;
-
-  if (fix_list.empty()) {
-    return;
-  }
-
-  ObjectStore::Transaction t;
-  OSDriver::OSTransaction t_drv(m_pg->osdriver.get_transaction(&t));
-
-  for (auto& [fix_op, hoid, snaps, bogus_snaps] : fix_list) {
-
-    if (fix_op != snap_mapper_op_t::add) {
-
-      // must remove the existing snap-set before inserting the correct one
-      if (auto r = m_pg->snap_mapper.remove_oid(hoid, &t_drv); r < 0) {
-
-	derr << __func__ << ": remove_oid returned " << cpp_strerror(r)
-	     << dendl;
-	if (fix_op == snap_mapper_op_t::update) {
-	  // for inconsistent snapmapper objects (i.e. for
-	  // snap_mapper_op_t::inconsistent), we don't fret if we can't remove
-	  // the old entries
-	  ceph_abort();
-	}
-      }
-
-      m_osds->clog->error() << fmt::format(
-	"osd.{} found snap mapper error on pg {} oid {} snaps in mapper: {}, "
-	"oi: "
-	"{} ...repaired",
-	m_pg_whoami,
-	m_pg_id,
-	hoid,
-	bogus_snaps,
-	snaps);
-
-    } else {
-
-      m_osds->clog->error() << fmt::format(
-	"osd.{} found snap mapper error on pg {} oid {} snaps missing in "
-	"mapper, should be: {} ...repaired",
-	m_pg_whoami,
-	m_pg_id,
-	hoid,
-	snaps);
-    }
-
-    // now - insert the correct snap-set
-    m_pg->snap_mapper.add_oid(hoid, snaps, &t_drv);
-  }
-
-  // wait for repair to apply to avoid confusing other bits of the system.
-  {
-    dout(15) << __func__ << " wait on repair!" << dendl;
-
-    ceph::condition_variable my_cond;
-    ceph::mutex my_lock = ceph::make_mutex("PG::_scan_snaps my_lock");
-    int e = 0;
-    bool done{false};
-
-    t.register_on_applied_sync(new C_SafeCond(my_lock, my_cond, &done, &e));
-
-    if (e = m_pg->osd->store->queue_transaction(m_pg->ch, std::move(t));
-	e != 0) {
-      derr << __func__ << ": queue_transaction got " << cpp_strerror(e)
-	   << dendl;
-    } else {
-      std::unique_lock l{my_lock};
-      my_cond.wait(l, [&done] { return done; });
-      ceph_assert(m_pg->osd->store);  // RRR why?
-    }
-    dout(15) << __func__ << " wait on repair - done" << dendl;
-  }
-}
-
 void PgScrubber::maps_compare_n_cleanup()
 {
   m_listener->sl_report_objects_scrubbed(
@@ -1450,7 +1373,8 @@ void PgScrubber::maps_compare_n_cleanup()
   }
 
   // actuate snap-mapper changes:
-  apply_snap_mapper_fixes(required_fixes.snap_fix_list);
+  m_listener->sl_submit_snap_mapper_repairs(
+    required_fixes.snap_fix_list);
 
   auto chunk_err_counts = m_be->get_error_counts();
   m_shallow_errors += chunk_err_counts.shallow_errors;
