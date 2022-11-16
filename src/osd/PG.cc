@@ -2101,7 +2101,7 @@ void PG::unreserve_recovery_space() {
   local_num_bytes.store(0);
 }
 
-void PG::_scan_rollback_obs(const vector<ghobject_t> &rollback_obs)
+void PG::sl_scan_rollback_obs(const vector<ghobject_t> &rollback_obs)
 {
   ObjectStore::Transaction t;
   eversion_t trimmed_to = recovery_state.get_last_rollback_info_trimmed_to_applied();
