@@ -145,6 +145,10 @@ public:
     const hobject_t &hoid,
     const object_info_t &oi) = 0;
 
+  /// Submit batch of snap_mapper fixes
+  virtual void sl_submit_snap_mapper_repairs(
+    const std::vector<snap_mapper_fix_t> &fix_list) = 0;
+
   virtual ~ScrubListener() = default;
 };
 
