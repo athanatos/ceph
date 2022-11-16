@@ -158,6 +158,9 @@ public:
   /// Distribute pg info
   virtual void sl_share_pg_info() = 0;
 
+  /// Trigger listener implementation to check for obsolete rollback objects
+  virtual void sl_scan_rollback_obs(const std::vector<ghobject_t> &objects) = 0;
+
   virtual ~ScrubListener() = default;
 };
 

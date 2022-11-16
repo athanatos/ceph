@@ -1269,7 +1269,7 @@ int PgScrubber::build_scrub_map_chunk(ScrubMap& map,
     if (pos.ls.empty()) {
       break;
     }
-    m_pg->_scan_rollback_obs(rollback_obs);
+    m_listener->sl_scan_rollback_obs(rollback_obs);
     pos.pos = 0;
     return -EINPROGRESS;
   }

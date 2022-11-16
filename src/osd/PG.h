@@ -1232,7 +1232,7 @@ protected:
       : Scrub::scrub_prio_t::high_priority;
   }
 
-  void _scan_rollback_obs(const std::vector<ghobject_t> &rollback_obs);
+  void sl_scan_rollback_obs(const std::vector<ghobject_t> &rollback_obs) final;
 
   /**
    * Initiate the process that will create our scrub map for the Primary.
