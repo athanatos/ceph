@@ -1985,9 +1985,7 @@ void PgScrubber::scrub_finish()
     request_rescrubbing(m_planned_scrub);
   }
 
-  if (m_pg->is_active() && m_listener->sl_is_primary()) {
-    m_pg->recovery_state.share_pg_info();
-  }
+  m_pg->recovery_state.share_pg_info();
 }
 
 void PgScrubber::on_digest_updates()
