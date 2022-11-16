@@ -155,6 +155,9 @@ public:
   /// Notify that a repair has completed
   virtual void sl_on_repair_finish() = 0;
 
+  /// Distribute pg info
+  virtual void sl_share_pg_info() = 0;
+
   virtual ~ScrubListener() = default;
 };
 
