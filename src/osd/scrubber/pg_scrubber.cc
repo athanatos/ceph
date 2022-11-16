@@ -1137,9 +1137,7 @@ void PgScrubber::_scrub_finish()
       return false;
     });
 
-    if (m_pg->agent_state) {
-      m_pg->agent_choose_mode();
-    }
+    m_listener->sl_on_stats_valid();
   }
 
   dout(10) << m_mode_desc << " got " << m_scrub_cstat.sum.num_objects << "/"

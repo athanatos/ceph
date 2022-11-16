@@ -2037,6 +2037,12 @@ public:
 
   void sl_submit_snap_mapper_repairs(
     const std::vector<Scrub::snap_mapper_fix_t> &fix_list) final;
+
+  void sl_on_stats_valid() final {
+    if (agent_state) {
+      agent_choose_mode();
+    }
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
