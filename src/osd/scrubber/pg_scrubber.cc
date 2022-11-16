@@ -1103,7 +1103,7 @@ int PgScrubber::build_replica_map_chunk()
 
 void PgScrubber::_scrub_finish()
 {
-  auto& info = m_pg->get_pg_info(ScrubberPasskey{});  ///< a temporary alias
+  const auto& info = m_listener->sl_get_info();
 
   dout(10) << __func__ << " info stats: "
 	   << (info.stats.stats_invalid ? "invalid" : "valid")
@@ -2629,7 +2629,7 @@ namespace Scrub {
 
 void ReplicaReservations::release_replica(pg_shard_t peer, epoch_t epoch)
 {
-  auto m = new MOSDScrubReserve(spg_t(m_pg_info.pgid.pgid, peer.shard),
+  auto m = new MOSDScrubReserve(spg_t(m_pgid, peer.shard),
 				epoch,
 				MOSDScrubReserve::RELEASE,
 				m_pg->pg_whoami);
@@ -2645,7 +2645,7 @@ ReplicaReservations::ReplicaReservations(Scrub::ScrubListener* listener,
     , m_acting_set{pg->get_actingset()}
     , m_osds{m_pg->get_pg_osd(ScrubberPasskey())}
     , m_pending{static_cast<int>(m_acting_set.size()) - 1}
-    , m_pg_info{m_pg->get_pg_info(ScrubberPasskey())}
+    , m_pgid{m_listener->sl_get_spgid().pgid}
     , m_scrub_job{scrubjob}
 {
   epoch_t epoch = m_listener->sl_get_osdmap_epoch();
@@ -2667,7 +2667,7 @@ ReplicaReservations::ReplicaReservations(Scrub::ScrubListener* listener,
     for (auto p : m_acting_set) {
       if (p == whoami)
 	continue;
-      auto m = new MOSDScrubReserve(spg_t(m_pg_info.pgid.pgid, p.shard),
+      auto m = new MOSDScrubReserve(spg_t(m_pgid, p.shard),
 				    epoch,
 				    MOSDScrubReserve::REQUEST,
 				    m_pg->pg_whoami);
