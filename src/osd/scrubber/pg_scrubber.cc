@@ -1500,7 +1500,7 @@ ScrubMachineListener::MsgAndEpoch PgScrubber::prep_replica_map_msg(
   dout(10) << __func__ << " min epoch:" << m_replica_min_epoch << dendl;
 
   auto reply = make_message<MOSDRepScrubMap>(
-    spg_t(m_listener->sl_get_info().pgid.pgid, m_pg->get_primary().shard),
+    m_listener->sl_get_primary_spgid(),
     m_replica_min_epoch,
     m_pg_whoami);
 
@@ -1512,7 +1512,7 @@ ScrubMachineListener::MsgAndEpoch PgScrubber::prep_replica_map_msg(
 
 void PgScrubber::send_replica_map(const MsgAndEpoch& preprepared)
 {
-  m_pg->send_cluster_message(m_pg->get_primary().osd,
+  m_pg->send_cluster_message(m_listener->sl_get_primary().osd,
 			     preprepared.m_msg,
 			     preprepared.m_epoch,
 			     false);
