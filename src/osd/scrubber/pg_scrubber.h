@@ -392,7 +392,7 @@ class PgScrubber : public ScrubPgIF,
   Scrub::scrub_prio_t replica_op_priority() const final
   {
     return m_replica_request_priority;
-  };
+  }
 
   unsigned int scrub_requeue_priority(
     Scrub::scrub_prio_t with_priority,
