@@ -1354,7 +1354,6 @@ protected:
 
   void queue_recovery();
   void queue_scrub_after_repair();
-  unsigned int get_scrub_priority();
 
   bool try_flush_or_schedule_async() override;
   void start_flush_on_transaction(

@@ -394,6 +394,16 @@ class PgScrubber : public ScrubPgIF,
     return m_replica_request_priority;
   }
 
+  unsigned get_scrub_priority() const
+  {
+    // a higher value -> a higher priority
+    int64_t pool_scrub_priority = m_listener->sl_get_pool().info.opts.value_or(
+      pool_opts_t::SCRUB_PRIORITY, (int64_t)0);
+    return pool_scrub_priority > 0
+      ? pool_scrub_priority
+      : get_pg_cct()->_conf->osd_scrub_priority;
+  }
+
   unsigned int scrub_requeue_priority(
     Scrub::scrub_prio_t with_priority,
     unsigned int suggested_priority) const final;

@@ -1421,7 +1421,7 @@ void PgScrubber::replica_scrub_op(OpRequestRef op)
   m_replica_request_priority = msg->high_priority
 				 ? Scrub::scrub_prio_t::high_priority
 				 : Scrub::scrub_prio_t::low_priority;
-  m_flags.priority = msg->priority ? msg->priority : m_pg->get_scrub_priority();
+  m_flags.priority = msg->priority ? msg->priority : get_scrub_priority();
 
   preemption_data.reset();
   preemption_data.force_preemptability(msg->allow_preemption);
@@ -1451,7 +1451,7 @@ void PgScrubber::set_op_parameters(const requested_scrub_t& request)
 
   m_flags.priority = (request.must_scrub || request.need_auto)
 		       ? m_listener->sl_get_config()->osd_requested_scrub_priority
-		       : m_pg->get_scrub_priority();
+		       : get_scrub_priority();
 
   state_set(PG_STATE_SCRUBBING);
 
