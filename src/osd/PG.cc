@@ -445,14 +445,6 @@ void PG::queue_scrub_after_repair()
   osd->queue_scrub_after_repair(this, Scrub::scrub_prio_t::high_priority);
 }
 
-unsigned PG::get_scrub_priority()
-{
-  // a higher value -> a higher priority
-  int64_t pool_scrub_priority =
-    pool.info.opts.value_or(pool_opts_t::SCRUB_PRIORITY, (int64_t)0);
-  return pool_scrub_priority > 0 ? pool_scrub_priority : cct->_conf->osd_scrub_priority;
-}
-
 Context *PG::finish_recovery()
 {
   dout(10) << "finish_recovery" << dendl;
