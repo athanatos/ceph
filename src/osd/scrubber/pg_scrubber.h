@@ -616,7 +616,7 @@ class PgScrubber : public ScrubPgIF,
 
   bool is_primary() const final { return m_listener->sl_is_primary(); }
 
-  spg_t get_pgid() const final { return m_pg->get_pgid(); }
+  spg_t get_pgid() const final { return m_listener->sl_get_spgid(); }
 
   /// Returns reference to current osdmap
   const OSDMapRef& get_osdmap() const final {

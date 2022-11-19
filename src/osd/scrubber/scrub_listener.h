@@ -161,6 +161,14 @@ public:
   /// Trigger listener implementation to check for obsolete rollback objects
   virtual void sl_scan_rollback_obs(const std::vector<ghobject_t> &objects) = 0;
 
+  /// Get current interval pg primary
+  virtual pg_shard_t sl_get_primary() const = 0;
+
+  /// Get spg_t for pg primary
+  spg_t sl_get_primary_spgid() const {
+    return spg_t{sl_get_spgid().pgid, sl_get_primary().shard};
+  }
+
   virtual ~ScrubListener() = default;
 };
 

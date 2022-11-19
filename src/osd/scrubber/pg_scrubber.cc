@@ -1492,7 +1492,7 @@ ScrubMachineListener::MsgAndEpoch PgScrubber::prep_replica_map_msg(
   dout(10) << __func__ << " min epoch:" << m_replica_min_epoch << dendl;
 
   auto reply = make_message<MOSDRepScrubMap>(
-    spg_t(m_listener->sl_get_info().pgid.pgid, m_pg->get_primary().shard),
+    m_listener->sl_get_primary_spgid(),
     m_replica_min_epoch,
     m_pg_whoami);
 
@@ -1504,7 +1504,7 @@ ScrubMachineListener::MsgAndEpoch PgScrubber::prep_replica_map_msg(
 
 void PgScrubber::send_replica_map(const MsgAndEpoch& preprepared)
 {
-  m_pg->send_cluster_message(m_pg->get_primary().osd,
+  m_pg->send_cluster_message(m_listener->sl_get_primary().osd,
 			     preprepared.m_msg,
 			     preprepared.m_epoch,
 			     false);
@@ -1513,14 +1513,14 @@ void PgScrubber::send_replica_map(const MsgAndEpoch& preprepared)
 void PgScrubber::send_preempted_replica()
 {
   auto reply = make_message<MOSDRepScrubMap>(
-    spg_t{m_listener->sl_get_info().pgid.pgid, m_pg->get_primary().shard},
+    m_listener->sl_get_primary_spgid(),
     m_replica_min_epoch,
     m_pg_whoami);
 
   reply->preempted = true;
   ::encode(replica_scrubmap,
 	   reply->get_data());	// skipping this crashes the scrubber
-  m_pg->send_cluster_message(m_pg->get_primary().osd,
+  m_pg->send_cluster_message(m_listener->sl_get_primary().osd,
 			     reply,
 			     m_replica_min_epoch,
 			     false);
@@ -1606,7 +1606,7 @@ void PgScrubber::handle_scrub_reserve_request(OpRequestRef op)
   dout(10) << __func__ << " reserved? " << (granted ? "yes" : "no") << dendl;
 
   Message* reply = new MOSDScrubReserve(
-    spg_t(m_listener->sl_get_info().pgid.pgid, m_pg->get_primary().shard),
+    m_listener->sl_get_primary_spgid(),
     request_ep,
     granted ? MOSDScrubReserve::GRANT : MOSDScrubReserve::REJECT,
     m_pg_whoami);
