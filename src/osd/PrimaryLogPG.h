@@ -1939,6 +1939,9 @@ public:
   bool sl_has_reset_since(epoch_t e) const final {
     return pg_has_reset_since(e);
   }
+  epoch_t sl_get_same_interval_since() const final {
+    return get_same_interval_since();
+  }
   const OSDMapRef &sl_get_osdmap() const final {
     return get_osdmap();
   }
