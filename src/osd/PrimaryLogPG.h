@@ -2055,6 +2055,10 @@ public:
   pg_shard_t sl_get_primary() const final {
     return get_primary();
   }
+
+  void sl_send_cluster_message(int osd, MessageRef m, epoch_t epoch) final {
+    return send_cluster_message(osd, m, epoch, false);
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
