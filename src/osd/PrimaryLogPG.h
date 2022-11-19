@@ -2051,6 +2051,10 @@ public:
   void sl_share_pg_info() final {
     recovery_state.share_pg_info();
   }
+
+  pg_shard_t sl_get_primary() const final {
+    return get_primary();
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
