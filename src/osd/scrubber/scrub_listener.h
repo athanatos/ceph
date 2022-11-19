@@ -24,6 +24,9 @@ public:
   /// returns true iff pg has reset peering since e.
   virtual bool sl_has_reset_since(epoch_t e) const = 0;
 
+  /// returns same_interval_since
+  virtual epoch_t sl_get_same_interval_since() const = 0;
+
   /// return reference to current osdmap
   virtual const OSDMapRef &sl_get_osdmap() const = 0;
 

@@ -872,7 +872,7 @@ void PgScrubber::get_replicas_maps(bool replica_can_preempt)
 {
   dout(10) << __func__ << " started in epoch: " << m_epoch_start
 	   << " pg same_interval_since: "
-	   << m_listener->sl_get_info().history.same_interval_since << dendl;
+	   << m_listener->sl_get_same_interval_since() << dendl;
 
   m_primary_scrubmap_pos.reset();
 
