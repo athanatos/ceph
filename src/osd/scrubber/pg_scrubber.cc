@@ -1504,10 +1504,9 @@ ScrubMachineListener::MsgAndEpoch PgScrubber::prep_replica_map_msg(
 
 void PgScrubber::send_replica_map(const MsgAndEpoch& preprepared)
 {
-  m_pg->send_cluster_message(m_listener->sl_get_primary().osd,
-			     preprepared.m_msg,
-			     preprepared.m_epoch,
-			     false);
+  return m_listener->sl_send_cluster_message(m_listener->sl_get_primary().osd,
+					     preprepared.m_msg,
+					     preprepared.m_epoch);
 }
 
 void PgScrubber::send_preempted_replica()
@@ -1520,10 +1519,9 @@ void PgScrubber::send_preempted_replica()
   reply->preempted = true;
   ::encode(replica_scrubmap,
 	   reply->get_data());	// skipping this crashes the scrubber
-  m_pg->send_cluster_message(m_listener->sl_get_primary().osd,
-			     reply,
-			     m_replica_min_epoch,
-			     false);
+  m_listener->sl_send_cluster_message(m_listener->sl_get_primary().osd,
+				      reply,
+				      m_replica_min_epoch);
 }
 
 /*
