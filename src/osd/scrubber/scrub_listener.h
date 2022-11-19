@@ -169,6 +169,9 @@ public:
     return spg_t{sl_get_spgid().pgid, sl_get_primary().shard};
   }
 
+  /// Send message to specified OSD
+  virtual void sl_send_cluster_message(int osd, MessageRef m, epoch_t epoch) = 0;
+
   virtual ~ScrubListener() = default;
 };
 
