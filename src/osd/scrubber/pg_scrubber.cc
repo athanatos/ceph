@@ -852,7 +852,7 @@ void PgScrubber::get_replicas_maps(bool replica_can_preempt)
 {
   dout(10) << __func__ << " started in epoch: " << m_epoch_start
 	   << " pg same_interval_since: "
-	   << m_listener->sl_get_info().history.same_interval_since << dendl;
+	   << m_listener->sl_get_same_interval_since() << dendl;
 
   m_primary_scrubmap_pos.reset();
 
@@ -1387,10 +1387,10 @@ void PgScrubber::replica_scrub_op(OpRequestRef op)
   // the interval changed? won't see it here, but rather at the reservation
   // stage.
 
-  if (msg->map_epoch < m_listener->sl_get_info().history.same_interval_since) {
+  if (msg->map_epoch < m_listener->sl_get_same_interval_since()) {
     dout(10) << "replica_scrub_op discarding old replica_scrub from "
 	     << msg->map_epoch << " < "
-	     << m_listener->sl_get_info().history.same_interval_since << dendl;
+	     << m_listener->sl_get_same_interval_since() << dendl;
 
     // is there a general sync issue? are we holding a stale reservation?
     // not checking now - assuming we will actively react to interval change.
@@ -1546,9 +1546,9 @@ void PgScrubber::map_from_replica(OpRequestRef op)
   auto m = op->get_req<MOSDRepScrubMap>();
   dout(15) << __func__ << " " << *m << dendl;
 
-  if (m->map_epoch < m_listener->sl_get_info().history.same_interval_since) {
+  if (m->map_epoch < m_listener->sl_get_same_interval_since()) {
     dout(10) << __func__ << " discarding old from " << m->map_epoch << " < "
-	     << m_listener->sl_get_info().history.same_interval_since << dendl;
+	     << m_listener->sl_get_same_interval_since() << dendl;
     return;
   }
 
@@ -1612,12 +1612,12 @@ void PgScrubber::handle_scrub_reserve_request(OpRequestRef op)
     dout(10) << __func__ << " cleared existing stale reservation" << dendl;
   }
 
-  if (request_ep < m_pg->get_same_interval_since()) {
+  if (request_ep < m_listener->sl_get_same_interval_since()) {
     // will not ack stale requests
     dout(10) << fmt::format("{}: stale reservation (request ep{} < {}) denied",
 			    __func__,
 			    request_ep,
-			    m_pg->get_same_interval_since())
+			    m_listener->sl_get_same_interval_since())
 	     << dendl;
     return;
   }
@@ -2849,7 +2849,7 @@ ReservedByRemotePrimary::ReservedByRemotePrimary(const PgScrubber* scrubber,
 
 bool ReservedByRemotePrimary::is_stale() const
 {
-  return m_reserved_at < m_pg->get_same_interval_since();
+  return m_reserved_at < m_listener->sl_get_same_interval_since();
 }
 
 ReservedByRemotePrimary::~ReservedByRemotePrimary()
