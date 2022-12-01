@@ -1668,8 +1668,6 @@ void PgScrubber::clear_scrub_reservations()
 
 void PgScrubber::message_all_replicas(int32_t opcode, std::string_view op_text)
 {
-  ceph_assert(m_pg->recovery_state.get_backfill_targets().empty());
-
   std::vector<pair<int, Message*>> messages;
   messages.reserve(m_listener->sl_get_actingset().size());
 
