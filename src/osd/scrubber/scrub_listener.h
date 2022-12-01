@@ -189,6 +189,9 @@ public:
   virtual void sl_state_clear(uint64_t m) = 0;
   virtual bool sl_state_test(uint64_t m) const = 0;
 
+  /// requeue scrub waiters
+  virtual void sl_requeue_scrub_waiters() = 0;
+
   virtual ~ScrubListener() = default;
 };
 
