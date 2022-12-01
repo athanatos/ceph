@@ -2068,6 +2068,10 @@ public:
   void sl_requeue_scrub_waiters() final {
     requeue_ops(waiting_for_scrub);
   }
+
+  Scrub::SnapMapReaderI &sl_get_snap_map_reader() final {
+    return snap_mapper;
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
