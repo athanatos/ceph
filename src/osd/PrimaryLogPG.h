@@ -2055,6 +2055,11 @@ public:
   void sl_send_cluster_message(int osd, MessageRef m, epoch_t epoch) final {
     return send_cluster_message(osd, m, epoch, false);
   }
+
+  unsigned sl_get_pending_active_pushes() const final {
+    assert(active_pushes >= 0);
+    return static_cast<unsigned>(active_pushes);
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
