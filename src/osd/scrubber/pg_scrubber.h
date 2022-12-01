@@ -578,10 +578,6 @@ class PgScrubber : public ScrubPgIF,
   void log_cluster_warning(const std::string& warning) const final;
 
  private:
-  bool state_test(uint64_t m) const { return m_pg->state_test(m); }
-  void state_set(uint64_t m) { m_pg->state_set(m); }
-  void state_clear(uint64_t m) { m_pg->state_clear(m); }
-
   [[nodiscard]] bool is_scrub_registered() const;
 
   /// the 'is-in-scheduling-queue' status, using relaxed-semantics access to the

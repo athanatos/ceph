@@ -184,6 +184,11 @@ public:
    */
   virtual unsigned sl_get_pending_active_pushes() const = 0;
 
+  /// state setters/accessors
+  virtual void sl_state_set(uint64_t m) = 0;
+  virtual void sl_state_clear(uint64_t m) = 0;
+  virtual bool sl_state_test(uint64_t m) const = 0;
+
   virtual ~ScrubListener() = default;
 };
 

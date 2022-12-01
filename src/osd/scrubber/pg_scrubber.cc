@@ -430,12 +430,13 @@ bool PgScrubber::is_reserving() const
 
 void PgScrubber::reset_epoch(epoch_t epoch_queued)
 {
-  dout(10) << __func__ << " state deep? " << state_test(PG_STATE_DEEP_SCRUB)
+  dout(10) << __func__ << " state deep? "
+	   << m_listener->sl_state_test(PG_STATE_DEEP_SCRUB)
 	   << dendl;
   m_fsm->assert_not_active();
 
   m_epoch_start = epoch_queued;
-  ceph_assert(m_is_deep == state_test(PG_STATE_DEEP_SCRUB));
+  ceph_assert(m_is_deep == m_listener->sl_state_test(PG_STATE_DEEP_SCRUB));
   update_op_mode_text();
 }
 
@@ -911,7 +912,7 @@ std::string PgScrubber::dump_awaited_maps() const
 
 void PgScrubber::update_op_mode_text()
 {
-  auto visible_repair = state_test(PG_STATE_REPAIR);
+  auto visible_repair = m_listener->sl_state_test(PG_STATE_REPAIR);
   m_mode_desc =
     (visible_repair ? "repair" : (m_is_deep ? "deep-scrub" : "scrub"));
 
@@ -1364,7 +1365,7 @@ void PgScrubber::maps_compare_n_cleanup()
   auto required_fixes =
     m_be->scrub_compare_maps(m_end.is_max(), get_snap_mapper_accessor());
   if (!required_fixes.inconsistent_objs.empty()) {
-    if (state_test(PG_STATE_REPAIR)) {
+    if (m_listener->sl_state_test(PG_STATE_REPAIR)) {
       dout(10) << __func__ << ": discarding scrub results (repairing)" << dendl;
     } else {
       // perform the ordered scrub-store I/O:
@@ -1453,11 +1454,11 @@ void PgScrubber::set_op_parameters(const requested_scrub_t& request)
 		       ? m_listener->sl_get_config()->osd_requested_scrub_priority
 		       : get_scrub_priority();
 
-  state_set(PG_STATE_SCRUBBING);
+  m_listener->sl_state_set(PG_STATE_SCRUBBING);
 
   // will we be deep-scrubbing?
   if (request.calculated_to_deep) {
-    state_set(PG_STATE_DEEP_SCRUB);
+    m_listener->sl_state_set(PG_STATE_DEEP_SCRUB);
     m_is_deep = true;
   } else {
     m_is_deep = false;
@@ -1475,7 +1476,7 @@ void PgScrubber::set_op_parameters(const requested_scrub_t& request)
   // the PG status as appearing in the logs).
   m_is_repair = request.must_repair || m_flags.auto_repair;
   if (request.must_repair) {
-    state_set(PG_STATE_REPAIR);
+    m_listener->sl_state_set(PG_STATE_REPAIR);
     update_op_mode_text();
   }
 
@@ -1786,7 +1787,7 @@ void PgScrubber::clear_scrub_blocked()
 void PgScrubber::scrub_finish()
 {
   dout(10) << __func__ << " before flags: " << m_flags << ". repair state: "
-	   << (state_test(PG_STATE_REPAIR) ? "repair" : "no-repair")
+	   << (m_listener->sl_state_test(PG_STATE_REPAIR) ? "repair" : "no-repair")
 	   << ". deep_scrub_on_error: " << m_flags.deep_scrub_on_error << dendl;
 
   ceph_assert(m_listener->sl_is_locked());
@@ -1801,7 +1802,7 @@ void PgScrubber::scrub_finish()
       static_cast<int>(m_listener->sl_get_config()->osd_scrub_auto_repair_num_errors)) {
 
     dout(10) << __func__ << " undoing the repair" << dendl;
-    state_clear(PG_STATE_REPAIR);  // not expected to be set, anyway
+    m_listener->sl_state_clear(PG_STATE_REPAIR);  // not expected to be set, anyway
     m_is_repair = false;
     update_op_mode_text();
   }
@@ -1842,10 +1843,10 @@ void PgScrubber::scrub_finish()
   // note that the PG_STATE_REPAIR might have changed above
   if (m_be->authoritative_peers_count() && m_is_repair) {
 
-    state_clear(PG_STATE_CLEAN);
+    m_listener->sl_state_clear(PG_STATE_CLEAN);
     // we know we have a problem, so it's OK to set the user-visible flag
     // even if we only reached here via auto-repair
-    state_set(PG_STATE_REPAIR);
+    m_listener->sl_state_set(PG_STATE_REPAIR);
     update_op_mode_text();
     m_be->update_repair_status(true);
     m_fixed_count += m_be->scrub_process_inconsistent();
@@ -1901,7 +1902,7 @@ void PgScrubber::scrub_finish()
 
       // We have errors but nothing can be fixed, so there is no repair
       // possible.
-      state_set(PG_STATE_FAILED_REPAIR);
+      m_listener->sl_state_set(PG_STATE_FAILED_REPAIR);
       dout(10) << __func__ << " " << (m_shallow_errors + m_deep_errors)
 	       << " error(s) present with no repair possible" << dendl;
     }
@@ -1954,7 +1955,7 @@ void PgScrubber::scrub_finish()
 	if (m_flags.check_repair) {
 	  m_flags.check_repair = false;
 	  if (m_listener->sl_get_info().stats.stats.sum.num_scrub_errors) {
-	    state_set(PG_STATE_FAILED_REPAIR);
+	    m_listener->sl_state_set(PG_STATE_FAILED_REPAIR);
 	    dout(10) << "scrub_finish "
 		     << m_listener->sl_get_info().stats.stats.sum.num_scrub_errors
 		     << " error(s) still present after re-scrub" << dendl;
@@ -1974,7 +1975,7 @@ void PgScrubber::scrub_finish()
 				       PeeringState::DoRecovery())));
   } else {
     m_is_repair = false;
-    state_clear(PG_STATE_REPAIR);
+    m_listener->sl_state_clear(PG_STATE_REPAIR);
     update_op_mode_text();
   }
 
@@ -2021,7 +2022,7 @@ void PgScrubber::dump_scrubber(ceph::Formatter* f,
 
   if (m_active) {  // TBD replace with PR#42780's test
     f->dump_bool("active", true);
-    dump_active_scrubber(f, state_test(PG_STATE_DEEP_SCRUB));
+    dump_active_scrubber(f, m_listener->sl_state_test(PG_STATE_DEEP_SCRUB));
   } else {
     f->dump_bool("active", false);
     f->dump_bool("must_scrub",
@@ -2248,8 +2249,8 @@ void PgScrubber::cleanup_on_finish()
   dout(10) << __func__ << dendl;
   ceph_assert(m_listener->sl_is_locked());
 
-  state_clear(PG_STATE_SCRUBBING);
-  state_clear(PG_STATE_DEEP_SCRUB);
+  m_listener->sl_state_clear(PG_STATE_SCRUBBING);
+  m_listener->sl_state_clear(PG_STATE_DEEP_SCRUB);
 
   clear_scrub_reservations();
   requeue_waiting();
@@ -2280,10 +2281,10 @@ void PgScrubber::clear_pgscrub_state()
   dout(10) << __func__ << dendl;
   ceph_assert(m_listener->sl_is_locked());
 
-  state_clear(PG_STATE_SCRUBBING);
-  state_clear(PG_STATE_DEEP_SCRUB);
+  m_listener->sl_state_clear(PG_STATE_SCRUBBING);
+  m_listener->sl_state_clear(PG_STATE_DEEP_SCRUB);
 
-  state_clear(PG_STATE_REPAIR);
+  m_listener->sl_state_clear(PG_STATE_REPAIR);
 
   clear_scrub_reservations();
   requeue_waiting();
@@ -2299,8 +2300,8 @@ void PgScrubber::replica_handling_done()
 {
   dout(10) << __func__ << dendl;
 
-  state_clear(PG_STATE_SCRUBBING);
-  state_clear(PG_STATE_DEEP_SCRUB);
+  m_listener->sl_state_clear(PG_STATE_SCRUBBING);
+  m_listener->sl_state_clear(PG_STATE_DEEP_SCRUB);
 
   reset_internal_state();
 }

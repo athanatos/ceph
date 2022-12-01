@@ -2067,6 +2067,10 @@ public:
     assert(active_pushes >= 0);
     return static_cast<unsigned>(active_pushes);
   }
+
+  void sl_state_set(uint64_t m) final { state_set(m); }
+  void sl_state_clear(uint64_t m) final { state_clear(m); }
+  bool sl_state_test(uint64_t m) const final { return state_test(m); }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
