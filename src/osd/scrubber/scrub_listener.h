@@ -175,6 +175,15 @@ public:
   /// Send message to specified OSD
   virtual void sl_send_cluster_message(int osd, MessageRef m, epoch_t epoch) = 0;
 
+  /**
+   * sl_get_pending_active_pushes
+   *
+   * Returns number of pending active pushes.  If implementation
+   * returns value > 0, must invoke PgScrubber::send_replica_pushes_upd
+   * as value decreases.
+   */
+  virtual unsigned sl_get_pending_active_pushes() const = 0;
+
   virtual ~ScrubListener() = default;
 };
 

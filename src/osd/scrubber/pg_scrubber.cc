@@ -266,7 +266,7 @@ void PgScrubber::send_start_replica(epoch_t epoch_queued,
     // save us some time by not waiting for updates if there are none
     // to wait for. Affects the transition from NotActive into either
     // ReplicaWaitUpdates or ActiveReplica.
-    if (pending_active_pushes())
+    if (m_listener->sl_get_pending_active_pushes() > 0)
       m_fsm->process_event(StartReplica{});
     else
       m_fsm->process_event(StartReplicaNoWait{});

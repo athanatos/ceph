@@ -499,8 +499,6 @@ class PgScrubber : public ScrubPgIF,
     return m_listener->sl_get_latest_update_in_range(m_start, m_end);
   }
 
-  int pending_active_pushes() const final { return m_pg->active_pushes; }
-
   void on_init() final;
   void on_replica_init() final;
   void replica_handling_done() final;
