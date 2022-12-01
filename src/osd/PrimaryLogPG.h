@@ -2071,6 +2071,10 @@ public:
   void sl_state_set(uint64_t m) final { state_set(m); }
   void sl_state_clear(uint64_t m) final { state_clear(m); }
   bool sl_state_test(uint64_t m) const final { return state_test(m); }
+
+  void sl_requeue_scrub_waiters() final {
+    requeue_ops(waiting_for_scrub);
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)

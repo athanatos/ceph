@@ -1383,9 +1383,7 @@ void PgScrubber::maps_compare_n_cleanup()
 
   m_start = m_end;
   run_callbacks();
-
-  // requeue the writes from the chunk that just finished
-  requeue_waiting();
+  m_listener->sl_requeue_scrub_waiters();
   m_osds->queue_scrub_maps_compared(m_pg, Scrub::scrub_prio_t::low_priority);
 }
 
@@ -2253,7 +2251,7 @@ void PgScrubber::cleanup_on_finish()
   m_listener->sl_state_clear(PG_STATE_DEEP_SCRUB);
 
   clear_scrub_reservations();
-  requeue_waiting();
+  m_listener->sl_requeue_scrub_waiters();
 
   reset_internal_state();
   m_flags = scrub_flags_t{};
@@ -2287,7 +2285,7 @@ void PgScrubber::clear_pgscrub_state()
   m_listener->sl_state_clear(PG_STATE_REPAIR);
 
   clear_scrub_reservations();
-  requeue_waiting();
+  m_listener->sl_requeue_scrub_waiters();
 
   reset_internal_state();
   m_flags = scrub_flags_t{};
