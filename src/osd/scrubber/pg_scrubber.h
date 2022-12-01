@@ -569,12 +569,6 @@ class PgScrubber : public ScrubPgIF,
   utime_t scrub_begin_stamp;
   std::ostream& gen_prefix(std::ostream& out) const final;
 
-  /// facilitate scrub-backend access to SnapMapper mappings
-  Scrub::SnapMapReaderI& get_snap_mapper_accessor()
-  {
-    return m_pg->snap_mapper;
-  }
-
   void log_cluster_warning(const std::string& warning) const final;
 
  private:

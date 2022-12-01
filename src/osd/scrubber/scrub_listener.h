@@ -192,6 +192,9 @@ public:
   /// requeue scrub waiters
   virtual void sl_requeue_scrub_waiters() = 0;
 
+  /// get read interface to snapshot information
+  virtual Scrub::SnapMapReaderI &sl_get_snap_map_reader() = 0;
+
   virtual ~ScrubListener() = default;
 };
 

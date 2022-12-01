@@ -1088,10 +1088,12 @@ int PgScrubber::build_replica_map_chunk()
     case 0: {
       // finished!
 
-      auto required_fixes = m_be->replica_clean_meta(replica_scrubmap,
-						     m_end.is_max(),
-						     m_start,
-						     get_snap_mapper_accessor());
+      auto required_fixes = m_be->replica_clean_meta(
+	replica_scrubmap,
+	m_end.is_max(),
+	m_start,
+	m_listener->sl_get_snap_map_reader());
+
       // actuate snap-mapper changes:
       m_listener->sl_submit_snap_mapper_repairs(
 	required_fixes);
@@ -1363,7 +1365,9 @@ void PgScrubber::maps_compare_n_cleanup()
   );
 
   auto required_fixes =
-    m_be->scrub_compare_maps(m_end.is_max(), get_snap_mapper_accessor());
+    m_be->scrub_compare_maps(
+      m_end.is_max(),
+      m_listener->sl_get_snap_map_reader());
   if (!required_fixes.inconsistent_objs.empty()) {
     if (m_listener->sl_state_test(PG_STATE_REPAIR)) {
       dout(10) << __func__ << ": discarding scrub results (repairing)" << dendl;
