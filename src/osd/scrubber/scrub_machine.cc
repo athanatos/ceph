@@ -365,9 +365,9 @@ sc::result WaitPushes::react(const ActivePushesUpd&)
   DECLARE_LOCALS;  // 'scrbr' & 'pg_id' aliases
   dout(10)
     << "WaitPushes::react(const ActivePushesUpd&) pending_active_pushes: "
-    << scrbr->pending_active_pushes() << dendl;
+    << listener->sl_get_pending_active_pushes() << dendl;
 
-  if (!scrbr->pending_active_pushes()) {
+  if (!listener->sl_get_pending_active_pushes()) {
     // done waiting
     return transit<WaitLastUpdate>();
   }
@@ -670,9 +670,9 @@ sc::result ReplicaWaitUpdates::react(const ReplicaPushesUpd&)
 {
   DECLARE_LOCALS;  // 'scrbr' & 'pg_id' aliases
   dout(10) << "ReplicaWaitUpdates::react(const ReplicaPushesUpd&): "
-	   << scrbr->pending_active_pushes() << dendl;
+	   << listener->sl_get_pending_active_pushes() << dendl;
 
-  if (scrbr->pending_active_pushes() == 0) {
+  if (listener->sl_get_pending_active_pushes() == 0) {
 
     // done waiting
     return transit<ReplicaBuildingMap>();
