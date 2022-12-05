@@ -2033,7 +2033,7 @@ void PgScrubber::dump_scrubber(ceph::Formatter* f,
     // note that we are repeating logic that is coded elsewhere (currently
     // PG.cc). This is not optimal.
     bool deep_expected =
-      (ceph_clock_now() >= m_pg->next_deepscrub_interval()) ||
+      (ceph_clock_now() >= m_listener->sl_next_deepscrub_interval()) ||
       request_flags.must_deep_scrub || request_flags.need_auto;
     auto sched_state =
       m_scrub_job->scheduling_state(ceph_clock_now(), deep_expected);
@@ -2134,7 +2134,7 @@ pg_scrubbing_status_t PgScrubber::get_schedule() const
 
   // Will next scrub surely be a deep one? note that deep-scrub might be
   // selected even if we report a regular scrub here.
-  bool deep_expected = (now_is >= m_pg->next_deepscrub_interval()) ||
+  bool deep_expected = (now_is >= m_listener->sl_next_deepscrub_interval()) ||
 		       m_planned_scrub.must_deep_scrub ||
 		       m_planned_scrub.need_auto;
   scrub_level_t expected_level =
