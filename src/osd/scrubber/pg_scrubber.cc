@@ -1891,7 +1891,7 @@ void PgScrubber::scrub_finish()
     } else if (has_error) {
 
       // Deep scrub in order to get corrected error counts
-      m_pg->scrub_after_recovery = true;
+      m_listener->sl_queue_scrub_after_recovery();
       m_planned_scrub.req_scrub = m_planned_scrub.req_scrub || m_flags.required;
 
       dout(20) << __func__ << " Current 'required': " << m_flags.required
