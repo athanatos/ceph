@@ -198,6 +198,9 @@ public:
   /// signal scrub complete
   virtual void sl_requeue_snap_trim() = 0;
 
+  /// signals implementation to requeue scrub after recovery
+  virtual void sl_queue_scrub_after_recovery() = 0;
+
   virtual ~ScrubListener() = default;
 };
 
