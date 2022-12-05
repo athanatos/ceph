@@ -1725,7 +1725,7 @@ void PgScrubber::clear_queued_or_active()
   if (m_queued_or_active) {
     m_queued_or_active = false;
     // and just in case snap trimming was blocked by the aborted scrub
-    m_pg->snap_trimmer_scrub_complete();
+    m_listener->sl_requeue_snap_trim();
   }
 }
 
