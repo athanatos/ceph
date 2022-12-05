@@ -195,6 +195,9 @@ public:
   /// get read interface to snapshot information
   virtual Scrub::SnapMapReaderI &sl_get_snap_map_reader() = 0;
 
+  /// signal scrub complete
+  virtual void sl_requeue_snap_trim() = 0;
+
   virtual ~ScrubListener() = default;
 };
 

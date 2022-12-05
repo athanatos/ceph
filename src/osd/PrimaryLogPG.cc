@@ -4919,14 +4919,6 @@ void PrimaryLogPG::kick_snap_trim()
   }
 }
 
-void PrimaryLogPG::snap_trimmer_scrub_complete()
-{
-  if (is_primary() && is_active() && is_clean() && !snap_trimq.empty()) {
-    dout(10) << "scrub finished - requeuing snap_trimmer" << dendl;
-    snap_trimmer_machine.process_event(ScrubComplete());
-  }
-}
-
 void PrimaryLogPG::snap_trimmer(epoch_t queued)
 {
   if (recovery_state.is_deleting() || pg_has_reset_since(queued)) {
@@ -15627,6 +15619,15 @@ int PrimaryLogPG::rep_repair_primary_object(const hobject_t& soid, OpContext *ct
 
   return -EAGAIN;
 }
+
+void PrimaryLogPG::sl_requeue_snap_trim()
+{
+  if (is_primary() && is_active() && is_clean() && !snap_trimq.empty()) {
+    dout(10) << "scrub finished - requeuing snap_trimmer" << dendl;
+    snap_trimmer_machine.process_event(ScrubComplete());
+  }
+}
+
 
 /*---SnapTrimmer Logging---*/
 #undef dout_prefix
