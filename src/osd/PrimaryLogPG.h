@@ -2080,6 +2080,10 @@ public:
   }
 
   void sl_requeue_snap_trim() final;
+
+  void sl_queue_scrub_after_recovery() final {
+    scrub_after_recovery = true;
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
