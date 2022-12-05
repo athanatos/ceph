@@ -201,6 +201,9 @@ public:
   /// signals implementation to requeue scrub after recovery
   virtual void sl_queue_scrub_after_recovery() = 0;
 
+  /// signals implementation to queue recovery
+  virtual void sl_queue_recovery() = 0;
+
   virtual ~ScrubListener() = default;
 };
 
