@@ -2084,6 +2084,15 @@ public:
   void sl_queue_scrub_after_recovery() final {
     scrub_after_recovery = true;
   }
+
+  void sl_queue_recovery() final {
+    queue_peering_event(
+      PGPeeringEventRef(
+	std::make_shared<PGPeeringEvent>(
+	  get_osdmap_epoch(),
+	  get_osdmap_epoch(),
+	  PeeringState::DoRecovery())));
+  }
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)

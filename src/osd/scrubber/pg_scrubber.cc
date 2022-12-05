@@ -1969,10 +1969,7 @@ void PgScrubber::scrub_finish()
   update_scrub_job(m_planned_scrub);
 
   if (has_error) {
-    m_pg->queue_peering_event(PGPeeringEventRef(
-      std::make_shared<PGPeeringEvent>(m_listener->sl_get_osdmap_epoch(),
-				       m_listener->sl_get_osdmap_epoch(),
-				       PeeringState::DoRecovery())));
+    m_listener->sl_queue_recovery();
   } else {
     m_is_repair = false;
     m_listener->sl_state_clear(PG_STATE_REPAIR);
