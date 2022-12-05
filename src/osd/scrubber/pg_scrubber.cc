@@ -1917,10 +1917,10 @@ void PgScrubber::scrub_finish()
 		 << m_shallow_errors << "/" << m_deep_errors << " deep? "
 		 << m_is_deep << dendl;
 	utime_t now = ceph_clock_now();
-	history.last_scrub = m_pg->recovery_state.get_info().last_update;
+	history.last_scrub = m_listener->sl_get_info().last_update;
 	history.last_scrub_stamp = now;
 	if (m_is_deep) {
-	  history.last_deep_scrub = m_pg->recovery_state.get_info().last_update;
+	  history.last_deep_scrub = m_listener->sl_get_info().last_update;
 	  history.last_deep_scrub_stamp = now;
 	}
 
