@@ -204,6 +204,9 @@ public:
   /// signals implementation to queue recovery
   virtual void sl_queue_recovery() = 0;
 
+  /// get next deepscrub interval
+  virtual double sl_next_deepscrub_interval() const = 0;
+
   virtual ~ScrubListener() = default;
 };
 

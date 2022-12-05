@@ -1377,7 +1377,7 @@ Scrub::schedule_result_t PG::sched_scrub()
   return schedule_result_t::scrub_initiated;
 }
 
-double PG::next_deepscrub_interval() const
+double PG::sl_next_deepscrub_interval() const
 {
   double deep_scrub_interval =
     pool.info.opts.value_or(pool_opts_t::DEEP_SCRUB_INTERVAL, 0.0);
@@ -1410,9 +1410,9 @@ bool PG::is_time_for_deep(bool allow_deep_scrub,
     return true;
   }
 
-  if (ceph_clock_now() >= next_deepscrub_interval()) {
+  if (ceph_clock_now() >= sl_next_deepscrub_interval()) {
     dout(20) << __func__ << ": now (" << ceph_clock_now()
-             << ") >= time for deep (" << next_deepscrub_interval() << ")"
+             << ") >= time for deep (" << sl_next_deepscrub_interval() << ")"
              << dendl;
     return true;
   }

@@ -699,9 +699,6 @@ public:
   /// the version that refers to flags_.priority
   unsigned int scrub_requeue_priority(Scrub::scrub_prio_t with_priority) const;
 private:
-  // auxiliaries used by sched_scrub():
-  double next_deepscrub_interval() const;
-
   /// should we perform deep scrub?
   bool is_time_for_deep(bool allow_deep_scrub,
                         bool allow_shallow_scrub,
@@ -1233,6 +1230,8 @@ protected:
   }
 
   void sl_scan_rollback_obs(const std::vector<ghobject_t> &rollback_obs) final;
+
+  double sl_next_deepscrub_interval() const final;
 
   /**
    * Initiate the process that will create our scrub map for the Primary.
