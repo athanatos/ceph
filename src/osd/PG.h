@@ -1350,7 +1350,6 @@ protected:
   void filter_snapc(std::vector<snapid_t> &snaps);
 
   virtual void kick_snap_trim() = 0;
-  virtual void snap_trimmer_scrub_complete() = 0;
 
   void queue_recovery();
   void queue_scrub_after_repair();

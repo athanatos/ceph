@@ -1505,7 +1505,6 @@ public:
 		  OpContextUPtr *ctxp);
   void snap_trimmer(epoch_t e) override;
   void kick_snap_trim() override;
-  void snap_trimmer_scrub_complete() override;
   int do_osd_ops(OpContext *ctx, std::vector<OSDOp>& ops);
 
   int _get_tmap(OpContext *ctx, ceph::buffer::list *header, ceph::buffer::list *vals);
@@ -2079,6 +2078,8 @@ public:
   Scrub::SnapMapReaderI &sl_get_snap_map_reader() final {
     return snap_mapper;
   }
+
+  void sl_requeue_snap_trim() final;
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
