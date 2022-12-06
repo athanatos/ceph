@@ -1933,6 +1933,8 @@ private:
 
 public:
   // Scrub::ScrubListener method implementations
+  pg_shard_t sl_get_pg_whoami() const final { return pg_whoami; }
+
   spg_t sl_get_spgid() const final { return pg_id; }
 
   bool sl_has_reset_since(epoch_t e) const final {

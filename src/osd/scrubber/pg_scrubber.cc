@@ -2202,7 +2202,7 @@ PgScrubber::PgScrubber(
     , m_pg{pg}
     , m_pg_id{pg->pg_id}
     , m_osds{m_pg->osd}
-    , m_pg_whoami{pg->pg_whoami}
+    , m_pg_whoami{m_listener->sl_get_pg_whoami()}
     , m_planned_scrub{pg->get_planned_scrub(ScrubberPasskey{})}
     , preemption_data{scrub_listener, pg}
 {
