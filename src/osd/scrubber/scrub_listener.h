@@ -18,6 +18,9 @@ namespace Scrub {
  */
 class ScrubListener {
 public:
+  /// get local pg_shard_t
+  virtual pg_shard_t sl_get_pg_whoami() const = 0;
+  
   /// get spg_t for pg
   virtual spg_t sl_get_spgid() const = 0;
 
