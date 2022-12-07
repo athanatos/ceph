@@ -135,7 +135,8 @@ class TestScrubber : public ScrubBeListener, public Scrub::SnapMapReaderI {
   // submit_digest_fixes() mock can be set to expect a specific set of
   // fixes to perform.
   /// \todo implement the mock.
-  void submit_digest_fixes(const digests_fixes_t& fixes) final
+  void submit_digest_fixes(
+    const Scrub::ScrubListener::object_digest_vec_t& fixes) final
   {
     std::cout << fmt::format("{} submit_digest_fixes({})",
 			     __func__,

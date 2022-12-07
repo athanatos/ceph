@@ -5,7 +5,12 @@
 
 #include <set>
 
+#include <fmt/core.h>
+#include <fmt/format.h>
+
+#include "osd/PeeringState.h"
 #include "osd/scrubber/ScrubStore.h"
+#include "osd/scrubber_common.h"
 #include "osd/osd_types.h"
 
 namespace Scrub {
@@ -210,7 +215,58 @@ public:
   /// get next deepscrub interval
   virtual double sl_next_deepscrub_interval() const = 0;
 
+  using digest_t =
+    std::pair<std::optional<uint32_t>, std::optional<uint32_t>>;
+  using object_digest_t = std::pair<hobject_t, digest_t>;
+  using object_digest_vec_t = std::vector<object_digest_t>;
+  /**
+   *
+   * sl_submit_digest_fixes
+   *
+   * Implementation should update metadata for objects in fixes to
+   * match the new digest values.
+   *
+   * Implementation must invoke OSDService::queue_scrub_digest_update
+   * once all outstanding updates complete.
+   */
+  virtual void sl_submit_digest_fixes(const object_digest_vec_t &fixes) = 0;
+
   virtual ~ScrubListener() = default;
 };
 
 }
+
+template <>
+struct fmt::formatter<Scrub::ScrubListener::digest_t> {
+  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+
+  template <typename FormatContext>
+  auto format(const Scrub::ScrubListener::digest_t &dg, FormatContext& ctx)
+  {
+    // can't use value_or() due to different output types
+    if (std::get<0>(dg).has_value()) {
+      fmt::format_to(ctx.out(), "[{:#x}/", std::get<0>(dg).value());
+    } else {
+      fmt::format_to(ctx.out(), "[---/");
+    }
+    if (std::get<1>(dg).has_value()) {
+      return fmt::format_to(ctx.out(), "{:#x}]", std::get<1>(dg).value());
+    } else {
+      return fmt::format_to(ctx.out(), "---]");
+    }
+  }
+};
+
+template <>
+struct fmt::formatter<Scrub::ScrubListener::object_digest_t> {
+  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+
+  template <typename FormatContext>
+  auto format(const Scrub::ScrubListener::object_digest_t &x, FormatContext& ctx)
+  {
+    return fmt::format_to(ctx.out(),
+			  "{{ {} - {} }}",
+			  std::get<0>(x),
+			  std::get<1>(x));
+  }
+};

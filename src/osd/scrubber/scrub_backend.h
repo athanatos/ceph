@@ -46,6 +46,7 @@
 #include "common/LogClient.h"
 #include "osd/OSDMap.h"
 #include "osd/osd_types_fmt.h"
+#include "osd/scrubber/scrub_listener.h"
 #include "osd/scrubber_common.h"
 #include "osd/SnapMapReaderI.h"
 
@@ -58,9 +59,6 @@ using Scrub::PgScrubBeListener;
 
 using data_omap_digests_t =
   std::pair<std::optional<uint32_t>, std::optional<uint32_t>>;
-
-/// a list of fixes to be performed on objects' digests
-using digests_fixes_t = std::vector<std::pair<hobject_t, data_omap_digests_t>>;
 
 using shard_info_map_t = std::map<pg_shard_t, shard_info_wrapper>;
 using shard_to_scrubmap_t = std::map<pg_shard_t, ScrubMap>;
@@ -92,7 +90,8 @@ struct ScrubBeListener {
   virtual spg_t get_pgid() const = 0;
   virtual const OSDMapRef& get_osdmap() const = 0;
   virtual void add_to_stats(const object_stat_sum_t& stat) = 0;
-  virtual void submit_digest_fixes(const digests_fixes_t& fixes) = 0;
+  virtual void submit_digest_fixes(
+    const Scrub::ScrubListener::object_digest_vec_t& fixes) = 0;
   virtual ~ScrubBeListener() = default;
 };
 
@@ -258,7 +257,7 @@ struct scrub_chunk_t {
 
   utime_t started{ceph_clock_now()};
 
-  digests_fixes_t missing_digest;
+  Scrub::ScrubListener::object_digest_vec_t missing_digest;
 
   /// Map from object with errors to good peers
   std::map<hobject_t, std::list<pg_shard_t>> authoritative;
