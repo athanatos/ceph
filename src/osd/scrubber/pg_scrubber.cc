@@ -1986,15 +1986,12 @@ void PgScrubber::scrub_finish()
 
 void PgScrubber::on_digest_updates()
 {
-  dout(10) << __func__ << " #pending: " << num_digest_updates_pending << " "
-	   << (m_end.is_max() ? " <last chunk>" : " <mid chunk>")
+  dout(10) << __func__ << " " << (m_end.is_max() ? " <last chunk>" : " <mid chunk>")
 	   << (is_queued_or_active() ? "" : " ** not marked as scrubbing **")
 	   << dendl;
 
-  if (num_digest_updates_pending > 0) {
-    // do nothing for now. We will be called again when new updates arrive
-    return;
-  }
+  // TODOSAM: fix the num_digest_update_pending check lost somewhere in the
+  // refactor
 
   // got all updates, and finished with this chunk. Any more?
   if (m_end.is_max()) {
@@ -2335,7 +2332,6 @@ void PgScrubber::reset_internal_state()
 
   run_callbacks();
 
-  num_digest_updates_pending = 0;
   m_primary_scrubmap_pos.reset();
   replica_scrubmap = ScrubMap{};
   replica_scrubmap_pos.reset();
@@ -2358,64 +2354,10 @@ bool PgScrubber::is_token_current(Scrub::act_token_t received_token)
 }
 
 /// \todo combine the multiple transactions into a single one
-void PgScrubber::submit_digest_fixes(const digests_fixes_t& fixes)
+void PgScrubber::submit_digest_fixes(
+  const Scrub::ScrubListener::object_digest_vec_t& fixes)
 {
-  // note: the following line was modified from '+=' to '=', as we should not
-  // encounter previous-chunk digest updates after starting a new chunk
-  num_digest_updates_pending = fixes.size();
-  dout(10) << __func__
-	   << ": num_digest_updates_pending: " << num_digest_updates_pending
-	   << dendl;
-
-  for (auto& [obj, dgs] : fixes) {
-
-    ObjectContextRef obc = m_pg->get_object_context(obj, false);
-    if (!obc) {
-      m_osds->clog->error() << m_pg_id << " " << m_mode_desc
-			    << " cannot get object context for object " << obj;
-      num_digest_updates_pending--;
-      continue;
-    }
-    dout(15) << fmt::format(
-		  "{}: {}, pg[{}] {}/{}", __func__, num_digest_updates_pending,
-		  m_pg_id, obj, dgs)
-	     << dendl;
-    if (obc->obs.oi.soid != obj) {
-      m_osds->clog->error()
-	<< m_pg_id << " " << m_mode_desc << " " << obj
-	<< " : object has a valid oi attr with a mismatched name, "
-	<< " obc->obs.oi.soid: " << obc->obs.oi.soid;
-      num_digest_updates_pending--;
-      continue;
-    }
-
-    PrimaryLogPG::OpContextUPtr ctx = m_pg->simple_opc_create(obc);
-    ctx->at_version = m_pg->get_next_version();
-    ctx->mtime = utime_t();  // do not update mtime
-    if (dgs.first) {
-      ctx->new_obs.oi.set_data_digest(*dgs.first);
-    } else {
-      ctx->new_obs.oi.clear_data_digest();
-    }
-    if (dgs.second) {
-      ctx->new_obs.oi.set_omap_digest(*dgs.second);
-    } else {
-      ctx->new_obs.oi.clear_omap_digest();
-    }
-    m_pg->finish_ctx(ctx.get(), pg_log_entry_t::MODIFY);
-
-
-    ctx->register_on_success([this]() {
-      if ((num_digest_updates_pending >= 1) &&
-	  (--num_digest_updates_pending == 0)) {
-	m_osds->queue_scrub_digest_update(
-	  m_pg,
-	  m_listener->sl_get_block_priority());
-      }
-    });
-
-    m_pg->simple_opc_submit(std::move(ctx));
-  }
+  m_listener->sl_submit_digest_fixes(fixes);
 }
 
 void PgScrubber::add_to_stats(const object_stat_sum_t& stat)

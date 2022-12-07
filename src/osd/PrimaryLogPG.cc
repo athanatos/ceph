@@ -15631,6 +15631,58 @@ void PrimaryLogPG::sl_requeue_snap_trim()
   }
 }
 
+void PrimaryLogPG::sl_submit_digest_fixes(const object_digest_vec_t &fixes)
+{
+  dout(10) << __func__ << ": fixes.size(): " << fixes.size() << dendl;
+  std::shared_ptr<unsigned> num_digest_updates_pending =
+    std::make_shared<unsigned>(0);
+  for (auto& [obj, dgs] : fixes) {
+    ObjectContextRef obc = get_object_context(obj, false);
+    if (!obc) {
+      osd->clog->error()
+	<< pg_id << " cannot get object context for object " << obj;
+      continue;
+    }
+    dout(15) << fmt::format(
+		  "{}: {}, pg[{}] {}/{}",
+		  __func__, *num_digest_updates_pending,
+		  pg_id, obj, dgs)
+	     << dendl;
+    if (obc->obs.oi.soid != obj) {
+      osd->clog->error()
+	<< pg_id << " " << obj
+	<< " : object has a valid oi attr with a mismatched name, "
+	<< " obc->obs.oi.soid: " << obc->obs.oi.soid;
+      continue;
+    }
+
+    PrimaryLogPG::OpContextUPtr ctx = simple_opc_create(obc);
+    ctx->at_version = get_next_version();
+    ctx->mtime = utime_t();  // do not update mtime
+    if (dgs.first) {
+      ctx->new_obs.oi.set_data_digest(*dgs.first);
+    } else {
+      ctx->new_obs.oi.clear_data_digest();
+    }
+    if (dgs.second) {
+      ctx->new_obs.oi.set_omap_digest(*dgs.second);
+    } else {
+      ctx->new_obs.oi.clear_omap_digest();
+    }
+    finish_ctx(ctx.get(), pg_log_entry_t::MODIFY);
+
+    ++(*num_digest_updates_pending);
+    ctx->register_on_success([this, num_digest_updates_pending]() {
+      if ((*num_digest_updates_pending >= 1) &&
+	  (--(*num_digest_updates_pending) == 0)) {
+	osd->queue_scrub_digest_update(
+	  this,
+	  sl_get_block_priority());
+      }
+    });
+    simple_opc_submit(std::move(ctx));
+  }
+}
 
 /*---SnapTrimmer Logging---*/
 #undef dout_prefix

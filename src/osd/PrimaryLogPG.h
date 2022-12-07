@@ -2095,6 +2095,8 @@ public:
 	  get_osdmap_epoch(),
 	  PeeringState::DoRecovery())));
   }
+
+  void sl_submit_digest_fixes(const object_digest_vec_t &fixes) final;
 };
 
 inline ostream& operator<<(ostream& out, const PrimaryLogPG::RepGather& repop)
