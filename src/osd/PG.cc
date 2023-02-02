@@ -419,7 +419,11 @@ void PG::queue_recovery()
   } else {
     dout(10) << "queue_recovery -- queuing" << dendl;
     recovery_queued = true;
-    osd->queue_for_recovery(this);
+    // Determine recovery cost in terms of average object size in this PG
+    int64_t num_bytes = info.stats.stats.sum.num_bytes;
+    int64_t num_objects = info.stats.stats.sum.num_objects;
+    int cost_per_object = std::max((int)(num_bytes / num_objects), 1);
+    osd->queue_for_recovery(this, cost_per_object);
   }
 }
 

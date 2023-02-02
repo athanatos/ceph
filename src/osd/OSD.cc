@@ -1971,20 +1971,26 @@ void OSDService::prune_sent_ready_to_merge(const OSDMapRef& osdmap)
 // ---
 
 void OSDService::_queue_for_recovery(
-  std::pair<epoch_t, PGRef> p,
+  std::tuple<epoch_t, PGRef, int> p,
   uint64_t reserved_pushes)
 {
   ceph_assert(ceph_mutex_is_locked_by_me(recovery_lock));
+  int osd_recovery_cost = cct->_conf->osd_recovery_cost;
+  if (cct->_conf->osd_op_queue == "mclock_scheduler") {
+    osd_recovery_cost = std::get<2>(p) * reserved_pushes;
+  }
   enqueue_back(
     OpSchedulerItem(
       unique_ptr<OpSchedulerItem::OpQueueable>(
 	new PGRecovery(
-	  p.second->get_pgid(), p.first, reserved_pushes)),
-      cct->_conf->osd_recovery_cost,
+          std::get<1>(p)->get_pgid(),
+          std::get<0>(p),
+          reserved_pushes)),
+      osd_recovery_cost,
       cct->_conf->osd_recovery_priority,
       ceph_clock_now(),
       0,
-      p.first));
+      std::get<0>(p)));
 }
 
 // ====================================================================
