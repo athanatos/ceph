@@ -1691,7 +1691,8 @@ void PG::on_info_history_change()
 
 void PG::reschedule_scrub()
 {
-  dout(20) << __func__ << " for a " << (is_primary() ? "Primary" : "non-primary") <<dendl;
+  dout(20) << __func__ << " for a "
+	   << (is_primary() ? "Primary" : "non-primary") << dendl;
 
   // we are assuming no change in primary status
   if (is_primary()) {

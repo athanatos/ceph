@@ -548,7 +548,7 @@ void PgScrubber::update_scrub_job(const requested_scrub_t& request_flags)
   if (is_primary() && m_scrub_job) {
     ceph_assert(m_pg->is_locked());
     auto suggested = m_osds->get_scrub_services().determine_scrub_time(
-      request_flags, m_pg->info, m_pg->get_pgpool().info.opts);
+	request_flags, m_pg->info, m_pg->get_pgpool().info.opts);
     m_osds->get_scrub_services().update_job(m_scrub_job, suggested);
     m_pg->publish_stats_to_osd();
   }
@@ -2563,8 +2563,9 @@ ReplicaReservations::ReplicaReservations(
   m_timeout = conf.get_val<std::chrono::milliseconds>(
     "osd_scrub_slow_reservation_response");
   m_log_msg_prefix = fmt::format(
-    "osd.{} ep: {} scrubber::ReplicaReservations pg[{}]: ", m_osds->whoami,
-    epoch, pg->pg_id);
+      "osd.{} ep: {} scrubber::ReplicaReservations pg[{}]: ", m_osds->whoami,
+      epoch, pg->pg_id);
+
 
   if (m_pending <= 0) {
     // A special case of no replicas.
