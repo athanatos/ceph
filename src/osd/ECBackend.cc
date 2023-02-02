@@ -1431,9 +1431,24 @@ void ECBackend::filter_read_op(
   }
 
   if (op.in_progress.empty()) {
+    // Determine recovery cost
+    int cost = 0;
+    auto ropiter = tid_to_read_map.find(op.tid);
+    if (ropiter != tid_to_read_map.end()) {
+      ReadOp &rop = ropiter->second;
+      for (auto &&i: rop.complete) {
+        for (auto &&ret: i.second.returned) {
+          for (auto &&shard: ret.get<2>()) {
+            cost += shard.second.length();
+          }
+        }
+      }
+    }
+    cost = std::max(cost, 1);
     get_parent()->schedule_recovery_work(
       get_parent()->bless_unlocked_gencontext(
-	new FinishReadOp(this, op.tid)));
+        new FinishReadOp(this, op.tid)),
+        cost);
   }
 }
 

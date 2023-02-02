@@ -68,12 +68,14 @@ class PG_SendMessageOnConn: public Context {
 class PG_RecoveryQueueAsync : public Context {
   PGBackend::Listener *pg;
   unique_ptr<GenContext<ThreadPool::TPHandle&>> c;
+  int cost;
   public:
   PG_RecoveryQueueAsync(
     PGBackend::Listener *pg,
-    GenContext<ThreadPool::TPHandle&> *c) : pg(pg), c(c) {}
+    GenContext<ThreadPool::TPHandle&> *c,
+    int cost) : pg(pg), c(c), cost(cost) {}
   void finish(int) override {
-    pg->schedule_recovery_work(c.release());
+    pg->schedule_recovery_work(c.release(), cost);
   }
 };
 }
@@ -870,10 +872,22 @@ void ReplicatedBackend::_do_pull_response(OpRequestRef op)
 	this,
 	m->get_priority());
     c->to_continue.swap(to_continue);
+    // Determine recovery cost
+    int cost = 0;
+    for (auto &&i: c->to_continue) {
+      auto j = pulling.find(i.hoid);
+      if (j != pulling.end()) {
+        auto rec_size = j->second.recovery_info.size;
+        auto rec_progress = j->second.recovery_progress.data_recovered_to;
+        cost += (rec_size - rec_progress);
+      }
+    }
+    cost = std::max(cost, 1);
     t.register_on_complete(
       new PG_RecoveryQueueAsync(
 	get_parent(),
-	get_parent()->bless_unlocked_gencontext(c)));
+	get_parent()->bless_unlocked_gencontext(c),
+        cost));
   }
   replies.erase(replies.end() - 1);
 

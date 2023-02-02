@@ -1637,14 +1637,21 @@ void OSDService::enqueue_front(OpSchedulerItem&& qi)
 
 void OSDService::queue_recovery_context(
   PG *pg,
-  GenContext<ThreadPool::TPHandle&> *c)
+  GenContext<ThreadPool::TPHandle&> *c,
+  int cost)
 {
   epoch_t e = get_osdmap_epoch();
+  int osd_recovery_cost = cct->_conf->osd_recovery_cost;
+
+  if (cct->_conf->osd_op_queue == "mclock_scheduler") {
+    osd_recovery_cost = cost;
+  }
+
   enqueue_back(
     OpSchedulerItem(
       unique_ptr<OpSchedulerItem::OpQueueable>(
 	new PGRecoveryContext(pg->get_pgid(), c, e)),
-      cct->_conf->osd_recovery_cost,
+      osd_recovery_cost,
       cct->_conf->osd_recovery_priority,
       ceph_clock_now(),
       0,
