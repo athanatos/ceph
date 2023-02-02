@@ -156,6 +156,9 @@ class ScrubMachine : public sc::state_machine<ScrubMachine, NotActive> {
   void assert_not_active() const;
   [[nodiscard]] bool is_reserving() const;
   [[nodiscard]] bool is_accepting_updates() const;
+
+  /// are we scrubbing (actively) in replica mode now?
+  [[nodiscard]] bool is_active_replica() const;
 };
 
 /**

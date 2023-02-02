@@ -2379,8 +2379,11 @@ void PgScrubber::advance_token()
   // place. We will, though, verify that. And if we are actually still handling
   // a stale request - both our internal state and the FSM state will be
   // cleared.
-  replica_handling_done();
-  m_fsm->process_event(FullReset{});
+  if (m_fsm->is_active_replica()) {
+    dout(10) << fmt::format("{}: clearing stale replica state", __func__) << dendl;
+    m_fsm->process_event(FullReset{});
+    replica_handling_done();
+  }
 }
 
 bool PgScrubber::is_token_current(Scrub::act_token_t received_token)

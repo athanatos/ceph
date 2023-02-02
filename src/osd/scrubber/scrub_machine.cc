@@ -63,6 +63,12 @@ bool ScrubMachine::is_accepting_updates() const
   return state_cast<const WaitLastUpdate*>();
 }
 
+bool ScrubMachine::is_active_replica() const
+{
+  return state_cast<const ReplicaWaitUpdates*>() ||
+	 state_cast<const ActiveReplica*>();
+}
+
 // for the rest of the code in this file - we know what PG we are dealing with:
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, this->context<ScrubMachine>())
