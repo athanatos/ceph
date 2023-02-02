@@ -2560,12 +2560,12 @@ ReplicaReservations::ReplicaReservations(
     , m_conf{conf}
 {
   epoch_t epoch = m_pg->get_osdmap_epoch();
-  m_timeout = conf.get_val<std::chrono::milliseconds>(
-    "osd_scrub_slow_reservation_response");
   m_log_msg_prefix = fmt::format(
       "osd.{} ep: {} scrubber::ReplicaReservations pg[{}]: ", m_osds->whoami,
       epoch, pg->pg_id);
 
+  m_timeout = conf.get_val<std::chrono::milliseconds>(
+      "osd_scrub_slow_reservation_response");
 
   if (m_pending <= 0) {
     // A special case of no replicas.
