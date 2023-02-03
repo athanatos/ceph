@@ -544,7 +544,7 @@ public:
 
   void schedule_recovery_work(
     GenContext<ThreadPool::TPHandle&> *c,
-    int cost) override;
+    uint64_t cost) override;
 
   pg_shard_t whoami_shard() const override {
     return pg_whoami;

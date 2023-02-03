@@ -524,7 +524,7 @@ void PrimaryLogPG::on_global_recover(
 
 void PrimaryLogPG::schedule_recovery_work(
   GenContext<ThreadPool::TPHandle&> *c,
-  int cost)
+  uint64_t cost)
 {
   osd->queue_recovery_context(this, c, cost);
 }

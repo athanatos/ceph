@@ -261,7 +261,7 @@ typedef std::shared_ptr<const OSDMap> OSDMapRef;
 
      virtual void schedule_recovery_work(
        GenContext<ThreadPool::TPHandle&> *c,
-       int cost) = 0;
+       uint64_t cost) = 0;
 
      virtual pg_shard_t whoami_shard() const = 0;
      int whoami() const {

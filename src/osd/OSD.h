@@ -540,7 +540,7 @@ public:
   AsyncReserver<spg_t, Finisher> snap_reserver;
   void queue_recovery_context(PG *pg,
                               GenContext<ThreadPool::TPHandle&> *c,
-                              int cost);
+                              uint64_t cost);
   void queue_for_snap_trim(PG *pg);
   void queue_for_scrub(PG* pg, Scrub::scrub_prio_t with_priority);
 
