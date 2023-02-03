@@ -615,7 +615,13 @@ public:
 private:
   // -- pg recovery and associated throttling --
   ceph::mutex recovery_lock = ceph::make_mutex("OSDService::recovery_lock");
-  std::list<std::tuple<epoch_t, PGRef, int> > awaiting_throttle;
+
+  struct pg_awaiting_throttle_t {
+    const epoch_t epoch_queued;
+    PGRef pg;
+    const uint64_t cost_per_object;
+  };
+  std::list<pg_awaiting_throttle_t> awaiting_throttle;
 
   /// queue a scrub-related message for a PG
   template <class MSG_TYPE>
@@ -638,8 +644,7 @@ private:
 #endif
   bool _recover_now(uint64_t *available_pushes);
   void _maybe_queue_recovery();
-  void _queue_for_recovery(
-    std::tuple<epoch_t, PGRef, int> p, uint64_t reserved_pushes);
+  void _queue_for_recovery(pg_awaiting_throttle_t p, uint64_t reserved_pushes);
 public:
   void start_recovery_op(PG *pg, const hobject_t& soid);
   void finish_recovery_op(PG *pg, const hobject_t& soid, bool dequeue);
@@ -670,22 +675,22 @@ public:
     std::lock_guard l(recovery_lock);
     awaiting_throttle.remove_if(
       [pg](decltype(awaiting_throttle)::const_reference awaiting ) {
-	return std::get<1>(awaiting).get() == pg;
+	return awaiting.pg.get() == pg;
       });
   }
 
   unsigned get_target_pg_log_entries() const;
 
   // delayed pg activation
-  void queue_for_recovery(PG *pg, int cost_per_object) {
+  void queue_for_recovery(PG *pg, uint64_t cost_per_object) {
     std::lock_guard l(recovery_lock);
 
     if (pg->is_forced_recovery_or_backfill()) {
-      awaiting_throttle.push_front(
-        std::make_tuple(pg->get_osdmap()->get_epoch(), pg, cost_per_object));
+      awaiting_throttle.emplace_front(
+	pg->get_osdmap()->get_epoch(), pg, cost_per_object);
     } else {
-      awaiting_throttle.push_back(
-        std::make_tuple(pg->get_osdmap()->get_epoch(), pg, cost_per_object));
+      awaiting_throttle.emplace_back(
+        pg->get_osdmap()->get_epoch(), pg, cost_per_object);
     }
     _maybe_queue_recovery();
   }
@@ -693,7 +698,7 @@ public:
     std::lock_guard l(recovery_lock);
     // Send cost as 1 in the tuple below. The cost is ignored
     // as this path is only applicable for 'wpq' scheduler.
-    _queue_for_recovery(std::make_tuple(queued, pg, 1), reserved_pushes);
+    _queue_for_recovery(pg_awaiting_throttle_t{queued, pg, 1}, reserved_pushes);
   }
 
   void queue_check_readable(spg_t spgid,
