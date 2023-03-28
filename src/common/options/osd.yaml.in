@@ -1078,28 +1078,28 @@ options:
 - name: osd_mclock_max_sequential_bandwidth_hdd
   type: size
   level: basic
-  desc: The maximum sequential bandwidth in bytes of the OSD (for
+  desc: The maximum sequential bandwidth in bytes/second of the OSD (for
     rotational media)
   long_desc: This option specifies the maximum sequential bandwidth to consider
     for an OSD whose underlying device type is rotational media. This is
     considered by the mclock scheduler to derive the cost factor to be used in
     QoS calculations. Only considered for osd_op_queue = mclock_scheduler
-  fmt_desc: The maximum sequential bandwidth in bytes to consider for the OSD
-    (for rotational media)
+  fmt_desc: The maximum sequential bandwidth in bytes/second to consider for the
+    OSD (for rotational media)
   default: 150_M
   flags:
   - runtime
 - name: osd_mclock_max_sequential_bandwidth_ssd
   type: size
   level: basic
-  desc: The maximum sequential bandwidth in bytes of the OSD (for
+  desc: The maximum sequential bandwidth in bytes/second of the OSD (for
     solid state media)
   long_desc: This option specifies the maximum sequential bandwidth to consider
     for an OSD whose underlying device type is solid state media. This is
     considered by the mclock scheduler to derive the cost factor to be used in
     QoS calculations. Only considered for osd_op_queue = mclock_scheduler
-  fmt_desc: The maximum sequential bandwidth in bytes to consider for the OSD
-    (for solid state media)
+  fmt_desc: The maximum sequential bandwidth in bytes/second to consider for the
+    OSD (for solid state media)
   default: 750_M
   flags:
   - runtime
