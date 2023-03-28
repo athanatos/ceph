@@ -78,10 +78,7 @@ class mClockScheduler : public OpScheduler, md_config_obs_t {
   const int shard_id;
   bool is_rotational;
   MonClient *monc;
-  double max_osd_random_write_iops;
-  double max_osd_random_write_iops_per_shard;
-  uint64_t max_osd_sequential_bandwidth;
-  double osd_bandwidth_cost_per_io;
+
   std::string mclock_profile = "high_client_ops";
   struct ClientAllocs {
     double res;
@@ -108,6 +105,50 @@ class mClockScheduler : public OpScheduler, md_config_obs_t {
     ClientAllocs(0, 1, 0), // immediate (not used)
     ClientAllocs(0, 1, 0)  // client
   };
+
+  /**
+   * osd_bandwidth_cost_per_io
+   *
+   * mClock expects all queued items to have a uniform expression of
+   * "cost".  However, IO devices generally have quite different capacity
+   * for sequential IO vs small random IO.  This implementation handles this
+   * by expressing all costs as a number of seqential bytes written adding
+   * additional cost for each random IO equal to osd_bandwidth_cost_per_io.
+   *
+   * Thus, an IO operation requiring a total of <size> bytes to be written
+   * accross <iops> different locations will have a cost of
+   * <size> + (osd_bandwidth_cost_per_io * <iops>) bytes.
+   *
+   * Set in set_osd_capacity_params_from_config in the constructor and upon
+   * config change.
+   *
+   * Has units bytes/io.
+   */
+  double osd_bandwidth_cost_per_io;
+
+  /**
+   * osd_bandwidth_capacity_per_shard
+   *
+   * mClock expects reservation and limit paramters to be expressed in units
+   * of cost/second -- which means bytes/second for this implementation.
+   *
+   * Rather than expecting users to compute appropriate limit and reservation
+   * values for each class of OSDs in their cluster, we instead express
+   * reservation and limit paramaters as ratios of the OSD's maxmimum capacity.
+   * osd_bandwidth_capacity_per_shard is that capacity divided by the number
+   * of shards.
+   *
+   * Set in set_osd_capacity_params_from_config in the constructor and upon
+   * config change.
+   *
+   * This value gets passed to ClientRegistry::update_from_config in order
+   * to resolve the full reservaiton and limit parameters for mclock from
+   * the configured ratios.
+   *
+   * Has units bytes/second.
+   */
+  double osd_bandwidth_capacity_per_shard;
+
   class ClientRegistry {
     std::array<
       crimson::dmclock::ClientInfo,
@@ -124,10 +165,16 @@ class mClockScheduler : public OpScheduler, md_config_obs_t {
     const crimson::dmclock::ClientInfo *get_external_client(
       const client_profile_id_t &client) const;
   public:
+    /**
+     * update_from_config
+     *
+     * Sets the mclock paramaters (reservation, weight, and limit)
+     * for each class of IO (background_recovery, background_best_effort,
+     * and client).
+     */
     void update_from_config(
       const ConfigProxy &conf,
-      double cost_per_io,
-      double iops_capacity_per_shard);
+      double capacity_per_shard);
     const crimson::dmclock::ClientInfo *get_info(
       const scheduler_id_t &id) const;
   } client_registry;
@@ -175,19 +222,24 @@ class mClockScheduler : public OpScheduler, md_config_obs_t {
     }
   }
 
-  /// Set the bandwidth cost per io for the osd
-  void set_osd_bandwidth_cost_per_io();
+  /**
+   * set_osd_capacity_params_from_config
+   *
+   * mClockScheduler uses two parameters, osd_bandwidth_cost_per_io
+   * and osd_bandwidth_capacity_per_shard, internally.  These two
+   * parameters are derived from config parameters
+   * osd_mclock_max_capacity_iops_(hdd|ssd) and
+   * osd_mclock_max_sequential_bandwidth_(hdd|ssd) as well as num_shards.
+   * Invoking set_osd_capacity_params_from_config() resets those derived
+   * params based on the current config and should be invoked any time they
+   * are modified as well as in the constructor.  See handle_conf_change().
+   */
+  void set_osd_capacity_params_from_config();
 
 public:
   mClockScheduler(CephContext *cct, int whoami, uint32_t num_shards,
     int shard_id, bool is_rotational, MonClient *monc);
   ~mClockScheduler() override;
-
-  /// Set the max osd capacity in iops - random write @ 4KiB
-  void set_max_osd_random_write_iops();
-
-  /// Set the max sequential bandwidth for the osd
-  void set_max_osd_sequential_bandwidth();
 
   // Set the mclock profile type to enable
   void set_mclock_profile();
