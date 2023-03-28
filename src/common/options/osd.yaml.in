@@ -956,7 +956,7 @@ options:
   desc: IO proportion reserved for each client (default). The default value
     of 0 specifies the lowest possible reservation. Any value greater than
     0 and up to 1.0 specifies the minimum IO proportion to reserve for each
-    client in terms of a percentage of the OSD's maximum IOPS capacity.
+    client in terms of a fraction of the OSD's maximum IOPS capacity.
   long_desc: Only considered for osd_op_queue = mclock_scheduler
   fmt_desc: IO proportion reserved for each client (default).
   default: 0
@@ -980,7 +980,7 @@ options:
     value of 0 specifies no limit enforcement, which means each client can
     use the maximum possible IOPS capacity of the OSD. Any value greater
     than 0 and up to 1.0 specifies the upper IO limit over reservation
-    that each client receives in terms of a percentage of the OSD's
+    that each client receives in terms of a fraction of the OSD's
     maximum IOPS capacity.
   long_desc: Only considered for osd_op_queue = mclock_scheduler
   fmt_desc: IO limit for each client (default) over reservation.
@@ -995,7 +995,7 @@ options:
   desc: IO proportion reserved for background recovery (default). The
     default value of 0 specifies the lowest possible reservation. Any value
     greater than 0 and up to 1.0 specifies the minimum IO proportion to
-    reserve for background recovery operations in terms of a percentage of
+    reserve for background recovery operations in terms of a fraction of
     the OSD's maximum IOPS capacity.
   long_desc: Only considered for osd_op_queue = mclock_scheduler
   fmt_desc: IO proportion reserved for background recovery (default).
@@ -1021,7 +1021,7 @@ options:
     recovery operation can use the maximum possible IOPS capacity of the
     OSD. Any value greater than 0 and up to 1.0 specifies the upper IO
     limit over reservation that background recovery operation receives in
-    terms of a percentage of the OSD's maximum IOPS capacity.
+    terms of a fraction of the OSD's maximum IOPS capacity.
   long_desc: Only considered for osd_op_queue = mclock_scheduler
   fmt_desc: IO limit for background recovery over reservation.
   default: 0
@@ -1035,7 +1035,7 @@ options:
   desc: IO proportion reserved for background best_effort (default). The
     default value of 0 specifies the lowest possible reservation. Any value
     greater than 0 and up to 1.0 specifies the minimum IO proportion to
-    reserve for background best_effort operations in terms of a percentage
+    reserve for background best_effort operations in terms of a fraction
     of the OSD's maximum IOPS capacity.
   long_desc: Only considered for osd_op_queue = mclock_scheduler
   fmt_desc: IO proportion reserved for background best_effort (default).
@@ -1061,7 +1061,7 @@ options:
     best_effort operation can use the maximum possible IOPS capacity of the
     OSD. Any value greater than 0 and up to 1.0 specifies the upper IO
     limit over reservation that background best_effort operation receives
-    in terms of a percentage of the OSD's maximum IOPS capacity.
+    in terms of a fraction of the OSD's maximum IOPS capacity.
   long_desc: Only considered for osd_op_queue = mclock_scheduler
   fmt_desc: IO limit for background best_effort over reservation.
   default: 0
