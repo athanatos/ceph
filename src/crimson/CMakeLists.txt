@@ -28,7 +28,7 @@ set(crimson_common_srcs
   crush/CrushLocation.cc)
 
 if(WITH_SPDK)
-list(APPEND crimson-store-nbd-srcs
+list(APPEND crimson_common_srcs
   common/seastar_spdk_reactor.cc
 )
 endif()

@@ -33,13 +33,12 @@ seastar::future<> SeastarSPDKReactor::start()
     }).get();
     threads.stop().get();
   });
-
-  return seastar::now();
 }
 
-static void subsystem_fini_done(void *arg)
+void subsystem_fini_done(void *arg)
 {
-  auto *threads = static_cast<seastar::distributed<seastar_lw_thread_t>*>(arg);
+  auto *threads = static_cast<
+    seastar::distributed<SeastarSPDKReactor::seastar_lw_thread_t>*>(arg);
   threads->invoke_on_all([](auto &thread) {
     return thread.stop();
   }).get();
