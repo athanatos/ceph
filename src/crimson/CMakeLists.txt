@@ -27,6 +27,12 @@ set(crimson_common_srcs
   common/buffer_seastar.cc
   crush/CrushLocation.cc)
 
+if(WITH_SPDK)
+list(APPEND crimson-store-nbd-srcs
+  common/seastar_spdk_reactor.cc
+)
+endif()
+
 # the specialized version of ceph-common, where
 #  - the logging is sent to Seastar backend
 #  - and the template parameter of lock_policy is SINGLE
@@ -140,6 +146,9 @@ set(crimson_common_deps
 set(crimson_common_public_deps crimson::cflags)
 if(WITH_JAEGER)
   list(APPEND crimson_common_public_deps jaeger_base)
+endif()
+if(WITH_SPDK)
+  list(APPEND crimson_common_public_deps spdk::spdk)
 endif()
 
 if(NOT WITH_SYSTEM_BOOST)
