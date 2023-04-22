@@ -7,6 +7,7 @@
 #include <seastar/core/distributed.hh>
 #include <seastar/core/reactor.hh>
 #include <seastar/core/thread.hh>
+#include <seastar/util/later.hh>
 
 #include <spdk/stdinc.h>
 #include <spdk/env.h>
@@ -48,6 +49,7 @@ class SeastarSPDKReactor {
   };
   seastar::distributed<seastar_lw_thread_t> threads;
 public:
+  friend void subsystem_fini_done(void*);
   seastar::future<> start();
-  sesatar::future<> stop();
+  seastar::future<> stop();
 };
