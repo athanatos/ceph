@@ -16,11 +16,6 @@ add_executable(crimson-store-nbd ${crimson-store-nbd-srcs})
 target_link_libraries(crimson-store-nbd
   PRIVATE crimson-os)
 
-if(WITH_SPDK)
-target_link_libraries(crimson-store-nbd
-  PRIVATE spdk::spdk)
-endif()
-
 install(TARGETS crimson-store-nbd DESTINATION bin)
 
 add_executable(perf-crimson-msgr perf_crimson_msgr.cc)
