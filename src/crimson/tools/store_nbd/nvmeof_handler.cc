@@ -6,6 +6,7 @@
 #include <seastar/core/app-template.hh>
 #include <seastar/core/future.hh>
 #include <seastar/core/reactor.hh>
+#include <seastar/core/coroutine.hh>
 #include <seastar/util/later.hh>
 
 #include <spdk/stdinc.h>
@@ -19,9 +20,24 @@
 
 #include "nvmeof_handler.h"
 
-void NVMEOFHandler::run()
+// borrowed liberally from examples/nvmf/nvmf.c
+
+void fulfill_promise(int r, void *p)
 {
-  std::ignore = spdk_reactor.start();
+  assert(r == 0);
+  static_cast<seastar::promise<>*>(p)->set_value();
+}
+
+seastar::future<> NVMEOFHandler::run()
+{
+  co_await spdk_reactor.start();
+
+  // initialize bdev layer
+  {
+    seastar::promise<> p;
+    spdk_subsystem_init(fulfill_promise, static_cast<void*>(&p));
+    co_await p.get_future();
+  }
 }
 
 seastar::future<> NVMEOFHandler::stop()

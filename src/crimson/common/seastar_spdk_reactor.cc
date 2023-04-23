@@ -25,7 +25,8 @@ seastar::future<> SeastarSPDKReactor::start()
     spdk_thread_lib_init(seastar_schedule_thread, 0);
     threads.start().get0();
     threads.invoke_on_all([] (auto &thread) {
-      return thread.start();
+      thread.start();
+      return seastar::now();
     }).get();
     spdk_subsystem_init(start_rpc, NULL);
     threads.invoke_on_all([] (auto &thread) {

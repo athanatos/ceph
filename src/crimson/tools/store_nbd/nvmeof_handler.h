@@ -6,6 +6,6 @@
 class NVMEOFHandler {
   SeastarSPDKReactor spdk_reactor;
 public:
-  void run();
+  seastar::future<> run();
   seastar::future<> stop();
 };
