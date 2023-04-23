@@ -22,12 +22,11 @@ class SeastarSPDKReactor {
     seastar::promise<> p;
     std::optional<seastar::reactor::poller> poller;
     seastar_lw_thread_t() : thread(NULL) {}
-    seastar::future<> start() {
+    void start() {
       std::string thread_name("thread");
       thread_name += std::to_string(seastar::this_shard_id());
       thread = spdk_thread_create(thread_name.c_str(), NULL);
       spdk_set_thread(thread);
-      return seastar::make_ready_future();
     }
     bool poll_spdk_thread() {
       spdk_thread_poll(thread, 0, spdk_get_ticks());
@@ -39,12 +38,12 @@ class SeastarSPDKReactor {
     }
     seastar::future<> stop() {
       p.set_value();
-      return seastar::make_ready_future();
+      return seastar::now();
     }
     seastar::future<> destroy() {
       spdk_thread_exit(thread);
       spdk_thread_destroy(thread);
-      return seastar::make_ready_future();
+      return seastar::now();
     }
   };
   seastar::distributed<seastar_lw_thread_t> threads;
