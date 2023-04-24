@@ -1,11 +1,14 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#include <atomic>
+
 #include <boost/intrusive/list.hpp>
 
 #include <seastar/core/future.hh>
 #include <seastar/core/distributed.hh>
 #include <seastar/core/reactor.hh>
+#include <seastar/core/smp.hh>
 #include <seastar/core/thread.hh>
 #include <seastar/util/later.hh>
 
@@ -29,7 +32,9 @@ class seastar_spdk_reactor_t {
     seastar::future<> do_poll();
     void add_thread(seastar_spdk_thread_t *thread);
   };
+
   seastar::sharded<reactor_core_t> reactor_threads;
+  std::atomic<unsigned> next_core;
 
 public:
   seastar::future<> start();
@@ -41,7 +46,7 @@ static seastar_spdk_reactor_t *g_reactor = nullptr;
 
 seastar::future<> seastar_spdk_reactor_t::reactor_core_t::stop()
 {
-  return seastar::now(); // TODO
+  return seastar::now(); // TODO how do we know when the seastar threads die?
 }
 
 seastar::future<> seastar_spdk_reactor_t::reactor_core_t::do_poll()
@@ -58,6 +63,7 @@ seastar::future<> seastar_spdk_reactor_t::reactor_core_t::do_poll()
 void seastar_spdk_reactor_t::reactor_core_t::add_thread(
   seastar_spdk_thread_t *thread)
 {
+  threads.push_back(*thread);
 }
 
 seastar::future<> seastar_spdk_reactor_t::start()
@@ -73,6 +79,12 @@ seastar::future<> seastar_spdk_reactor_t::stop()
 void seastar_spdk_reactor_t::add_thread(
   seastar_spdk_thread_t *thread)
 {
+  std::ignore = reactor_threads.invoke_on(
+    ++next_core % seastar::smp::count,
+    [thread](auto &core) {
+      core.add_thread(thread);
+      return seastar::now();
+    });
 }
 
 static int schedule_thread(struct spdk_thread *thread)
