@@ -63,7 +63,8 @@ seastar::future<> NVMEOFHandler::run()
       0);                           // number of namespaces, 0 due to discovery?
 
     if (subsystem == NULL) {
-      std::cerr << "failed to create discovery nvmf library subsystem" << std::endl;
+      std::cerr << "failed to create discovery nvmf library subsystem"
+		<< std::endl;
       assert(0 == "cannot create subsystem");
     }
     
