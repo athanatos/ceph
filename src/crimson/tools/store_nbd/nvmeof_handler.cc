@@ -38,6 +38,42 @@ seastar::future<> NVMEOFHandler::run()
     spdk_subsystem_init(fulfill_promise, static_cast<void*>(&p));
     co_await p.get_future();
   }
+
+  {
+    spdk_nvmf_target_opts tgt_opts;
+    tgt_opts.max_subsystems = 1;
+    snprintf(tgt_opts.name, sizeof(tgt_opts.name), "%s", "nvmf_example");
+
+    // Default nvmeof target
+    nvmf_tgt = spdk_nvmf_tgt_create(&tgt_opts);
+    if (nvmf_tgt == NULL) {
+      std::cerr << "spdk_nvmf_tgt_create() failed" << std::endl;
+      assert(0 == "cannot create target");
+    }
+    
+    /* Create and add discovery subsystem to the NVMe-oF target.
+       * NVMe-oF defines a discovery mechanism that a host uses to determine
+       * the NVM subsystems that expose namespaces that the host may access.
+       * It provides a host with following capabilities:
+       *	1,The ability to discover a list of NVM subsystems with namespaces
+       *	  that are accessible to the host.
+       *	2,The ability to discover multiple paths to an NVM subsystem.
+       *	3,The ability to discover controllers that are statically configured.
+       */
+    spdk_nvmf_subsystem *subsystem = spdk_nvmf_subsystem_create(
+      nvmf_tgt, SPDK_NVMF_DISCOVERY_NQN,
+      SPDK_NVMF_SUBTYPE_DISCOVERY, 0);
+
+    if (subsystem == NULL) {
+      std::cerr << "failed to create discovery nvmf library subsystem" << std::endl;
+      assert(0 == "cannot create subsystem");
+    }
+    
+    /* Allow any host to access the discovery subsystem */
+    spdk_nvmf_subsystem_set_allow_any_host(subsystem, true);
+    
+    std::cout << "created a nvmf target service" << std::endl;
+  }
 }
 
 seastar::future<> NVMEOFHandler::stop()
