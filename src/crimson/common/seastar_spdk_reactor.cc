@@ -70,6 +70,11 @@ seastar::future<> seastar_spdk_reactor_t::stop()
   return reactor_threads.stop();
 }
 
+void seastar_spdk_reactor_t::add_thread(
+  seastar_spdk_thread_t *thread)
+{
+}
+
 static int schedule_thread(struct spdk_thread *thread)
 {
   auto *reactor_thread = new(spdk_thread_get_ctx(thread)) seastar_spdk_thread_t;
@@ -94,5 +99,6 @@ seastar::future<> spdk_reactor_start()
 
 seastar::future<> spdk_reactor_stop()
 {
-  return g_reactor->stop();
+  co_await g_reactor->stop();
+  delete g_reactor;
 }
