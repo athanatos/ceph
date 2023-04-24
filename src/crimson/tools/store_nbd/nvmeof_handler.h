@@ -7,8 +7,7 @@
 #include "block_driver.h"
 
 class NVMEOFHandler {
-  SeastarSPDKReactor spdk_reactor;
-  spdk_nvmf_tgt *nvmf_tgt;
+  spdk_nvmf_tgt *nvmf_tgt = nullptr;
 public:
   seastar::future<> run();
   seastar::future<> stop();

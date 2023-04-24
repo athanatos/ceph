@@ -30,7 +30,7 @@ void fulfill_promise(int r, void *p)
 
 seastar::future<> NVMEOFHandler::run()
 {
-  co_await spdk_reactor.start();
+  co_await spdk_reactor_start();
 
   // initialize bdev layer
   {
@@ -77,5 +77,5 @@ seastar::future<> NVMEOFHandler::run()
 
 seastar::future<> NVMEOFHandler::stop()
 {
-  return spdk_reactor.stop();
+  return spdk_reactor_stop();
 }
