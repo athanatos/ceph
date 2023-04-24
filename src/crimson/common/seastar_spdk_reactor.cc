@@ -27,9 +27,15 @@ using seastar_spdk_thread_list_t = boost::intrusive::list<seastar_spdk_thread_t>
 class seastar_spdk_reactor_t {
   class reactor_core_t {
     seastar_spdk_thread_list_t threads;
-  public:
-    seastar::future<> stop();
+
+    bool do_stop = false;
+    std::optional<seastar::future<>> on_stop;
+
     seastar::future<> do_poll();
+
+  public:
+    seastar::future<> start();
+    seastar::future<> stop();
     void add_thread(seastar_spdk_thread_t *thread);
   };
 
@@ -46,18 +52,32 @@ static seastar_spdk_reactor_t *g_reactor = nullptr;
 
 seastar::future<> seastar_spdk_reactor_t::reactor_core_t::stop()
 {
-  return seastar::now(); // TODO how do we know when the seastar threads die?
+  if (!on_stop) {
+    return seastar::now();
+  }
+  do_stop = true;
+  auto f = std::move(*on_stop);
+  on_stop = std::nullopt;
+  return f;
+}
+
+seastar::future<> seastar_spdk_reactor_t::reactor_core_t::start()
+{
+  on_stop = do_poll();
+  return seastar::now();
 }
 
 seastar::future<> seastar_spdk_reactor_t::reactor_core_t::do_poll()
 {
-  for (auto &&i: threads) {
-    spdk_thread *t = spdk_thread_get_from_ctx(static_cast<void*>(&i));
-    spdk_thread_poll(t, 0, 0);
-    // TODO, return value is whether work was done, how to I find out whether the
-    // thread is dead?  spdk_thread_is_exited/destroy?
+  while (!do_stop) {
+    for (auto &&i: threads) {
+      spdk_thread *t = spdk_thread_get_from_ctx(static_cast<void*>(&i));
+      spdk_thread_poll(t, 0, 0);
+      // TODO, return value is whether work was done, how to I find out whether the
+      // thread is dead?  spdk_thread_is_exited/destroy?
+    }
+    co_await seastar::yield();
   }
-  return seastar::now();
 }
 
 void seastar_spdk_reactor_t::reactor_core_t::add_thread(
@@ -68,7 +88,11 @@ void seastar_spdk_reactor_t::reactor_core_t::add_thread(
 
 seastar::future<> seastar_spdk_reactor_t::start()
 {
-  return reactor_threads.start();
+  co_await reactor_threads.start();
+  co_await reactor_threads.invoke_on_all(
+    [](auto &core) {
+      return core.start();
+    });
 }
 
 seastar::future<> seastar_spdk_reactor_t::stop()
