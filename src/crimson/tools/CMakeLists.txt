@@ -30,3 +30,11 @@ target_link_libraries(perf-staged-fltree crimson-seastore crimson::gtest)
 else()
 target_link_libraries(perf-staged-fltree crimson-seastore)
 endif()
+
+if(WITH_SPDK)
+add_executable(crimson-nvmeof-demo
+  store_nbd/nvmeof_handler.cc
+  nvmeof-demo.cc)
+target_link_libraries(crimson-nvmeof-demo
+  crimson-common)
+endif()
