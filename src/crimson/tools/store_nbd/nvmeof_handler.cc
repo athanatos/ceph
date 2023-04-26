@@ -38,13 +38,37 @@ struct create_poll_group_ret_t {
   spdk_nvmf_tgt *tgt;
 
   spdk_nvmf_poll_group **group;
-  seastar::promise<> ret;
+  seastar::promise<> cont;
 };
 void create_poll_group(void *p)
 {
   auto &ret = *static_cast<create_poll_group_ret_t*>(p);
   *ret.group = spdk_nvmf_poll_group_create(ret.tgt);
-  ret.ret.set_value();
+  ret.cont.set_value();
+}
+
+
+static int accept_poll(void *p)
+{
+  auto *tgt = static_cast<spdk_nvmf_tgt*>(p);
+  spdk_nvmf_tgt_accept(tgt);
+  return -1;
+}
+struct start_poller_ret_t {
+  spdk_nvmf_tgt *tgt;
+
+  spdk_poller **poller;
+  seastar::promise<> cont;
+};
+
+void start_poller(void *p)
+{
+  constexpr unsigned poll_rate = 10000; /* 10ms */
+  auto &ret = *static_cast<start_poller_ret_t*>(p);
+  *(ret.poller) = SPDK_POLLER_REGISTER(
+    accept_poll, &ret.tgt,
+    poll_rate);
+  ret.cont.set_value();
 }
 
 seastar::future<> NVMEOFHandler::run()
@@ -100,7 +124,7 @@ seastar::future<> NVMEOFHandler::run()
     spdk_cpuset cpuset;
     thread = spdk_thread_create("poll_thread", &cpuset);
     spdk_thread_send_msg(thread, create_poll_group, &poll_thread);
-    co_await poll_thread.ret.get_future();
+    co_await poll_thread.cont.get_future();
   }
 
   {
@@ -113,6 +137,12 @@ seastar::future<> NVMEOFHandler::run()
     }
   }
 
+  spdk_poller *poller = nullptr;
+  {
+    start_poller_ret_t ret{nvmf_tgt, &poller};
+    spdk_thread_send_msg(thread, start_poller, &ret);
+    co_await ret.cont.get_future();
+  }
 }
 
 seastar::future<> NVMEOFHandler::stop()
