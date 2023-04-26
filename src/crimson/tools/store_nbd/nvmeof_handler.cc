@@ -22,6 +22,12 @@
 
 // borrowed liberally from examples/nvmf/nvmf.c
 
+void fulfill_promise_subsystem(spdk_nvmf_subsystem *, void *p, int r)
+{
+  assert(r == 0);
+  static_cast<seastar::promise<>*>(p)->set_value();
+}
+
 void fulfill_promise(int r, void *p)
 {
   assert(r == 0);
@@ -95,6 +101,16 @@ seastar::future<> NVMEOFHandler::run()
     thread = spdk_thread_create("poll_thread", &cpuset);
     spdk_thread_send_msg(thread, create_poll_group, &poll_thread);
     co_await poll_thread.ret.get_future();
+  }
+
+  {
+    spdk_nvmf_subsystem *subsystem = spdk_nvmf_subsystem_get_first(nvmf_tgt);
+    while (subsystem) {
+      seastar::promise<> p;
+      spdk_nvmf_subsystem_start(subsystem, fulfill_promise_subsystem, &p);
+      co_await p.get_future();
+      subsystem = spdk_nvmf_subsystem_get_next(subsystem);
+    }
   }
 
 }
