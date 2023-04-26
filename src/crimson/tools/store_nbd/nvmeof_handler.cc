@@ -28,6 +28,19 @@ void fulfill_promise(int r, void *p)
   static_cast<seastar::promise<>*>(p)->set_value();
 }
 
+struct create_poll_group_ret_t {
+  spdk_nvmf_tgt *tgt;
+
+  spdk_nvmf_poll_group **group;
+  seastar::promise<> ret;
+};
+void create_poll_group(void *p)
+{
+  auto &ret = *static_cast<create_poll_group_ret_t*>(p);
+  *ret.group = spdk_nvmf_poll_group_create(ret.tgt);
+  ret.ret.set_value();
+}
+
 seastar::future<> NVMEOFHandler::run()
 {
   co_await spdk_reactor_start();
@@ -72,6 +85,16 @@ seastar::future<> NVMEOFHandler::run()
     spdk_nvmf_subsystem_set_allow_any_host(subsystem, true);
     
     std::cout << "created a nvmf target service" << std::endl;
+  }
+
+  spdk_thread *thread = nullptr;
+  spdk_nvmf_poll_group *group = nullptr;
+  {
+    create_poll_group_ret_t poll_thread{nvmf_tgt, &group};
+    spdk_cpuset cpuset;
+    thread = spdk_thread_create("poll_thread", &cpuset);
+    spdk_thread_send_msg(thread, create_poll_group, &poll_thread);
+    co_await poll_thread.ret.get_future();
   }
 
 }
