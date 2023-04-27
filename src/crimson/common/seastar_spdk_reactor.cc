@@ -122,6 +122,8 @@ seastar::future<> spdk_reactor_start()
 {
   struct spdk_env_opts opts;
   spdk_env_opts_init(&opts);
+  opts.iova_mode = "va";
+  opts.mem_size = 1<<10;
   if (spdk_env_init(&opts) == -EALREADY) {
     spdk_env_dpdk_post_init(false);
   }
