@@ -52,11 +52,10 @@ int main(int argc, char** argv)
     po::notify(vm);
     unrecognized_options =
       po::collect_unrecognized(parsed.options, po::include_positional);
- }  catch(const po::error& e) {
+  }  catch(const po::error& e) {
     std::cerr << "error: " << e.what() << std::endl;
     return 1;
   }
-  std::vector<const char*> args(argv, argv + argc);
 
   seastar::app_template::config app_cfg;
   app_cfg.name = "crimson-nvmeof-demo";

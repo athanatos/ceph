@@ -47,6 +47,16 @@ void create_poll_group(void *p)
   ret.cont.set_value();
 }
 
+struct start_subsystem_args_t {
+  spdk_nvmf_subsystem *subsystem;
+  seastar::promise<> cont;
+};
+void start_subsystem(void *p)
+{
+  auto &args = *static_cast<start_subsystem_args_t*>(p);
+  spdk_nvmf_subsystem_start(
+    args.subsystem, fulfill_promise_subsystem, &args.cont);
+}
 
 static int accept_poll(void *p)
 {
@@ -60,7 +70,6 @@ struct start_poller_ret_t {
   spdk_poller **poller;
   seastar::promise<> cont;
 };
-
 void start_poller(void *p)
 {
   constexpr unsigned poll_rate = 10000; /* 10ms */
@@ -80,6 +89,16 @@ seastar::future<> NVMEOFHandler::run()
     seastar::promise<> p;
     spdk_subsystem_init(fulfill_promise, static_cast<void*>(&p));
     co_await p.get_future();
+  }
+
+  spdk_thread *thread = nullptr;
+  spdk_nvmf_poll_group *group = nullptr;
+  {
+    create_poll_group_ret_t poll_thread{nvmf_tgt, &group};
+    spdk_cpuset cpuset;
+    thread = spdk_thread_create("poll_thread", &cpuset);
+    spdk_thread_send_msg(thread, create_poll_group, &poll_thread);
+    co_await poll_thread.cont.get_future();
   }
 
   {
@@ -117,22 +136,12 @@ seastar::future<> NVMEOFHandler::run()
     std::cout << "created a nvmf target service" << std::endl;
   }
 
-  spdk_thread *thread = nullptr;
-  spdk_nvmf_poll_group *group = nullptr;
-  {
-    create_poll_group_ret_t poll_thread{nvmf_tgt, &group};
-    spdk_cpuset cpuset;
-    thread = spdk_thread_create("poll_thread", &cpuset);
-    spdk_thread_send_msg(thread, create_poll_group, &poll_thread);
-    co_await poll_thread.cont.get_future();
-  }
-
   {
     spdk_nvmf_subsystem *subsystem = spdk_nvmf_subsystem_get_first(nvmf_tgt);
     while (subsystem) {
-      seastar::promise<> p;
-      spdk_nvmf_subsystem_start(subsystem, fulfill_promise_subsystem, &p);
-      co_await p.get_future();
+      start_subsystem_args_t args{subsystem};
+      spdk_thread_send_msg(thread, start_subsystem, &args);
+      co_await args.cont.get_future();
       subsystem = spdk_nvmf_subsystem_get_next(subsystem);
     }
   }

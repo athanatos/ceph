@@ -21,8 +21,9 @@
 
 #include "seastar_spdk_reactor.h"
 
-struct seastar_spdk_thread_t : boost::intrusive::list_base_hook<> {};
-using seastar_spdk_thread_list_t = boost::intrusive::list<seastar_spdk_thread_t>;
+struct seastar_spdk_reactor_header_t : boost::intrusive::list_base_hook<> {};
+using seastar_spdk_thread_list_t =
+  boost::intrusive::list<seastar_spdk_reactor_header_t>;
 
 class seastar_spdk_reactor_t {
   class reactor_core_t {
@@ -36,7 +37,7 @@ class seastar_spdk_reactor_t {
   public:
     seastar::future<> start();
     seastar::future<> stop();
-    void add_thread(seastar_spdk_thread_t *thread);
+    void add_thread(seastar_spdk_reactor_header_t *thread);
   };
 
   seastar::sharded<reactor_core_t> reactor_threads;
@@ -45,7 +46,7 @@ class seastar_spdk_reactor_t {
 public:
   seastar::future<> start();
   seastar::future<> stop();
-  void add_thread(seastar_spdk_thread_t *thread);
+  void add_thread(seastar_spdk_reactor_header_t *thread);
 };
 
 static seastar_spdk_reactor_t *g_reactor = nullptr;
@@ -81,7 +82,7 @@ seastar::future<> seastar_spdk_reactor_t::reactor_core_t::do_poll()
 }
 
 void seastar_spdk_reactor_t::reactor_core_t::add_thread(
-  seastar_spdk_thread_t *thread)
+  seastar_spdk_reactor_header_t *thread)
 {
   threads.push_back(*thread);
 }
@@ -101,7 +102,7 @@ seastar::future<> seastar_spdk_reactor_t::stop()
 }
 
 void seastar_spdk_reactor_t::add_thread(
-  seastar_spdk_thread_t *thread)
+  seastar_spdk_reactor_header_t *thread)
 {
   std::ignore = reactor_threads.invoke_on(
     ++next_core % seastar::smp::count,
@@ -113,7 +114,8 @@ void seastar_spdk_reactor_t::add_thread(
 
 static int schedule_thread(struct spdk_thread *thread)
 {
-  auto *reactor_thread = new(spdk_thread_get_ctx(thread)) seastar_spdk_thread_t;
+  auto *reactor_thread =
+    new(spdk_thread_get_ctx(thread)) seastar_spdk_reactor_header_t;
   g_reactor->add_thread(reactor_thread);
   return 0;
 }
@@ -131,7 +133,9 @@ seastar::future<> spdk_reactor_start()
   assert(nullptr == g_reactor);
   g_reactor = new seastar_spdk_reactor_t;
 
-  spdk_thread_lib_init(schedule_thread, sizeof(seastar_spdk_thread_t));
+  spdk_thread_lib_init(
+    schedule_thread,
+    sizeof(seastar_spdk_reactor_header_t));
   return g_reactor->start();
 }
 
@@ -139,4 +143,31 @@ seastar::future<> spdk_reactor_stop()
 {
   co_await g_reactor->stop();
   delete g_reactor;
+}
+
+void seastar_spdk_thread_t::_run_msg(void *p)
+{
+  auto &f = *static_cast<msg_func_t*>(p);
+  std::invoke(f);
+}
+
+void seastar_spdk_thread_t::send_msg(msg_func_t *f)
+{
+  spdk_thread_send_msg(thread, _run_msg, f);
+}
+
+seastar_spdk_thread_t::seastar_spdk_thread_t(
+  const char *name, spdk_cpuset *cpuset)
+{
+  thread = spdk_thread_create(name, cpuset);
+}
+
+seastar_spdk_thread_t::~seastar_spdk_thread_t()
+{
+  assert(!thread);
+}
+
+seastar::future<> seastar_spdk_thread_t::exit()
+{
+  return seastar::now();
 }
