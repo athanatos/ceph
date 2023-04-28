@@ -10,13 +10,15 @@ seastar::future<> spdk_reactor_stop();
 
 class seastar_spdk_thread_t {
   spdk_thread *thread = nullptr;
+  const char *name = nullptr;
 
   static void _run_msg(void*);
   using msg_func_t = std::function<void()>;
   void send_msg(msg_func_t *f);
 public:
-  seastar_spdk_thread_t(const char *name, spdk_cpuset *cpuset);
+  seastar_spdk_thread_t(const char *name) : name(name) {}
   ~seastar_spdk_thread_t();
+  void start();
   seastar::future<> exit();
 
   template <typename F, typename Ret>

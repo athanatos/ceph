@@ -156,10 +156,10 @@ void seastar_spdk_thread_t::send_msg(msg_func_t *f)
   spdk_thread_send_msg(thread, _run_msg, f);
 }
 
-seastar_spdk_thread_t::seastar_spdk_thread_t(
-  const char *name, spdk_cpuset *cpuset)
+void seastar_spdk_thread_t::start()
 {
-  thread = spdk_thread_create(name, cpuset);
+  spdk_cpuset cpuset;
+  thread = spdk_thread_create(name, &cpuset);
 }
 
 seastar_spdk_thread_t::~seastar_spdk_thread_t()
