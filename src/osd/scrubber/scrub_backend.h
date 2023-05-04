@@ -57,9 +57,6 @@ class PgScrubber;
 struct PGPool;
 using Scrub::PgScrubBeListener;
 
-using data_omap_digests_t =
-  std::pair<std::optional<uint32_t>, std::optional<uint32_t>>;
-
 using shard_info_map_t = std::map<pg_shard_t, shard_info_wrapper>;
 using shard_to_scrubmap_t = std::map<pg_shard_t, ScrubMap>;
 
@@ -514,38 +511,3 @@ class ScrubBackend {
   uint64_t logical_to_ondisk_size(uint64_t logical_size) const;
 };
 
-template <>
-struct fmt::formatter<data_omap_digests_t> {
-  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-
-  template <typename FormatContext>
-  auto format(const data_omap_digests_t& dg, FormatContext& ctx)
-  {
-    // can't use value_or() due to different output types
-    if (std::get<0>(dg).has_value()) {
-      fmt::format_to(ctx.out(), "[{:#x}/", std::get<0>(dg).value());
-    } else {
-      fmt::format_to(ctx.out(), "[---/");
-    }
-    if (std::get<1>(dg).has_value()) {
-      return fmt::format_to(ctx.out(), "{:#x}]", std::get<1>(dg).value());
-    } else {
-      return fmt::format_to(ctx.out(), "---]");
-    }
-  }
-};
-
-template <>
-struct fmt::formatter<std::pair<hobject_t, data_omap_digests_t>> {
-  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-
-  template <typename FormatContext>
-  auto format(const std::pair<hobject_t, data_omap_digests_t>& x,
-	      FormatContext& ctx) const
-  {
-    return fmt::format_to(ctx.out(),
-			  "{{ {} - {} }}",
-			  std::get<0>(x),
-			  std::get<1>(x));
-  }
-};
