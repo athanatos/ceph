@@ -90,8 +90,6 @@ MEV(IntLocalMapDone)
 MEV(DigestUpdate)  ///< external. called upon success of a MODIFY op. See
 		   ///< scrub_snapshot_metadata()
 
-MEV(MapsCompared)  ///< maps_compare_n_cleanup() transactions are done
-
 MEV(StartReplica)  ///< initiating replica scrub.
 
 MEV(StartReplicaNoWait)	 ///< 'start replica' when there are no pending updates
@@ -298,7 +296,6 @@ struct WaitReplicas : sc::state<WaitReplicas, ActiveScrubbing> {
 
   using reactions =
     mpl::list<sc::custom_reaction<GotReplicas>,	 // all replicas are accounted for
-	      sc::transition<MapsCompared, WaitDigestUpdate>,
 	      sc::custom_reaction<DigestUpdate>
 	      >;
 

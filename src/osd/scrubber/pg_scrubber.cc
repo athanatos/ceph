@@ -377,15 +377,6 @@ void PgScrubber::send_scrub_is_finished(epoch_t epoch_queued)
   dout(10) << "scrubber event --<< " << __func__ << dendl;
 }
 
-void PgScrubber::send_maps_compared(epoch_t epoch_queued)
-{
-  dout(10) << "scrubber event -->> " << __func__ << " epoch: " << epoch_queued << dendl;
-
-  m_fsm->process_event(Scrub::MapsCompared{});
-
-  dout(10) << "scrubber event --<< " << __func__ << dendl;
-}
-
 // -----------------
 
 bool PgScrubber::is_reserving() const
@@ -1245,7 +1236,6 @@ void PgScrubber::maps_compare_n_cleanup()
   m_start = m_end;
   run_callbacks();
   requeue_waiting();
-  m_osds->queue_scrub_maps_compared(m_pg, Scrub::scrub_prio_t::low_priority);
 }
 
 Scrub::preemption_t& PgScrubber::get_preemptor()
