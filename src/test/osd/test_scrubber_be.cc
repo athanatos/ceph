@@ -136,7 +136,7 @@ class TestScrubber : public ScrubBeListener, public Scrub::SnapMapReaderI {
   // fixes to perform.
   /// \todo implement the mock.
   void submit_digest_fixes(
-    const Scrub::ScrubListener::object_digest_vec_t& fixes) final
+    const Scrub::object_digest_vec_t& fixes) final
   {
     std::cout << fmt::format("{} submit_digest_fixes({})",
 			     __func__,

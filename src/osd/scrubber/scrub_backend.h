@@ -88,7 +88,7 @@ struct ScrubBeListener {
   virtual const OSDMapRef& get_osdmap() const = 0;
   virtual void add_to_stats(const object_stat_sum_t& stat) = 0;
   virtual void submit_digest_fixes(
-    const Scrub::ScrubListener::object_digest_vec_t& fixes) = 0;
+    const Scrub::object_digest_vec_t& fixes) = 0;
   virtual ~ScrubBeListener() = default;
 };
 
@@ -254,7 +254,7 @@ struct scrub_chunk_t {
 
   utime_t started{ceph_clock_now()};
 
-  Scrub::ScrubListener::object_digest_vec_t missing_digest;
+  Scrub::object_digest_vec_t missing_digest;
 
   /// Map from object with errors to good peers
   std::map<hobject_t, std::list<pg_shard_t>> authoritative;

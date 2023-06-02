@@ -2355,7 +2355,7 @@ bool PgScrubber::is_token_current(Scrub::act_token_t received_token)
 
 /// \todo combine the multiple transactions into a single one
 void PgScrubber::submit_digest_fixes(
-  const Scrub::ScrubListener::object_digest_vec_t& fixes)
+  const Scrub::object_digest_vec_t& fixes)
 {
   m_listener->sl_submit_digest_fixes(fixes);
 }

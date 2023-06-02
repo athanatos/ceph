@@ -597,7 +597,7 @@ class PgScrubber : public ScrubPgIF,
   void add_to_stats(const object_stat_sum_t& stat) final;
 
   void submit_digest_fixes(
-    const Scrub::ScrubListener::object_digest_vec_t& fixes) final;
+    const Scrub::object_digest_vec_t& fixes) final;
 
   CephContext* get_pg_cct() const final { return m_pg->cct; }
  

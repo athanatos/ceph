@@ -15,6 +15,11 @@
 
 namespace Scrub {
 
+using digest_t =
+  std::pair<std::optional<uint32_t>, std::optional<uint32_t>>;
+using object_digest_t = std::pair<hobject_t, digest_t>;
+using object_digest_vec_t = std::vector<object_digest_t>;
+
 /**
  * ScrubListener
  *
@@ -215,10 +220,6 @@ public:
   /// get next deepscrub interval
   virtual double sl_next_deepscrub_interval() const = 0;
 
-  using digest_t =
-    std::pair<std::optional<uint32_t>, std::optional<uint32_t>>;
-  using object_digest_t = std::pair<hobject_t, digest_t>;
-  using object_digest_vec_t = std::vector<object_digest_t>;
   /**
    *
    * sl_submit_digest_fixes
@@ -237,11 +238,11 @@ public:
 }
 
 template <>
-struct fmt::formatter<Scrub::ScrubListener::digest_t> {
+struct fmt::formatter<Scrub::digest_t> {
   constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
   template <typename FormatContext>
-  auto format(const Scrub::ScrubListener::digest_t &dg, FormatContext& ctx)
+  auto format(const Scrub::digest_t &dg, FormatContext& ctx)
   {
     // can't use value_or() due to different output types
     if (std::get<0>(dg).has_value()) {
@@ -258,11 +259,11 @@ struct fmt::formatter<Scrub::ScrubListener::digest_t> {
 };
 
 template <>
-struct fmt::formatter<Scrub::ScrubListener::object_digest_t> {
+struct fmt::formatter<Scrub::object_digest_t> {
   constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
   template <typename FormatContext>
-  auto format(const Scrub::ScrubListener::object_digest_t &x, FormatContext& ctx)
+  auto format(const Scrub::object_digest_t &x, FormatContext& ctx)
   {
     return fmt::format_to(ctx.out(),
 			  "{{ {} - {} }}",
