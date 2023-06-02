@@ -15631,7 +15631,7 @@ void PrimaryLogPG::sl_requeue_snap_trim()
   }
 }
 
-void PrimaryLogPG::sl_submit_digest_fixes(const object_digest_vec_t &fixes)
+void PrimaryLogPG::sl_submit_digest_fixes(const Scrub::object_digest_vec_t &fixes)
 {
   dout(10) << __func__ << ": fixes.size(): " << fixes.size() << dendl;
   std::shared_ptr<unsigned> num_digest_updates_pending =
