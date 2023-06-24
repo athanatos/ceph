@@ -20,6 +20,7 @@
 #include "crimson/osd/osd_meta.h"
 #include "crimson/osd/object_context.h"
 #include "crimson/osd/pg_map.h"
+#include "crimson/osd/scrub/scrub_scheduler.h"
 #include "crimson/osd/state.h"
 #include "common/AsyncReserver.h"
 #include "crimson/net/Connection.h"
@@ -297,6 +298,8 @@ private:
   AsyncReserver<spg_t, DirectFinisher> local_reserver;
   AsyncReserver<spg_t, DirectFinisher> remote_reserver;
   AsyncReserver<spg_t, DirectFinisher> snap_reserver;
+
+  scrub::Scheduler scrub_scheduler;
 
   epoch_t up_thru_wanted = 0;
   seastar::future<> send_alive(epoch_t want);
