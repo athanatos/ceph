@@ -158,6 +158,21 @@ CompatSet get_osd_initial_compat_set()
 }
 }
 
+void OSD::start_timers()
+{
+  beacon_timer.arm_periodic(
+    std::chrono::seconds(local_conf()->osd_beacon_report_interval));
+  // timer continuation rearms when complete
+  heartbeat_timer.arm(
+    std::chrono::seconds(TICK_INTERVAL));
+}
+
+void OSD::stop_timers()
+{
+  beacon_timer.cancel();
+  heartbeat_timer.cancel();
+}
+
 seastar::future<> OSD::open_meta_coll()
 {
   return store.get_sharded_store().open_collection(
@@ -634,8 +649,7 @@ seastar::future<> OSD::start_asok_admin()
 seastar::future<> OSD::stop()
 {
   logger().info("stop");
-  beacon_timer.cancel();
-  heartbeat_timer.cancel();
+  stop_timers();
   // see also OSD::shutdown()
   return prepare_to_stop().then([this] {
     pg_shard_manager.set_stopping();
@@ -984,11 +998,7 @@ seastar::future<> OSD::committed_osd_maps(version_t first,
           pg_shard_manager.is_booting()) {
         logger().info("osd.{}: activating...", whoami);
         pg_shard_manager.set_active();
-        beacon_timer.arm_periodic(
-          std::chrono::seconds(local_conf()->osd_beacon_report_interval));
-	// timer continuation rearms when complete
-        heartbeat_timer.arm(
-          std::chrono::seconds(TICK_INTERVAL));
+	start_timers();
       }
     } else {
       if (pg_shard_manager.is_prestop()) {
@@ -1184,8 +1194,7 @@ bool OSD::should_restart() const
 
 seastar::future<> OSD::restart()
 {
-  beacon_timer.cancel();
-  heartbeat_timer.cancel();
+  stop_timers();
   return pg_shard_manager.set_up_epoch(
     0
   ).then([this] {
