@@ -86,8 +86,6 @@ OSD::OSD(int id, uint32_t nonce,
   : whoami{id},
     nonce{nonce},
     abort_source{abort_source},
-    // do this in background
-    beacon_timer{[this] { (void)send_beacon(); }},
     cluster_msgr{cluster_msgr},
     public_msgr{public_msgr},
     hb_front_msgr{hb_front_msgr},
@@ -95,15 +93,6 @@ OSD::OSD(int id, uint32_t nonce,
     monc{new crimson::mon::Client{*public_msgr, *this}},
     mgrc{new crimson::mgr::Client{*public_msgr, *this}},
     store{store},
-    // do this in background -- continuation rearms timer when complete
-    heartbeat_timer{[this] {
-      std::ignore = update_heartbeat_peers(
-      ).then([this] {
-	update_stats();
-	heartbeat_timer.arm(
-	  std::chrono::seconds(TICK_INTERVAL));
-      });
-    }},
     asok{seastar::make_lw_shared<crimson::admin::AdminSocket>()},
     log_client(cluster_msgr.get(), LogClient::NO_FLAGS),
     clog(log_client.create_channel())
@@ -159,17 +148,14 @@ CompatSet get_osd_initial_compat_set()
 
 void OSD::start_timers()
 {
-  beacon_timer.arm_periodic(
-    std::chrono::seconds(local_conf()->osd_beacon_report_interval));
-  // timer continuation rearms when complete
-  heartbeat_timer.arm(
-    std::chrono::seconds(TICK_INTERVAL));
+  beacon_timer.start();
+  heartbeat_timer.start();
 }
 
-void OSD::stop_timers()
+seastar::future<> OSD::stop_timers()
 {
-  beacon_timer.cancel();
-  heartbeat_timer.cancel();
+  co_await heartbeat_timer.stop();
+  co_await beacon_timer.stop();
 }
 
 seastar::future<> OSD::open_meta_coll()
@@ -648,9 +634,11 @@ seastar::future<> OSD::start_asok_admin()
 seastar::future<> OSD::stop()
 {
   logger().info("stop");
-  stop_timers();
-  // see also OSD::shutdown()
-  return prepare_to_stop().then([this] {
+  return stop_timers(
+  ).then([this] {
+    // see also OSD::shutdown()
+    return prepare_to_stop();
+  }).then([this] {
     pg_shard_manager.set_stopping();
     logger().debug("prepared to stop");
     public_msgr->stop();
@@ -1198,10 +1186,10 @@ bool OSD::should_restart() const
 
 seastar::future<> OSD::restart()
 {
-  stop_timers();
-  return pg_shard_manager.set_up_epoch(
-    0
+  return stop_timers(
   ).then([this] {
+    return pg_shard_manager.set_up_epoch(0);
+  }).then([this] {
     bind_epoch = osdmap->get_epoch();
     // TODO: promote to shutdown if being marked down for multiple times
     // rebind messengers

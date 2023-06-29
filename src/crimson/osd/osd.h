@@ -15,6 +15,7 @@
 #include "crimson/common/type_helpers.h"
 #include "crimson/common/auth_handler.h"
 #include "crimson/common/gated.h"
+#include "crimson/common/periodic_executor.h"
 #include "crimson/admin/admin_socket.h"
 #include "crimson/common/simple_lru.h"
 #include "crimson/mgr/client.h"
@@ -64,7 +65,11 @@ class OSD final : public crimson::net::Dispatcher,
   const int whoami;
   const uint32_t nonce;
   seastar::abort_source& abort_source;
-  seastar::timer<seastar::lowres_clock> beacon_timer;
+  common::PeriodicExecutor beacon_timer{
+    std::chrono::seconds(common::local_conf()->osd_beacon_report_interval),
+    [] { return seastar::now(); }
+  };
+
   // talk with osd
   crimson::net::MessengerRef cluster_msgr;
   // talk with client/mon/mgr
@@ -113,13 +118,21 @@ class OSD final : public crimson::net::Dispatcher,
   crimson::osd::PGShardManager pg_shard_manager;
 
   std::unique_ptr<Heartbeat> heartbeat;
-  seastar::timer<seastar::lowres_clock> heartbeat_timer;
+  common::PeriodicExecutor heartbeat_timer{
+    std::chrono::seconds{1},
+    [this] {
+      return update_heartbeat_peers(
+      ).then([this] {
+	update_stats();
+	return seastar::now();
+      });
+    }};
 
   // admin-socket
   seastar::lw_shared_ptr<crimson::admin::AdminSocket> asok;
 
   void start_timers();
-  void stop_timers();
+  seastar::future<> stop_timers();
 
 public:
   OSD(int id, uint32_t nonce,
