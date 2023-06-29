@@ -113,7 +113,7 @@ class OSD final : public crimson::net::Dispatcher,
   crimson::osd::PGShardManager pg_shard_manager;
 
   std::unique_ptr<Heartbeat> heartbeat;
-  seastar::timer<seastar::lowres_clock> tick_timer;
+  seastar::timer<seastar::lowres_clock> heartbeat_timer;
 
   // admin-socket
   seastar::lw_shared_ptr<crimson::admin::AdminSocket> asok;

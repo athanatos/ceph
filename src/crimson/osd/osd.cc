@@ -96,11 +96,11 @@ OSD::OSD(int id, uint32_t nonce,
     mgrc{new crimson::mgr::Client{*public_msgr, *this}},
     store{store},
     // do this in background -- continuation rearms timer when complete
-    tick_timer{[this] {
+    heartbeat_timer{[this] {
       std::ignore = update_heartbeat_peers(
       ).then([this] {
 	update_stats();
-	tick_timer.arm(
+	heartbeat_timer.arm(
 	  std::chrono::seconds(TICK_INTERVAL));
       });
     }},
@@ -634,7 +634,7 @@ seastar::future<> OSD::stop()
 {
   logger().info("stop");
   beacon_timer.cancel();
-  tick_timer.cancel();
+  heartbeat_timer.cancel();
   // see also OSD::shutdown()
   return prepare_to_stop().then([this] {
     pg_shard_manager.set_stopping();
@@ -986,7 +986,7 @@ seastar::future<> OSD::committed_osd_maps(version_t first,
         beacon_timer.arm_periodic(
           std::chrono::seconds(local_conf()->osd_beacon_report_interval));
 	// timer continuation rearms when complete
-        tick_timer.arm(
+        heartbeat_timer.arm(
           std::chrono::seconds(TICK_INTERVAL));
       }
     } else {
@@ -1189,7 +1189,7 @@ bool OSD::should_restart() const
 seastar::future<> OSD::restart()
 {
   beacon_timer.cancel();
-  tick_timer.cancel();
+  heartbeat_timer.cancel();
   return pg_shard_manager.set_up_epoch(
     0
   ).then([this] {
