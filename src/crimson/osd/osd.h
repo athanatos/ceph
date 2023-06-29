@@ -118,6 +118,9 @@ class OSD final : public crimson::net::Dispatcher,
   // admin-socket
   seastar::lw_shared_ptr<crimson::admin::AdminSocket> asok;
 
+  void start_timers();
+  void stop_timers();
+
 public:
   OSD(int id, uint32_t nonce,
       seastar::abort_source& abort_source,
