@@ -32,6 +32,7 @@
 #include "crimson/osd/osd_operations/logmissing_request_reply.h"
 #include "crimson/osd/osd_operations/peering_event.h"
 #include "crimson/osd/osd_operations/replicated_request.h"
+#include "crimson/osd/scrub/scrub_machine.h"
 #include "crimson/osd/shard_services.h"
 #include "crimson/osd/osdmap_gate.h"
 #include "crimson/osd/pg_activation_blocker.h"
@@ -608,6 +609,8 @@ private:
 
   PeeringState peering_state;
   eversion_t projected_last_update;
+
+  scrub::ScrubMachine scrub_machine;
 
 public:
   ObjectContextRegistry obc_registry;

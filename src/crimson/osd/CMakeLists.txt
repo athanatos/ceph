@@ -33,6 +33,7 @@ add_executable(crimson-osd
   replicated_recovery_backend.cc
   scheduler/scheduler.cc
   scheduler/mclock_scheduler.cc
+  scrub/scrub_machine.cc
   osdmap_gate.cc
   pg_activation_blocker.cc
   pg_map.cc
