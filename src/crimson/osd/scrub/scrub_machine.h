@@ -17,9 +17,9 @@
 
 namespace crimson::osd::scrub {
 
-template <typename E>
-struct scrub_event_t : boost::statechart::event<E> {
-};
+#define SIMPLE_EVENT(E) struct E : boost::statechart::event<E> { \
+    static constexpr event_name = #E;				 \
+  }
 
 /**
  * ScrubContext
@@ -29,8 +29,29 @@ struct scrub_event_t : boost::statechart::event<E> {
  * Methods which may take time return immediately and define an event which
  * will be asyncronously delivered to the state machine with the result.  This
  * is a bit clumsy to use, but should render this component highly testable.
+ *
+ * Events sent as a completion to a ScrubContext interface method are defined
+ * within ScrubContext.  Other events are defined within ScrubMachine.
  */
 struct ScrubContext {
+
+  /**
+   * request_local_reservation
+   *
+   * Asyncronously request a reservation on the local osd.  Implementation
+   * must signal completion by submitting a
+   * request_local_reservation_complete_t event unless first canceled.
+   *
+   * ScrubMachine is responsible for releasing the reservation even in the
+   * event of an interval_change_event_t.
+   */
+  SIMPLE_EVENT(request_local_reservation_complete_t);
+  virtual void request_local_reservation() = 0;
+
+  /// cancel in progress or current local reservation
+  virtual void cancel_local_reservation() = 0;
+
+  
 };
 
 /**
@@ -70,6 +91,23 @@ struct ScrubState : boost::statechart::state<S, P, T...> {
 
 struct Crash;
 struct Inactive;
+
+/**
+ * ScrubMachine
+ *
+ * Manages orchestration of rados's distributed scrub process.
+ *
+ * There are two general ways in which ScrubMachine may need to release
+ * resources:
+ * - interval_change_t -- represents case where PG as a whole undergoes
+ *   a distributed mapping change.  Distributed resources are released
+ *   implicitely as remote PG instances receive the new map.  Local
+ *   resources are still released by ScrubMachine via ScrubContext methods
+ *   generally via state destructors
+ * - otherwise, ScrubMachine is responsible for notifying remote PG
+ *   instances via the appropriate ScrubContext methods again generally
+ *   from state destructors.
+ */
 class ScrubMachine
   : public boost::statechart::state_machine<ScrubMachine, Inactive> {
   using reactions = boost::mpl::list<
@@ -77,6 +115,10 @@ class ScrubMachine
     >;
 
   static constexpr std::string_view full_name = "ScrubMachine";
+public:
+
+  /// Event to submit upon interval change, 
+  SIMPLE_EVENT(interval_change_event_t);
 };
 
 struct Crash : ScrubState<Crash, ScrubMachine> {
