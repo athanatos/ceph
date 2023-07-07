@@ -18,7 +18,7 @@
 namespace crimson::osd::scrub {
 
 #define SIMPLE_EVENT(E) struct E : boost::statechart::event<E> { \
-    static constexpr event_name = #E;				 \
+    static constexpr std::string_view event_name = #E;			 \
   }
 
 /**
@@ -51,42 +51,23 @@ struct ScrubContext {
   /// cancel in progress or current local reservation
   virtual void cancel_local_reservation() = 0;
 
-  
-};
+  /**
+   * request_remote_reservations
+   *
+   * Asyncronously request reservations on the remote peers.  Implementation
+   * must signal completion by submitting a
+   * request_remote_reservation_complete_t event unless first canceled.
+   *
+   * ScrubMachine is not responsible for releasing the remote reservations in the
+   * event of an interval_change_event_t as the remote peers will do so
+   * upon receipt of the new map.  In other cases, ScrubMachine is responsible
+   * for releasing the reservation.
+   */
+  SIMPLE_EVENT(request_remote_reservations_complete_t);
+  virtual void request_remote_reservations() = 0;
 
-/**
- * ScrubState
- *
- * Template defining machinery/state common to all scrub state machine
- * states.
- */
-template <typename S, typename P, typename... T>
-struct ScrubState : boost::statechart::state<S, P, T...> {
-  /* machinery for populating a full_name member for each ScrubState with
-   * ScrubMachine/.../ParentState/ChildState full_name */
-  template <std::string_view const &PN, typename PI,
-	    std::string_view const &CN, typename CI>
-  struct concat;
-  
-  template <std::string_view const &PN, std::size_t... PI,
-	    std::string_view const &CN, std::size_t... CI>
-  struct concat<PN, std::index_sequence<PI...>, CN, std::index_sequence<CI...>> {
-    static constexpr const char value[]{PN[PI]..., '/', CN[CI]...};
-  };
-  
-  template <std::string_view const &PN, std::string_view const &CN>
-  struct join {
-    static constexpr std::string_view value = concat<
-      PN, std::make_index_sequence<PN.size()>,
-      CN, std::make_index_sequence<CN.size()>>::value;
-  };
-
-  /// Populated with ScrubMachine/.../Parent/Child for each state Child
-  static constexpr std::string_view full_name =
-    join<P::full_name, S::state_name>::value;
-
-  template <typename C>
-  explicit ScrubState(C ctx) : boost::statechart::state<S, P, T...>(ctx) {}
+  /// cancel in progress or current remote reservations
+  virtual void cancel_remote_reservations() = 0;
 };
 
 struct Crash;
@@ -119,6 +100,50 @@ public:
 
   /// Event to submit upon interval change, 
   SIMPLE_EVENT(interval_change_event_t);
+
+  ScrubContext &context;
+  ScrubMachine(ScrubContext &context) : context(context) {}
+};
+
+/**
+ * ScrubState
+ *
+ * Template defining machinery/state common to all scrub state machine
+ * states.
+ */
+template <typename S, typename P, typename... T>
+struct ScrubState : boost::statechart::state<S, P, T...> {
+  using sc_base = boost::statechart::state<S, P, T...>;
+
+  /* machinery for populating a full_name member for each ScrubState with
+   * ScrubMachine/.../ParentState/ChildState full_name */
+  template <std::string_view const &PN, typename PI,
+	    std::string_view const &CN, typename CI>
+  struct concat;
+  
+  template <std::string_view const &PN, std::size_t... PI,
+	    std::string_view const &CN, std::size_t... CI>
+  struct concat<PN, std::index_sequence<PI...>, CN, std::index_sequence<CI...>> {
+    static constexpr const char value[]{PN[PI]..., '/', CN[CI]...};
+  };
+  
+  template <std::string_view const &PN, std::string_view const &CN>
+  struct join {
+    static constexpr std::string_view value = concat<
+      PN, std::make_index_sequence<PN.size()>,
+      CN, std::make_index_sequence<CN.size()>>::value;
+  };
+
+  /// Populated with ScrubMachine/.../Parent/Child for each state Child
+  static constexpr std::string_view full_name =
+    join<P::full_name, S::state_name>::value;
+
+  template <typename C>
+  explicit ScrubState(C ctx) : sc_base(ctx) {}
+
+  auto &get_scrub_context() {
+    return sc_base::template context<ScrubMachine>().context;
+  }
 };
 
 struct Crash : ScrubState<Crash, ScrubMachine> {
@@ -131,8 +156,45 @@ struct Inactive : ScrubState<Inactive, ScrubMachine> {
   static constexpr std::string_view state_name = "Inactive";
 };
 
-struct PrimaryActive : ScrubState<Inactive, ScrubMachine> {
+struct GetLocalReservation;
+struct PrimaryActive : ScrubState<PrimaryActive, ScrubMachine, GetLocalReservation> {
   static constexpr std::string_view state_name = "PrimaryActive";
+
+  bool local_reservation_held = false;
+  bool remote_reservations_held = false;
+
+  void exit();
 };
+
+struct GetRemoteReservations;
+struct GetLocalReservation : ScrubState<GetLocalReservation, PrimaryActive> {
+  static constexpr std::string_view state_name = "GetLocalReservation";
+
+  using reactions = boost::mpl::list<
+    boost::statechart::transition<ScrubContext::request_local_reservation_complete_t,
+				  GetRemoteReservations>
+    >;
+
+  explicit GetLocalReservation(my_context ctx);
+};
+
+struct Scrubbing;
+struct GetRemoteReservations : ScrubState<GetRemoteReservations, PrimaryActive> {
+  static constexpr std::string_view state_name = "GetRemoteReservations";
+
+  using reactions = boost::mpl::list<
+    boost::statechart::transition<ScrubContext::request_remote_reservations_complete_t,
+				  Scrubbing>
+    >;
+
+  explicit GetRemoteReservations(my_context ctx);
+};
+
+struct Scrubbing : ScrubState<Scrubbing, PrimaryActive> {
+  static constexpr std::string_view state_name = "Scrubbing";
+
+  explicit Scrubbing(my_context ctx);
+};
+
 
 }

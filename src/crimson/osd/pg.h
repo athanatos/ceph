@@ -610,8 +610,6 @@ private:
   PeeringState peering_state;
   eversion_t projected_last_update;
 
-  scrub::ScrubMachine scrub_machine;
-
 public:
   ObjectContextRegistry obc_registry;
   ObjectContextLoader obc_loader;
