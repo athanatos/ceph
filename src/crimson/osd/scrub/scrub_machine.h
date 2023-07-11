@@ -87,8 +87,8 @@ struct ScrubContext {
   virtual void cancel_remote_reservations() = 0;
 
   struct request_range_result_t {
-    const hobject_t start;
-    const hobject_t end;
+    hobject_t start;
+    hobject_t end;
   };
   VALUE_EVENT(request_range_complete_t, request_range_result_t);
   virtual void request_range(
@@ -246,7 +246,7 @@ struct ChunkState : ScrubState<ChunkState, Scrubbing, GetRange> {
   static constexpr std::string_view state_name = "ChunkState";
 
   /// Current chunk includes objects in [range_start, range_end)
-  hobject_t range_start, range_end;
+  boost::optional<ScrubContext::request_range_result_t> range;
 
   /// true once we have requested that the range be reserved
   bool range_reserved = false;
