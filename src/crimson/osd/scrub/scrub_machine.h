@@ -19,14 +19,16 @@
 
 namespace crimson::osd::scrub {
 
-#define SIMPLE_EVENT(E) struct E : boost::statechart::event<E> {	\
+namespace sc = boost::statechart;
+
+#define SIMPLE_EVENT(E) struct E : sc::event<E> {	\
     static constexpr std::string_view event_name = #E;			\
   }
 
-#define VALUE_EVENT(E, T) struct E : boost::statechart::event<E> {	\
+#define VALUE_EVENT(E, T) struct E : sc::event<E> {	\
     static constexpr std::string_view event_name = #E;			\
     									\
-    T value;								\
+    const T value;							\
 									\
     template <typename... Args>						\
     E(Args&&... args) : value(std::forward<Args>(args)...) {}		\
@@ -90,7 +92,23 @@ struct ScrubContext {
   };
   VALUE_EVENT(request_range_complete_t, request_range_result_t);
   virtual void request_range(
-    hobject_t &start) = 0;
+    const hobject_t &start) = 0;
+
+  SIMPLE_EVENT(reserve_range_complete_t);
+  virtual void reserve_range(
+    const hobject_t &start,
+    const hobject_t &end) = 0;
+
+  /// cancel in progress or currently reserved range
+  virtual void release_range() = 0;
+
+  struct scan_range_result_t {
+    // TODO
+  };
+  VALUE_EVENT(scan_range_complete_t, scan_range_result_t);
+  virtual void scan_range(
+    const hobject_t &start,
+    const hobject_t &end) = 0;
 };
 
 struct Crash;
@@ -113,9 +131,9 @@ struct Inactive;
  *   from state destructors.
  */
 class ScrubMachine
-  : public boost::statechart::state_machine<ScrubMachine, Inactive> {
+  : public sc::state_machine<ScrubMachine, Inactive> {
   using reactions = boost::mpl::list<
-    boost::statechart::transition<boost::statechart::event_base, Crash>
+    sc::transition<sc::event_base, Crash>
     >;
 
   static constexpr std::string_view full_name = "ScrubMachine";
@@ -135,8 +153,8 @@ public:
  * states.
  */
 template <typename S, typename P, typename... T>
-struct ScrubState : boost::statechart::state<S, P, T...> {
-  using sc_base = boost::statechart::state<S, P, T...>;
+struct ScrubState : sc::state<S, P, T...> {
+  using sc_base = sc::state<S, P, T...>;
 
   /* machinery for populating a full_name member for each ScrubState with
    * ScrubMachine/.../ParentState/ChildState full_name */
@@ -194,7 +212,7 @@ struct GetLocalReservation : ScrubState<GetLocalReservation, PrimaryActive> {
   static constexpr std::string_view state_name = "GetLocalReservation";
 
   using reactions = boost::mpl::list<
-    boost::statechart::transition<ScrubContext::request_local_reservation_complete_t,
+    sc::transition<ScrubContext::request_local_reservation_complete_t,
 				  GetRemoteReservations>
     >;
 
@@ -206,17 +224,73 @@ struct GetRemoteReservations : ScrubState<GetRemoteReservations, PrimaryActive> 
   static constexpr std::string_view state_name = "GetRemoteReservations";
 
   using reactions = boost::mpl::list<
-    boost::statechart::transition<ScrubContext::request_remote_reservations_complete_t,
-				  Scrubbing>
+    sc::transition<ScrubContext::request_remote_reservations_complete_t,
+		   Scrubbing>
     >;
 
   explicit GetRemoteReservations(my_context ctx);
 };
 
-struct Scrubbing : ScrubState<Scrubbing, PrimaryActive> {
+struct ChunkState;
+struct Scrubbing : ScrubState<Scrubbing, PrimaryActive, ChunkState> {
   static constexpr std::string_view state_name = "Scrubbing";
 
+  /// hobjects < current have been scrubbed
+  hobject_t current;
+
   explicit Scrubbing(my_context ctx);
+};
+
+struct GetRange;
+struct ChunkState : ScrubState<ChunkState, Scrubbing, GetRange> {
+  static constexpr std::string_view state_name = "ChunkState";
+
+  /// Current chunk includes objects in [range_start, range_end)
+  hobject_t range_start, range_end;
+
+  /// true once we have requested that the range be reserved
+  bool range_reserved = false;
+
+  /// chunk scan contents, populated after ScanRange
+  boost::optional<ScrubContext::scan_range_result_t> scan_results;
+
+  explicit ChunkState(my_context ctx);
+  void exit();
+};
+
+struct GetRange : ScrubState<GetRange, ChunkState> {
+  static constexpr std::string_view state_name = "GetRange";
+
+  using reactions = boost::mpl::list<
+    sc::custom_reaction<ScrubContext::request_range_complete_t>
+    >;
+
+  explicit GetRange(my_context ctx);
+
+  sc::result react(const ScrubContext::request_range_complete_t &);
+};
+
+struct ScanRange;
+struct ReserveRange : ScrubState<ReserveRange, ChunkState> {
+  static constexpr std::string_view state_name = "ReserveRange";
+
+  using reactions = boost::mpl::list<
+    sc::transition<ScrubContext::reserve_range_complete_t, ScanRange>
+    >;
+
+  explicit ReserveRange(my_context ctx);
+};
+
+struct ScanRange : ScrubState<ScanRange, ChunkState> {
+  static constexpr std::string_view state_name = "ScanRange";
+
+  using reactions = boost::mpl::list<
+    sc::custom_reaction<ScrubContext::scan_range_complete_t>
+    >;
+
+  explicit ScanRange(my_context ctx);
+
+  sc::result react(const ScrubContext::scan_range_complete_t &);
 };
 
 #undef SIMPLE_EVENT

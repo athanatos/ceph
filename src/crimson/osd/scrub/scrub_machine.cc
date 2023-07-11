@@ -5,8 +5,6 @@
 
 #include "crimson/osd/scrub/scrub_machine.h"
 
-namespace sc = boost::statechart;
-
 namespace crimson::osd::scrub {
 
 Crash::Crash(my_context ctx) : ScrubState(ctx)
@@ -39,6 +37,52 @@ GetRemoteReservations::GetRemoteReservations(my_context ctx) : ScrubState(ctx)
 
 Scrubbing::Scrubbing(my_context ctx) : ScrubState(ctx)
 {
+}
+
+ChunkState::ChunkState(my_context ctx) : ScrubState(ctx)
+{
+}
+
+void ChunkState::exit()
+{
+  if (range_reserved) {
+    // TODO: guard from interval change
+    get_scrub_context().release_range();
+  }
+}
+
+GetRange::GetRange(my_context ctx) : ScrubState(ctx)
+{
+  get_scrub_context().request_range(context<Scrubbing>().current);
+}
+
+sc::result GetRange::react(const ScrubContext::request_range_complete_t &event)
+{
+  context<ChunkState>().range_start = event.value.start;
+  context<ChunkState>().range_start = event.value.end;
+  return transit<ReserveRange>();
+}
+
+ReserveRange::ReserveRange(my_context ctx) : ScrubState(ctx)
+{
+  auto &cs = context<ChunkState>();
+  cs.range_reserved = true;
+  get_scrub_context().reserve_range(cs.range_start, cs.range_end);
+}
+
+ScanRange::ScanRange(my_context ctx) : ScrubState(ctx)
+{
+  const auto &cs = context<ChunkState>();
+  get_scrub_context().scan_range(
+    cs.range_start,
+    cs.range_end);
+}
+
+sc::result ScanRange::react(const ScrubContext::scan_range_complete_t &event)
+{
+  auto &cs = context<ChunkState>();
+  cs.scan_results = event.value;
+  return discard_event();
 }
 
 };
