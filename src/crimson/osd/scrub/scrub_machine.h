@@ -15,10 +15,25 @@
 #include <boost/statechart/state_machine.hpp>
 #include <boost/statechart/transition.hpp>
 
+#include "common/hobject.h"
+
 namespace crimson::osd::scrub {
 
-#define SIMPLE_EVENT(E) struct E : boost::statechart::event<E> { \
-    static constexpr std::string_view event_name = #E;			 \
+#define SIMPLE_EVENT(E) struct E : boost::statechart::event<E> {	\
+    static constexpr std::string_view event_name = #E;			\
+  }
+
+#define VALUE_EVENT(E, T) struct E : boost::statechart::event<E> {	\
+    static constexpr std::string_view event_name = #E;			\
+    									\
+    T value;								\
+									\
+    template <typename... Args>						\
+    E(Args&&... args) : value(std::forward<Args>(args)...) {}		\
+    E(const E &) = default;						\
+    E(E &&) = default;							\
+    E &operator=(const E&) = default;					\
+    E &operator=(E&&) = default;						\
   }
 
 /**
@@ -68,6 +83,14 @@ struct ScrubContext {
 
   /// cancel in progress or current remote reservations
   virtual void cancel_remote_reservations() = 0;
+
+  struct request_range_result_t {
+    const hobject_t start;
+    const hobject_t end;
+  };
+  VALUE_EVENT(request_range_complete_t, request_range_result_t);
+  virtual void request_range(
+    hobject_t &start) = 0;
 };
 
 struct Crash;
@@ -196,5 +219,7 @@ struct Scrubbing : ScrubState<Scrubbing, PrimaryActive> {
   explicit Scrubbing(my_context ctx);
 };
 
+#undef SIMPLE_EVENT
+#undef VALUE_EVENT
 
 }
