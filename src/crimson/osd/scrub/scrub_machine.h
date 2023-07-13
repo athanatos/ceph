@@ -19,6 +19,19 @@
 
 namespace crimson::osd::scrub {
 
+/* Development Notes
+ *
+ * Notes:
+ * - We're leaving out all of the throttle waits.  We actually want to handle
+ *   that using crimson's operation throttler machinery.
+ *
+ * TODOs:
+ * - Leaving SnapMapper validation to later work
+ *   - Note, each replica should validate and repair locally as the SnapMapper
+ *     is meant to be a local index of the authoritative object contents
+ * - Leaving preemption for later
+ */
+
 namespace sc = boost::statechart;
 
 #define SIMPLE_EVENT(E) struct E : sc::event<E> {	\
