@@ -2,6 +2,7 @@
 // vim: ts=8 sw=2 smarttab
 
 #include "crimson/osd/scrub/scrub_validator.h"
+// enable once ec is merged #include "osd/ECUtil.h"
 
 namespace crimson::osd::scrub {
 
@@ -17,9 +18,214 @@ object_set_t get_object_set(const scrub_map_set_t &in)
   return ret;
 }
 
+struct object_shard_evaluation_t {
+  bool object_present{false};
+
+  bool ec_hash_mismatch{false};
+  bool ec_size_mismatch{false};
+
+  bool read_error{false};
+  bool stat_error{false};
+
+  bool snapset_missing{false};
+  bool snapset_corrupted{false};
+
+  bool object_info_missing{false};
+  bool object_info_corrupted{false};
+
+  bool hinfo_key_missing{false};
+  bool hinfo_key_corrupted{false};
+
+  bool has_errors() const {
+    return ec_hash_mismatch || ec_size_mismatch || read_error || stat_error ||
+      snapset_missing || snapset_corrupted ||
+      object_info_missing || object_info_corrupted ||
+      hinfo_key_missing || hinfo_key_corrupted;
+  }
+
+  object_shard_evaluation_t absent() {
+    return object_shard_evaluation_t{};
+  }
+};
+object_shard_evaluation_t evaluate_object_shard(
+  const chunk_validation_policy_t &params,
+  const hobject_t &oid,
+  const ScrubMap::object &obj)
+{
+  object_shard_evaluation_t ret;
+  if (obj.negative) {
+    ceph_assert(0 == "impossible since we removed incremental scrub");
+    return ret;
+  }
+
+  ret.object_present = true;
+
+  ret.ec_hash_mismatch = obj.ec_hash_mismatch;
+  ret.ec_size_mismatch = obj.ec_size_mismatch;
+
+  ret.read_error = obj.read_error;
+  ret.stat_error = obj.stat_error;
+
+  {
+    auto xiter = obj.attrs.find(OI_ATTR);
+    if (xiter == obj.attrs.end()) {
+      ret.object_info_missing = true;
+    } else {
+      bufferlist bl;
+      bl.push_back(xiter->second);
+      object_info_t oi;
+      try {
+	auto bliter = bl.cbegin();
+	::decode(oi, bliter);
+      } catch (...) {
+	ret.object_info_corrupted = true;
+      }
+    }
+  }
+
+  {
+    auto xiter = obj.attrs.find(SS_ATTR);
+    if (xiter == obj.attrs.end()) {
+      ret.snapset_missing = true;
+    } else {
+      bufferlist bl;
+      bl.push_back(xiter->second);
+      SnapSet ss;
+      try {
+	auto bliter = bl.cbegin();
+	::decode(ss, bliter);
+      } catch (...) {
+	ret.snapset_corrupted = true;
+      }
+    }
+  }
+
+#if 0 // enable once EC is implemented, need to link against ECUtils
+  if (params.is_ec) {
+    auto xiter = obj.attrs.find(ECUtil::get_hinfo_key());
+    if (xiter == obj.attrs.end()) {
+      ret.hinfo_key_missing = true;
+    } else {
+      bufferlist bl;
+      bl.push_back(xiter->second);
+      ECUtil::HashInfo hinfo;
+      try {
+	auto bliter = bl.cbegin();
+	::decode(hinfo, bliter);
+      } catch (...) {
+	ret.hinfo_key_corrupted = true;
+      }
+    }
+  }
+#endif
+  return ret;
+}
+
 std::pair<pg_shard_t, const ScrubMap::object &>
 select_auth_object(const hobject_t &hoid, const scrub_map_set_t &maps)
 {
+#if 0
+  // Create a list of shards (with the Primary first, so that it will be
+  // auth-copy, all other things being equal)
+
+  /// \todo: consider sorting the candidate shards by the conditions for
+  /// selecting best auth source below. Then - stopping on the first one
+  /// that is auth eligible.
+  /// This creates an issue with 'digest_match' that should be handled.
+  std::list<pg_shard_t> shards;
+  for (const auto& [srd, smap] : this_chunk->received_maps) {
+    if (srd != m_pg_whoami) {
+      shards.push_back(srd);
+    }
+  }
+  shards.push_front(m_pg_whoami);
+
+  auth_selection_t ret_auth;
+  ret_auth.auth = this_chunk->received_maps.end();
+  eversion_t auth_version;
+
+  for (auto& l : shards) {
+
+    auto shard_ret = possible_auth_shard(ho, l, ret_auth.shard_map);
+
+    // digest_match will only be true if computed digests are the same
+    if (auth_version != eversion_t() &&
+        ret_auth.auth->second.objects[ho].digest_present &&
+        shard_ret.digest.has_value() &&
+        ret_auth.auth->second.objects[ho].digest != *shard_ret.digest) {
+
+      ret_auth.digest_match = false;
+      dout(10) << fmt::format(
+                    "{}: digest_match = false, {} data_digest 0x{:x} != "
+                    "data_digest 0x{:x}",
+                    __func__,
+                    ho,
+                    ret_auth.auth->second.objects[ho].digest,
+                    *shard_ret.digest)
+               << dendl;
+    }
+
+    dout(20)
+      << fmt::format("{}: {} shard {} got:{:D}", __func__, ho, l, shard_ret)
+      << dendl;
+
+    if (shard_ret.possible_auth == shard_as_auth_t::usable_t::not_usable) {
+
+      // Don't use this particular shard due to previous errors
+      // XXX: For now we can't pick one shard for repair and another's object
+      // info or snapset
+
+      ceph_assert(shard_ret.error_text.length());
+      errstream << m_pg_id.pgid << " shard " << l << " soid " << ho << " : "
+                << shard_ret.error_text << "\n";
+
+    } else if (shard_ret.possible_auth ==
+               shard_as_auth_t::usable_t::not_found) {
+
+      // do not emit the returned error message to the log
+      dout(15) << fmt::format("{}: {} not found on shard {}", __func__, ho, l)
+               << dendl;
+    } else {
+
+      dout(30) << fmt::format("{}: consider using {} srv: {} oi soid: {}",
+                              __func__,
+                              l,
+                              shard_ret.oi.version,
+                              shard_ret.oi.soid)
+               << dendl;
+
+      // consider using this shard as authoritative. Is it more recent?
+
+      if (auth_version == eversion_t() || shard_ret.oi.version > auth_version ||
+          (shard_ret.oi.version == auth_version &&
+           dcount(shard_ret.oi) > dcount(ret_auth.auth_oi))) {
+
+        dout(20) << fmt::format("{}: using {} moved auth oi {:p} <-> {:p}",
+                                __func__,
+                                l,
+                                (void*)&ret_auth.auth_oi,
+                                (void*)&shard_ret.oi)
+                 << dendl;
+
+        ret_auth.auth = shard_ret.auth_iter;
+        ret_auth.auth_shard = ret_auth.auth->first;
+        ret_auth.auth_oi = shard_ret.oi;
+        auth_version = shard_ret.oi.version;
+        ret_auth.is_auth_available = true;
+      }
+    }
+  }
+
+  dout(10) << fmt::format("{}: selecting osd {} for obj {} with oi {}",
+                          __func__,
+                          ret_auth.auth_shard,
+                          ho,
+                          ret_auth.auth_oi)
+           << dendl;
+
+  return ret_auth;
+#endif
+
   // TODO: very wrong
   return std::make_pair(
     maps.begin()->first,

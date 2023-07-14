@@ -11,6 +11,10 @@
 
 namespace crimson::osd::scrub {
 
+struct chunk_validation_policy_t {
+  bool is_ec{false};
+};
+
 using scrub_map_set_t = std::map<pg_shard_t, ScrubMap>;
 
 struct chunk_info_t {
