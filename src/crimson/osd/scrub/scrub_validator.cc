@@ -24,59 +24,59 @@ struct shard_validator_t {
 
   std::optional<object_info_t> object_info;
   std::optional<SnapSet> snapset;
-  std::optional<ECUtil::HashInfo> hinfo;
+  //std::optional<ECUtil::HashInfo> hinfo;
 
-  static shard_validator_t absent() {
+  static shard_validator_t build_absent() {
     return shard_validator_t{false};
   }
 
-  static shard_validator_t present() {
+  static shard_validator_t build_present() {
     return shard_validator_t{
       true,
       shard_info_wrapper{}
     };
   }
 };
-shard_valdiator_t generate_shard_info(
+shard_validator_t generate_shard_info(
   const chunk_validation_policy_t &params,
   const hobject_t &oid,
   const ScrubMap::object &obj)
 {
   if (obj.negative) {
     ceph_assert(0 == "impossible since chunky scrub was introduced");
-    return shard_validator_t::absent();
+    return shard_validator_t::build_absent();
   }
 
-  auto ret = shard_validator_t::present();
+  auto ret = shard_validator_t::build_present();
 
-  ret.shard_info.size = obj.size;
+  ret.shard_info->size = obj.size;
 
-  ret.shard_info.omap_digest_present = obj.omap_digest_present;
-  ret.shard_info.omap_digest = obj.omap_digest;
+  ret.shard_info->omap_digest_present = obj.omap_digest_present;
+  ret.shard_info->omap_digest = obj.omap_digest;
 
-  ret.shard_info.data_digest_present = obj.digest_present;
-  ret.shard_info.data_digest = obj.digest;
+  ret.shard_info->data_digest_present = obj.digest_present;
+  ret.shard_info->data_digest = obj.digest;
 
   if (obj.ec_hash_mismatch) {
-    ret.shard_info.set_ec_hash_mismatch();
+    ret.shard_info->set_ec_hash_mismatch();
   }
 
   if (obj.ec_size_mismatch) {
-    ret.shard_info.set_ec_size_mismatch();
+    ret.shard_info->set_ec_size_mismatch();
   }
 
   if (obj.read_error) {
-    ret.shard_info.set_read_error();
+    ret.shard_info->set_read_error();
   }
 
   if (obj.stat_error) {
-    ret.shard_info.set_stat_error();
+    ret.shard_info->set_stat_error();
   }
 
   {
     auto xiter = obj.attrs.find(OI_ATTR);
     if (xiter == obj.attrs.end()) {
-      ret.shard_info.set_info_missing();
+      ret.shard_info->set_info_missing();
     } else {
       bufferlist bl;
       bl.push_back(xiter->second);
@@ -85,7 +85,7 @@ shard_valdiator_t generate_shard_info(
 	auto bliter = bl.cbegin();
 	::decode(*(ret.object_info), bliter);
       } catch (...) {
-	ret.shard_info.set_info_corrupted();
+	ret.shard_info->set_info_corrupted();
 	ret.object_info = std::nullopt;
       }
     }
@@ -94,16 +94,16 @@ shard_valdiator_t generate_shard_info(
   {
     auto xiter = obj.attrs.find(SS_ATTR);
     if (xiter == obj.attrs.end()) {
-      ret.shard_info.set_snapset_missing();
+      ret.shard_info->set_snapset_missing();
     } else {
       bufferlist bl;
       bl.push_back(xiter->second);
-      ret.snapset = SnapSet{}
+      ret.snapset = SnapSet{};
       try {
 	auto bliter = bl.cbegin();
 	::decode(*(ret.snapset), bliter);
       } catch (...) {
-	ret.shard_info.set_snapset_corrupted();
+	ret.shard_info->set_snapset_corrupted();
 	ret.snapset = std::nullopt;
       }
     }
@@ -113,16 +113,17 @@ shard_valdiator_t generate_shard_info(
   if (params.is_ec) {
     auto xiter = obj.attrs.find(ECUtil::get_hinfo_key());
     if (xiter == obj.attrs.end()) {
-      ret.shard_info.set_hinfo_missing = true;
+      ret.shard_info->set_hinfo_missing = true;
     } else {
       bufferlist bl;
       bl.push_back(xiter->second);
-      ECUtil::HashInfo hinfo;
+      ret.hinfo = ECUtil::HashInfo{};
       try {
 	auto bliter = bl.cbegin();
-	::decode(hinfo, bliter);
+	::decode(*(ret.hinfo), bliter);
       } catch (...) {
-	ret.shard_info.set_hinfo_corrupted();
+	ret.shard_info->set_hinfo_corrupted();
+	ret.hinfo = std::nullopt;
       }
     }
   }
@@ -131,7 +132,7 @@ shard_valdiator_t generate_shard_info(
   for (auto &[key, contents] : obj.attrs) {
     bufferlist bl;
     bl.push_back(contents);
-    ret.shard_info.attrs.emplace(key, std::move(bl));
+    ret.shard_info->attrs.emplace(key, std::move(bl));
   }
   return ret;
 }
@@ -143,22 +144,21 @@ select_auth_object(
   const scrub_map_set_t &maps)
 {
 
-  using obj_shard_map_t = std::map<
-    pg_shard_t, std::optional<shard_info_wrapper>>;
-  obj_shard_map_t shards;
+  using validator_map_t = std::map<pg_shard_t, shard_validator_t>;
+  validator_map_t shards;
   std::transform(
     maps.begin(),
     maps.end(),
     std::inserter(shards, shards.end()),
-    [&hoid, &policy](const auto &item) -> obj_shard_map_t::value_type {
+    [&hoid, &policy](const auto &item) -> validator_map_t::value_type {
       const auto &[shard, scrub_map] = item;
       auto miter = scrub_map.objects.find(hoid);
       if (miter == scrub_map.objects.end()) {
-	return obj_shard_map_t::value_type{
+	return validator_map_t::value_type{
 	  shard,
-	  std::nullopt};
+	  shard_validator_t::build_absent()};
       } else {
-	return obj_shard_map_t::value_type{
+	return validator_map_t::value_type{
 	  shard,
 	  generate_shard_info(
 	    policy, hoid, miter->second
