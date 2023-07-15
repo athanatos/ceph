@@ -18,44 +18,67 @@ object_set_t get_object_set(const scrub_map_set_t &in)
   return ret;
 }
 
-struct shard_validator_t {
-  bool present{true};
+struct shard_evaluation_t {
+  // Populated iff object exists on shard
   std::optional<shard_info_wrapper> shard_info;
 
   std::optional<object_info_t> object_info;
   std::optional<SnapSet> snapset;
   //std::optional<ECUtil::HashInfo> hinfo;
 
-  static shard_validator_t build_absent() {
-    return shard_validator_t{false};
+  bool from_primary{false};
+
+  static shard_evaluation_t build_absent() {
+    return shard_evaluation_t{};
   }
 
-  static shard_validator_t build_present() {
-    return shard_validator_t{
-      true,
-      shard_info_wrapper{}
-    };
+  void set_present() {
+    shard_info = shard_info_wrapper{};
+  }
+  
+  bool exists() const {
+    return !!shard_info;
+  }
+  
+  bool has_errors() const {
+    return !exists() || shard_info->has_errors();
+  }
+
+  std::weak_ordering operator<=>(const shard_evaluation_t &rhs) const {
+    if (has_errors() && !rhs.has_errors()) {
+      return std::weak_ordering::less;
+    } else if (!has_errors() && rhs.has_errors()) {
+      return std::weak_ordering::greater;
+    }
+
+
+    if (from_primary && !rhs.from_primary) {
+      return std::weak_ordering::greater;
+    } else if (!from_primary && rhs.from_primary) {
+      return std::weak_ordering::less;
+    }
+    return std::weak_ordering::equivalent;
   }
 };
-shard_validator_t generate_shard_info(
-  const chunk_validation_policy_t &params,
+shard_evaluation_t evaluate_object_shard(
+  const chunk_validation_policy_t &policy,
   const hobject_t &oid,
-  const ScrubMap::object &obj)
+  pg_shard_t from,
+  const ScrubMap::object *maybe_obj)
 {
-  if (obj.negative) {
-    ceph_assert(0 == "impossible since chunky scrub was introduced");
-    return shard_validator_t::build_absent();
+  auto ret = shard_evaluation_t::build_absent();
+  if (from == policy.primary) {
+    ret.from_primary = true;
+  }
+  if (!maybe_obj || maybe_obj->negative) {
+    ceph_assert(!maybe_obj->negative); // "impossible since chunky scrub was introduced");
+    return ret;
   }
 
-  auto ret = shard_validator_t::build_present();
-
-  ret.shard_info->size = obj.size;
-
-  ret.shard_info->omap_digest_present = obj.omap_digest_present;
-  ret.shard_info->omap_digest = obj.omap_digest;
-
-  ret.shard_info->data_digest_present = obj.digest_present;
-  ret.shard_info->data_digest = obj.digest;
+  auto &obj = *maybe_obj;
+  ret.set_present();
+  
+  ret.shard_info->set_object(obj);
 
   if (obj.ec_hash_mismatch) {
     ret.shard_info->set_ec_hash_mismatch();
@@ -129,42 +152,35 @@ shard_validator_t generate_shard_info(
   }
 #endif
 
-  for (auto &[key, contents] : obj.attrs) {
-    bufferlist bl;
-    bl.push_back(contents);
-    ret.shard_info->attrs.emplace(key, std::move(bl));
-  }
   return ret;
 }
 
-std::pair<pg_shard_t, const ScrubMap::object &>
-select_auth_object(
+std::optional<inconsistent_obj_wrapper> evaluate_object(
   const chunk_validation_policy_t &policy,
   const hobject_t &hoid,
   const scrub_map_set_t &maps)
 {
-
-  using validator_map_t = std::map<pg_shard_t, shard_validator_t>;
-  validator_map_t shards;
+  
+  using evaluation_vec_t = std::vector<std::pair<pg_shard_t, shard_evaluation_t>>;
+  evaluation_vec_t shards;
   std::transform(
     maps.begin(),
     maps.end(),
     std::inserter(shards, shards.end()),
-    [&hoid, &policy](const auto &item) -> validator_map_t::value_type {
+    [&hoid, &policy](const auto &item) -> evaluation_vec_t::value_type {
       const auto &[shard, scrub_map] = item;
       auto miter = scrub_map.objects.find(hoid);
-      if (miter == scrub_map.objects.end()) {
-	return validator_map_t::value_type{
+      auto maybe_shard = miter == scrub_map.objects.end() ?
+	nullptr : &(miter->second);
+      return
+	std::make_pair(
 	  shard,
-	  shard_validator_t::build_absent()};
-      } else {
-	return validator_map_t::value_type{
-	  shard,
-	  generate_shard_info(
-	    policy, hoid, miter->second
-	  )};
-      }
+	  evaluate_object_shard(policy, hoid, shard, maybe_shard));
     });
+  
+  std::sort(shards.begin(), shards.end());
+  
+  return std::nullopt;
 #if 0
   // Create a list of shards (with the Primary first, so that it will be
   // auth-copy, all other things being equal)
@@ -266,11 +282,6 @@ select_auth_object(
 
   return ret_auth;
 #endif
-
-  // TODO: very wrong
-  return std::make_pair(
-    maps.begin()->first,
-    std::cref(maps.begin()->second.objects.find(hoid)->second));
 }
 
 void validate_object(const hobject_t &hoid, const scrub_map_set_t &maps)
