@@ -112,8 +112,34 @@ shard_info_wrapper generate_shard_info(
 }
 
 std::pair<pg_shard_t, const ScrubMap::object &>
-select_auth_object(const hobject_t &hoid, const scrub_map_set_t &maps)
+select_auth_object(
+  const chunk_validation_policy_t &policy,
+  const hobject_t &hoid,
+  const scrub_map_set_t &maps)
 {
+
+  using obj_shard_map_t = std::map<
+    pg_shard_t, std::optional<shard_info_wrapper>>;
+  obj_shard_map_t shards;
+  std::transform(
+    maps.begin(),
+    maps.end(),
+    std::inserter(shards, shards.end()),
+    [&hoid, &policy](const auto &item) -> obj_shard_map_t::value_type {
+      const auto &[shard, scrub_map] = item;
+      auto miter = scrub_map.objects.find(hoid);
+      if (miter == scrub_map.objects.end()) {
+	return obj_shard_map_t::value_type{
+	  shard,
+	  std::nullopt};
+      } else {
+	return obj_shard_map_t::value_type{
+	  shard,
+	  generate_shard_info(
+	    policy, hoid, miter->second
+	  )};
+      }
+    });
 #if 0
   // Create a list of shards (with the Primary first, so that it will be
   // auth-copy, all other things being equal)
@@ -225,7 +251,7 @@ select_auth_object(const hobject_t &hoid, const scrub_map_set_t &maps)
 void validate_object(const hobject_t &hoid, const scrub_map_set_t &maps)
 {
 
-  auto auth_map_iter = select_auth_object(hoid, maps);
+  //auto auth_map_iter = select_auth_object(hoid, maps);
 #if 0
   // clear per-object data:
   this_chunk->cur_inconsistent.clear();

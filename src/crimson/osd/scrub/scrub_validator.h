@@ -12,6 +12,7 @@
 namespace crimson::osd::scrub {
 
 struct chunk_validation_policy_t {
+  pg_shard_t primary;
   bool is_ec{false};
 };
 
