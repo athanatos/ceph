@@ -18,51 +18,75 @@ object_set_t get_object_set(const scrub_map_set_t &in)
   return ret;
 }
 
-shard_info_wrapper generate_shard_info(
+struct shard_validator_t {
+  bool present{true};
+  std::optional<shard_info_wrapper> shard_info;
+
+  std::optional<object_info_t> object_info;
+  std::optional<SnapSet> snapset;
+  std::optional<ECUtil::HashInfo> hinfo;
+
+  static shard_validator_t absent() {
+    return shard_validator_t{false};
+  }
+
+  static shard_validator_t present() {
+    return shard_validator_t{
+      true,
+      shard_info_wrapper{}
+    };
+  }
+};
+shard_valdiator_t generate_shard_info(
   const chunk_validation_policy_t &params,
   const hobject_t &oid,
   const ScrubMap::object &obj)
 {
-  shard_info_wrapper ret;
-  ceph_assert(!obj.negative); // impossible since chunky scrub was introduced
+  if (obj.negative) {
+    ceph_assert(0 == "impossible since chunky scrub was introduced");
+    return shard_validator_t::absent();
+  }
 
-  ret.size = obj.size;
+  auto ret = shard_validator_t::present();
 
-  ret.omap_digest_present = obj.omap_digest_present;
-  ret.omap_digest = obj.omap_digest;
+  ret.shard_info.size = obj.size;
 
-  ret.data_digest_present = obj.digest_present;
-  ret.data_digest = obj.digest;
+  ret.shard_info.omap_digest_present = obj.omap_digest_present;
+  ret.shard_info.omap_digest = obj.omap_digest;
+
+  ret.shard_info.data_digest_present = obj.digest_present;
+  ret.shard_info.data_digest = obj.digest;
 
   if (obj.ec_hash_mismatch) {
-    ret.set_ec_hash_mismatch();
+    ret.shard_info.set_ec_hash_mismatch();
   }
 
   if (obj.ec_size_mismatch) {
-    ret.set_ec_size_mismatch();
+    ret.shard_info.set_ec_size_mismatch();
   }
 
   if (obj.read_error) {
-    ret.set_read_error();
+    ret.shard_info.set_read_error();
   }
 
   if (obj.stat_error) {
-    ret.set_stat_error();
+    ret.shard_info.set_stat_error();
   }
 
   {
     auto xiter = obj.attrs.find(OI_ATTR);
     if (xiter == obj.attrs.end()) {
-      ret.set_info_missing();
+      ret.shard_info.set_info_missing();
     } else {
       bufferlist bl;
       bl.push_back(xiter->second);
-      object_info_t oi;
+      ret.object_info = object_info_t{};
       try {
 	auto bliter = bl.cbegin();
-	::decode(oi, bliter);
+	::decode(*(ret.object_info), bliter);
       } catch (...) {
-	ret.set_info_corrupted();
+	ret.shard_info.set_info_corrupted();
+	ret.object_info = std::nullopt;
       }
     }
   }
@@ -70,16 +94,17 @@ shard_info_wrapper generate_shard_info(
   {
     auto xiter = obj.attrs.find(SS_ATTR);
     if (xiter == obj.attrs.end()) {
-      ret.set_snapset_missing();
+      ret.shard_info.set_snapset_missing();
     } else {
       bufferlist bl;
       bl.push_back(xiter->second);
-      SnapSet ss;
+      ret.snapset = SnapSet{}
       try {
 	auto bliter = bl.cbegin();
-	::decode(ss, bliter);
+	::decode(*(ret.snapset), bliter);
       } catch (...) {
-	ret.set_snapset_corrupted();
+	ret.shard_info.set_snapset_corrupted();
+	ret.snapset = std::nullopt;
       }
     }
   }
@@ -88,7 +113,7 @@ shard_info_wrapper generate_shard_info(
   if (params.is_ec) {
     auto xiter = obj.attrs.find(ECUtil::get_hinfo_key());
     if (xiter == obj.attrs.end()) {
-      ret.set_hinfo_missing = true;
+      ret.shard_info.set_hinfo_missing = true;
     } else {
       bufferlist bl;
       bl.push_back(xiter->second);
@@ -97,7 +122,7 @@ shard_info_wrapper generate_shard_info(
 	auto bliter = bl.cbegin();
 	::decode(hinfo, bliter);
       } catch (...) {
-	ret.set_hinfo_corrupted();
+	ret.shard_info.set_hinfo_corrupted();
       }
     }
   }
@@ -106,7 +131,7 @@ shard_info_wrapper generate_shard_info(
   for (auto &[key, contents] : obj.attrs) {
     bufferlist bl;
     bl.push_back(contents);
-    ret.attrs.emplace(key, std::move(bl));
+    ret.shard_info.attrs.emplace(key, std::move(bl));
   }
   return ret;
 }
