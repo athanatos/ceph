@@ -199,6 +199,7 @@ std::optional<inconsistent_obj_wrapper> evaluate_object(
 	ret.shards.emplace(
 	  librados::osd_shard_t{source.osd, source.shard},
 	  *eval.shard_info);
+	ret.errors |= eval.shard_info->errors;
       }
     }
     if (auth_eval.object_info) {
