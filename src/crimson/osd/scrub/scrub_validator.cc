@@ -46,16 +46,16 @@ struct shard_evaluation_t {
 
   std::weak_ordering operator<=>(const shard_evaluation_t &rhs) const {
     if (has_errors() && !rhs.has_errors()) {
-      return std::weak_ordering::less;
-    } else if (!has_errors() && rhs.has_errors()) {
       return std::weak_ordering::greater;
+    } else if (!has_errors() && rhs.has_errors()) {
+      return std::weak_ordering::less;
     }
 
 
     if (from_primary && !rhs.from_primary) {
-      return std::weak_ordering::greater;
-    } else if (!from_primary && rhs.from_primary) {
       return std::weak_ordering::less;
+    } else if (!from_primary && rhs.from_primary) {
+      return std::weak_ordering::greater;
     }
     return std::weak_ordering::equivalent;
   }
@@ -160,7 +160,7 @@ std::optional<inconsistent_obj_wrapper> evaluate_object(
   const hobject_t &hoid,
   const scrub_map_set_t &maps)
 {
-  
+  ceph_assert(maps.size() > 0);
   using evaluation_vec_t = std::vector<std::pair<pg_shard_t, shard_evaluation_t>>;
   evaluation_vec_t shards;
   std::transform(
@@ -179,8 +179,35 @@ std::optional<inconsistent_obj_wrapper> evaluate_object(
     });
   
   std::sort(shards.begin(), shards.end());
-  
-  return std::nullopt;
+
+  bool any_errors = false;
+  auto &[auth_shard, auth_eval] = shards.front();
+
+  if (!auth_eval.has_errors()) {
+    auth_eval.shard_info->selected_oi = true;
+    for (auto siter = shards.begin() + 1; siter != shards.end(); ++siter) {
+      
+    }
+  } else {
+    any_errors = true;
+  }
+
+  if (any_errors) {
+    inconsistent_obj_wrapper ret{hoid};
+    for (auto &[source, eval] : shards) {
+      if (eval.shard_info) {
+	ret.shards.emplace(
+	  librados::osd_shard_t{source.osd, source.shard},
+	  *eval.shard_info);
+      }
+    }
+    if (auth_eval.object_info) {
+      ret.version = auth_eval.object_info->version.version;
+    }
+    return ret;
+  } else {
+    return std::nullopt;
+  }
 #if 0
   // Create a list of shards (with the Primary first, so that it will be
   // auth-copy, all other things being equal)
