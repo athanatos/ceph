@@ -20,7 +20,7 @@ object_set_t get_object_set(const scrub_map_set_t &in)
 
 struct shard_evaluation_t {
   // Populated iff object exists on shard
-  std::optional<shard_info_wrapper> shard_info;
+  shard_info_wrapper shard_info;
 
   std::optional<object_info_t> object_info;
   std::optional<SnapSet> snapset;
@@ -32,16 +32,8 @@ struct shard_evaluation_t {
     return shard_evaluation_t{};
   }
 
-  void set_present() {
-    shard_info = shard_info_wrapper{};
-  }
-  
-  bool exists() const {
-    return !!shard_info;
-  }
-  
   bool has_errors() const {
-    return !exists() || shard_info->has_errors();
+    return shard_info.has_errors();
   }
 
   std::weak_ordering operator<=>(const shard_evaluation_t &rhs) const {
@@ -66,40 +58,40 @@ shard_evaluation_t evaluate_object_shard(
   pg_shard_t from,
   const ScrubMap::object *maybe_obj)
 {
-  auto ret = shard_evaluation_t::build_absent();
+  auto ret = shard_evaluation_t{};
   if (from == policy.primary) {
     ret.from_primary = true;
   }
   if (!maybe_obj || maybe_obj->negative) {
     ceph_assert(!maybe_obj->negative); // "impossible since chunky scrub was introduced");
+    ret.shard_info.set_missing();
     return ret;
   }
 
   auto &obj = *maybe_obj;
-  ret.set_present();
   
-  ret.shard_info->set_object(obj);
+  ret.shard_info.set_object(obj);
 
   if (obj.ec_hash_mismatch) {
-    ret.shard_info->set_ec_hash_mismatch();
+    ret.shard_info.set_ec_hash_mismatch();
   }
 
   if (obj.ec_size_mismatch) {
-    ret.shard_info->set_ec_size_mismatch();
+    ret.shard_info.set_ec_size_mismatch();
   }
 
   if (obj.read_error) {
-    ret.shard_info->set_read_error();
+    ret.shard_info.set_read_error();
   }
 
   if (obj.stat_error) {
-    ret.shard_info->set_stat_error();
+    ret.shard_info.set_stat_error();
   }
 
   {
     auto xiter = obj.attrs.find(OI_ATTR);
     if (xiter == obj.attrs.end()) {
-      ret.shard_info->set_info_missing();
+      ret.shard_info.set_info_missing();
     } else {
       bufferlist bl;
       bl.push_back(xiter->second);
@@ -108,7 +100,7 @@ shard_evaluation_t evaluate_object_shard(
 	auto bliter = bl.cbegin();
 	::decode(*(ret.object_info), bliter);
       } catch (...) {
-	ret.shard_info->set_info_corrupted();
+	ret.shard_info.set_info_corrupted();
 	ret.object_info = std::nullopt;
       }
     }
@@ -117,7 +109,7 @@ shard_evaluation_t evaluate_object_shard(
   {
     auto xiter = obj.attrs.find(SS_ATTR);
     if (xiter == obj.attrs.end()) {
-      ret.shard_info->set_snapset_missing();
+      ret.shard_info.set_snapset_missing();
     } else {
       bufferlist bl;
       bl.push_back(xiter->second);
@@ -126,7 +118,7 @@ shard_evaluation_t evaluate_object_shard(
 	auto bliter = bl.cbegin();
 	::decode(*(ret.snapset), bliter);
       } catch (...) {
-	ret.shard_info->set_snapset_corrupted();
+	ret.shard_info.set_snapset_corrupted();
 	ret.snapset = std::nullopt;
       }
     }
@@ -136,7 +128,7 @@ shard_evaluation_t evaluate_object_shard(
   if (params.is_ec) {
     auto xiter = obj.attrs.find(ECUtil::get_hinfo_key());
     if (xiter == obj.attrs.end()) {
-      ret.shard_info->set_hinfo_missing = true;
+      ret.shard_info.set_hinfo_missing = true;
     } else {
       bufferlist bl;
       bl.push_back(xiter->second);
@@ -145,7 +137,7 @@ shard_evaluation_t evaluate_object_shard(
 	auto bliter = bl.cbegin();
 	::decode(*(ret.hinfo), bliter);
       } catch (...) {
-	ret.shard_info->set_hinfo_corrupted();
+	ret.shard_info.set_hinfo_corrupted();
 	ret.hinfo = std::nullopt;
       }
     }
@@ -184,7 +176,7 @@ std::optional<inconsistent_obj_wrapper> evaluate_object(
   auto &[auth_shard, auth_eval] = shards.front();
 
   if (!auth_eval.has_errors()) {
-    auth_eval.shard_info->selected_oi = true;
+    auth_eval.shard_info.selected_oi = true;
     for (auto siter = shards.begin() + 1; siter != shards.end(); ++siter) {
       
     }
@@ -195,12 +187,10 @@ std::optional<inconsistent_obj_wrapper> evaluate_object(
   if (any_errors) {
     inconsistent_obj_wrapper ret{hoid};
     for (auto &[source, eval] : shards) {
-      if (eval.shard_info) {
-	ret.shards.emplace(
-	  librados::osd_shard_t{source.osd, source.shard},
-	  *eval.shard_info);
-	ret.errors |= eval.shard_info->errors;
-      }
+      ret.shards.emplace(
+	librados::osd_shard_t{source.osd, source.shard},
+	eval.shard_info);
+      ret.errors |= eval.shard_info.errors;
     }
     if (auth_eval.object_info) {
       ret.version = auth_eval.object_info->version.version;
