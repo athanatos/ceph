@@ -106,6 +106,18 @@ shard_evaluation_t evaluate_object_shard(
     }
   }
 
+  if (ret.object_info) {
+    if (ret.shard_info.data_digest_present &&
+	ret.object_info->is_data_digest() &&
+	(ret.object_info->data_digest != ret.shard_info.data_digest)) {
+      ret.shard_info.set_data_digest_mismatch_info();
+    }
+    if (ret.shard_info.omap_digest_present &&
+	(ret.object_info->omap_digest != ret.shard_info.omap_digest)) {
+      ret.shard_info.set_omap_digest_mismatch_info();
+    }
+  }
+
   {
     auto xiter = obj.attrs.find(SS_ATTR);
     if (xiter == obj.attrs.end()) {
@@ -128,7 +140,7 @@ shard_evaluation_t evaluate_object_shard(
   if (params.is_ec) {
     auto xiter = obj.attrs.find(ECUtil::get_hinfo_key());
     if (xiter == obj.attrs.end()) {
-      ret.shard_info.set_hinfo_missing = true;
+      ret.shard_info.set_hinfo_missing();
     } else {
       bufferlist bl;
       bl.push_back(xiter->second);
@@ -145,6 +157,25 @@ shard_evaluation_t evaluate_object_shard(
 #endif
 
   return ret;
+}
+
+void compare_object_to_authoritative(
+  const shard_evaluation_t &auth,
+  shard_evaluation_t &cand)
+{
+  ceph_assert(auth.object_info);
+  const auto &auth_oi = *auth.object_info;
+  const auto &auth_si = auth.shard_info;
+
+  auto &cand_si = cand.shard_info;
+
+  if (auth_si.data_digest != cand_si.data_digest) {
+    cand_si.set_data_digest_mismatch_info();
+  }
+
+  if (auth_si.omap_digest != cand_si.omap_digest) {
+    cand_si.set_omap_digest_mismatch_info();
+  }
 }
 
 std::optional<inconsistent_obj_wrapper> evaluate_object(
@@ -172,19 +203,19 @@ std::optional<inconsistent_obj_wrapper> evaluate_object(
   
   std::sort(shards.begin(), shards.end());
 
-  bool any_errors = false;
   auto &[auth_shard, auth_eval] = shards.front();
 
   if (!auth_eval.has_errors()) {
     auth_eval.shard_info.selected_oi = true;
-    for (auto siter = shards.begin() + 1; siter != shards.end(); ++siter) {
-      
-    }
-  } else {
-    any_errors = true;
+    std::for_each(
+      shards.begin() + 1, shards.end(),
+      [&auth_eval](auto &p) {
+	compare_object_to_authoritative(auth_eval, p.second);
+      });
   }
 
-  if (any_errors) {
+  if (std::any_of(shards.begin(), shards.end(),
+		  [](auto &p) { return p.second.has_errors(); })) {
     inconsistent_obj_wrapper ret{hoid};
     for (auto &[source, eval] : shards) {
       ret.shards.emplace(
