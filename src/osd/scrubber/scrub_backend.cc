@@ -1188,6 +1188,7 @@ bool ScrubBackend::compare_obj_details(pg_shard_t auth_shard,
                    candidate.omap_digest,
                    auth.omap_digest,
                    auth_shard);
+    error = true;
     obj_result.set_omap_digest_mismatch();
   }
 
@@ -1201,6 +1202,7 @@ bool ScrubBackend::compare_obj_details(pg_shard_t auth_shard,
                      candidate.digest,
                      auth_oi.data_digest,
                      auth_oi);
+      error = true;
       shard_result.set_data_digest_mismatch_info();
     }
 
@@ -1213,6 +1215,7 @@ bool ScrubBackend::compare_obj_details(pg_shard_t auth_shard,
                      candidate.omap_digest,
                      auth_oi.omap_digest,
                      auth_oi);
+      error = true;
       shard_result.set_omap_digest_mismatch_info();
     }
   }
@@ -1244,6 +1247,7 @@ bool ScrubBackend::compare_obj_details(pg_shard_t auth_shard,
       fmt::format_to(std::back_inserter(out),
 		     "{}object info inconsistent ",
 		     sep(error));
+      error = true;
       obj_result.set_object_info_inconsistency();
     }
   }
@@ -1266,6 +1270,7 @@ bool ScrubBackend::compare_obj_details(pg_shard_t auth_shard,
         fmt::format_to(std::back_inserter(out),
 		       "{}snapset inconsistent ",
 		       sep(error));
+	error = true;
         obj_result.set_snapset_inconsistency();
       }
     }
@@ -1291,6 +1296,7 @@ bool ScrubBackend::compare_obj_details(pg_shard_t auth_shard,
         fmt::format_to(std::back_inserter(out),
 		       "{}hinfo inconsistent ",
 		       sep(error));
+	error = true;
         obj_result.set_hinfo_inconsistency();
       }
     }
@@ -1308,6 +1314,7 @@ bool ScrubBackend::compare_obj_details(pg_shard_t auth_shard,
                    candidate.size,
                    oi_size,
                    auth_oi);
+    error = true;
     shard_result.set_size_mismatch_info();
   }
 
@@ -1318,6 +1325,7 @@ bool ScrubBackend::compare_obj_details(pg_shard_t auth_shard,
                    candidate.size,
                    auth.size,
                    auth_shard);
+    error = true;
     obj_result.set_size_mismatch();
   }
 
@@ -1331,6 +1339,7 @@ bool ScrubBackend::compare_obj_details(pg_shard_t auth_shard,
                    sep(error),
                    candidate.size,
                    m_conf->osd_max_object_size);
+    error = true;
     obj_result.set_size_too_large();
   }
 
@@ -1350,12 +1359,14 @@ bool ScrubBackend::compare_obj_details(pg_shard_t auth_shard,
 		     "{}attr name mismatch '{}'",
 		     sep(error),
 		     k);
+      error = true;
       obj_result.set_attr_name_mismatch();
     } else if (cand->second.cmp(v)) {
       fmt::format_to(std::back_inserter(out),
 		     "{}attr value mismatch '{}'",
 		     sep(error),
 		     k);
+      error = true;
       obj_result.set_attr_value_mismatch();
     }
   }
@@ -1372,6 +1383,7 @@ bool ScrubBackend::compare_obj_details(pg_shard_t auth_shard,
 		     "{}attr name mismatch '{}'",
 		     sep(error),
 		     k);
+      error = true;
       obj_result.set_attr_name_mismatch();
     }
   }
