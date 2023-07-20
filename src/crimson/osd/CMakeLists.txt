@@ -34,6 +34,7 @@ add_executable(crimson-osd
   scheduler/scheduler.cc
   scheduler/mclock_scheduler.cc
   scrub/scrub_machine.cc
+  scrub/scrub_validator.cc
   osdmap_gate.cc
   pg_activation_blocker.cc
   pg_map.cc
