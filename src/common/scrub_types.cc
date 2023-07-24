@@ -73,7 +73,7 @@ void shard_info_wrapper::set_object(const ScrubMap::object& object)
 
 void shard_info_wrapper::encode(bufferlist& bl) const
 {
-  ENCODE_START(3, 3, bl);
+  ENCODE_START(4, 3, bl);
   encode(errors, bl);
   encode(primary, bl);
   if (!has_shard_missing()) {
@@ -85,12 +85,13 @@ void shard_info_wrapper::encode(bufferlist& bl) const
     encode(data_digest, bl);
     encode(selected_oi, bl);
   }
+  encode(authoritative, bl);
   ENCODE_FINISH(bl);
 }
 
 void shard_info_wrapper::decode(bufferlist::const_iterator& bp)
 {
-  DECODE_START(3, bp);
+  DECODE_START(4, bp);
   decode(errors, bp);
   decode(primary, bp);
   if (!has_shard_missing()) {
@@ -101,6 +102,9 @@ void shard_info_wrapper::decode(bufferlist::const_iterator& bp)
     decode(data_digest_present, bp);
     decode(data_digest, bp);
     decode(selected_oi, bp);
+  }
+  if (struct_v >= 4) {
+    decode(authoritative, bp);
   }
   DECODE_FINISH(bp);
 }
