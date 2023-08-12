@@ -54,6 +54,7 @@
 #include "crimson/osd/osd_operations/pg_advance_map.h"
 #include "crimson/osd/osd_operations/recovery_subrequest.h"
 #include "crimson/osd/osd_operations/replicated_request.h"
+#include "crimson/osd/osd_operations/scrub_events.h"
 #include "crimson/osd/osd_operation_external_tracking.h"
 #include "crimson/crush/CrushLocation.h"
 
@@ -1189,20 +1190,12 @@ seastar::future<> OSD::handle_scrub(
     logger().warn("fsid mismatched");
     return seastar::now();
   }
-  return seastar::parallel_for_each(std::move(m->scrub_pgs),
-    [m, conn, this](spg_t pgid) {
-    pg_shard_t from_shard{static_cast<int>(m->get_source().num()),
-                          pgid.shard};
-    return seastar::now();
-/*
-    PeeringState::RequestScrub scrub_request{m->deep, m->repair};
-    return pg_shard_manager.start_pg_operation<RemotePeeringEvent>(
-      conn,
-      from_shard,
-      pgid,
-      PGPeeringEvent{m->epoch, m->epoch, scrub_request}).second;
-      */
-  });
+  for (auto &pgid : m->scrub_pgs) {
+    std::ignore = pg_shard_manager.start_pg_operation<
+      crimson::osd::ScrubRequested
+      >(conn, m->epoch, pgid);
+  }
+  return seastar::now();
 }
 
 seastar::future<> OSD::handle_mark_me_down(

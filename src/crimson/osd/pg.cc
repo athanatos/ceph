@@ -108,6 +108,7 @@ PG::PG(
     pg_whoami{pg_shard},
     coll_ref{coll_ref},
     pgmeta_oid{pgid.make_pgmeta_oid()},
+    scrubber(*this),
     osdmap_gate("PG::osdmap_gate"),
     shard_services{shard_services},
     backend(

@@ -39,6 +39,7 @@
 #include "crimson/osd/pg_recovery_listener.h"
 #include "crimson/osd/recovery_backend.h"
 #include "crimson/osd/object_context_loader.h"
+#include "crimson/osd/scrub/pg_scrubber.h"
 
 class MQuery;
 class OSDMap;
@@ -159,6 +160,13 @@ public:
     bool dirty_big_info,
     bool need_write_epoch,
     ceph::os::Transaction &t) final;
+
+  // scrub state
+
+  friend class scrub::PGScrubber;
+  template <typename T> friend class ScrubEventBaseT;
+
+  scrub::PGScrubber scrubber;
 
   void scrub_requested(scrub_level_t scrub_level, scrub_type_t scrub_type);
 

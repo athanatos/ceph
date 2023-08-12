@@ -92,61 +92,6 @@ struct ScrubContext {
   /// return struct defining chunk validation rules
   virtual const chunk_validation_policy_t &get_policy() const = 0;
 
-  /**
-   * request_local_reservation
-   *
-   * Asyncronously request a local reservation on primary osd.  Implementation
-   * must signal completion by submitting a
-   * request_local_reservation_complete_t event unless first canceled.
-   *
-   * ScrubMachine is responsible for releasing the reservation even in the
-   * event of an interval_change_event_t.
-   */
-  SIMPLE_EVENT(request_local_reservation_complete_t);
-  virtual void request_local_reservation() = 0;
-
-  /// cancel in progress or current local reservation
-  virtual void cancel_local_reservation() = 0;
-
-  /**
-   * replica_request_local_reservation
-   *
-   * Asyncronously request a local reservation a replica.  Implementation
-   * must signal completion by submitting a
-   * replica_request_local_reservation_complete_t event unless first canceled.
-   *
-   * ScrubMachine is responsible for releasing the reservation even in the
-   * event of an interval_change_event_t.
-   */
-  SIMPLE_EVENT(replica_request_local_reservation_complete_t);
-  virtual void replica_request_local_reservation() = 0;
-
-  /// cancel in progress or current local reservation
-  virtual void replica_cancel_local_reservation() = 0;
-
-  /// signal to primary that reservation was successful
-  virtual void replica_confirm_reservation() = 0;
-
-
-  /**
-   * request_remote_reservations
-   *
-   * Asyncronously request reservations on a remote peer.  Implementation
-   * must signal completion by submitting a
-   * request_remote_reservation_complete_t event with the completed peer unless
-   * first canceled.
-   *
-   * ScrubMachine is not responsible for releasing the remote reservation in the
-   * event of an interval_change_event_t as the remote peer will do so
-   * upon receipt of the new map.  In other cases, ScrubMachine is responsible
-   * for releasing the reservation.
-   */
-  VALUE_EVENT(request_remote_reservations_complete_t, pg_shard_t);
-  virtual void request_remote_reservation(pg_shard_t target) = 0;
-
-  /// cancel in progress or current remote reservations
-  virtual void cancel_remote_reservation(pg_shard_t target) = 0;
-
   struct request_range_result_t {
     hobject_t start;
     hobject_t end;
@@ -256,45 +201,23 @@ struct Crash : ScrubState<Crash, ScrubMachine> {
 
   explicit Crash(my_context ctx);
 };
-  
+
+SIMPLE_EVENT(StartScrub);
+struct PrimaryActive;
 struct Inactive : ScrubState<Inactive, ScrubMachine> {
   static constexpr std::string_view state_name = "Inactive";
-};
-
-struct GetLocalReservation;
-struct PrimaryActive : ScrubState<PrimaryActive, ScrubMachine, GetLocalReservation> {
-  static constexpr std::string_view state_name = "PrimaryActive";
-
-  bool local_reservation_held = false;
-  bool remote_reservations_held = false;
-
-  void exit();
-};
-
-struct GetRemoteReservations;
-struct GetLocalReservation : ScrubState<GetLocalReservation, PrimaryActive> {
-  static constexpr std::string_view state_name = "GetLocalReservation";
 
   using reactions = boost::mpl::list<
-    sc::transition<ScrubContext::request_local_reservation_complete_t,
-				  GetRemoteReservations>
+    sc::transition<StartScrub, PrimaryActive>
     >;
-
-  explicit GetLocalReservation(my_context ctx);
 };
 
 struct Scrubbing;
-struct GetRemoteReservations : ScrubState<GetRemoteReservations, PrimaryActive> {
-  static constexpr std::string_view state_name = "GetRemoteReservations";
-  unsigned waiting_on = 0;
+struct PrimaryActive : ScrubState<PrimaryActive, ScrubMachine, Scrubbing> {
+  static constexpr std::string_view state_name = "PrimaryActive";
 
-  using reactions = boost::mpl::list<
-    sc::custom_reaction<ScrubContext::request_remote_reservations_complete_t>
-    >;
-
-  explicit GetRemoteReservations(my_context ctx);
-
-  sc::result react(const ScrubContext::request_remote_reservations_complete_t &);
+  bool local_reservation_held = false;
+  std::set<pg_shard_t> remote_reservations_held;
 };
 
 struct ChunkState;
@@ -361,33 +284,6 @@ struct ScanRange : ScrubState<ScanRange, ChunkState> {
 
   sc::result react(const ScrubContext::scan_range_complete_t &);
 };
-
-struct ReplicaGetLocalReservation;
-struct ReplicaActive : ScrubState<ReplicaActive, ScrubMachine, ReplicaGetLocalReservation> {
-  static constexpr std::string_view state_name = "ReplicaActive";
-
-  bool reservation_held = false;
-
-  void exit();
-};
-
-struct ReplicaAwaitScan;
-struct ReplicaGetLocalReservation : ScrubState<ReplicaGetLocalReservation, ReplicaActive> {
-  static constexpr std::string_view state_name = "ReplicaGetLocalReservation";
-
-  using reactions = boost::mpl::list<
-    sc::custom_reaction<ScrubContext::replica_request_local_reservation_complete_t>
-    >;
-
-  explicit ReplicaGetLocalReservation(my_context ctx);
-
-  sc::result react(const ScrubContext::replica_request_local_reservation_complete_t &);
-};
-
-struct ReplicaAwaitScan : ScrubState<ReplicaGetLocalReservation, ReplicaActive> {
-  static constexpr std::string_view state_name = "ReplicaAwaitScan";
-};
-
 
 #undef SIMPLE_EVENT
 #undef VALUE_EVENT
