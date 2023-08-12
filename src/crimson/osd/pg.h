@@ -31,7 +31,9 @@
 #include "crimson/osd/osd_operations/logmissing_request.h"
 #include "crimson/osd/osd_operations/logmissing_request_reply.h"
 #include "crimson/osd/osd_operations/peering_event.h"
+#include "crimson/osd/osd_operations/primary_scrub_process.h"
 #include "crimson/osd/osd_operations/replicated_request.h"
+#include "crimson/osd/osd_operations/replica_scrub_process.h"
 #include "crimson/osd/shard_services.h"
 #include "crimson/osd/osdmap_gate.h"
 #include "crimson/osd/pg_activation_blocker.h"
@@ -158,6 +160,17 @@ public:
     bool dirty_big_info,
     bool need_write_epoch,
     ceph::os::Transaction &t) final;
+
+  // scrub state
+
+  friend class PrimaryScrubProcess;
+  friend class ReplicaScrubProcess;
+
+  /// null iff scrub is in progress, primary touchpoint between IO and scrub
+  Ref<PrimaryScrubProcess> primary_scrub_process;
+
+  /// null iff scrub is in progress, primary touchpoint between IO and scrub
+  Ref<ReplicaScrubProcess> replica_scrub_process;
 
   void scrub_requested(scrub_level_t scrub_level, scrub_type_t scrub_type) final;
 

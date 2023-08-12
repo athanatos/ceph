@@ -29,6 +29,7 @@ add_executable(crimson-osd
   osd_operations/recovery_subrequest.cc
   osd_operations/snaptrim_event.cc
   osd_operations/primary_scrub_process.cc
+  osd_operations/replica_scrub_process.cc
   pg_recovery.cc
   recovery_backend.cc
   replicated_recovery_backend.cc

@@ -2,10 +2,20 @@
 // vim: ts=8 sw=2 smarttab
 
 #include "primary_scrub_process.h"
+#include "crimson/osd/pg.h"
 
 namespace crimson::osd {
 
-// imposed by `ShardService::start_operation<T>(...)`.
+PrimaryScrubProcess::PrimaryScrubProcess(Ref<PG> pg) : pg(pg)
+{
+  pg->primary_scrub_process = this;
+}
+
+PrimaryScrubProcess::~PrimaryScrubProcess()
+{
+  pg->primary_scrub_process = nullptr;
+}
+
 seastar::future<> PrimaryScrubProcess::start()
 {
   return seastar::now();
