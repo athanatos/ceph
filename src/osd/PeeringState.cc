@@ -9,7 +9,6 @@
 #include "messages/MOSDPGRemove.h"
 #include "messages/MBackfillReserve.h"
 #include "messages/MRecoveryReserve.h"
-#include "messages/MOSDScrubReserve.h"
 #include "messages/MOSDPGInfo2.h"
 #include "messages/MOSDPGTrim.h"
 #include "messages/MOSDPGLog.h"
@@ -4878,17 +4877,6 @@ boost::statechart::result PeeringState::Primary::react(
 {
   DECLARE_LOCALS;
   ps->set_force_recovery(false);
-  return discard_event();
-}
-
-boost::statechart::result PeeringState::Primary::react(
-  const RequestScrub& evt)
-{
-  DECLARE_LOCALS;
-  if (ps->is_primary()) {
-    pl->scrub_requested(evt.deep, evt.repair);
-    psdout(10) << "marking for scrub" << dendl;
-  }
   return discard_event();
 }
 

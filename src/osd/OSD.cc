@@ -7599,6 +7599,7 @@ void OSD::handle_fast_scrub(MOSDScrub2 *m)
     return;
   }
   for (auto pgid : m->scrub_pgs) {
+/* TODOSAM: reroute this if crimson really doesn't submit it
     enqueue_peering_evt(
       pgid,
       PGPeeringEventRef(
@@ -7606,6 +7607,7 @@ void OSD::handle_fast_scrub(MOSDScrub2 *m)
 	  m->epoch,
 	  m->epoch,
 	  PeeringState::RequestScrub(m->deep, m->repair))));
+	  */
   }
   m->put();
 }

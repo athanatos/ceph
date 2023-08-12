@@ -1193,12 +1193,15 @@ seastar::future<> OSD::handle_scrub(
     [m, conn, this](spg_t pgid) {
     pg_shard_t from_shard{static_cast<int>(m->get_source().num()),
                           pgid.shard};
+    return seastar::now();
+/*
     PeeringState::RequestScrub scrub_request{m->deep, m->repair};
     return pg_shard_manager.start_pg_operation<RemotePeeringEvent>(
       conn,
       from_shard,
       pgid,
       PGPeeringEvent{m->epoch, m->epoch, scrub_request}).second;
+      */
   });
 }
 

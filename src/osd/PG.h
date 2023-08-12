@@ -548,7 +548,7 @@ public:
    */
   void on_scrub_schedule_input_change();
 
-  void scrub_requested(scrub_level_t scrub_level, scrub_type_t scrub_type) override;
+  void scrub_requested(scrub_level_t scrub_level, scrub_type_t scrub_type);
 
   uint64_t get_snap_trimq_size() const override {
     return snap_trimq.size();
