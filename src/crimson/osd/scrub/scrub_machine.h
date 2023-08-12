@@ -313,9 +313,10 @@ struct Scrubbing : ScrubState<Scrubbing, PrimaryActive, ChunkState> {
   /// hobjects < current have been scrubbed
   hobject_t current;
 
+  /// true for deep scrub
   bool deep = false;
 
-  // TODOSAM: add event for each stat update
+  /// stats for objects < current, maintained via OpStats
   object_stat_sum_t stats;
 
   void advance_current(const hobject_t &next) {

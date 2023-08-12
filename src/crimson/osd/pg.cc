@@ -97,6 +97,7 @@ PG::PG(
     pg_whoami{pg_shard},
     coll_ref{coll_ref},
     pgmeta_oid{pgid.make_pgmeta_oid()},
+    scrubber(*this),
     osdmap_gate("PG::osdmap_gate"),
     shard_services{shard_services},
     backend(
@@ -144,6 +145,7 @@ PG::PG(
       pgid.shard),
     wait_for_active_blocker(this)
 {
+  scrubber.initiate();
   peering_state.set_backend_predicates(
     new ReadablePredicate(pg_whoami),
     new RecoverablePredicate());
@@ -324,6 +326,12 @@ void PG::on_activate(interval_set<snapid_t> snaps)
   projected_last_update = peering_state.get_info().last_update;
 }
 
+void PG::on_replica_activate()
+{
+  logger().debug("{}: {}", *this, __func__);
+  scrubber.on_replica_activate();
+}
+
 void PG::on_activate_complete()
 {
   wait_for_active_blocker.unblock();
@@ -451,7 +459,7 @@ PG::do_delete_work(ceph::os::Transaction &t, ghobject_t _next)
 
 Context *PG::on_clean()
 {
-  // Not needed yet (will be needed for IO unblocking)
+  scrubber.on_primary_active_clean();
   return nullptr;
 }
 
@@ -1264,6 +1272,8 @@ void PG::log_operation(
   if (!is_primary()) { // && !is_ec_pg()
     replica_clear_repop_obc(logv);
   }
+  ceph_assert(!logv.empty());
+  scrubber.on_log_update(logv.rbegin()->version);
   peering_state.append_log(std::move(logv),
                            trim_to,
                            roll_forward_to,
@@ -1440,6 +1450,7 @@ void PG::on_change(ceph::os::Transaction &t) {
     logger().debug("{} {}: dropping requests", *this, __func__);
     client_request_orderer.clear_and_cancel();
   }
+  scrubber.on_interval_change();
 }
 
 void PG::context_registry_on_change() {

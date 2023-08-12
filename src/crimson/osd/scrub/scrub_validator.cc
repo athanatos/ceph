@@ -347,7 +347,7 @@ std::optional<inconsistent_snapset_wrapper> evaluate_snapset(
 {
   /* inconsistent_snapset_t has several error codes that seem to pertain to
    * specific objects rather than to the snapset specifically.  I'm choosing
-   * to ignore those for now TODOSAM */
+   * to ignore those for now */
   inconsistent_snapset_wrapper ret;
   if (!maybe_snapset) {
     ret.set_headless();
