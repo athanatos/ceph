@@ -244,20 +244,30 @@ ClientRequest::process_op(
 	  DEBUGDPP("{}.{}: entered get_obc stage, about to wait_scrub",
 		   *pg, *this, this_instance_id);
           op_info.set_from_op(&*m, *pg->get_osdmap());
-	  return pg->with_locked_obc(
-	    m->get_hobj(), op_info,
-	    [FNAME, this, pg, this_instance_id, &ihref](auto obc) mutable {
-	      DEBUGDPP("{}.{}: got obc {}, entering process stage",
-		       *pg, *this, this_instance_id, obc->obs);
-	      return ihref.enter_stage<interruptor>(
-		client_pp(*pg).process, *this
-	      ).then_interruptible(
-		[FNAME, this, pg, this_instance_id, obc, &ihref]() mutable {
-		  DEBUGDPP("{}.{}: in process stage, calling do_process",
-			   *pg, *this, this_instance_id);
+	  return ihref.enter_blocker(
+	    *this,
+	    pg->scrubber,
+	    &decltype(pg->scrubber)::wait_scrub,
+	    m->get_hobj()
+	  ).then_interruptible(
+	    [FNAME, this, pg, this_instance_id, &ihref]() mutable {
+	      DEBUGDPP("{}.{}: past scrub blocker, getting obc",
+		       *pg, *this, this_instance_id);
+	    return pg->with_locked_obc(
+	      m->get_hobj(), op_info,
+	      [FNAME, this, pg, this_instance_id, &ihref](auto obc) mutable {
+		DEBUGDPP("{}.{}: got obc {}, entering process stage",
+			 *pg, *this, this_instance_id, obc->obs);
+		return ihref.enter_stage<interruptor>(
+		  client_pp(*pg).process, *this
+		).then_interruptible(
+		  [FNAME, this, pg, this_instance_id, obc, &ihref]() mutable {
+		    DEBUGDPP("{}.{}: in process stage, calling do_process",
+			     *pg, *this, this_instance_id);
 		  return do_process(ihref, pg, obc, this_instance_id);
 		});
-	    });
+	      });
+	  });
         });
       }
     });
