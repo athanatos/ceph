@@ -224,16 +224,23 @@ ClientRequest::process_op(instance_handle_t &ihref, Ref<PG> &pg)
           [this, pg, &ihref]() mutable -> PG::load_obc_iertr::future<> {
           logger().debug("{}: in get_obc stage", *this);
           op_info.set_from_op(&*m, *pg->get_osdmap());
-          return pg->with_locked_obc(
-            m->get_hobj(), op_info,
-            [this, pg, &ihref](auto obc) mutable {
-              logger().debug("{}: got obc {}", *this, obc->obs);
-              return ihref.enter_stage<interruptor>(
-                client_pp(*pg).process, *this
-              ).then_interruptible([this, pg, obc, &ihref]() mutable {
-                return do_process(ihref, pg, obc);
-              });
-            });
+	  return ihref.enter_blocker(
+	    *this,
+	    pg->scrubber,
+	    &decltype(pg->scrubber)::wait_scrub,
+	    m->get_hobj()
+	  ).then_interruptible([this, pg, &ihref]() mutable {
+	    return pg->with_locked_obc(
+	      m->get_hobj(), op_info,
+	      [this, pg, &ihref](auto obc) mutable {
+		logger().debug("{}: got obc {}", *this, obc->obs);
+		return ihref.enter_stage<interruptor>(
+		  client_pp(*pg).process, *this
+		).then_interruptible([this, pg, obc, &ihref]() mutable {
+		  return do_process(ihref, pg, obc);
+		});
+	      });
+	  });
         });
       }
     });
