@@ -14,6 +14,7 @@
 #include "crimson/osd/osd_operations/snaptrim_event.h"
 #include "crimson/osd/pg_activation_blocker.h"
 #include "crimson/osd/pg_map.h"
+#include "crimson/osd/scrub/pg_scrubber.h"
 
 namespace crimson::osd {
 
@@ -29,6 +30,7 @@ struct LttngBackend
     PG_OSDMapGate::OSDMapBlocker::BlockingEvent::Backend,
     ClientRequest::PGPipeline::WaitForActive::BlockingEvent::Backend,
     PGActivationBlocker::BlockingEvent::Backend,
+    scrub::PGScrubber::BlockingEvent::Backend,
     ClientRequest::PGPipeline::RecoverMissing::BlockingEvent::Backend,
     ClientRequest::PGPipeline::GetOBC::BlockingEvent::Backend,
     ClientRequest::PGPipeline::Process::BlockingEvent::Backend,
@@ -83,6 +85,11 @@ struct LttngBackend
   void handle(PGActivationBlocker::BlockingEvent& ev,
               const Operation& op,
               const PGActivationBlocker& blocker) override {
+  }
+
+  void handle(scrub::PGScrubber::BlockingEvent& ev,
+              const Operation& op,
+              const scrub::PGScrubber& blocker) override {
   }
 
   void handle(ClientRequest::PGPipeline::RecoverMissing::BlockingEvent& ev,
@@ -129,6 +136,7 @@ struct HistoricBackend
     PG_OSDMapGate::OSDMapBlocker::BlockingEvent::Backend,
     ClientRequest::PGPipeline::WaitForActive::BlockingEvent::Backend,
     PGActivationBlocker::BlockingEvent::Backend,
+    scrub::PGScrubber::BlockingEvent::Backend,
     ClientRequest::PGPipeline::RecoverMissing::BlockingEvent::Backend,
     ClientRequest::PGPipeline::GetOBC::BlockingEvent::Backend,
     ClientRequest::PGPipeline::Process::BlockingEvent::Backend,
@@ -183,6 +191,11 @@ struct HistoricBackend
   void handle(PGActivationBlocker::BlockingEvent& ev,
               const Operation& op,
               const PGActivationBlocker& blocker) override {
+  }
+
+  void handle(scrub::PGScrubber::BlockingEvent& ev,
+              const Operation& op,
+              const scrub::PGScrubber& blocker) override {
   }
 
   void handle(ClientRequest::PGPipeline::RecoverMissing::BlockingEvent& ev,
