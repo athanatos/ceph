@@ -159,7 +159,7 @@ public:
     bool need_write_epoch,
     ceph::os::Transaction &t) final;
 
-  void scrub_requested(scrub_level_t scrub_level, scrub_type_t scrub_type) final;
+  void scrub_requested(scrub_level_t scrub_level, scrub_type_t scrub_type);
 
   uint64_t get_snap_trimq_size() const final {
     return std::size(snap_trimq);

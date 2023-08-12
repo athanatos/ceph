@@ -279,9 +279,6 @@ public:
       bool need_write_epoch,
       ObjectStore::Transaction &t) = 0;
 
-    /// Notify that a scrub has been requested
-    virtual void scrub_requested(scrub_level_t scrub_level, scrub_type_t scrub_type) = 0;
-
     /// Return current snap_trimq size
     virtual uint64_t get_snap_trimq_size() const = 0;
 
@@ -523,16 +520,6 @@ public:
     }
   };
 
-  struct RequestScrub : boost::statechart::event<RequestScrub> {
-    scrub_level_t deep;
-    scrub_type_t repair;
-    explicit RequestScrub(bool d, bool r) : deep(scrub_level_t(d)), repair(scrub_type_t(r)) {}
-    void print(std::ostream *out) const {
-      *out << "RequestScrub(" << ((deep==scrub_level_t::deep) ? "deep" : "shallow")
-	   << ((repair==scrub_type_t::do_repair) ? " repair)" : ")");
-    }
-  };
-
   TrivialEvent(Initialize)
   TrivialEvent(GotInfo)
   TrivialEvent(NeedUpThru)
@@ -740,7 +727,6 @@ public:
       boost::statechart::custom_reaction<UnsetForceRecovery>,
       boost::statechart::custom_reaction<SetForceBackfill>,
       boost::statechart::custom_reaction<UnsetForceBackfill>,
-      boost::statechart::custom_reaction<RequestScrub>,
       boost::statechart::custom_reaction<CheckReadable>,
       // crash
       boost::statechart::transition< boost::statechart::event_base, Crashed >
@@ -782,8 +768,7 @@ public:
       boost::statechart::custom_reaction<SetForceRecovery>,
       boost::statechart::custom_reaction<UnsetForceRecovery>,
       boost::statechart::custom_reaction<SetForceBackfill>,
-      boost::statechart::custom_reaction<UnsetForceBackfill>,
-      boost::statechart::custom_reaction<RequestScrub>
+      boost::statechart::custom_reaction<UnsetForceBackfill>
       > reactions;
     boost::statechart::result react(const ActMap&);
     boost::statechart::result react(const MNotifyRec&);
@@ -791,7 +776,6 @@ public:
     boost::statechart::result react(const UnsetForceRecovery&);
     boost::statechart::result react(const SetForceBackfill&);
     boost::statechart::result react(const UnsetForceBackfill&);
-    boost::statechart::result react(const RequestScrub&);
   };
 
   struct WaitActingChange : boost::statechart::state< WaitActingChange, Primary>,
