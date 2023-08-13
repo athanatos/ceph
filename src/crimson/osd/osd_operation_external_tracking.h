@@ -12,6 +12,9 @@
 #include "crimson/osd/osd_operations/recovery_subrequest.h"
 #include "crimson/osd/osd_operations/replicated_request.h"
 #include "crimson/osd/osd_operations/snaptrim_event.h"
+#include "crimson/osd/osd_operations/scrub_events.h"
+#include "crimson/osd/osd_operations/primary_scrub_process.h"
+#include "crimson/osd/osd_operations/replica_scrub_process.h"
 #include "crimson/osd/pg_activation_blocker.h"
 #include "crimson/osd/pg_map.h"
 
@@ -299,6 +302,27 @@ struct EventBackendRegistry<osd::PGAdvanceMap> {
 
 template <>
 struct EventBackendRegistry<osd::SnapTrimObjSubEvent> {
+  static std::tuple<> get_backends() {
+    return {};
+  }
+};
+
+template <>
+struct EventBackendRegistry<osd::ScrubRequested> {
+  static std::tuple<> get_backends() {
+    return {};
+  }
+};
+
+template <>
+struct EventBackendRegistry<osd::PrimaryScrubProcess> {
+  static std::tuple<> get_backends() {
+    return {};
+  }
+};
+
+template <>
+struct EventBackendRegistry<osd::ReplicaScrubProcess> {
   static std::tuple<> get_backends() {
     return {};
   }

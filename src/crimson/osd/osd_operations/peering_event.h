@@ -23,19 +23,13 @@ class ShardServices;
 class PG;
 class BackfillRecovery;
 
-  class PGPeeringPipeline {
+  struct PGPeeringPipeline {
     struct AwaitMap : OrderedExclusivePhaseT<AwaitMap> {
       static constexpr auto type_name = "PeeringEvent::PGPipeline::await_map";
     } await_map;
     struct Process : OrderedExclusivePhaseT<Process> {
       static constexpr auto type_name = "PeeringEvent::PGPipeline::process";
     } process;
-    template <class T>
-    friend class PeeringEvent;
-    friend class LocalPeeringEvent;
-    friend class RemotePeeringEvent;
-    friend class PGAdvanceMap;
-    friend class BackfillRecovery;
   };
 
 template <class T>
@@ -120,14 +114,6 @@ protected:
   ) override;
 
 public:
-  class OSDPipeline {
-    struct AwaitActive : OrderedExclusivePhaseT<AwaitActive> {
-      static constexpr auto type_name =
-	"PeeringRequest::OSDPipeline::await_active";
-    } await_active;
-    friend class RemotePeeringEvent;
-  };
-
   template <typename... Args>
   RemotePeeringEvent(crimson::net::ConnectionRef conn, Args&&... args) :
     PeeringEvent(std::forward<Args>(args)...),
@@ -144,7 +130,6 @@ public:
     PGPeeringPipeline::AwaitMap::BlockingEvent,
     PG_OSDMapGate::OSDMapBlocker::BlockingEvent,
     PGPeeringPipeline::Process::BlockingEvent,
-    OSDPipeline::AwaitActive::BlockingEvent,
     CompletionEvent
   > tracking_events;
 
