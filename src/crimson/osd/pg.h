@@ -165,6 +165,7 @@ public:
 
   friend class PrimaryScrubProcess;
   friend class ReplicaScrubProcess;
+  template <typename T> friend class ScrubEventBaseT;
 
   /// null iff scrub is in progress, primary touchpoint between IO and scrub
   Ref<PrimaryScrubProcess> primary_scrub_process;
