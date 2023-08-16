@@ -308,13 +308,6 @@ struct EventBackendRegistry<osd::SnapTrimObjSubEvent> {
 };
 
 template <>
-struct EventBackendRegistry<osd::ScrubRequested> {
-  static std::tuple<> get_backends() {
-    return {};
-  }
-};
-
-template <>
 struct EventBackendRegistry<osd::PrimaryScrubProcess> {
   static std::tuple<> get_backends() {
     return {};
