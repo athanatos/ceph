@@ -8,12 +8,10 @@ namespace crimson::osd {
 
 ReplicaScrubProcess::ReplicaScrubProcess(Ref<PG> pg) : pg(pg)
 {
-  pg->replica_scrub_process = this;
 }
 
 ReplicaScrubProcess::~ReplicaScrubProcess()
 {
-  pg->replica_scrub_process = nullptr;
 }
 
 

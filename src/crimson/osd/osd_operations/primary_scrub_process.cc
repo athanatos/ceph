@@ -8,12 +8,10 @@ namespace crimson::osd {
 
 PrimaryScrubProcess::PrimaryScrubProcess(Ref<PG> pg) : pg(pg)
 {
-  pg->primary_scrub_process = this;
 }
 
 PrimaryScrubProcess::~PrimaryScrubProcess()
 {
-  pg->primary_scrub_process = nullptr;
 }
 
 seastar::future<> PrimaryScrubProcess::start()

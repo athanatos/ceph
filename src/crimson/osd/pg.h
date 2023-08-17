@@ -41,6 +41,7 @@
 #include "crimson/osd/pg_recovery_listener.h"
 #include "crimson/osd/recovery_backend.h"
 #include "crimson/osd/object_context_loader.h"
+#include "crimson/osd/scrub/pg_scrubber.h"
 
 class MQuery;
 class OSDMap;
@@ -163,15 +164,10 @@ public:
 
   // scrub state
 
-  friend class PrimaryScrubProcess;
-  friend class ReplicaScrubProcess;
+  friend class scrub::PGScrubber;
   template <typename T> friend class ScrubEventBaseT;
 
-  /// null iff scrub is in progress, primary touchpoint between IO and scrub
-  Ref<PrimaryScrubProcess> primary_scrub_process;
-
-  /// null iff scrub is in progress, primary touchpoint between IO and scrub
-  Ref<ReplicaScrubProcess> replica_scrub_process;
+  scrub::PGScrubber scrubber;
 
   void scrub_requested(scrub_level_t scrub_level, scrub_type_t scrub_type);
 
