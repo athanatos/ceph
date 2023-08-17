@@ -13,11 +13,17 @@ namespace crimson::osd::scrub {
 
 class PGScrubber : public ScrubContext {
   PG &pg;
+  ScrubMachine machine;
 
 public:
-  PGScrubber(PG &pg) : pg(pg) {}
+  PGScrubber(PG &pg) : pg(pg), machine(*this) {}
 
-  void scrub_requested();
+  void on_primary_activate();
+  void on_interval_change();
+
+  void handle_scrub_requested();
+
+  void handle_scrub_message(Message &m);
 
 private:
   // ScrubContext interface

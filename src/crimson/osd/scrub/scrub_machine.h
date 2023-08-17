@@ -256,9 +256,15 @@ struct Crash : ScrubState<Crash, ScrubMachine> {
 
   explicit Crash(my_context ctx);
 };
-  
+
+SIMPLE_EVENT(StartScrub);
+struct PrimaryActive;
 struct Inactive : ScrubState<Inactive, ScrubMachine> {
   static constexpr std::string_view state_name = "Inactive";
+
+  using reactions = boost::mpl::list<
+    sc::transition<StartScrub, PrimaryActive>
+    >;
 };
 
 struct GetLocalReservation;
