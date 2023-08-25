@@ -25,4 +25,64 @@ void PGScrubber::handle_scrub_message(Message &m)
 {
 }
 
+const std::set<pg_shard_t> &PGScrubber::get_ids_to_scrub() const
+{
+  return pg.peering_state.get_actingset();
+}
+
+void PGScrubber::request_local_reservation()
+{
+  // schedule scrub TOOD
+}
+
+void PGScrubber::cancel_local_reservation()
+{
+  // unschedule scrub TODO
+}
+
+void PGScrubber::replica_request_local_reservation()
+{
+}
+
+void PGScrubber::replica_cancel_local_reservation()
+{
+}
+
+void PGScrubber::replica_confirm_reservation()
+{
+}
+
+void PGScrubber::request_remote_reservation(pg_shard_t target)
+{
+}
+
+void PGScrubber::cancel_remote_reservation(pg_shard_t target)
+{
+}
+
+void PGScrubber::request_range(const hobject_t &start)
+{
+}
+
+void PGScrubber::reserve_range(const hobject_t &start, const hobject_t &end)
+{
+}
+
+void PGScrubber::release_range()
+{
+}
+
+void PGScrubber::scan_range(
+  pg_shard_t target,
+  const hobject_t &start,
+  const hobject_t &end)
+{
+}
+
+void PGScrubber::emit_chunk_result(
+  const request_range_result_t &range,
+  chunk_result_t &&result)
+{
+}
+
 }

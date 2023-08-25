@@ -129,19 +129,24 @@ struct ScrubContext {
 
 
   /**
-   * request_remote_reservations
+   * request_remote_reservation
    *
-   * Asyncronously request reservations on a remote peer.  Implementation
+   * Asyncronously request reservation on a remote peer.  Implementation
    * must signal completion by submitting a
-   * request_remote_reservation_complete_t event with the completed peer unless
-   * first canceled.
+   * request_remote_reservation_complete_t event with the completed peer and
+   * result unless first canceled.
    *
    * ScrubMachine is not responsible for releasing the remote reservation in the
    * event of an interval_change_event_t as the remote peer will do so
    * upon receipt of the new map.  In other cases, ScrubMachine is responsible
    * for releasing the reservation.
    */
-  VALUE_EVENT(request_remote_reservations_complete_t, pg_shard_t);
+  struct remote_reservation_result_t {
+    pg_shard_t target;
+    bool result; // true if granted, false otherwise
+  };
+  VALUE_EVENT(
+    request_remote_reservation_complete_t, remote_reservation_result_t);
   virtual void request_remote_reservation(pg_shard_t target) = 0;
 
   /// cancel in progress or current remote reservations
@@ -272,7 +277,7 @@ struct PrimaryActive : ScrubState<PrimaryActive, ScrubMachine, GetLocalReservati
   static constexpr std::string_view state_name = "PrimaryActive";
 
   bool local_reservation_held = false;
-  bool remote_reservations_held = false;
+  std::set<pg_shard_t> remote_reservations_held;
 
   void exit();
 };
@@ -295,12 +300,12 @@ struct GetRemoteReservations : ScrubState<GetRemoteReservations, PrimaryActive> 
   unsigned waiting_on = 0;
 
   using reactions = boost::mpl::list<
-    sc::custom_reaction<ScrubContext::request_remote_reservations_complete_t>
+    sc::custom_reaction<ScrubContext::request_remote_reservation_complete_t>
     >;
 
   explicit GetRemoteReservations(my_context ctx);
 
-  sc::result react(const ScrubContext::request_remote_reservations_complete_t &);
+  sc::result react(const ScrubContext::request_remote_reservation_complete_t &);
 };
 
 struct ChunkState;

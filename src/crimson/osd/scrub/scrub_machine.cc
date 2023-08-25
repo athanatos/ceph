@@ -17,11 +17,9 @@ void PrimaryActive::exit()
   if (local_reservation_held) {
     get_scrub_context().cancel_local_reservation();
   }
-  if (remote_reservations_held) {
-    // TODO: guard from interval change
-    get_scrub_context().foreach_remote_id_to_scrub([this](const auto &id) {
-      get_scrub_context().cancel_remote_reservation(id);
-    });
+  // TODO: guard from interval change
+  for (const auto &i : remote_reservations_held) {
+    get_scrub_context().cancel_remote_reservation(i);
   }
 }
 
@@ -33,22 +31,28 @@ GetLocalReservation::GetLocalReservation(my_context ctx) : ScrubState(ctx)
 
 GetRemoteReservations::GetRemoteReservations(my_context ctx) : ScrubState(ctx)
 {
-  context<PrimaryActive>().remote_reservations_held = true;
   get_scrub_context().foreach_remote_id_to_scrub([this](const auto &id) {
     get_scrub_context().request_remote_reservation(id);
-    ++waiting_on;
+    context<PrimaryActive>().remote_reservations_held.insert(id);
   });
 }
 
 sc::result GetRemoteReservations::react(
-  const ScrubContext::request_remote_reservations_complete_t &)
+  const ScrubContext::request_remote_reservation_complete_t &e)
 {
-  ceph_assert(waiting_on > 0);
-  --waiting_on;
-  if (waiting_on == 0) {
-    return transit<Scrubbing>();
+  if (e.value.result) {
+    // TODOSAM: handle reject
+    ceph_assert(waiting_on > 0);
+    --waiting_on;
+    if (waiting_on == 0) {
+      return transit<Scrubbing>();
+    } else {
+      return discard_event();
+    }
   } else {
-    return discard_event();
+    // TODOSAM: 
+    context<PrimaryActive>().remote_reservations_held.erase(e.value.target);
+    return transit<GetRemoteReservations>();
   }
 }
 

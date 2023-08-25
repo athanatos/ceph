@@ -23,6 +23,7 @@
 #include "crimson/osd/scrub/scrub_scheduler.h"
 #include "crimson/osd/state.h"
 #include "common/AsyncReserver.h"
+#include "common/SyncReserver.h"
 #include "crimson/net/Connection.h"
 
 namespace crimson::net {
@@ -300,6 +301,7 @@ private:
   AsyncReserver<spg_t, DirectFinisher> snap_reserver;
 
   scrub::Scheduler scrub_scheduler;
+  SyncReserver<spg_t> scrub_replica_reserver;
 
   epoch_t up_thru_wanted = 0;
   seastar::future<> send_alive(epoch_t want);
@@ -521,6 +523,13 @@ public:
   FORWARD_TO_OSD_SINGLETON_TARGET(
     snap_dump_reservations,
     snap_reserver.dump)
+
+  FORWARD_TO_OSD_SINGLETON_TARGET(
+    scrub_replica_try_reserve,
+    scrub_replica_reserver.try_reserve)
+  FORWARD_TO_OSD_SINGLETON_TARGET(
+    scrub_replica_release,
+    scrub_replica_reserver.release)
 
   Context *invoke_context_on_core(core_id_t core, Context *c) {
     if (!c) return nullptr;
