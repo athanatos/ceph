@@ -12,6 +12,50 @@ Crash::Crash(my_context ctx) : ScrubState(ctx)
   ceph_abort("Crash state impossible");
 }
 
+void PrimaryActive::exit()
+{
+  if (local_reservation_held) {
+    get_scrub_context().cancel_local_reservation();
+  }
+  // TODO: guard from interval change
+  for (const auto &i : remote_reservations_held) {
+    get_scrub_context().cancel_remote_reservation(i);
+  }
+}
+
+GetLocalReservation::GetLocalReservation(my_context ctx) : ScrubState(ctx)
+{
+  context<PrimaryActive>().local_reservation_held = true;
+  get_scrub_context().request_local_reservation();
+}
+
+GetRemoteReservations::GetRemoteReservations(my_context ctx) : ScrubState(ctx)
+{
+  get_scrub_context().foreach_remote_id_to_scrub([this](const auto &id) {
+    get_scrub_context().request_remote_reservation(id);
+    context<PrimaryActive>().remote_reservations_held.insert(id);
+  });
+}
+
+sc::result GetRemoteReservations::react(
+  const ScrubContext::request_remote_reservation_complete_t &e)
+{
+  if (e.value.result) {
+    // TODOSAM: handle reject
+    ceph_assert(waiting_on > 0);
+    --waiting_on;
+    if (waiting_on == 0) {
+      return transit<Scrubbing>();
+    } else {
+      return discard_event();
+    }
+  } else {
+    // TODOSAM: 
+    context<PrimaryActive>().remote_reservations_held.erase(e.value.target);
+    return transit<GetRemoteReservations>();
+  }
+}
+
 Scrubbing::Scrubbing(my_context ctx) : ScrubState(ctx)
 {
 }
@@ -78,6 +122,28 @@ sc::result ScanRange::react(const ScrubContext::scan_range_complete_t &event)
       context<ChunkState>().range->end);
     return transit<ChunkState>();
   }
+}
+
+void ReplicaActive::exit()
+{
+  if (reservation_held) {
+    get_scrub_context().replica_cancel_local_reservation();
+  }
+}
+
+ReplicaGetLocalReservation::ReplicaGetLocalReservation(my_context ctx)
+  : ScrubState(ctx)
+{
+  context<ReplicaActive>().reservation_held = true;
+  get_scrub_context().replica_request_local_reservation();
+}
+
+
+sc::result ReplicaGetLocalReservation::react(
+  const ScrubContext::replica_request_local_reservation_complete_t &event)
+{
+  get_scrub_context().replica_confirm_reservation();
+  return transit<ReplicaAwaitScan>();
 }
 
 };

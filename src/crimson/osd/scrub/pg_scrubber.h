@@ -38,6 +38,13 @@ private:
     return policy;
   }
 
+  void request_local_reservation() final;
+  void cancel_local_reservation() final;
+  void replica_request_local_reservation() final;
+  void replica_cancel_local_reservation() final;
+  void replica_confirm_reservation() final;
+  void request_remote_reservation(pg_shard_t target) final;
+  void cancel_remote_reservation(pg_shard_t target) final;
   void request_range(const hobject_t &start) final;
   void reserve_range(const hobject_t &start, const hobject_t &end) final;
   void release_range() final;

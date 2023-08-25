@@ -30,6 +30,36 @@ const std::set<pg_shard_t> &PGScrubber::get_ids_to_scrub() const
   return pg.peering_state.get_actingset();
 }
 
+void PGScrubber::request_local_reservation()
+{
+  // TOOD
+}
+
+void PGScrubber::cancel_local_reservation()
+{
+  // TODO
+}
+
+void PGScrubber::replica_request_local_reservation()
+{
+}
+
+void PGScrubber::replica_cancel_local_reservation()
+{
+}
+
+void PGScrubber::replica_confirm_reservation()
+{
+}
+
+void PGScrubber::request_remote_reservation(pg_shard_t target)
+{
+}
+
+void PGScrubber::cancel_remote_reservation(pg_shard_t target)
+{
+}
+
 void PGScrubber::request_range(const hobject_t &start)
 {
 }
