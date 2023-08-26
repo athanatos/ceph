@@ -16,6 +16,16 @@ class PGScrubber : public ScrubContext {
   ScrubMachine machine;
 
 public:
+  static inline bool is_scrub_message(Message &m) {
+    switch (m.get_type()) {
+    case MSG_OSD_REP_SCRUB:
+      return true;
+    default:
+      return false;
+    }
+    return false;
+  }
+
   PGScrubber(PG &pg) : pg(pg), machine(*this) {}
 
   void on_primary_activate();
