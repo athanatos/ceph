@@ -37,15 +37,16 @@ GetRange::GetRange(my_context ctx) : ScrubState(ctx)
 sc::result GetRange::react(const ScrubContext::request_range_complete_t &event)
 {
   context<ChunkState>().range = event.value;
-  return transit<ReserveRange>();
+  return transit<WaitUpdate>();
 }
 
-ReserveRange::ReserveRange(my_context ctx) : ScrubState(ctx)
+WaitUpdate::WaitUpdate(my_context ctx) : ScrubState(ctx)
 {
   auto &cs = context<ChunkState>();
   cs.range_reserved = true;
   assert(cs.range);
-  get_scrub_context().reserve_range(cs.range->start, cs.range->end);
+  cs.version = get_scrub_context().reserve_range(cs.range->start, cs.range->end);
+  get_scrub_context().await_update(cs.version);
 }
 
 ScanRange::ScanRange(my_context ctx) : ScrubState(ctx)
