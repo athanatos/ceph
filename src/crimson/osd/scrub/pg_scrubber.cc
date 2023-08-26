@@ -40,8 +40,9 @@ void PGScrubber::request_range(const hobject_t &start)
 {
 }
 
-void PGScrubber::reserve_range(const hobject_t &start, const hobject_t &end)
+eversion_t PGScrubber::reserve_range(const hobject_t &start, const hobject_t &end)
 {
+  return eversion_t{};
 }
 
 void PGScrubber::release_range()

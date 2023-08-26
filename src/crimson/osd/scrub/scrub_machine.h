@@ -100,8 +100,7 @@ struct ScrubContext {
   virtual void request_range(
     const hobject_t &start) = 0;
 
-  VALUE_EVENT(reserve_range_complete_t, eversion_t);
-  virtual void reserve_range(
+  virtual eversion_t reserve_range(
     const hobject_t &start,
     const hobject_t &end) = 0;
 
@@ -252,6 +251,9 @@ struct ChunkState : ScrubState<ChunkState, Scrubbing, GetRange> {
   /// true once we have requested that the range be reserved
   bool range_reserved = false;
 
+  /// version of last update for the reserved chunk
+  eversion_t version;
+
   explicit ChunkState(my_context ctx);
   void exit();
 };
@@ -269,14 +271,14 @@ struct GetRange : ScrubState<GetRange, ChunkState> {
 };
 
 struct ScanRange;
-struct ReserveRange : ScrubState<ReserveRange, ChunkState> {
-  static constexpr std::string_view state_name = "ReserveRange";
+struct WaitUpdate : ScrubState<WaitUpdate, ChunkState> {
+  static constexpr std::string_view state_name = "WaitUpdate";
 
   using reactions = boost::mpl::list<
-    sc::transition<ScrubContext::reserve_range_complete_t, ScanRange>
+    sc::transition<ScrubContext::await_update_complete_t, ScanRange>
     >;
 
-  explicit ReserveRange(my_context ctx);
+  explicit WaitUpdate(my_context ctx);
 };
 
 struct ScanRange : ScrubState<ScanRange, ChunkState> {
