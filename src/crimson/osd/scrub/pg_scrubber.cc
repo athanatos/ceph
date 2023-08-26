@@ -23,6 +23,12 @@ void PGScrubber::handle_scrub_requested()
 
 void PGScrubber::handle_scrub_message(Message &m)
 {
+  switch (m.get_type()) {
+  case MSG_OSD_REP_SCRUB:
+    // do scan
+  default:
+    ceph_assert(is_scrub_message(m));
+  }
 }
 
 const std::set<pg_shard_t> &PGScrubber::get_ids_to_scrub() const
