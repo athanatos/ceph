@@ -55,6 +55,15 @@ void PGScrubber::scan_range(
 {
 }
 
+void PGScrubber::await_update(const eversion_t &version)
+{
+}
+
+void PGScrubber::generate_and_submit_chunk_result(
+  ScrubMap &map)
+{
+}
+
 void PGScrubber::emit_chunk_result(
   const request_range_result_t &range,
   chunk_result_t &&result)
