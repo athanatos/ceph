@@ -100,10 +100,14 @@ struct ScrubContext {
   virtual void request_range(
     const hobject_t &start) = 0;
 
-  SIMPLE_EVENT(reserve_range_complete_t);
+  VALUE_EVENT(reserve_range_complete_t, eversion_t);
   virtual void reserve_range(
     const hobject_t &start,
     const hobject_t &end) = 0;
+
+  SIMPLE_EVENT(await_update_complete_t);
+  virtual void await_update(
+    const eversion_t &version) = 0;
 
   /// cancel in progress or currently reserved range
   virtual void release_range() = 0;
@@ -114,6 +118,10 @@ struct ScrubContext {
     pg_shard_t target,
     const hobject_t &start,
     const hobject_t &end) = 0;
+
+  SIMPLE_EVENT(generate_and_submit_chunk_result_complet_t);
+  virtual void generate_and_submit_chunk_result(
+    ScrubMap &map) = 0;
 
   virtual void emit_chunk_result(
     const request_range_result_t &range,
@@ -283,6 +291,18 @@ struct ScanRange : ScrubState<ScanRange, ChunkState> {
   explicit ScanRange(my_context ctx);
 
   sc::result react(const ScrubContext::scan_range_complete_t &);
+};
+
+struct ReplicaWaitUpdate;
+struct ReplicaActive :
+    ScrubState<ReplicaActive, ScrubMachine, ReplicaWaitUpdate> {
+};
+
+struct ReplicaWaitScan;
+struct ReplicaWaitUpdate : ScrubState<ReplicaWaitUpdate, ReplicaActive> {
+};
+
+struct ReplicaWaitScan : ScrubState<ReplicaWaitScan, ReplicaActive> {
 };
 
 #undef SIMPLE_EVENT

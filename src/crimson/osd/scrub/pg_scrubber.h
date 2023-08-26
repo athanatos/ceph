@@ -55,6 +55,9 @@ private:
     pg_shard_t target,
     const hobject_t &start,
     const hobject_t &end) final;
+  void await_update(const eversion_t &version) final;
+  void generate_and_submit_chunk_result(
+    ScrubMap &map) final;
   void emit_chunk_result(
     const request_range_result_t &range,
     chunk_result_t &&result) final;
