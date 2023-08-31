@@ -29,6 +29,7 @@ public:
   PGScrubber(PG &pg) : pg(pg), machine(*this) {}
 
   void on_primary_activate();
+  void on_replica_activate();
   void on_interval_change();
 
   void handle_scrub_requested();

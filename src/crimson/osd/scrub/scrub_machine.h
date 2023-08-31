@@ -209,22 +209,35 @@ struct Crash : ScrubState<Crash, ScrubMachine> {
   explicit Crash(my_context ctx);
 };
 
-SIMPLE_EVENT(StartScrub);
+SIMPLE_EVENT(PrimaryActivate);
+SIMPLE_EVENT(ReplicaActivate);
 struct PrimaryActive;
+struct ReplicaActive;
 struct Inactive : ScrubState<Inactive, ScrubMachine> {
   static constexpr std::string_view state_name = "Inactive";
 
   using reactions = boost::mpl::list<
-    sc::transition<StartScrub, PrimaryActive>
+    sc::transition<PrimaryActivate, PrimaryActive>,
+    sc::transition<ReplicaActivate, ReplicaActive>
     >;
 };
 
-struct Scrubbing;
-struct PrimaryActive : ScrubState<PrimaryActive, ScrubMachine, Scrubbing> {
+struct AwaitScrub;
+struct PrimaryActive : ScrubState<PrimaryActive, ScrubMachine, AwaitScrub> {
   static constexpr std::string_view state_name = "PrimaryActive";
 
   bool local_reservation_held = false;
   std::set<pg_shard_t> remote_reservations_held;
+};
+
+SIMPLE_EVENT(StartScrub);
+struct Scrubbing;
+struct AwaitScrub : ScrubState<AwaitScrub, PrimaryActive, Scrubbing> {
+  static constexpr std::string_view state_name = "AwaitScrub";
+
+  using reactions = boost::mpl::list<
+    sc::transition<StartScrub, Scrubbing>
+    >;
 };
 
 struct ChunkState;
