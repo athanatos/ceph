@@ -8,15 +8,22 @@ namespace crimson::osd::scrub {
 
 void PGScrubber::on_primary_activate()
 {
+  // schedule scrub, TODO
+}
+
+void PGScrubber::on_replica_activate()
+{
+  
 }
 
 void PGScrubber::on_interval_change()
 {
+  // clear scrubber, cancel scheduled scrub
 }
 
 void PGScrubber::handle_scrub_requested()
 {
-  if (pg.peering_state.is_active()) {
+  if (pg.peering_state.is_active() && pg.peering_state.is_clean()) {
     machine.process_event(StartScrub{});
   }
 }
