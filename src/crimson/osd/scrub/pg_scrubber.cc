@@ -28,9 +28,7 @@ void PGScrubber::on_interval_change()
 
 void PGScrubber::handle_scrub_requested()
 {
-  if (pg.peering_state.is_active() && pg.peering_state.is_clean()) {
-    machine.process_event(StartScrub{});
-  }
+  machine.process_event(StartScrub{});
 }
 
 void PGScrubber::handle_scrub_message(Message &_m)

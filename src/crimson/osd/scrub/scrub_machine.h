@@ -133,6 +133,7 @@ struct Crash;
 struct Inactive;
 
 SIMPLE_EVENT(Reset);
+SIMPLE_EVENT(StartScrub);
 
 /**
  * ScrubMachine
@@ -152,17 +153,8 @@ SIMPLE_EVENT(Reset);
  */
 class ScrubMachine
   : public sc::state_machine<ScrubMachine, Inactive> {
-  using reactions = boost::mpl::list<
-    sc::transition<sc::event_base, Crash>,
-    sc::transition<Reset, Inactive>
-    >;
-
   static constexpr std::string_view full_name = "ScrubMachine";
 public:
-
-  /// Event to submit upon interval change, 
-  SIMPLE_EVENT(interval_change_event_t);
-
   ScrubContext &context;
   ScrubMachine(ScrubContext &context) : context(context) {}
 };
@@ -210,7 +202,6 @@ struct ScrubState : sc::state<S, P, T...> {
 
 struct Crash : ScrubState<Crash, ScrubMachine> {
   static constexpr std::string_view state_name = "Crash";
-
   explicit Crash(my_context ctx);
 };
 
@@ -220,25 +211,45 @@ struct PrimaryActive;
 struct ReplicaActive;
 struct Inactive : ScrubState<Inactive, ScrubMachine> {
   static constexpr std::string_view state_name = "Inactive";
+  explicit Inactive(my_context ctx);
 
   using reactions = boost::mpl::list<
     sc::transition<PrimaryActivate, PrimaryActive>,
-    sc::transition<ReplicaActivate, ReplicaActive>
+    sc::transition<ReplicaActivate, ReplicaActive>,
+    sc::custom_reaction<Reset>,
+    sc::custom_reaction<StartScrub>
     >;
+
+  sc::result react(const Reset &) {
+    return discard_event();
+  }
+  sc::result react(const StartScrub &) {
+    return discard_event();
+  }
 };
 
 struct AwaitScrub;
 struct PrimaryActive : ScrubState<PrimaryActive, ScrubMachine, AwaitScrub> {
   static constexpr std::string_view state_name = "PrimaryActive";
+  explicit PrimaryActive(my_context ctx);
 
   bool local_reservation_held = false;
   std::set<pg_shard_t> remote_reservations_held;
+
+  using reactions = boost::mpl::list<
+    sc::transition<Reset, Inactive>,
+    sc::custom_reaction<StartScrub>
+    >;
+
+  sc::result react(const StartScrub &) {
+    return discard_event();
+  }
 };
 
-SIMPLE_EVENT(StartScrub);
 struct Scrubbing;
-struct AwaitScrub : ScrubState<AwaitScrub, PrimaryActive, Scrubbing> {
+struct AwaitScrub : ScrubState<AwaitScrub, PrimaryActive> {
   static constexpr std::string_view state_name = "AwaitScrub";
+  explicit AwaitScrub(my_context ctx);
 
   using reactions = boost::mpl::list<
     sc::transition<StartScrub, Scrubbing>
@@ -248,11 +259,10 @@ struct AwaitScrub : ScrubState<AwaitScrub, PrimaryActive, Scrubbing> {
 struct ChunkState;
 struct Scrubbing : ScrubState<Scrubbing, PrimaryActive, ChunkState> {
   static constexpr std::string_view state_name = "Scrubbing";
+  explicit Scrubbing(my_context ctx);
 
   /// hobjects < current have been scrubbed
   hobject_t current;
-
-  explicit Scrubbing(my_context ctx);
 
   void advance_current(const hobject_t &next) {
     current = next;
@@ -262,6 +272,7 @@ struct Scrubbing : ScrubState<Scrubbing, PrimaryActive, ChunkState> {
 struct GetRange;
 struct ChunkState : ScrubState<ChunkState, Scrubbing, GetRange> {
   static constexpr std::string_view state_name = "ChunkState";
+  explicit ChunkState(my_context ctx);
 
   /// Current chunk includes objects in [range_start, range_end)
   boost::optional<ScrubContext::request_range_result_t> range;
@@ -272,18 +283,16 @@ struct ChunkState : ScrubState<ChunkState, Scrubbing, GetRange> {
   /// version of last update for the reserved chunk
   eversion_t version;
 
-  explicit ChunkState(my_context ctx);
   void exit();
 };
 
 struct GetRange : ScrubState<GetRange, ChunkState> {
   static constexpr std::string_view state_name = "GetRange";
+  explicit GetRange(my_context ctx);
 
   using reactions = boost::mpl::list<
     sc::custom_reaction<ScrubContext::request_range_complete_t>
     >;
-
-  explicit GetRange(my_context ctx);
 
   sc::result react(const ScrubContext::request_range_complete_t &);
 };
@@ -291,24 +300,23 @@ struct GetRange : ScrubState<GetRange, ChunkState> {
 struct ScanRange;
 struct WaitUpdate : ScrubState<WaitUpdate, ChunkState> {
   static constexpr std::string_view state_name = "WaitUpdate";
+  explicit WaitUpdate(my_context ctx);
 
   using reactions = boost::mpl::list<
     sc::transition<ScrubContext::await_update_complete_t, ScanRange>
     >;
-
-  explicit WaitUpdate(my_context ctx);
 };
 
 struct ScanRange : ScrubState<ScanRange, ChunkState> {
   static constexpr std::string_view state_name = "ScanRange";
+  explicit ScanRange(my_context ctx);
+
   scrub_map_set_t maps;
   unsigned waiting_on = 0;
 
   using reactions = boost::mpl::list<
     sc::custom_reaction<ScrubContext::scan_range_complete_t>
     >;
-
-  explicit ScanRange(my_context ctx);
 
   sc::result react(const ScrubContext::scan_range_complete_t &);
 };
@@ -323,14 +331,28 @@ VALUE_EVENT(ReplicaScan, replica_scan_event_t);
 struct ReplicaWaitUpdate;
 struct ReplicaActive :
     ScrubState<ReplicaActive, ScrubMachine, ReplicaWaitUpdate> {
+  static constexpr std::string_view state_name = "ReplicaActive";
+  explicit ReplicaActive(my_context ctx) : ScrubState(ctx) {}
 
+  using reactions = boost::mpl::list<
+    sc::transition<Reset, Inactive>,
+    sc::custom_reaction<StartScrub>
+    >;
+
+  sc::result react(const StartScrub &) {
+    return discard_event();
+  }
 };
 
 struct ReplicaWaitScan;
 struct ReplicaWaitUpdate : ScrubState<ReplicaWaitUpdate, ReplicaActive> {
+  static constexpr std::string_view state_name = "ReplicaWaitUpdate";
+  explicit ReplicaWaitUpdate(my_context ctx) : ScrubState(ctx) {}
 };
 
 struct ReplicaWaitScan : ScrubState<ReplicaWaitScan, ReplicaActive> {
+  static constexpr std::string_view state_name = "ReplicaWaitScan";
+  explicit ReplicaWaitScan(my_context ctx) : ScrubState(ctx) {}
 };
 
 #undef SIMPLE_EVENT
