@@ -84,11 +84,29 @@ void PGScrubber::request_range(const hobject_t &start)
 {
 }
 
+/* TODOSAM: this isn't actually enough.  Here, classic would
+ * hold the pg lock from the wait_scrub through to IO submission.
+ * ClientRequest, however, isn't in the processing ExclusivePhase
+ * bit yet, and so this check may miss ops between the wait_scrub
+ * check and adding the IO to the log */
+
 eversion_t PGScrubber::reserve_range(const hobject_t &start, const hobject_t &end)
 {
   ceph_assert(!blocked);
   blocked = blocked_range_t{start, end};
-  return eversion_t{};
+
+  auto& log = pg.peering_state.get_pg_log().get_log().log;
+  auto p = find_if(
+    log.crbegin(), log.crend(),
+    [this, &start, &end](const auto& e) -> bool {
+      return e.soid >= start && e.soid < end;
+    });
+
+  if (p == log.crend()) {
+    return eversion_t{};
+  } else {
+    return p->version;
+  }
 }
 
 void PGScrubber::release_range()
