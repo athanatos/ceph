@@ -58,6 +58,11 @@ void PGScrubber::handle_scrub_message(Message &_m)
   }
 }
 
+PGScrubber::ifut<> PGScrubber::wait_scrub(const hobject_t &hoid)
+{
+  return seastar::now();
+}
+
 const std::set<pg_shard_t> &PGScrubber::get_ids_to_scrub() const
 {
   return pg.peering_state.get_actingset();
