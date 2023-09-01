@@ -19,6 +19,7 @@ public:
   static inline bool is_scrub_message(Message &m) {
     switch (m.get_type()) {
     case MSG_OSD_REP_SCRUB:
+    case MSG_OSD_REP_SCRUBMAP:
       return true;
     default:
       return false;
@@ -28,7 +29,7 @@ public:
 
   PGScrubber(PG &pg) : pg(pg), machine(*this) {}
 
-  void on_primary_activate();
+  void on_primary_active_clean();
   void on_replica_activate();
   void on_interval_change();
 
@@ -58,7 +59,9 @@ private:
     const hobject_t &end) final;
   void await_update(const eversion_t &version) final;
   void generate_and_submit_chunk_result(
-    ScrubMap &map) final;
+    const hobject_t &begin,
+    const hobject_t &end,
+    bool deep) final;
   void emit_chunk_result(
     const request_range_result_t &range,
     chunk_result_t &&result) final;

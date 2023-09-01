@@ -118,9 +118,11 @@ struct ScrubContext {
     const hobject_t &start,
     const hobject_t &end) = 0;
 
-  SIMPLE_EVENT(generate_and_submit_chunk_result_complet_t);
+  SIMPLE_EVENT(generate_and_submit_chunk_result_complete_t);
   virtual void generate_and_submit_chunk_result(
-    ScrubMap &map) = 0;
+    const hobject_t &begin,
+    const hobject_t &end,
+    bool deep) = 0;
 
   virtual void emit_chunk_result(
     const request_range_result_t &range,
@@ -129,6 +131,8 @@ struct ScrubContext {
 
 struct Crash;
 struct Inactive;
+
+SIMPLE_EVENT(Reset);
 
 /**
  * ScrubMachine
@@ -149,7 +153,8 @@ struct Inactive;
 class ScrubMachine
   : public sc::state_machine<ScrubMachine, Inactive> {
   using reactions = boost::mpl::list<
-    sc::transition<sc::event_base, Crash>
+    sc::transition<sc::event_base, Crash>,
+    sc::transition<Reset, Inactive>
     >;
 
   static constexpr std::string_view full_name = "ScrubMachine";
@@ -308,9 +313,17 @@ struct ScanRange : ScrubState<ScanRange, ChunkState> {
   sc::result react(const ScrubContext::scan_range_complete_t &);
 };
 
+struct replica_scan_event_t {
+  hobject_t start;
+  hobject_t end;
+  eversion_t version;
+  bool deep = false;
+};
+VALUE_EVENT(ReplicaScan, replica_scan_event_t);
 struct ReplicaWaitUpdate;
 struct ReplicaActive :
     ScrubState<ReplicaActive, ScrubMachine, ReplicaWaitUpdate> {
+
 };
 
 struct ReplicaWaitScan;

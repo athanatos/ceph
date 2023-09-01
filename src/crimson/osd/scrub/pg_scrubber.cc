@@ -2,23 +2,28 @@
 // vim: ts=8 sw=2 smarttab expandtab
 
 #include "crimson/osd/pg.h"
+#include "messages/MOSDRepScrub.h"
+#include "messages/MOSDRepScrubMap.h"
 #include "pg_scrubber.h"
 
 namespace crimson::osd::scrub {
 
-void PGScrubber::on_primary_activate()
+void PGScrubber::on_primary_active_clean()
 {
-  // schedule scrub, TODO
+  machine.process_event(PrimaryActivate{});
 }
 
 void PGScrubber::on_replica_activate()
 {
-  
+  machine.process_event(ReplicaActivate{});
 }
 
 void PGScrubber::on_interval_change()
 {
-  // clear scrubber, cancel scheduled scrub
+  /* Once reservations and scheduling are introduced, we'll need an
+   * IntervalChange event to drop remote resources (they'll be automatically
+   * released on the other side */
+  machine.process_event(Reset{});
 }
 
 void PGScrubber::handle_scrub_requested()
@@ -28,13 +33,28 @@ void PGScrubber::handle_scrub_requested()
   }
 }
 
-void PGScrubber::handle_scrub_message(Message &m)
+void PGScrubber::handle_scrub_message(Message &_m)
 {
-  switch (m.get_type()) {
-  case MSG_OSD_REP_SCRUB:
-    // do scan
+  switch (_m.get_type()) {
+  case MSG_OSD_REP_SCRUB: {
+    MOSDRepScrub &m = *static_cast<MOSDRepScrub*>(&_m);
+    machine.process_event(ReplicaScan{
+	m.start, m.end, m.scrub_from, m.deep
+      });
+    break;
+  }
+  case MSG_OSD_REP_SCRUBMAP: {
+    MOSDRepScrubMap &m = *static_cast<MOSDRepScrubMap*>(&_m);
+    ScrubMap map;
+    auto iter = m.scrub_map_bl.cbegin();
+    ::decode(map, iter);
+    machine.process_event(scan_range_complete_t{
+	std::make_pair(m.from, std::move(map))
+      });
+    break;
+  }
   default:
-    ceph_assert(is_scrub_message(m));
+    ceph_assert(is_scrub_message(_m));
   }
 }
 
@@ -68,7 +88,9 @@ void PGScrubber::await_update(const eversion_t &version)
 }
 
 void PGScrubber::generate_and_submit_chunk_result(
-  ScrubMap &map)
+  const hobject_t &begin,
+  const hobject_t &end,
+  bool deep)
 {
 }
 
