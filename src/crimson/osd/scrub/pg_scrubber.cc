@@ -86,6 +86,8 @@ void PGScrubber::request_range(const hobject_t &start)
 
 eversion_t PGScrubber::reserve_range(const hobject_t &start, const hobject_t &end)
 {
+  ceph_assert(!blocked);
+  blocked = blocked_range_t{start, end};
   return eversion_t{};
 }
 
