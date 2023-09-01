@@ -8,38 +8,9 @@
 
 namespace crimson::osd::scrub {
 
-void PGScrubber::RangeBlocker::dump_detail(Formatter *f) const
+void PGScrubber::dump_detail(Formatter *f) const
 {
-  f->dump_stream("pgid") << pgid;
-}
-
-void PGScrubber::RangeBlocker::unblock()
-{
-  ceph_assert(blocked);
-  blocked->p.set_value();
-  blocked = std::nullopt;
-}
-
-seastar::future<>
-PGScrubber::RangeBlocker::wait(
-  PGScrubber::RangeBlocker::BlockingEvent::TriggerI&& trigger)
-{
-  return seastar::now();
-#if 0
-  if (pg->get_peering_state().is_active()) {
-    return seastar::now();
-  } else {
-    return trigger.maybe_record_blocking(p.get_shared_future(), *this);
-  }
-#endif
-}
-
-void PGScrubber::RangeBlocker::stop()
-{
-  if (blocked) {
-    blocked->p.set_exception(crimson::common::system_shutdown_exception());
-    blocked = std::nullopt;
-  }
+  f->dump_stream("pgid") << pg.get_pgid();
 }
 
 void PGScrubber::on_primary_active_clean()
@@ -58,6 +29,7 @@ void PGScrubber::on_interval_change()
    * IntervalChange event to drop remote resources (they'll be automatically
    * released on the other side */
   machine.process_event(Reset{});
+  ceph_assert(!blocked);
 }
 
 void PGScrubber::handle_scrub_requested()
@@ -90,6 +62,21 @@ void PGScrubber::handle_scrub_message(Message &_m)
   }
 }
 
+seastar::future<>
+PGScrubber::wait(
+  const hobject_t &hoid,
+  PGScrubber::BlockingEvent::TriggerI&& trigger)
+{
+  return seastar::now();
+#if 0
+  if (pg->get_peering_state().is_active()) {
+    return seastar::now();
+  } else {
+    return trigger.maybe_record_blocking(p.get_shared_future(), *this);
+  }
+#endif
+}
+
 PGScrubber::ifut<> PGScrubber::wait_scrub(const hobject_t &hoid)
 {
   return seastar::now();
@@ -111,6 +98,9 @@ eversion_t PGScrubber::reserve_range(const hobject_t &start, const hobject_t &en
 
 void PGScrubber::release_range()
 {
+  ceph_assert(blocked);
+  blocked->p.set_value();
+  blocked = std::nullopt;
 }
 
 void PGScrubber::scan_range(
