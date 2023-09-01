@@ -54,10 +54,9 @@ public:
 
   void handle_scrub_message(Message &m);
 
-  seastar::future<> wait(
-    const hobject_t &hoid,
-    PGScrubber::BlockingEvent::TriggerI&&);
-  ifut<> wait_scrub(const hobject_t &hoid);
+  ifut<> wait_scrub(
+    PGScrubber::BlockingEvent::TriggerI&& trigger,
+    const hobject_t &hoid);
 
 private:
   // ScrubContext interface
