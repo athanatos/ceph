@@ -21,6 +21,29 @@ class PGScrubber : public ScrubContext {
   PG &pg;
   ScrubMachine machine;
 
+  class RangeBlocker : public crimson::BlockerT<RangeBlocker> {
+    const spg_t pgid;
+
+    struct blocked_range_t {
+      hobject_t begin;
+      hobject_t end;
+      seastar::shared_promise<> p;
+    };
+    std::optional<blocked_range_t> blocked;
+
+  protected:
+    void dump_detail(Formatter *f) const;
+    
+  public:
+    static constexpr const char *type_name = "PGScrubber::RangeBlocker";
+    using Blocker = RangeBlocker;
+    
+    RangeBlocker(spg_t pgid) : pgid(pgid) {}
+    void unblock();
+    seastar::future<> wait(RangeBlocker::BlockingEvent::TriggerI&&);
+    void stop();
+  };
+
 public:
   static inline bool is_scrub_message(Message &m) {
     switch (m.get_type()) {
