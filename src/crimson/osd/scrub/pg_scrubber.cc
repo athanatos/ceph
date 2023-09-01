@@ -8,6 +8,40 @@
 
 namespace crimson::osd::scrub {
 
+void PGScrubber::RangeBlocker::dump_detail(Formatter *f) const
+{
+  f->dump_stream("pgid") << pgid;
+}
+
+void PGScrubber::RangeBlocker::unblock()
+{
+  ceph_assert(blocked);
+  blocked->p.set_value();
+  blocked = std::nullopt;
+}
+
+seastar::future<>
+PGScrubber::RangeBlocker::wait(
+  PGScrubber::RangeBlocker::BlockingEvent::TriggerI&& trigger)
+{
+  return seastar::now();
+#if 0
+  if (pg->get_peering_state().is_active()) {
+    return seastar::now();
+  } else {
+    return trigger.maybe_record_blocking(p.get_shared_future(), *this);
+  }
+#endif
+}
+
+void PGScrubber::RangeBlocker::stop()
+{
+  if (blocked) {
+    blocked->p.set_exception(crimson::common::system_shutdown_exception());
+    blocked = std::nullopt;
+  }
+}
+
 void PGScrubber::on_primary_active_clean()
 {
   machine.process_event(PrimaryActivate{});
