@@ -12,7 +12,7 @@ class PG;
 
 namespace crimson::osd::scrub {
 
-class PGScrubber : public ScrubContext {
+class PGScrubber : public crimson::BlockerT<PGScrubber>, ScrubContext {
   template <typename T = void>
   using ifut =
     ::crimson::interruptible::interruptible_future<
@@ -21,30 +21,18 @@ class PGScrubber : public ScrubContext {
   PG &pg;
   ScrubMachine machine;
 
-  class RangeBlocker : public crimson::BlockerT<RangeBlocker> {
-    const spg_t pgid;
-
-    struct blocked_range_t {
-      hobject_t begin;
-      hobject_t end;
-      seastar::shared_promise<> p;
-    };
-    std::optional<blocked_range_t> blocked;
-
-  protected:
-    void dump_detail(Formatter *f) const;
-    
-  public:
-    static constexpr const char *type_name = "PGScrubber::RangeBlocker";
-    using Blocker = RangeBlocker;
-    
-    RangeBlocker(spg_t pgid) : pgid(pgid) {}
-    void unblock();
-    seastar::future<> wait(RangeBlocker::BlockingEvent::TriggerI&&);
-    void stop();
+  struct blocked_range_t {
+    hobject_t begin;
+    hobject_t end;
+    seastar::shared_promise<> p;
   };
+  std::optional<blocked_range_t> blocked;
 
 public:
+  static constexpr const char *type_name = "PGScrubber";
+  using Blocker = PGScrubber;
+  void dump_detail(Formatter *f) const;
+
   static inline bool is_scrub_message(Message &m) {
     switch (m.get_type()) {
     case MSG_OSD_REP_SCRUB:
@@ -66,6 +54,9 @@ public:
 
   void handle_scrub_message(Message &m);
 
+  seastar::future<> wait(
+    const hobject_t &hoid,
+    PGScrubber::BlockingEvent::TriggerI&&);
   ifut<> wait_scrub(const hobject_t &hoid);
 
 private:
