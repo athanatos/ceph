@@ -62,24 +62,17 @@ void PGScrubber::handle_scrub_message(Message &_m)
   }
 }
 
-seastar::future<>
-PGScrubber::wait(
-  const hobject_t &hoid,
-  PGScrubber::BlockingEvent::TriggerI&& trigger)
+PGScrubber::ifut<> PGScrubber::wait_scrub(
+  PGScrubber::BlockingEvent::TriggerI&& trigger,
+  const hobject_t &hoid)
 {
-  return seastar::now();
-#if 0
-  if (pg->get_peering_state().is_active()) {
-    return seastar::now();
+  if (blocked && (hoid >= blocked->begin) && (hoid < blocked->end)) {
+    return trigger.maybe_record_blocking(
+      blocked->p.get_shared_future(),
+      *this);
   } else {
-    return trigger.maybe_record_blocking(p.get_shared_future(), *this);
+    return seastar::now();
   }
-#endif
-}
-
-PGScrubber::ifut<> PGScrubber::wait_scrub(const hobject_t &hoid)
-{
-  return seastar::now();
 }
 
 const std::set<pg_shard_t> &PGScrubber::get_ids_to_scrub() const
