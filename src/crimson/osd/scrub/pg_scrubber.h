@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "crimson/osd/pg_interval_interrupt_condition.h"
 #include "scrub_machine.h"
 
 namespace crimson::osd {
@@ -12,6 +13,11 @@ class PG;
 namespace crimson::osd::scrub {
 
 class PGScrubber : public ScrubContext {
+  template <typename T = void>
+  using ifut =
+    ::crimson::interruptible::interruptible_future<
+      ::crimson::osd::IOInterruptCondition, T>;
+
   PG &pg;
   ScrubMachine machine;
 
@@ -36,6 +42,8 @@ public:
   void handle_scrub_requested();
 
   void handle_scrub_message(Message &m);
+
+  ifut<> wait_scrub(const hobject_t &hoid);
 
 private:
   // ScrubContext interface
