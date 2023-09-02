@@ -14,7 +14,7 @@ namespace crimson::osd {
 class PG;
 
 template <typename T>
-class ScrubEventBaseT : public PhasedOperationT<T> {
+class RemoteScrubEventBaseT : public PhasedOperationT<T> {
   virtual void scrub_event_print(std::ostream &) const = 0;
   virtual void scrub_event_dump_detail(ceph::Formatter* f) const = 0;
 
@@ -39,7 +39,7 @@ protected:
 
   virtual ifut<> handle_event(PG &pg) = 0;
 public:
-  ScrubEventBaseT(
+  RemoteScrubEventBaseT(
     crimson::net::ConnectionRef conn, epoch_t epoch, spg_t pgid)
     : conn(conn), epoch(epoch), pgid(pgid) {}
 
@@ -92,7 +92,7 @@ public:
   > tracking_events;
 };
 
-class ScrubRequested final : public ScrubEventBaseT<ScrubRequested> {
+class ScrubRequested final : public RemoteScrubEventBaseT<ScrubRequested> {
   void scrub_event_print(std::ostream &) const final { /* TODO */ }
   void scrub_event_dump_detail(ceph::Formatter* f) const final { /* TODO */ }
 
@@ -104,10 +104,10 @@ public:
 
   template <typename... Args>
   ScrubRequested(Args&&... base_args)
-    : ScrubEventBaseT<ScrubRequested>(std::forward<Args>(base_args)...) {}
+    : RemoteScrubEventBaseT<ScrubRequested>(std::forward<Args>(base_args)...) {}
 };
 
-class ScrubMessage final : public ScrubEventBaseT<ScrubMessage> {
+class ScrubMessage final : public RemoteScrubEventBaseT<ScrubMessage> {
   void scrub_event_print(std::ostream &) const final { /* TODO */ }
   void scrub_event_dump_detail(ceph::Formatter* f) const final { /* TODO */ }
 
@@ -120,7 +120,7 @@ public:
 
   template <typename... Args>
   ScrubMessage(MessageRef m, Args&&... base_args)
-    : ScrubEventBaseT<ScrubMessage>(std::forward<Args>(base_args)...),
+    : RemoteScrubEventBaseT<ScrubMessage>(std::forward<Args>(base_args)...),
       m(m) {
     ceph_assert(scrub::PGScrubber::is_scrub_message(*m));
   }

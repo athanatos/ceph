@@ -14,19 +14,19 @@ namespace {
 namespace crimson::osd {
 
 template <class T>
-PGPeeringPipeline &ScrubEventBaseT<T>::pp(PG &pg)
+PGPeeringPipeline &RemoteScrubEventBaseT<T>::pp(PG &pg)
 {
   return pg.peering_request_pg_pipeline;
 }
 
 template <class T>
-ConnectionPipeline &ScrubEventBaseT<T>::get_connection_pipeline()
+ConnectionPipeline &RemoteScrubEventBaseT<T>::get_connection_pipeline()
 {
   return get_osd_priv(conn.get()).peering_request_conn_pipeline;
 }
 
 template <class T>
-seastar::future<> ScrubEventBaseT<T>::with_pg(
+seastar::future<> RemoteScrubEventBaseT<T>::with_pg(
   ShardServices &shard_services, Ref<PG> pg)
 {
   return interruptor::with_interruption([this, pg, &shard_services] {
@@ -65,7 +65,7 @@ ScrubMessage::ifut<> ScrubMessage::handle_event(PG &pg)
 }
 
 
-template class ScrubEventBaseT<ScrubRequested>;
-template class ScrubEventBaseT<ScrubMessage>;
+template class RemoteScrubEventBaseT<ScrubRequested>;
+template class RemoteScrubEventBaseT<ScrubMessage>;
 
 }

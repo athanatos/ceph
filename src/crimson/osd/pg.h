@@ -164,7 +164,7 @@ public:
   // scrub state
 
   friend class scrub::PGScrubber;
-  template <typename T> friend class ScrubEventBaseT;
+  template <typename T> friend class RemoteScrubEventBaseT;
 
   scrub::PGScrubber scrubber;
 
