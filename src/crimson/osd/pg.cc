@@ -1256,6 +1256,7 @@ void PG::log_operation(
   if (is_primary()) {
     ceph_assert(trim_to <= peering_state.get_last_update_ondisk());
   }
+
   /* TODO: when we add snap mapper and projected log support,
    * we'll likely want to update them here.
    *
@@ -1276,6 +1277,8 @@ void PG::log_operation(
   if (!is_primary()) { // && !is_ec_pg()
     replica_clear_repop_obc(logv);
   }
+  ceph_assert(!logv.empty());
+  scrubber.on_log_update(logv.rbegin()->version);
   peering_state.append_log(std::move(logv),
                            trim_to,
                            roll_forward_to,
