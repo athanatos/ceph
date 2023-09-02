@@ -99,31 +99,34 @@ void PGScrubber::request_range(const hobject_t &start)
  * bit yet, and so this check may miss ops between the wait_scrub
  * check and adding the IO to the log. */
 
-// TODO trim interconnect
 void PGScrubber::reserve_range(const hobject_t &start, const hobject_t &end)
 {
   ceph_assert(!blocked);
   blocked = blocked_range_t{start, end};
 
-#if 0
-  auto& log = pg.peering_state.get_pg_log().get_log().log;
-  auto p = find_if(
-    log.crbegin(), log.crend(),
-    [this, &start, &end](const auto& e) -> bool {
-      return e.soid >= start && e.soid < end;
-    });
-
-  if (p == log.crend()) {
-    return eversion_t{};
-  } else {
-    return p->version;
-  }
-#endif
+  std::ignore = ifut<>(seastar::yield()
+  ).then_interruptible([this] {
+    return pg.background_io_mutex.lock();
+  }).then_interruptible([this, start, end] {
+    auto& log = pg.peering_state.get_pg_log().get_log().log;
+    auto p = find_if(
+      log.crbegin(), log.crend(),
+      [this, &start, &end](const auto& e) -> bool {
+	return e.soid >= start && e.soid < end;
+      });
+    
+    if (p == log.crend()) {
+      return machine.process_event(reserve_range_complete_t{eversion_t{}});
+    } else {
+      return machine.process_event(reserve_range_complete_t{p->version});
+    }
+  });
 }
 
 void PGScrubber::release_range()
 {
   ceph_assert(blocked);
+  pg.background_io_mutex.unlock();
   blocked->p.set_value();
   blocked = std::nullopt;
 }
@@ -135,6 +138,7 @@ void PGScrubber::scan_range(
 {
 }
 
+// TODOSAM: probably can't send an event syncronously
 void PGScrubber::await_update(const eversion_t &version)
 {
   ceph_assert(!waiting_for_update);
