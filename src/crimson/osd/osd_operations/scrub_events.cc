@@ -64,7 +64,6 @@ ScrubMessage::ifut<> ScrubMessage::handle_event(PG &pg)
   return seastar::now();
 }
 
-
 template class RemoteScrubEventBaseT<ScrubRequested>;
 template class RemoteScrubEventBaseT<ScrubMessage>;
 
