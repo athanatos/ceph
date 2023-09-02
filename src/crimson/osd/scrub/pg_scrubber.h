@@ -28,6 +28,8 @@ class PGScrubber : public crimson::BlockerT<PGScrubber>, ScrubContext {
   };
   std::optional<blocked_range_t> blocked;
 
+  std::optional<eversion_t> waiting_for_update;
+
 public:
   static constexpr const char *type_name = "PGScrubber";
   using Blocker = PGScrubber;
@@ -49,6 +51,8 @@ public:
   void on_primary_active_clean();
   void on_replica_activate();
   void on_interval_change();
+
+  void on_log_update(eversion_t v);
 
   void handle_scrub_requested();
 

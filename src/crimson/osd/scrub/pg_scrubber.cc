@@ -32,6 +32,14 @@ void PGScrubber::on_interval_change()
   ceph_assert(!blocked);
 }
 
+void PGScrubber::on_log_update(eversion_t v)
+{
+  if (waiting_for_update && v > *waiting_for_update) {
+    machine.process_event(await_update_complete_t{});
+    waiting_for_update = std::nullopt;
+  }
+}
+
 void PGScrubber::handle_scrub_requested()
 {
   machine.process_event(StartScrub{});
