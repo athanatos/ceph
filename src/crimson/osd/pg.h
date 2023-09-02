@@ -542,18 +542,20 @@ public:
 
 private:
 
-  struct SnapTrimMutex {
-    struct WaitPG : OrderedConcurrentPhaseT<WaitPG> {
-      static constexpr auto type_name = "SnapTrimEvent::wait_pg";
-    } wait_pg;
-    seastar::shared_mutex mutex;
-
-    interruptible_future<> lock(SnapTrimEvent &st_event) noexcept;
-
-    void unlock() noexcept {
-      mutex.unlock();
-    }
-  } snaptrim_mutex;
+  /**
+   * background_io_mutex
+   *
+   * This mutex is used by snap_trim and scrub to ensure that
+   * at most one snaptrim instance or scrub is operating at
+   * once.  Scrub won't correctly handle a concurrent trim because
+   * trim doesn't respect the range reservation mechanic.  We could
+   * change it to work correctly, but this is a reasonable solution
+   * for now.
+   *
+   * It's probably worth expressing this as a BlockerT, but we can
+   * do that later.
+   */
+  seastar::shared_mutex background_io_mutex;
 
   using do_osd_ops_ertr = crimson::errorator<
    crimson::ct_error::eagain>;
