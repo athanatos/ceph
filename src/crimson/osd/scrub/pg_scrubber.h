@@ -76,7 +76,7 @@ private:
   }
 
   void request_range(const hobject_t &start) final;
-  eversion_t reserve_range(const hobject_t &start, const hobject_t &end) final;
+  void reserve_range(const hobject_t &start, const hobject_t &end) final;
   void release_range() final;
   void scan_range(
     pg_shard_t target,

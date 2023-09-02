@@ -100,7 +100,8 @@ struct ScrubContext {
   virtual void request_range(
     const hobject_t &start) = 0;
 
-  virtual eversion_t reserve_range(
+  VALUE_EVENT(reserve_range_complete_t, eversion_t);
+  virtual void reserve_range(
     const hobject_t &start,
     const hobject_t &end) = 0;
 
@@ -303,8 +304,10 @@ struct WaitUpdate : ScrubState<WaitUpdate, ChunkState> {
   explicit WaitUpdate(my_context ctx);
 
   using reactions = boost::mpl::list<
-    sc::transition<ScrubContext::await_update_complete_t, ScanRange>
+    sc::custom_reaction<ScrubContext::reserve_range_complete_t>
     >;
+
+  sc::result react(const ScrubContext::reserve_range_complete_t &);
 };
 
 struct ScanRange : ScrubState<ScanRange, ChunkState> {

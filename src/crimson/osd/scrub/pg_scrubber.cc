@@ -29,12 +29,13 @@ void PGScrubber::on_interval_change()
    * IntervalChange event to drop remote resources (they'll be automatically
    * released on the other side */
   machine.process_event(Reset{});
+  waiting_for_update = std::nullopt;
   ceph_assert(!blocked);
 }
 
 void PGScrubber::on_log_update(eversion_t v)
 {
-  if (waiting_for_update && v > *waiting_for_update) {
+  if (waiting_for_update && v >= *waiting_for_update) {
     machine.process_event(await_update_complete_t{});
     waiting_for_update = std::nullopt;
   }
@@ -92,17 +93,19 @@ void PGScrubber::request_range(const hobject_t &start)
 {
 }
 
-/* TODOSAM: this isn't actually enough.  Here, classic would
+/* TODOSAM: This isn't actually enough.  Here, classic would
  * hold the pg lock from the wait_scrub through to IO submission.
  * ClientRequest, however, isn't in the processing ExclusivePhase
  * bit yet, and so this check may miss ops between the wait_scrub
- * check and adding the IO to the log */
+ * check and adding the IO to the log. */
 
-eversion_t PGScrubber::reserve_range(const hobject_t &start, const hobject_t &end)
+// TODO trim interconnect
+void PGScrubber::reserve_range(const hobject_t &start, const hobject_t &end)
 {
   ceph_assert(!blocked);
   blocked = blocked_range_t{start, end};
 
+#if 0
   auto& log = pg.peering_state.get_pg_log().get_log().log;
   auto p = find_if(
     log.crbegin(), log.crend(),
@@ -115,6 +118,7 @@ eversion_t PGScrubber::reserve_range(const hobject_t &start, const hobject_t &en
   } else {
     return p->version;
   }
+#endif
 }
 
 void PGScrubber::release_range()
@@ -133,6 +137,10 @@ void PGScrubber::scan_range(
 
 void PGScrubber::await_update(const eversion_t &version)
 {
+  ceph_assert(!waiting_for_update);
+  waiting_for_update = version;
+  auto& log = pg.peering_state.get_pg_log().get_log().log;
+  on_log_update(log.empty() ? eversion_t() : log.rbegin()->version);
 }
 
 void PGScrubber::generate_and_submit_chunk_result(
