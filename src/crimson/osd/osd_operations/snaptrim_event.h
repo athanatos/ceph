@@ -106,12 +106,9 @@ public:
     CommonPGPipeline::GetOBC::BlockingEvent,
     CommonPGPipeline::Process::BlockingEvent,
     WaitSubop::BlockingEvent,
-    PG::SnapTrimMutex::WaitPG::BlockingEvent,
     WaitTrimTimer::BlockingEvent,
     CompletionEvent
   > tracking_events;
-
-  friend class PG::SnapTrimMutex;
 };
 
 // remove single object. a SnapTrimEvent can create multiple subrequests.
