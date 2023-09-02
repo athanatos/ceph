@@ -54,11 +54,13 @@ seastar::future<> ScrubEventBaseT<T>::with_pg(
 
 ScrubRequested::ifut<> ScrubRequested::handle_event(PG &pg)
 {
+  pg.scrubber.handle_scrub_requested();
   return seastar::now();
 }
 
 ScrubMessage::ifut<> ScrubMessage::handle_event(PG &pg)
 {
+  pg.scrubber.handle_scrub_message(*m);
   return seastar::now();
 }
 

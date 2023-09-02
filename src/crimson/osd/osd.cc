@@ -818,7 +818,13 @@ OSD::do_ms_dispatch(
   case MSG_OSD_REPOPREPLY:
     return handle_rep_op_reply(conn, boost::static_pointer_cast<MOSDRepOpReply>(m));
   case MSG_OSD_SCRUB2:
-    return handle_scrub(conn, boost::static_pointer_cast<MOSDScrub2>(m));
+    return handle_scrub_command(
+      conn, boost::static_pointer_cast<MOSDScrub2>(m));
+  case MSG_OSD_REP_SCRUB:
+  case MSG_OSD_REP_SCRUBMAP:
+    return handle_scrub_message(
+      conn,
+      boost::static_pointer_cast<MOSDFastDispatchOp>(m));
   case MSG_OSD_PG_UPDATE_LOG_MISSING:
     return handle_update_log_missing(conn, boost::static_pointer_cast<
       MOSDPGUpdateLogMissing>(m));
@@ -1182,7 +1188,7 @@ seastar::future<> OSD::handle_rep_op_reply(
     });
 }
 
-seastar::future<> OSD::handle_scrub(
+seastar::future<> OSD::handle_scrub_command(
   crimson::net::ConnectionRef conn,
   Ref<MOSDScrub2> m)
 {
@@ -1195,6 +1201,17 @@ seastar::future<> OSD::handle_scrub(
       crimson::osd::ScrubRequested
       >(conn, m->epoch, pgid);
   }
+  return seastar::now();
+}
+
+seastar::future<> OSD::handle_scrub_message(
+  crimson::net::ConnectionRef conn,
+  Ref<MOSDFastDispatchOp> m)
+{
+  ceph_assert(seastar::this_shard_id() == PRIMARY_CORE);
+  std::ignore = pg_shard_manager.start_pg_operation<
+    crimson::osd::ScrubMessage
+    >(m, conn, m->get_min_epoch(), m->get_spg());
   return seastar::now();
 }
 

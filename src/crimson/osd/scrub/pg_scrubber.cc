@@ -101,13 +101,12 @@ void PGScrubber::request_range(const hobject_t &start)
 
 void PGScrubber::reserve_range(const hobject_t &start, const hobject_t &end)
 {
-  ceph_assert(!blocked);
-  blocked = blocked_range_t{start, end};
-
   std::ignore = ifut<>(seastar::yield()
   ).then_interruptible([this] {
     return pg.background_io_mutex.lock();
   }).then_interruptible([this, start, end] {
+    ceph_assert(!blocked);
+    blocked = blocked_range_t{start, end};
     auto& log = pg.peering_state.get_pg_log().get_log().log;
     auto p = find_if(
       log.crbegin(), log.crend(),

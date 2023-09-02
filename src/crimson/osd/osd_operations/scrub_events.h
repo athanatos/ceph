@@ -5,6 +5,7 @@
 
 #include "common/Formatter.h"
 #include "crimson/osd/osd_operation.h"
+#include "crimson/osd/scrub/pg_scrubber.h"
 #include "osd/osd_types.h"
 #include "peering_event.h"
 
@@ -119,8 +120,10 @@ public:
 
   template <typename... Args>
   ScrubMessage(MessageRef m, Args&&... base_args)
-    : ScrubEventBaseT<ScrubRequested>(std::forward<Args>(base_args)...),
-      m(m) {}
+    : ScrubEventBaseT<ScrubMessage>(std::forward<Args>(base_args)...),
+      m(m) {
+    ceph_assert(scrub::PGScrubber::is_scrub_message(*m));
+  }
 };
 
 
