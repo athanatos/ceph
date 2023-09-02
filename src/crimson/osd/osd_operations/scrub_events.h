@@ -33,6 +33,10 @@ class ScrubEventBaseT : public PhasedOperationT<T> {
 protected:
   using interruptor = InterruptibleOperation::interruptor;
 
+  template <typename U=void>
+  using ifut = InterruptibleOperation::interruptible_future<U>;
+
+  virtual ifut<> handle_event(PG &pg) = 0;
 public:
   ScrubEventBaseT(
     crimson::net::ConnectionRef conn, epoch_t epoch, spg_t pgid)
@@ -91,6 +95,9 @@ class ScrubRequested final : public ScrubEventBaseT<ScrubRequested> {
   void scrub_event_print(std::ostream &) const final { /* TODO */ }
   void scrub_event_dump_detail(ceph::Formatter* f) const final { /* TODO */ }
 
+protected:
+  ifut<> handle_event(PG &pg) final;
+
 public:
   static constexpr OperationTypeCode type = OperationTypeCode::scrub_requested;
 
@@ -98,6 +105,24 @@ public:
   ScrubRequested(Args&&... base_args)
     : ScrubEventBaseT<ScrubRequested>(std::forward<Args>(base_args)...) {}
 };
+
+class ScrubMessage final : public ScrubEventBaseT<ScrubMessage> {
+  void scrub_event_print(std::ostream &) const final { /* TODO */ }
+  void scrub_event_dump_detail(ceph::Formatter* f) const final { /* TODO */ }
+
+  MessageRef m;
+protected:
+  ifut<> handle_event(PG &pg) final;
+
+public:
+  static constexpr OperationTypeCode type = OperationTypeCode::scrub_message;
+
+  template <typename... Args>
+  ScrubMessage(MessageRef m, Args&&... base_args)
+    : ScrubEventBaseT<ScrubRequested>(std::forward<Args>(base_args)...),
+      m(m) {}
+};
+
 
 }
 
@@ -110,9 +135,19 @@ struct EventBackendRegistry<osd::ScrubRequested> {
   }
 };
 
+template <>
+struct EventBackendRegistry<osd::ScrubMessage> {
+  static std::tuple<> get_backends() {
+    return {};
+  }
+};
+
 }
 
 #if FMT_VERSION >= 90000
 template <> struct fmt::formatter<crimson::osd::ScrubRequested>
+  : fmt::ostream_formatter {};
+
+template <> struct fmt::formatter<crimson::osd::ScrubMessage>
   : fmt::ostream_formatter {};
 #endif

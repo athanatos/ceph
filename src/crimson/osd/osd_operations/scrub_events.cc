@@ -41,8 +41,8 @@ seastar::future<> ScrubEventBaseT<T>::with_pg(
 	});
     }).then_interruptible([this, pg](auto) {
       return this->template enter_stage<interruptor>(pp(*pg).process);
-    }).then_interruptible([this] {
-      return interruptor::now();
+    }).then_interruptible([this, pg] {
+      return handle_event(*pg);
     });
   }, [this](std::exception_ptr ep) {
     logger().debug(
@@ -52,7 +52,18 @@ seastar::future<> ScrubEventBaseT<T>::with_pg(
   }, pg);
 }
 
+ScrubRequested::ifut<> ScrubRequested::handle_event(PG &pg)
+{
+  return seastar::now();
+}
+
+ScrubMessage::ifut<> ScrubMessage::handle_event(PG &pg)
+{
+  return seastar::now();
+}
+
 
 template class ScrubEventBaseT<ScrubRequested>;
+template class ScrubEventBaseT<ScrubMessage>;
 
 }
