@@ -130,6 +130,8 @@ class ScrubScan : public TrackableOperationT<ScrubScan> {
   Ref<PG> pg;
   const hobject_t begin;
   const hobject_t end;
+
+  ScrubMap ret;
 public:
   static constexpr OperationTypeCode type = OperationTypeCode::scrub_scan;
 
@@ -137,6 +139,7 @@ public:
   void dump_detail(ceph::Formatter *) const final;
 
   seastar::future<> start();
+  interruptible_future<> scan_object(const ghobject_t &obj);
 
   ScrubScan(Ref<PG> pg, const hobject_t &begin, const hobject_t &end);
   ~ScrubScan();

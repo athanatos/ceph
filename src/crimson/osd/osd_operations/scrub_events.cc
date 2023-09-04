@@ -89,8 +89,13 @@ seastar::future<> ScrubScan::start()
 	ghobject_t(begin, ghobject_t::NO_GEN, pg->get_pgid().shard),
 	ghobject_t(end, ghobject_t::NO_GEN, pg->get_pgid().shard),
 	std::numeric_limits<uint64_t>::max())
-    ).then_interruptible([](auto &&result) {
+    ).then_interruptible([this](auto &&result) {
       auto [objects, _] = std::move(result);
+      return interruptor::do_for_each(
+	objects,
+	[this](auto &obj) {
+	  return scan_object(obj);
+	});
     });
   }, [this](std::exception_ptr ep) {
     logger().debug(
@@ -98,6 +103,12 @@ seastar::future<> ScrubScan::start()
       *this,
       ep);
   }, pg);
+}
+
+ScrubScan::interruptible_future<> ScrubScan::scan_object(
+  const ghobject_t &obj)
+{
+  return seastar::now();
 }
 
 ScrubScan::~ScrubScan() {}
