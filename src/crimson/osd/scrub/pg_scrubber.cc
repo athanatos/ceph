@@ -2,6 +2,7 @@
 // vim: ts=8 sw=2 smarttab expandtab
 
 #include "crimson/osd/pg.h"
+#include "crimson/osd/osd_operations/scrub_events.h"
 #include "messages/MOSDRepScrub.h"
 #include "messages/MOSDRepScrubMap.h"
 #include "pg_scrubber.h"
@@ -151,6 +152,8 @@ void PGScrubber::generate_and_submit_chunk_result(
   const hobject_t &end,
   bool deep)
 {
+  // TODOSAM
+  std::ignore = pg.shard_services.start_operation<ScrubScan>(&pg, begin, end);
 }
 
 void PGScrubber::emit_chunk_result(

@@ -67,4 +67,31 @@ ScrubMessage::ifut<> ScrubMessage::handle_event(PG &pg)
 template class RemoteScrubEventBaseT<ScrubRequested>;
 template class RemoteScrubEventBaseT<ScrubMessage>;
 
+ScrubScan::ScrubScan(Ref<PG> pg, const hobject_t &begin, const hobject_t &end)
+  : pg(pg), begin(begin), end(end) {}
+
+void ScrubScan::print(std::ostream &) const
+{
+  // TODOSAM
+}
+
+void ScrubScan::dump_detail(ceph::Formatter *) const
+{
+  // TODOSAM
+}
+
+seastar::future<> ScrubScan::start()
+{
+  return interruptor::with_interruption([this] {
+    return interruptible_future<>(seastar::now());
+  }, [this](std::exception_ptr ep) {
+    logger().debug(
+      "{}: interrupted with {}",
+      *this,
+      ep);
+  }, pg);
+}
+
+ScrubScan::~ScrubScan() {}
+
 }

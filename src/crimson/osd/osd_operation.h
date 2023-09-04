@@ -49,6 +49,8 @@ enum class OperationTypeCode {
   snaptrimobj_subevent,
   scrub_requested,
   scrub_message,
+  scrub_scan,
+  scrub_find_range,
   last_op
 };
 
@@ -68,6 +70,8 @@ static constexpr const char* const OP_NAMES[] = {
   "snaptrimobj_subevent",
   "scrub_requested",
   "scrub_message",
+  "scrub_scan",
+  "scrub_find_range",
 };
 
 // prevent the addition of OperationTypeCode-s with no matching OP_NAMES entry:

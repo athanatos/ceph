@@ -126,6 +126,21 @@ public:
   }
 };
 
+class ScrubScan : public TrackableOperationT<ScrubScan> {
+  Ref<PG> pg;
+  const hobject_t begin;
+  const hobject_t end;
+public:
+  static constexpr OperationTypeCode type = OperationTypeCode::scrub_scan;
+
+  void print(std::ostream &) const final;
+  void dump_detail(ceph::Formatter *) const final;
+
+  seastar::future<> start();
+
+  ScrubScan(Ref<PG> pg, const hobject_t &begin, const hobject_t &end);
+  ~ScrubScan();
+};
 
 }
 
@@ -152,5 +167,8 @@ template <> struct fmt::formatter<crimson::osd::ScrubRequested>
   : fmt::ostream_formatter {};
 
 template <> struct fmt::formatter<crimson::osd::ScrubMessage>
+  : fmt::ostream_formatter {};
+
+template <> struct fmt::formatter<crimson::osd::ScrubScan>
   : fmt::ostream_formatter {};
 #endif
