@@ -83,7 +83,15 @@ void ScrubScan::dump_detail(ceph::Formatter *) const
 seastar::future<> ScrubScan::start()
 {
   return interruptor::with_interruption([this] {
-    return interruptible_future<>(seastar::now());
+    return interruptor::make_interruptible(
+      pg->shard_services.get_store().list_objects(
+	pg->get_collection_ref(),
+	ghobject_t(begin, ghobject_t::NO_GEN, pg->get_pgid().shard),
+	ghobject_t(end, ghobject_t::NO_GEN, pg->get_pgid().shard),
+	std::numeric_limits<uint64_t>::max())
+    ).then_interruptible([](auto &&result) {
+      auto [objects, _] = std::move(result);
+    });
   }, [this](std::exception_ptr ep) {
     logger().debug(
       "{}: interrupted with {}",

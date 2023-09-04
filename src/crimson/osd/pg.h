@@ -165,6 +165,7 @@ public:
 
   friend class scrub::PGScrubber;
   template <typename T> friend class RemoteScrubEventBaseT;
+  friend class ScrubScan;
 
   scrub::PGScrubber scrubber;
 
