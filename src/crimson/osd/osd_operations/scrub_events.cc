@@ -108,7 +108,13 @@ seastar::future<> ScrubScan::start()
 ScrubScan::interruptible_future<> ScrubScan::scan_object(
   const ghobject_t &obj)
 {
-  return seastar::now();
+  return interruptor::make_interruptible(
+    pg->shard_services.get_store().stat(
+      pg->get_collection_ref(),
+      obj)
+  ).then_interruptible([this, &obj](struct stat obj_stat) {
+    ret.objects[obj.hobj].size = obj_stat.st_size;
+  });
 }
 
 ScrubScan::~ScrubScan() {}
