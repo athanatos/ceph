@@ -114,7 +114,18 @@ ScrubScan::interruptible_future<> ScrubScan::scan_object(
       obj)
   ).then_interruptible([this, &obj](struct stat obj_stat) {
     ret.objects[obj.hobj].size = obj_stat.st_size;
-  });
+    return pg->shard_services.get_store().get_attrs(
+      pg->get_collection_ref(),
+      obj);
+  }).safe_then_interruptible([this, &obj](auto &&attrs) {
+    auto &smo = ret.objects[obj.hobj];
+    for (auto &i : attrs) {
+      i.second.rebuild();
+      smo.attrs.emplace(i.first, *(i.second.begin()));
+    }
+  }).handle_error_interruptible(
+    ct_error::assert_all{"can't live with object state messed up"}
+  );
 }
 
 ScrubScan::~ScrubScan() {}
