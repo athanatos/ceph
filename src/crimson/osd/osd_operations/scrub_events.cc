@@ -203,6 +203,35 @@ ScrubScan::interruptible_future<> ScrubScan::deep_scan_object(
 	    seastar::make_ready_future<seastar::stop_iteration>(
 	      seastar::stop_iteration::no));
 	});
+      } else if (!progress->keys_done) {
+	return pg->shard_services.get_store().omap_get_values(
+	  pg->get_collection_ref(),
+	  obj,
+	  progress->next_key
+	).safe_then([this, &progress, &entry](auto result) {
+	  const auto &[done, omap] = result;
+	  for (const auto &p : omap) {
+	    bufferlist bl;
+	    encode(p.first, bl);
+	    encode(p.second, bl);
+	    progress->omap_hash << bl;
+	  }
+	  if (done) {
+	    progress->keys_done = true;
+	    entry.omap_digest = progress->omap_hash.digest();
+	  } else {
+	    ceph_assert(!omap.empty()); // omap_get_values invariant
+	    progress->next_key = omap.crbegin()->first;
+	  }
+	}).handle_error(
+	  ct_error::all_same_way([this, &progress, &entry](auto e) {
+	    entry.read_error = true;
+	  })
+	).then([] {
+	  return interruptor::make_interruptible(
+	    seastar::make_ready_future<seastar::stop_iteration>(
+	      seastar::stop_iteration::no));
+	});
       } else {
 	return interruptor::make_interruptible(
 	  seastar::make_ready_future<seastar::stop_iteration>(
