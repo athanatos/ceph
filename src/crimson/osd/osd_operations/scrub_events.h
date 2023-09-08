@@ -128,6 +128,7 @@ public:
 
 class ScrubScan : public TrackableOperationT<ScrubScan> {
   Ref<PG> pg;
+  const bool deep;
   const hobject_t begin;
   const hobject_t end;
 
@@ -140,8 +141,9 @@ public:
 
   seastar::future<> start();
   interruptible_future<> scan_object(const ghobject_t &obj);
+  interruptible_future<> deep_scan_object(const ghobject_t &obj);
 
-  ScrubScan(Ref<PG> pg, const hobject_t &begin, const hobject_t &end);
+  ScrubScan(Ref<PG> pg, bool deep, const hobject_t &begin, const hobject_t &end);
   ~ScrubScan();
 };
 

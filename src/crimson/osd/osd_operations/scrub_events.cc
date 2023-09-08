@@ -67,8 +67,9 @@ ScrubMessage::ifut<> ScrubMessage::handle_event(PG &pg)
 template class RemoteScrubEventBaseT<ScrubRequested>;
 template class RemoteScrubEventBaseT<ScrubMessage>;
 
-ScrubScan::ScrubScan(Ref<PG> pg, const hobject_t &begin, const hobject_t &end)
-  : pg(pg), begin(begin), end(end) {}
+ScrubScan::ScrubScan(
+  Ref<PG> pg, bool deep, const hobject_t &begin, const hobject_t &end)
+  : pg(pg), deep(deep), begin(begin), end(end) {}
 
 void ScrubScan::print(std::ostream &) const
 {
@@ -82,6 +83,9 @@ void ScrubScan::dump_detail(ceph::Formatter *) const
 
 seastar::future<> ScrubScan::start()
 {
+  // legacy value, unused
+  ret.valid_through = pg->get_info().last_update;
+
   return interruptor::with_interruption([this] {
     return interruptor::make_interruptible(
       pg->shard_services.get_store().list_objects(
@@ -108,24 +112,79 @@ seastar::future<> ScrubScan::start()
 ScrubScan::interruptible_future<> ScrubScan::scan_object(
   const ghobject_t &obj)
 {
+  auto &entry = ret.objects[obj.hobj];
   return interruptor::make_interruptible(
     pg->shard_services.get_store().stat(
       pg->get_collection_ref(),
       obj)
-  ).then_interruptible([this, &obj](struct stat obj_stat) {
-    ret.objects[obj.hobj].size = obj_stat.st_size;
+  ).then_interruptible([this, &obj, &entry](struct stat obj_stat) {
+    entry.size = obj_stat.st_size;
     return pg->shard_services.get_store().get_attrs(
       pg->get_collection_ref(),
       obj);
-  }).safe_then_interruptible([this, &obj](auto &&attrs) {
-    auto &smo = ret.objects[obj.hobj];
+  }).safe_then_interruptible([this, &entry](auto &&attrs) {
     for (auto &i : attrs) {
       i.second.rebuild();
-      smo.attrs.emplace(i.first, *(i.second.begin()));
+      entry.attrs.emplace(i.first, *(i.second.begin()));
     }
   }).handle_error_interruptible(
-    ct_error::assert_all{"can't live with object state messed up"}
-  );
+    ct_error::all_same_way([this, &entry](auto e) {
+      entry.stat_error = true;
+    })
+  ).then_interruptible([this, &obj] {
+    if (deep) {
+      return deep_scan_object(obj);
+    } else {
+      return interruptor::now();
+    }
+  });
+    
+}
+
+ScrubScan::interruptible_future<> ScrubScan::deep_scan_object(
+  const ghobject_t &obj)
+{
+  using crimson::common::local_conf;
+  struct obj_scrub_progress_t {
+    // nullopt once complete
+    std::optional<uint64_t> offset;
+    ceph::buffer::hash data_hash{std::numeric_limits<uint32_t>::max()};
+
+    // nullopt once complete
+    std::optional<std::string> next_key;
+    ceph::buffer::hash omap_hash{std::numeric_limits<uint32_t>::max()};
+  };
+  auto &entry = ret.objects[obj.hobj];
+  return interruptor::repeat(
+    [this, progress = std::make_unique<obj_scrub_progress_t>(), &obj, &entry]()
+    -> interruptible_future<seastar::stop_iteration> {
+      if (progress->offset) {
+	return pg->shard_services.get_store().read(
+	  pg->get_collection_ref(),
+	  obj,
+	  *(progress->offset),
+	  local_conf().get_val<uint64_t>("osd_deep_scrub_stride")
+	).safe_then([this, &progress, &entry](auto bl) {
+	}).handle_error(
+	  ct_error::all_same_way([this, &progress, &entry](auto e) {
+	    entry.read_error = true;
+	    progress->offset = std::nullopt;
+	  })
+	).then([] {
+	  return interruptor::make_interruptible(
+	    seastar::make_ready_future<seastar::stop_iteration>(
+	      seastar::stop_iteration::no));
+	});
+      } else if (progress->next_key) {
+	return interruptor::make_interruptible(
+	  seastar::make_ready_future<seastar::stop_iteration>(
+	    seastar::stop_iteration::no));
+      } else {
+	return interruptor::make_interruptible(
+	  seastar::make_ready_future<seastar::stop_iteration>(
+	    seastar::stop_iteration::yes));
+      }
+    });
 }
 
 ScrubScan::~ScrubScan() {}
