@@ -150,8 +150,9 @@ ScrubScan::interruptible_future<> ScrubScan::deep_scan_object(
     std::optional<uint64_t> offset;
     ceph::buffer::hash data_hash{std::numeric_limits<uint32_t>::max()};
 
-    // nullopt once complete
+    bool header_done = false;
     std::optional<std::string> next_key;
+    bool keys_done = false;
     ceph::buffer::hash omap_hash{std::numeric_limits<uint32_t>::max()};
   };
   auto &entry = ret.objects[obj.hobj];
@@ -167,13 +168,14 @@ ScrubScan::interruptible_future<> ScrubScan::deep_scan_object(
 	  *(progress->offset),
 	  stride
 	).safe_then([this, stride, &progress, &entry](auto bl) {
+	  progress->data_hash << bl;
 	  if (bl.length() < stride) {
 	    progress->offset = std::nullopt;
+	    entry.digest = progress->data_hash.digest();
 	  } else {
 	    ceph_assert(stride == bl.length());
 	    *(progress->offset) += stride;
 	  }
-	  progress->data_hash << bl;
 	}).handle_error(
 	  ct_error::all_same_way([this, &progress, &entry](auto e) {
 	    entry.read_error = true;
@@ -184,10 +186,23 @@ ScrubScan::interruptible_future<> ScrubScan::deep_scan_object(
 	    seastar::make_ready_future<seastar::stop_iteration>(
 	      seastar::stop_iteration::no));
 	});
-      } else if (progress->next_key) {
-	return interruptor::make_interruptible(
-	  seastar::make_ready_future<seastar::stop_iteration>(
-	    seastar::stop_iteration::no));
+      } else if (!progress->header_done) {
+	return pg->shard_services.get_store().omap_get_header(
+	  pg->get_collection_ref(),
+	  obj
+	).safe_then([this, &progress, &entry](auto bl) {
+	  progress->omap_hash << bl;
+	}).handle_error(
+	  ct_error::enodata::handle([] {}),
+	  ct_error::all_same_way([this, &progress, &entry](auto e) {
+	    entry.read_error = true;
+	  })
+	).then([&progress] {
+	  progress->header_done = true;
+	  return interruptor::make_interruptible(
+	    seastar::make_ready_future<seastar::stop_iteration>(
+	      seastar::stop_iteration::no));
+	});
       } else {
 	return interruptor::make_interruptible(
 	  seastar::make_ready_future<seastar::stop_iteration>(
