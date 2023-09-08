@@ -159,12 +159,21 @@ ScrubScan::interruptible_future<> ScrubScan::deep_scan_object(
     [this, progress = std::make_unique<obj_scrub_progress_t>(), &obj, &entry]()
     -> interruptible_future<seastar::stop_iteration> {
       if (progress->offset) {
+	const auto stride = local_conf().get_val<uint64_t>(
+	  "osd_deep_scrub_stride");
 	return pg->shard_services.get_store().read(
 	  pg->get_collection_ref(),
 	  obj,
 	  *(progress->offset),
-	  local_conf().get_val<uint64_t>("osd_deep_scrub_stride")
-	).safe_then([this, &progress, &entry](auto bl) {
+	  stride
+	).safe_then([this, stride, &progress, &entry](auto bl) {
+	  if (bl.length() < stride) {
+	    progress->offset = std::nullopt;
+	  } else {
+	    ceph_assert(stride == bl.length());
+	    *(progress->offset) += stride;
+	  }
+	  progress->data_hash << bl;
 	}).handle_error(
 	  ct_error::all_same_way([this, &progress, &entry](auto e) {
 	    entry.read_error = true;
