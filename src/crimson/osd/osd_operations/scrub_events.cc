@@ -172,6 +172,7 @@ ScrubScan::interruptible_future<> ScrubScan::deep_scan_object(
 	  if (bl.length() < stride) {
 	    progress->offset = std::nullopt;
 	    entry.digest = progress->data_hash.digest();
+	    entry.digest_present = true;
 	  } else {
 	    ceph_assert(stride == bl.length());
 	    *(progress->offset) += stride;
@@ -215,10 +216,24 @@ ScrubScan::interruptible_future<> ScrubScan::deep_scan_object(
 	    encode(p.first, bl);
 	    encode(p.second, bl);
 	    progress->omap_hash << bl;
+	    entry.object_omap_keys++;
+	    entry.object_omap_bytes += p.second.length();
 	  }
 	  if (done) {
 	    progress->keys_done = true;
 	    entry.omap_digest = progress->omap_hash.digest();
+	    entry.omap_digest_present = true;
+
+	    if ((entry.object_omap_keys >
+		 local_conf().get_val<uint64_t>(
+		   "osd_deep_scrub_large_omap_object_key_threshold")) ||
+		(entry.object_omap_bytes >
+		 local_conf().get_val<uint64_t>(
+		   "osd_deep_scrub_large_omap_object_value_sum_threshold"))) {
+	      entry.large_omap_object_found = true;
+	      entry.large_omap_object_key_count = entry.object_omap_keys;
+	      ret.has_large_omap_object_errors = true;
+	    }
 	  } else {
 	    ceph_assert(!omap.empty()); // omap_get_values invariant
 	    progress->next_key = omap.crbegin()->first;
