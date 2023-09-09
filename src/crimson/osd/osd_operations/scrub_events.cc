@@ -115,6 +115,8 @@ seastar::future<> ScrubScan::start()
 	  pg->get_osdmap_epoch(),
 	  pg->get_pg_whoami());
 	encode(ret, m->scrub_map_bl);
+	pg->scrubber.machine.process_event(
+	  scrub::ScrubContext::generate_and_submit_chunk_result_complete_t{});
 	return pg->shard_services.send_to_osd(
 	  pg->get_primary().osd,
 	  std::move(m),

@@ -32,6 +32,8 @@ namespace crimson::osd::scrub {
  *   - Note, each replica should validate and repair locally as the SnapMapper
  *     is meant to be a local index of the authoritative object contents
  * - Leaving preemption for later
+ * - Leaving scheduling for later, for now the only way to trigger a scrub
+ *   is via the OSD or PG commands.
  */
 
 namespace sc = boost::statechart;
@@ -332,9 +334,9 @@ struct replica_scan_event_t {
   bool deep = false;
 };
 VALUE_EVENT(ReplicaScan, replica_scan_event_t);
-struct ReplicaWaitUpdate;
+struct ReplicaIdle;
 struct ReplicaActive :
-    ScrubState<ReplicaActive, ScrubMachine, ReplicaWaitUpdate> {
+    ScrubState<ReplicaActive, ScrubMachine, ReplicaIdle> {
   static constexpr std::string_view state_name = "ReplicaActive";
   explicit ReplicaActive(my_context ctx) : ScrubState(ctx) {}
 
@@ -348,15 +350,58 @@ struct ReplicaActive :
   }
 };
 
-struct ReplicaWaitScan;
-struct ReplicaWaitUpdate : ScrubState<ReplicaWaitUpdate, ReplicaActive> {
-  static constexpr std::string_view state_name = "ReplicaWaitUpdate";
-  explicit ReplicaWaitUpdate(my_context ctx) : ScrubState(ctx) {}
+struct ReplicaChunkState;
+struct ReplicaIdle : ScrubState<ReplicaIdle, ReplicaActive> {
+  static constexpr std::string_view state_name = "ReplicaIdle";
+  explicit ReplicaIdle(my_context ctx) : ScrubState(ctx) {}
+
+  using reactions = boost::mpl::list<
+    sc::custom_reaction<ReplicaScan>
+    >;
+
+  sc::result react(const ReplicaScan &event) {
+    post_event(event);
+    return transit<ReplicaChunkState>();
+  }
 };
 
-struct ReplicaWaitScan : ScrubState<ReplicaWaitScan, ReplicaActive> {
-  static constexpr std::string_view state_name = "ReplicaWaitScan";
-  explicit ReplicaWaitScan(my_context ctx) : ScrubState(ctx) {}
+struct ReplicaWaitUpdate;
+struct ReplicaChunkState : ScrubState<ReplicaChunkState, ReplicaActive, ReplicaWaitUpdate> {
+  static constexpr std::string_view state_name = "ReplicaChunkState";
+  explicit ReplicaChunkState(my_context ctx) : ScrubState(ctx) {}
+
+  eversion_t version;
+  hobject_t start, end;
+  bool deep = false;
+
+  using reactions = boost::mpl::list<
+    sc::custom_reaction<ReplicaScan>
+    >;
+
+  sc::result react(const ReplicaScan &event);
+};
+
+struct ReplicaScanChunk;
+struct ReplicaWaitUpdate : ScrubState<ReplicaWaitUpdate, ReplicaChunkState> {
+  static constexpr std::string_view state_name = "ReplicaWaitUpdate";
+  explicit ReplicaWaitUpdate(my_context ctx) : ScrubState(ctx) {}
+
+  using reactions = boost::mpl::list<
+    sc::custom_reaction<ReplicaScan>,
+    sc::transition<ScrubContext::await_update_complete_t, ReplicaScanChunk>
+    >;
+
+  sc::result react(const ReplicaScan &event);
+};
+
+struct ReplicaScanChunk : ScrubState<ReplicaScanChunk, ReplicaChunkState> {
+  static constexpr std::string_view state_name = "ReplicaScanChunk";
+  explicit ReplicaScanChunk(my_context ctx);
+
+  using reactions = boost::mpl::list<
+    sc::transition<ScrubContext::generate_and_submit_chunk_result_complete_t,
+		   ReplicaIdle>
+    >;
 };
 
 #undef SIMPLE_EVENT

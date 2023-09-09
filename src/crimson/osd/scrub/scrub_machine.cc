@@ -100,4 +100,28 @@ sc::result ScanRange::react(const ScrubContext::scan_range_complete_t &event)
   }
 }
 
+sc::result ReplicaChunkState::react(const ReplicaScan &event)
+{
+  start = event.value.start;
+  end = event.value.end;
+  version = event.value.version;
+  deep = event.value.deep;
+  return forward_event();
+}
+
+sc::result ReplicaWaitUpdate::react(const ReplicaScan &event)
+{
+  get_scrub_context().await_update(event.value.version);
+  return forward_event();
+}
+
+ReplicaScanChunk::ReplicaScanChunk(my_context ctx) : ScrubState(ctx)
+{
+  auto &cs = context<ReplicaChunkState>();
+  get_scrub_context().generate_and_submit_chunk_result(
+    cs.start,
+    cs.end,
+    cs.deep);
+}
+
 };

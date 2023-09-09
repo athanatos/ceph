@@ -185,7 +185,6 @@ void PGScrubber::generate_and_submit_chunk_result(
   const hobject_t &end,
   bool deep)
 {
-  // TODOSAM
   std::ignore = pg.shard_services.start_operation<ScrubScan>(
     &pg, deep, false /* not local */, begin, end
   );
@@ -195,6 +194,7 @@ void PGScrubber::emit_chunk_result(
   const request_range_result_t &range,
   chunk_result_t &&result)
 {
+  // TODO Maintain stats
 }
 
 }
