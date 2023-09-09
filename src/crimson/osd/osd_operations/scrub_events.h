@@ -128,11 +128,19 @@ public:
 
 class ScrubScan : public TrackableOperationT<ScrubScan> {
   Ref<PG> pg;
+  /// deep or shallow scrub
   const bool deep;
+
+  /// true: send event locally, false: send result to primary
+  const bool local;
+
+  /// object range to scan: [begin, end)
   const hobject_t begin;
   const hobject_t end;
 
+  /// result, see local
   ScrubMap ret;
+
 public:
   static constexpr OperationTypeCode type = OperationTypeCode::scrub_scan;
 
@@ -143,7 +151,9 @@ public:
   interruptible_future<> scan_object(const ghobject_t &obj);
   interruptible_future<> deep_scan_object(const ghobject_t &obj);
 
-  ScrubScan(Ref<PG> pg, bool deep, const hobject_t &begin, const hobject_t &end);
+  ScrubScan(
+    Ref<PG> pg, bool deep, bool local,
+    const hobject_t &begin, const hobject_t &end);
   ~ScrubScan();
 };
 

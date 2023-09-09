@@ -3,6 +3,7 @@
 
 #include "crimson/osd/pg.h"
 #include "crimson/osd/osd_connection_priv.h"
+#include "messages/MOSDRepScrubMap.h"
 #include "scrub_events.h"
 
 namespace {
@@ -68,8 +69,9 @@ template class RemoteScrubEventBaseT<ScrubRequested>;
 template class RemoteScrubEventBaseT<ScrubMessage>;
 
 ScrubScan::ScrubScan(
-  Ref<PG> pg, bool deep, const hobject_t &begin, const hobject_t &end)
-  : pg(pg), deep(deep), begin(begin), end(end) {}
+  Ref<PG> pg, bool deep, bool local,
+  const hobject_t &begin, const hobject_t &end)
+  : pg(pg), deep(deep), local(local), begin(begin), end(end) {}
 
 void ScrubScan::print(std::ostream &) const
 {
@@ -100,6 +102,18 @@ seastar::future<> ScrubScan::start()
 	[this](auto &obj) {
 	  return scan_object(obj);
 	});
+    }).then_interruptible([this] {
+      if (local) {
+	return seastar::now();
+      } else {
+	return pg->shard_services.send_to_osd(
+	  pg->get_primary().osd,
+	  crimson::make_message<MOSDRepScrubMap>(
+	    spg_t(pg->get_pgid().pgid, pg->get_primary().shard),
+	    pg->get_osdmap_epoch(),
+	    pg->get_pg_whoami()),
+	  pg->get_osdmap_epoch());
+      }
     });
   }, [this](std::exception_ptr ep) {
     logger().debug(

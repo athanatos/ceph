@@ -154,7 +154,7 @@ void PGScrubber::generate_and_submit_chunk_result(
 {
   // TODOSAM
   std::ignore = pg.shard_services.start_operation<ScrubScan>(
-    &pg, deep, begin, end
+    &pg, deep, false /* not local */, begin, end
   );
 }
 
