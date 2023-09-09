@@ -206,7 +206,10 @@ struct ScrubState : sc::state<S, P, T...> {
 
 struct Crash : ScrubState<Crash, ScrubMachine> {
   static constexpr std::string_view state_name = "Crash";
-  explicit Crash(my_context ctx);
+  explicit Crash(my_context ctx) : ScrubState(ctx) {
+    ceph_abort("Crash state impossible");
+  }
+  
 };
 
 SIMPLE_EVENT(PrimaryActivate);
@@ -215,7 +218,7 @@ struct PrimaryActive;
 struct ReplicaActive;
 struct Inactive : ScrubState<Inactive, ScrubMachine> {
   static constexpr std::string_view state_name = "Inactive";
-  explicit Inactive(my_context ctx);
+  explicit Inactive(my_context ctx) : ScrubState(ctx) {}
 
   using reactions = boost::mpl::list<
     sc::transition<PrimaryActivate, PrimaryActive>,
@@ -235,7 +238,7 @@ struct Inactive : ScrubState<Inactive, ScrubMachine> {
 struct AwaitScrub;
 struct PrimaryActive : ScrubState<PrimaryActive, ScrubMachine, AwaitScrub> {
   static constexpr std::string_view state_name = "PrimaryActive";
-  explicit PrimaryActive(my_context ctx);
+  explicit PrimaryActive(my_context ctx) : ScrubState(ctx) {}
 
   bool local_reservation_held = false;
   std::set<pg_shard_t> remote_reservations_held;
@@ -253,7 +256,7 @@ struct PrimaryActive : ScrubState<PrimaryActive, ScrubMachine, AwaitScrub> {
 struct Scrubbing;
 struct AwaitScrub : ScrubState<AwaitScrub, PrimaryActive> {
   static constexpr std::string_view state_name = "AwaitScrub";
-  explicit AwaitScrub(my_context ctx);
+  explicit AwaitScrub(my_context ctx) : ScrubState(ctx) {}
 
   using reactions = boost::mpl::list<
     sc::transition<StartScrub, Scrubbing>
@@ -276,7 +279,7 @@ struct Scrubbing : ScrubState<Scrubbing, PrimaryActive, ChunkState> {
 struct GetRange;
 struct ChunkState : ScrubState<ChunkState, Scrubbing, GetRange> {
   static constexpr std::string_view state_name = "ChunkState";
-  explicit ChunkState(my_context ctx);
+  explicit ChunkState(my_context ctx) : ScrubState(ctx) {}
 
   /// Current chunk includes objects in [range_start, range_end)
   boost::optional<ScrubContext::request_range_result_t> range;

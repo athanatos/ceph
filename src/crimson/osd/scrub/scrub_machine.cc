@@ -7,30 +7,6 @@
 
 namespace crimson::osd::scrub {
 
-Crash::Crash(my_context ctx) : ScrubState(ctx)
-{
-  ceph_abort("Crash state impossible");
-}
-
-Inactive::Inactive(my_context ctx) : ScrubState(ctx)
-{
-}
-
-PrimaryActive::PrimaryActive(my_context ctx) : ScrubState(ctx)
-{
-}
-
-AwaitScrub::AwaitScrub(my_context ctx) : ScrubState(ctx)
-{
-}
-
-Scrubbing::Scrubbing(my_context ctx) : ScrubState(ctx)
-{
-}
-
-ChunkState::ChunkState(my_context ctx) : ScrubState(ctx)
-{
-}
 
 void ChunkState::exit()
 {
