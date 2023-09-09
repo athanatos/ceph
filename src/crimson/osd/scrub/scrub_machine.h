@@ -290,18 +290,28 @@ struct ChunkState : ScrubState<ChunkState, Scrubbing, GetRange> {
   /// version of last update for the reserved chunk
   eversion_t version;
 
-  void exit();
+  void exit() {
+    if (range_reserved) {
+      get_scrub_context().release_range();
+    }
+  }
 };
 
+struct WaitUpdate;
 struct GetRange : ScrubState<GetRange, ChunkState> {
   static constexpr std::string_view state_name = "GetRange";
-  explicit GetRange(my_context ctx);
+  explicit GetRange(my_context ctx) : ScrubState(ctx) {
+    get_scrub_context().request_range(context<Scrubbing>().current);
+  }
 
   using reactions = boost::mpl::list<
     sc::custom_reaction<ScrubContext::request_range_complete_t>
     >;
 
-  sc::result react(const ScrubContext::request_range_complete_t &);
+  sc::result react(const ScrubContext::request_range_complete_t &event) {
+    context<ChunkState>().range = event.value;
+    return transit<WaitUpdate>();
+  }
 };
 
 struct ScanRange;
@@ -313,7 +323,10 @@ struct WaitUpdate : ScrubState<WaitUpdate, ChunkState> {
     sc::custom_reaction<ScrubContext::reserve_range_complete_t>
     >;
 
-  sc::result react(const ScrubContext::reserve_range_complete_t &);
+  sc::result react(const ScrubContext::reserve_range_complete_t &e) {
+    context<ChunkState>().version = e.value;
+    return transit<ScanRange>();
+  }
 };
 
 struct ScanRange : ScrubState<ScanRange, ChunkState> {
@@ -373,15 +386,16 @@ struct ReplicaChunkState : ScrubState<ReplicaChunkState, ReplicaActive, ReplicaW
   static constexpr std::string_view state_name = "ReplicaChunkState";
   explicit ReplicaChunkState(my_context ctx) : ScrubState(ctx) {}
 
-  eversion_t version;
-  hobject_t start, end;
-  bool deep = false;
+  replica_scan_event_t to_scan;
 
   using reactions = boost::mpl::list<
     sc::custom_reaction<ReplicaScan>
     >;
 
-  sc::result react(const ReplicaScan &event);
+  sc::result react(const ReplicaScan &event) {
+    to_scan = event.value;
+    return discard_event();
+  }
 };
 
 struct ReplicaScanChunk;
@@ -394,7 +408,10 @@ struct ReplicaWaitUpdate : ScrubState<ReplicaWaitUpdate, ReplicaChunkState> {
     sc::transition<ScrubContext::await_update_complete_t, ReplicaScanChunk>
     >;
 
-  sc::result react(const ReplicaScan &event);
+  sc::result react(const ReplicaScan &event) {
+    get_scrub_context().await_update(event.value.version);
+    return forward_event();
+  }
 };
 
 struct ReplicaScanChunk : ScrubState<ReplicaScanChunk, ReplicaChunkState> {

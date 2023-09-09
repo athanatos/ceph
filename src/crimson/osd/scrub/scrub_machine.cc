@@ -7,39 +7,12 @@
 
 namespace crimson::osd::scrub {
 
-
-void ChunkState::exit()
-{
-  if (range_reserved) {
-    // TODO: guard from interval change
-    get_scrub_context().release_range();
-  }
-}
-
-GetRange::GetRange(my_context ctx) : ScrubState(ctx)
-{
-  get_scrub_context().request_range(context<Scrubbing>().current);
-}
-
-sc::result GetRange::react(const ScrubContext::request_range_complete_t &event)
-{
-  context<ChunkState>().range = event.value;
-  return transit<WaitUpdate>();
-}
-
 WaitUpdate::WaitUpdate(my_context ctx) : ScrubState(ctx)
 {
   auto &cs = context<ChunkState>();
   cs.range_reserved = true;
   assert(cs.range);
   get_scrub_context().reserve_range(cs.range->start, cs.range->end);
-}
-
-sc::result WaitUpdate::react(const ScrubContext::reserve_range_complete_t &event)
-{
-  auto &cs = context<ChunkState>();
-  cs.version = event.value;
-  return transit<ScanRange>();
 }
 
 ScanRange::ScanRange(my_context ctx) : ScrubState(ctx)
@@ -76,28 +49,13 @@ sc::result ScanRange::react(const ScrubContext::scan_range_complete_t &event)
   }
 }
 
-sc::result ReplicaChunkState::react(const ReplicaScan &event)
-{
-  start = event.value.start;
-  end = event.value.end;
-  version = event.value.version;
-  deep = event.value.deep;
-  return forward_event();
-}
-
-sc::result ReplicaWaitUpdate::react(const ReplicaScan &event)
-{
-  get_scrub_context().await_update(event.value.version);
-  return forward_event();
-}
-
 ReplicaScanChunk::ReplicaScanChunk(my_context ctx) : ScrubState(ctx)
 {
-  auto &cs = context<ReplicaChunkState>();
+  auto &to_scan = context<ReplicaChunkState>().to_scan;
   get_scrub_context().generate_and_submit_chunk_result(
-    cs.start,
-    cs.end,
-    cs.deep);
+    to_scan.start,
+    to_scan.end,
+    to_scan.deep);
 }
 
 };
