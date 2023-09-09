@@ -146,6 +146,7 @@ void PGScrubber::release_range()
 void PGScrubber::scan_range(
   pg_shard_t target,
   eversion_t version,
+  bool deep,
   const hobject_t &start,
   const hobject_t &end)
 {
@@ -163,7 +164,7 @@ void PGScrubber::scan_range(
 	pg.get_osdmap_epoch(),
 	start,
 	end,
-	false /* TODO deep */,
+	deep,
 	false /* allow preemption -- irrelevant for replicas TODO */,
 	64 /* priority, TODO */,
 	false /* high_priority TODO */),

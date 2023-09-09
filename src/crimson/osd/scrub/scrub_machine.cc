@@ -22,7 +22,10 @@ ScanRange::ScanRange(my_context ctx) : ScrubState(ctx)
   const auto &range = cs.range.value();
   get_scrub_context(
   ).foreach_remote_id_to_scrub([this, &range, &cs](const auto &id) {
-    get_scrub_context().scan_range(id, cs.version, range.start, range.end);
+    get_scrub_context().scan_range(
+      id, cs.version,
+      false /* deep, TODO */,
+      range.start, range.end);
     waiting_on++;
   });
 }

@@ -119,6 +119,7 @@ struct ScrubContext {
   virtual void scan_range(
     pg_shard_t target,
     eversion_t version,
+    bool deep,
     const hobject_t &start,
     const hobject_t &end) = 0;
 
@@ -154,6 +155,8 @@ SIMPLE_EVENT(StartScrub);
  * - otherwise, ScrubMachine is responsible for notifying remote PG
  *   instances via the appropriate ScrubContext methods again generally
  *   from state destructors.
+ *
+ * TODO: interval_change_t will be added with remote reservations.
  */
 class ScrubMachine
   : public sc::state_machine<ScrubMachine, Inactive> {

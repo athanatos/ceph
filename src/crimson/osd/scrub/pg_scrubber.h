@@ -84,6 +84,7 @@ private:
   void scan_range(
     pg_shard_t target,
     eversion_t version,
+    bool deep,
     const hobject_t &start,
     const hobject_t &end) final;
   void await_update(const eversion_t &version) final;
