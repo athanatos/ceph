@@ -133,9 +133,30 @@ void PGScrubber::release_range()
 
 void PGScrubber::scan_range(
   pg_shard_t target,
+  eversion_t version,
   const hobject_t &start,
   const hobject_t &end)
 {
+  if (target == pg.get_pg_whoami()) {
+    std::ignore = pg.shard_services.start_operation<ScrubScan>(
+      &pg, false /* TODO deep */, true /* local */, start, end
+    );
+  } else {
+    std::ignore = pg.shard_services.send_to_osd(
+      pg.get_primary().osd,
+      crimson::make_message<MOSDRepScrub>(
+	spg_t(pg.get_pgid().pgid, target.shard),
+	version,
+	pg.get_osdmap_epoch(),
+	pg.get_osdmap_epoch(),
+	start,
+	end,
+	false /* TODO deep */,
+	false /* allow preemption -- irrelevant for replicas TODO */,
+	64 /* priority, TODO */,
+	false /* high_priority TODO */),
+      pg.get_osdmap_epoch());
+  }
 }
 
 // TODOSAM: probably can't send an event syncronously

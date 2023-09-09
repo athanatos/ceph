@@ -83,6 +83,7 @@ private:
   void release_range() final;
   void scan_range(
     pg_shard_t target,
+    eversion_t version,
     const hobject_t &start,
     const hobject_t &end) final;
   void await_update(const eversion_t &version) final;

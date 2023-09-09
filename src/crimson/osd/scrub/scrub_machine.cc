@@ -69,9 +69,11 @@ sc::result WaitUpdate::react(const ScrubContext::reserve_range_complete_t &event
 ScanRange::ScanRange(my_context ctx) : ScrubState(ctx)
 {
   ceph_assert(context<ChunkState>().range);
-  const auto &range = context<ChunkState>().range.value();
-  get_scrub_context().foreach_remote_id_to_scrub([this, &range](const auto &id) {
-    get_scrub_context().scan_range(id, range.start, range.end);
+  const auto &cs = context<ChunkState>();
+  const auto &range = cs.range.value();
+  get_scrub_context(
+  ).foreach_remote_id_to_scrub([this, &range, &cs](const auto &id) {
+    get_scrub_context().scan_range(id, cs.version, range.start, range.end);
     waiting_on++;
   });
 }

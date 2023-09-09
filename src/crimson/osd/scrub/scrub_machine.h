@@ -116,6 +116,7 @@ struct ScrubContext {
   VALUE_EVENT(scan_range_complete_t, scan_range_complete_value_t);
   virtual void scan_range(
     pg_shard_t target,
+    eversion_t version,
     const hobject_t &start,
     const hobject_t &end) = 0;
 
