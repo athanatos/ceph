@@ -8,11 +8,14 @@
 
 namespace crimson::osd {
 class PG;
+class ScrubScan;
 }
 
 namespace crimson::osd::scrub {
 
 class PGScrubber : public crimson::BlockerT<PGScrubber>, ScrubContext {
+  friend class ::crimson::osd::ScrubScan;
+
   template <typename T = void>
   using ifut =
     ::crimson::interruptible::interruptible_future<

@@ -104,14 +104,20 @@ seastar::future<> ScrubScan::start()
 	});
     }).then_interruptible([this] {
       if (local) {
+	pg->scrubber.machine.process_event(
+	  scrub::ScrubContext::scan_range_complete_t(
+	    pg->get_pg_whoami(),
+	    std::move(ret)));
 	return seastar::now();
       } else {
+	auto m = crimson::make_message<MOSDRepScrubMap>(
+	  spg_t(pg->get_pgid().pgid, pg->get_primary().shard),
+	  pg->get_osdmap_epoch(),
+	  pg->get_pg_whoami());
+	encode(ret, m->scrub_map_bl);
 	return pg->shard_services.send_to_osd(
 	  pg->get_primary().osd,
-	  crimson::make_message<MOSDRepScrubMap>(
-	    spg_t(pg->get_pgid().pgid, pg->get_primary().shard),
-	    pg->get_osdmap_epoch(),
-	    pg->get_pg_whoami()),
+	  std::move(m),
 	  pg->get_osdmap_epoch());
       }
     });
