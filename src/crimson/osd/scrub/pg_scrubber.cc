@@ -92,6 +92,18 @@ const std::set<pg_shard_t> &PGScrubber::get_ids_to_scrub() const
 
 void PGScrubber::request_range(const hobject_t &start)
 {
+  using crimson::common::local_conf;
+  std::ignore = ifut<>(seastar::yield()
+  ).then_interruptible([this, start] {
+    return pg.shard_services.get_store().list_objects(
+      pg.get_collection_ref(),
+      ghobject_t(start, ghobject_t::NO_GEN, pg.get_pgid().shard),
+      ghobject_t::get_max(),
+      local_conf().get_val<uint64_t>("osd_scrub_chunk_max"));
+  }).then_interruptible([this, start](auto ret) {
+    auto &[_, next] = ret;
+    machine.process_event(request_range_complete_t{start, next.hobj});
+  });
 }
 
 /* TODOSAM: This isn't actually enough.  Here, classic would
