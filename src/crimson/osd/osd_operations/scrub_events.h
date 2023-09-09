@@ -96,6 +96,7 @@ class ScrubRequested final : public RemoteScrubEventBaseT<ScrubRequested> {
   void scrub_event_print(std::ostream &) const final { /* TODO */ }
   void scrub_event_dump_detail(ceph::Formatter* f) const final { /* TODO */ }
 
+  bool deep = false;
 protected:
   ifut<> handle_event(PG &pg) final;
 
@@ -103,8 +104,9 @@ public:
   static constexpr OperationTypeCode type = OperationTypeCode::scrub_requested;
 
   template <typename... Args>
-  ScrubRequested(Args&&... base_args)
-    : RemoteScrubEventBaseT<ScrubRequested>(std::forward<Args>(base_args)...) {}
+  ScrubRequested(bool deep, Args&&... base_args)
+    : RemoteScrubEventBaseT<ScrubRequested>(std::forward<Args>(base_args)...),
+      deep(deep) {}
 };
 
 class ScrubMessage final : public RemoteScrubEventBaseT<ScrubMessage> {

@@ -138,7 +138,10 @@ struct Crash;
 struct Inactive;
 
 SIMPLE_EVENT(Reset);
-SIMPLE_EVENT(StartScrub);
+struct start_scrub_event_t {
+  bool deep = false;
+};
+VALUE_EVENT(StartScrub, start_scrub_event_t);
 
 /**
  * ScrubMachine
@@ -262,8 +265,13 @@ struct AwaitScrub : ScrubState<AwaitScrub, PrimaryActive> {
   explicit AwaitScrub(my_context ctx) : ScrubState(ctx) {}
 
   using reactions = boost::mpl::list<
-    sc::transition<StartScrub, Scrubbing>
+    sc::custom_reaction<StartScrub>
     >;
+
+  sc::result react(const StartScrub &event) {
+    post_event(event);
+    return transit<Scrubbing>();
+  }
 };
 
 struct ChunkState;
@@ -271,11 +279,23 @@ struct Scrubbing : ScrubState<Scrubbing, PrimaryActive, ChunkState> {
   static constexpr std::string_view state_name = "Scrubbing";
   explicit Scrubbing(my_context ctx);
 
+  using reactions = boost::mpl::list<
+    sc::custom_reaction<StartScrub>
+    >;
+
+
   /// hobjects < current have been scrubbed
   hobject_t current;
 
+  bool deep = false;
+
   void advance_current(const hobject_t &next) {
     current = next;
+  }
+
+  sc::result react(const StartScrub &event) {
+    deep = event.value.deep;
+    return discard_event();
   }
 };
 

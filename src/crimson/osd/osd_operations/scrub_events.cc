@@ -55,7 +55,7 @@ seastar::future<> RemoteScrubEventBaseT<T>::with_pg(
 
 ScrubRequested::ifut<> ScrubRequested::handle_event(PG &pg)
 {
-  pg.scrubber.handle_scrub_requested();
+  pg.scrubber.handle_scrub_requested(deep);
   return seastar::now();
 }
 

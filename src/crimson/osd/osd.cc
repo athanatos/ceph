@@ -1199,7 +1199,7 @@ seastar::future<> OSD::handle_scrub_command(
   for (auto &pgid : m->scrub_pgs) {
     std::ignore = pg_shard_manager.start_pg_operation<
       crimson::osd::ScrubRequested
-      >(conn, m->epoch, pgid);
+      >(m->deep, conn, m->epoch, pgid);
   }
   return seastar::now();
 }

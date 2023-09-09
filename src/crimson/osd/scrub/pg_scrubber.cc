@@ -42,9 +42,9 @@ void PGScrubber::on_log_update(eversion_t v)
   }
 }
 
-void PGScrubber::handle_scrub_requested()
+void PGScrubber::handle_scrub_requested(bool deep)
 {
-  machine.process_event(StartScrub{});
+  machine.process_event(StartScrub{deep});
 }
 
 void PGScrubber::handle_scrub_message(Message &_m)

@@ -57,7 +57,7 @@ public:
 
   void on_log_update(eversion_t v);
 
-  void handle_scrub_requested();
+  void handle_scrub_requested(bool deep);
 
   void handle_scrub_message(Message &m);
 
