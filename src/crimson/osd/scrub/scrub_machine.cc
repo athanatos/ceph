@@ -41,11 +41,15 @@ sc::result ScanRange::react(const ScrubContext::scan_range_complete_t &event)
     return discard_event();
   } else {
     ceph_assert(context<ChunkState>().range);
-    get_scrub_context().emit_chunk_result(
-      *(context<ChunkState>().range),
-      validate_chunk(
+    {
+      auto results = validate_chunk(
 	get_scrub_context().get_policy(),
-	maps));
+	maps);
+      context<Scrubbing>().stats.add(results.stats);
+      get_scrub_context().emit_chunk_result(
+	*(context<ChunkState>().range),
+	std::move(results));
+    }
     context<Scrubbing>().advance_current(
       context<ChunkState>().range->end);
     return transit<ChunkState>();

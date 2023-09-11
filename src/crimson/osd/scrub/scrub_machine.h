@@ -294,6 +294,8 @@ struct Scrubbing : ScrubState<Scrubbing, PrimaryActive, ChunkState> {
 
   bool deep = false;
 
+  object_stat_sum_t stats;
+
   void advance_current(const hobject_t &next) {
     current = next;
   }
