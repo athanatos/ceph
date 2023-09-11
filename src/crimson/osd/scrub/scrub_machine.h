@@ -94,6 +94,9 @@ struct ScrubContext {
   /// return struct defining chunk validation rules
   virtual const chunk_validation_policy_t &get_policy() const = 0;
 
+  virtual void notify_scrub_start(bool deep) = 0;
+  virtual void notify_scrub_end(bool deep) = 0;
+
   struct request_range_result_t {
     hobject_t start;
     hobject_t end;
@@ -254,7 +257,7 @@ struct PrimaryActive : ScrubState<PrimaryActive, ScrubMachine, AwaitScrub> {
     sc::custom_reaction<StartScrub>
     >;
 
-  sc::result react(const StartScrub &) {
+  sc::result react(const StartScrub &event) {
     return discard_event();
   }
 };
@@ -277,7 +280,9 @@ struct AwaitScrub : ScrubState<AwaitScrub, PrimaryActive> {
 struct ChunkState;
 struct Scrubbing : ScrubState<Scrubbing, PrimaryActive, ChunkState> {
   static constexpr std::string_view state_name = "Scrubbing";
-  explicit Scrubbing(my_context ctx);
+  explicit Scrubbing(my_context ctx) : ScrubState(ctx) {
+    get_scrub_context().notify_scrub_start(deep);
+  }
 
   using reactions = boost::mpl::list<
     sc::custom_reaction<StartScrub>
@@ -296,6 +301,10 @@ struct Scrubbing : ScrubState<Scrubbing, PrimaryActive, ChunkState> {
   sc::result react(const StartScrub &event) {
     deep = event.value.deep;
     return discard_event();
+  }
+
+  void exit() {
+    get_scrub_context().notify_scrub_end(deep);
   }
 };
 

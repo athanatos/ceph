@@ -71,6 +71,9 @@ private:
     return pg_shard_t{};
   }
 
+  void notify_scrub_start(bool deep) final;
+  void notify_scrub_end(bool deep) final;
+
   const std::set<pg_shard_t> &get_ids_to_scrub() const final;
 
   chunk_validation_policy_t policy;

@@ -85,6 +85,20 @@ PGScrubber::ifut<> PGScrubber::wait_scrub(
   }
 }
 
+void PGScrubber::notify_scrub_start(bool deep)
+{
+  pg.peering_state.state_set(PG_STATE_SCRUBBING);
+  pg.peering_state.state_set(PG_STATE_DEEP_SCRUB);
+  pg.publish_stats_to_osd();
+}
+
+void PGScrubber::notify_scrub_end(bool deep)
+{
+  pg.peering_state.state_clear(PG_STATE_SCRUBBING);
+  pg.peering_state.state_clear(PG_STATE_DEEP_SCRUB);
+  pg.publish_stats_to_osd();
+}
+
 const std::set<pg_shard_t> &PGScrubber::get_ids_to_scrub() const
 {
   return pg.peering_state.get_actingset();
