@@ -166,7 +166,7 @@ void PGScrubber::scan_range(
 {
   if (target == pg.get_pg_whoami()) {
     std::ignore = pg.shard_services.start_operation<ScrubScan>(
-      &pg, false /* TODO deep */, true /* local */, start, end
+      &pg, deep, true /* local */, start, end
     );
   } else {
     std::ignore = pg.shard_services.send_to_osd(
@@ -209,7 +209,35 @@ void PGScrubber::emit_chunk_result(
   const request_range_result_t &range,
   chunk_result_t &&result)
 {
-  // TODO Maintain stats
+  // TODO: repair and updating durable scrub results
+}
+
+void PGScrubber::emit_scrub_result(
+  bool deep,
+  object_stat_sum_t in_stats)
+{
+  pg.peering_state.update_stats(
+    [this, deep, &in_stats](auto &history, auto &pg_stats) {
+      iterate_scrub_maintained_stats(
+	[&pg_stats, &in_stats](const auto &name, auto statptr) {
+	  pg_stats.stats.sum.*statptr = in_stats.*statptr;
+	});
+      iterate_scrub_checked_stats(
+	[&pg_stats, &in_stats](
+	  const auto &name, auto statptr, const auto &invalid_predicate) {
+	  if (!invalid_predicate(pg_stats) &&
+	      (in_stats.*statptr != pg_stats.stats.sum.*statptr)) {
+	    ++pg_stats.stats.sum.num_shallow_scrub_errors;
+	  }
+	});
+      history.last_scrub = pg.peering_state.get_info().last_update;
+      auto now = ceph_clock_now();
+      history.last_scrub_stamp = now;
+      if (deep) {
+	history.last_deep_scrub_stamp = now;
+      }
+      return false; // notify_scrub_end will flush stats to osd
+    });
 }
 
 }

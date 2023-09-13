@@ -148,6 +148,32 @@ public:
   }
 };
 
+template <bool deep>
+class ScrubCommand : public PGCommand {
+public:
+  explicit ScrubCommand(crimson::osd::OSD& osd) :
+    PGCommand{
+      osd,
+      deep ? "deep_scrub" : "scrub",
+      "name=pgid,type=CephPgid,req=true",
+      deep ? "deep scrub pg" : "scrub pg"}
+  {}
+  seastar::future<tell_result_t>
+  do_command(Ref<PG> pg,
+	     const cmdmap_t& cmdmap,
+	     std::string_view format,
+	     ceph::bufferlist&&) const final
+  {
+    pg->scrubber.handle_scrub_requested(deep);
+    std::unique_ptr<Formatter> f{
+      Formatter::create(format, "json-pretty", "json-pretty")
+    };
+    f->dump_bool("deep", deep);
+    f->dump_stream("stamp") << ceph_clock_now();
+    return seastar::make_ready_future<tell_result_t>(std::move(f));
+  }
+};
+
 } // namespace crimson::admin::pg
 
 namespace crimson::admin {
@@ -163,5 +189,10 @@ make_asok_hook<crimson::admin::pg::QueryCommand>(crimson::osd::OSD& osd);
 
 template std::unique_ptr<AdminSocketHook>
 make_asok_hook<crimson::admin::pg::MarkUnfoundLostCommand>(crimson::osd::OSD& osd);
+
+template std::unique_ptr<AdminSocketHook>
+make_asok_hook<crimson::admin::pg::ScrubCommand<true>>(crimson::osd::OSD& osd);
+template std::unique_ptr<AdminSocketHook>
+make_asok_hook<crimson::admin::pg::ScrubCommand<false>>(crimson::osd::OSD& osd);
 
 } // namespace crimson::admin

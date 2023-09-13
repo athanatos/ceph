@@ -336,6 +336,12 @@ void PG::on_activate(interval_set<snapid_t> snaps)
   projected_last_update = peering_state.get_info().last_update;
 }
 
+void PG::on_replica_activate()
+{
+  logger().debug("{}: {}", *this, __func__);
+  scrubber.on_replica_activate();
+}
+
 void PG::on_activate_complete()
 {
   wait_for_active_blocker.unblock();
@@ -463,7 +469,7 @@ PG::do_delete_work(ceph::os::Transaction &t, ghobject_t _next)
 
 Context *PG::on_clean()
 {
-  // Not needed yet (will be needed for IO unblocking)
+  scrubber.on_primary_active_clean();
   return nullptr;
 }
 
@@ -1455,6 +1461,7 @@ void PG::on_change(ceph::os::Transaction &t) {
     logger().debug("{} {}: dropping requests", *this, __func__);
     client_request_orderer.clear_and_cancel();
   }
+  scrubber.on_interval_change();
 }
 
 void PG::context_registry_on_change() {

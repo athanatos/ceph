@@ -98,6 +98,9 @@ private:
   void emit_chunk_result(
     const request_range_result_t &range,
     chunk_result_t &&result) final;
+  void emit_scrub_result(
+    bool deep,
+    object_stat_sum_t scrub_stats) final;
 };
   
 };

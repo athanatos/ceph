@@ -135,6 +135,10 @@ struct ScrubContext {
   virtual void emit_chunk_result(
     const request_range_result_t &range,
     chunk_result_t &&result) = 0;
+
+  virtual void emit_scrub_result(
+    bool deep,
+    object_stat_sum_t scrub_stats) = 0;
 };
 
 struct Crash;
