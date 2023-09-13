@@ -641,6 +641,8 @@ seastar::future<> OSD::start_asok_admin()
     // PG commands
     asok->register_command(make_asok_hook<pg::QueryCommand>(*this));
     asok->register_command(make_asok_hook<pg::MarkUnfoundLostCommand>(*this));
+    asok->register_command(make_asok_hook<pg::ScrubCommand<true>>(*this));
+    asok->register_command(make_asok_hook<pg::ScrubCommand<false>>(*this));
     // ops commands
     asok->register_command(
       make_asok_hook<DumpInFlightOpsHook>(

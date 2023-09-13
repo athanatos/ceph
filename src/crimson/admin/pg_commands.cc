@@ -92,7 +92,7 @@ public:
   explicit QueryCommand(crimson::osd::OSD& osd) :
     PGCommand{osd,
               "query",
-              "",
+	      "",
               "show details of a specific pg"}
   {}
 private:
@@ -155,7 +155,7 @@ public:
     PGCommand{
       osd,
       deep ? "deep_scrub" : "scrub",
-      "name=pgid,type=CephPgid,req=true",
+      "",
       deep ? "deep scrub pg" : "scrub pg"}
   {}
   seastar::future<tell_result_t>
