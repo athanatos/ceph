@@ -139,6 +139,8 @@ struct ScrubContext {
   virtual void emit_scrub_result(
     bool deep,
     object_stat_sum_t scrub_stats) = 0;
+
+  virtual DoutPrefixProvider &get_dpp() = 0;
 };
 
 struct Crash;

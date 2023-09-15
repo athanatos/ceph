@@ -28,6 +28,10 @@ class PGScrubber : public crimson::BlockerT<PGScrubber>, ScrubContext {
       ::crimson::osd::IOInterruptCondition, T>;
 
   PG &pg;
+
+  /// PG alias for logging in header functions
+  DoutPrefixProvider &dpp;
+
   ScrubMachine machine;
 
   std::optional<blocked_range_t> blocked;
@@ -50,7 +54,7 @@ public:
     return false;
   }
 
-  PGScrubber(PG &pg) : pg(pg), machine(*this) {}
+  PGScrubber(PG &pg);
 
   void on_primary_active_clean();
   void on_replica_activate();
@@ -67,6 +71,8 @@ public:
     const hobject_t &hoid);
 
 private:
+  DoutPrefixProvider &get_dpp() final { return dpp; }
+
   // ScrubContext interface
   pg_shard_t get_my_id() const final {
     return pg_shard_t{};

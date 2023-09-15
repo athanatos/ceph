@@ -167,7 +167,7 @@ public:
 	     ceph::bufferlist&&) const final
   {
     LOG_PREFIX(ScrubCommand::do_command);
-    INFODPP("deep: {}", *pg, deep);
+    DEBUGDPP("deep: {}", *pg, deep);
     pg->scrubber.handle_scrub_requested(deep);
     std::unique_ptr<Formatter> f{
       Formatter::create(format, "json-pretty", "json-pretty")

@@ -17,6 +17,8 @@ void PGScrubber::dump_detail(Formatter *f) const
   f->dump_stream("pgid") << pg.get_pgid();
 }
 
+PGScrubber::PGScrubber(PG &pg) : pg(pg), dpp(pg), machine(*this) {}
+
 void PGScrubber::on_primary_active_clean()
 {
   LOG_PREFIX(PGScrubber::on_primary_active_clean);
