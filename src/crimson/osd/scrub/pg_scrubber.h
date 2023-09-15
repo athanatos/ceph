@@ -13,6 +13,12 @@ class ScrubScan;
 
 namespace crimson::osd::scrub {
 
+struct blocked_range_t {
+  hobject_t begin;
+  hobject_t end;
+  seastar::shared_promise<> p;
+};
+
 class PGScrubber : public crimson::BlockerT<PGScrubber>, ScrubContext {
   friend class ::crimson::osd::ScrubScan;
 
@@ -24,11 +30,6 @@ class PGScrubber : public crimson::BlockerT<PGScrubber>, ScrubContext {
   PG &pg;
   ScrubMachine machine;
 
-  struct blocked_range_t {
-    hobject_t begin;
-    hobject_t end;
-    seastar::shared_promise<> p;
-  };
   std::optional<blocked_range_t> blocked;
 
   std::optional<eversion_t> waiting_for_update;
@@ -103,4 +104,19 @@ private:
     object_stat_sum_t scrub_stats) final;
 };
   
+};
+
+template <>
+struct fmt::formatter<crimson::osd::scrub::blocked_range_t> {
+  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+
+  template <typename FormatContext>
+  auto format(const auto &range, FormatContext& ctx)
+  {
+    return fmt::format_to(
+      ctx.out(),
+      "{}~{}",
+      range.begin,
+      range.end);
+  }
 };

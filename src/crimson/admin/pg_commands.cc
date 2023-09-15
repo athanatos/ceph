@@ -11,9 +11,11 @@
 #include <seastar/core/future.hh>
 
 #include "crimson/admin/admin_socket.h"
+#include "crimson/common/log.h"
 #include "crimson/osd/osd.h"
 #include "crimson/osd/pg.h"
 
+SET_SUBSYS(osd);
 
 using crimson::osd::OSD;
 using crimson::osd::PG;
@@ -164,6 +166,8 @@ public:
 	     std::string_view format,
 	     ceph::bufferlist&&) const final
   {
+    LOG_PREFIX(ScrubCommand::do_command);
+    INFODPP("deep: {}", *pg, deep);
     pg->scrubber.handle_scrub_requested(deep);
     std::unique_ptr<Formatter> f{
       Formatter::create(format, "json-pretty", "json-pretty")

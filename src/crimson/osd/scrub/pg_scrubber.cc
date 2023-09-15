@@ -1,11 +1,14 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:nil -*-
 // vim: ts=8 sw=2 smarttab expandtab
 
+#include "crimson/common/log.h"
 #include "crimson/osd/pg.h"
 #include "crimson/osd/osd_operations/scrub_events.h"
 #include "messages/MOSDRepScrub.h"
 #include "messages/MOSDRepScrubMap.h"
 #include "pg_scrubber.h"
+
+SET_SUBSYS(osd);
 
 namespace crimson::osd::scrub {
 
@@ -16,16 +19,22 @@ void PGScrubber::dump_detail(Formatter *f) const
 
 void PGScrubber::on_primary_active_clean()
 {
+  LOG_PREFIX(PGScrubber::on_primary_active_clean);
+  DEBUGDPP("", pg);
   machine.process_event(PrimaryActivate{});
 }
 
 void PGScrubber::on_replica_activate()
 {
+  LOG_PREFIX(PGScrubber::on_replica_activate);
+  DEBUGDPP("", pg);
   machine.process_event(ReplicaActivate{});
 }
 
 void PGScrubber::on_interval_change()
 {
+  LOG_PREFIX(PGScrubber::on_interval_change);
+  DEBUGDPP("", pg);
   /* Once reservations and scheduling are introduced, we'll need an
    * IntervalChange event to drop remote resources (they'll be automatically
    * released on the other side */
@@ -36,7 +45,9 @@ void PGScrubber::on_interval_change()
 
 void PGScrubber::on_log_update(eversion_t v)
 {
+  LOG_PREFIX(PGScrubber::on_interval_change);
   if (waiting_for_update && v >= *waiting_for_update) {
+    DEBUGDPP("waiting_for_update: {}, v: {}", pg, *waiting_for_update, v);
     machine.process_event(await_update_complete_t{});
     waiting_for_update = std::nullopt;
   }
@@ -44,14 +55,18 @@ void PGScrubber::on_log_update(eversion_t v)
 
 void PGScrubber::handle_scrub_requested(bool deep)
 {
+  LOG_PREFIX(PGScrubber::handle_scrub_requested);
+  DEBUGDPP("deep: {}", pg, deep);
   machine.process_event(StartScrub{deep});
 }
 
 void PGScrubber::handle_scrub_message(Message &_m)
 {
+  LOG_PREFIX(PGScrubber::handle_scrub_requested);
   switch (_m.get_type()) {
   case MSG_OSD_REP_SCRUB: {
     MOSDRepScrub &m = *static_cast<MOSDRepScrub*>(&_m);
+    DEBUGDPP("MOSDRepScrub: {}", pg, m);
     machine.process_event(ReplicaScan{
 	m.start, m.end, m.scrub_from, m.deep
       });
@@ -59,6 +74,7 @@ void PGScrubber::handle_scrub_message(Message &_m)
   }
   case MSG_OSD_REP_SCRUBMAP: {
     MOSDRepScrubMap &m = *static_cast<MOSDRepScrubMap*>(&_m);
+    DEBUGDPP("MOSDRepScrubMap: {}", pg, m);
     ScrubMap map;
     auto iter = m.scrub_map_bl.cbegin();
     ::decode(map, iter);
@@ -68,6 +84,7 @@ void PGScrubber::handle_scrub_message(Message &_m)
     break;
   }
   default:
+    DEBUGDPP("invalid message: {}", pg, _m);
     ceph_assert(is_scrub_message(_m));
   }
 }
@@ -76,7 +93,9 @@ PGScrubber::ifut<> PGScrubber::wait_scrub(
   PGScrubber::BlockingEvent::TriggerI&& trigger,
   const hobject_t &hoid)
 {
+  LOG_PREFIX(PGScrubber::wait_scrub);
   if (blocked && (hoid >= blocked->begin) && (hoid < blocked->end)) {
+    DEBUGDPP("blocked: {}, hoid: {}", pg, *blocked, hoid);
     return trigger.maybe_record_blocking(
       blocked->p.get_shared_future(),
       *this);
@@ -87,15 +106,23 @@ PGScrubber::ifut<> PGScrubber::wait_scrub(
 
 void PGScrubber::notify_scrub_start(bool deep)
 {
+  LOG_PREFIX(PGScrubber::notify_scrub_start);
+  DEBUGDPP("deep: {}", pg, deep);
   pg.peering_state.state_set(PG_STATE_SCRUBBING);
-  pg.peering_state.state_set(PG_STATE_DEEP_SCRUB);
+  if (deep) {
+    pg.peering_state.state_set(PG_STATE_DEEP_SCRUB);
+  }
   pg.publish_stats_to_osd();
 }
 
 void PGScrubber::notify_scrub_end(bool deep)
 {
+  LOG_PREFIX(PGScrubber::notify_scrub_end);
+  DEBUGDPP("deep: {}", pg, deep);
   pg.peering_state.state_clear(PG_STATE_SCRUBBING);
-  pg.peering_state.state_clear(PG_STATE_DEEP_SCRUB);
+  if (deep) {
+    pg.peering_state.state_clear(PG_STATE_DEEP_SCRUB);
+  }
   pg.publish_stats_to_osd();
 }
 
@@ -106,6 +133,8 @@ const std::set<pg_shard_t> &PGScrubber::get_ids_to_scrub() const
 
 void PGScrubber::request_range(const hobject_t &start)
 {
+  LOG_PREFIX(PGScrubber::request_range);
+  DEBUGDPP("start: {}", pg, start);
   using crimson::common::local_conf;
   std::ignore = ifut<>(seastar::yield()
   ).then_interruptible([this, start] {
@@ -114,8 +143,9 @@ void PGScrubber::request_range(const hobject_t &start)
       ghobject_t(start, ghobject_t::NO_GEN, pg.get_pgid().shard),
       ghobject_t::get_max(),
       local_conf().get_val<uint64_t>("osd_scrub_chunk_max"));
-  }).then_interruptible([this, start](auto ret) {
+  }).then_interruptible([FNAME, this, start](auto ret) {
     auto &[_, next] = ret;
+    DEBUGDPP("returning start, end: {}, {}", pg, start, next.hobj);
     machine.process_event(request_range_complete_t{start, next.hobj});
   });
 }
@@ -128,6 +158,8 @@ void PGScrubber::request_range(const hobject_t &start)
 
 void PGScrubber::reserve_range(const hobject_t &start, const hobject_t &end)
 {
+  LOG_PREFIX(PGScrubber::reserve_range);
+  DEBUGDPP("start: {}, end: {}", pg, start, end);
   std::ignore = ifut<>(seastar::yield()
   ).then_interruptible([this] {
     return pg.background_io_mutex.lock();
@@ -151,7 +183,9 @@ void PGScrubber::reserve_range(const hobject_t &start, const hobject_t &end)
 
 void PGScrubber::release_range()
 {
+  LOG_PREFIX(PGScrubber::release_range);
   ceph_assert(blocked);
+  DEBUGDPP("blocked: {}", pg, *blocked);
   pg.background_io_mutex.unlock();
   blocked->p.set_value();
   blocked = std::nullopt;
@@ -164,6 +198,9 @@ void PGScrubber::scan_range(
   const hobject_t &start,
   const hobject_t &end)
 {
+  LOG_PREFIX(PGScrubber::scan_range);
+  DEBUGDPP("target: {}, version: {}, deep: {}, start: {}, end: {}",
+	   pg, version, deep, start, end);
   if (target == pg.get_pg_whoami()) {
     std::ignore = pg.shard_services.start_operation<ScrubScan>(
       &pg, deep, true /* local */, start, end
@@ -189,6 +226,8 @@ void PGScrubber::scan_range(
 // TODOSAM: probably can't send an event syncronously
 void PGScrubber::await_update(const eversion_t &version)
 {
+  LOG_PREFIX(PGScrubber::await_update);
+  DEBUGDPP("version: {}", pg, version);
   ceph_assert(!waiting_for_update);
   waiting_for_update = version;
   auto& log = pg.peering_state.get_pg_log().get_log().log;
@@ -200,6 +239,8 @@ void PGScrubber::generate_and_submit_chunk_result(
   const hobject_t &end,
   bool deep)
 {
+  LOG_PREFIX(PGScrubber::generate_and_submit_chunk_result);
+  DEBUGDPP("begin: {}, end: {}, deep: {}", pg, begin, end, deep);
   std::ignore = pg.shard_services.start_operation<ScrubScan>(
     &pg, deep, false /* not local */, begin, end
   );
@@ -209,6 +250,8 @@ void PGScrubber::emit_chunk_result(
   const request_range_result_t &range,
   chunk_result_t &&result)
 {
+  LOG_PREFIX(PGScrubber::emit_chunk_result);
+  DEBUGDPP("", pg);
   // TODO: repair and updating durable scrub results
 }
 
@@ -216,6 +259,8 @@ void PGScrubber::emit_scrub_result(
   bool deep,
   object_stat_sum_t in_stats)
 {
+  LOG_PREFIX(PGScrubber::emit_scrub_result);
+  DEBUGDPP("", pg);
   pg.peering_state.update_stats(
     [this, deep, &in_stats](auto &history, auto &pg_stats) {
       iterate_scrub_maintained_stats(
