@@ -7,12 +7,6 @@
 #include "messages/MOSDRepScrubMap.h"
 #include "scrub_events.h"
 
-namespace {
-  seastar::logger& logger() {
-    return crimson::get_logger(ceph_subsys_osd);
-  }
-}
-
 SET_SUBSYS(osd);
 
 namespace crimson::osd {
@@ -86,6 +80,7 @@ void ScrubScan::dump_detail(ceph::Formatter *) const
 
 seastar::future<> ScrubScan::start()
 {
+  LOG_PREFIX(ScrubScan::start);
   // legacy value, unused
   ret.valid_through = pg->get_info().last_update;
 
@@ -124,11 +119,8 @@ seastar::future<> ScrubScan::start()
 	  pg->get_osdmap_epoch());
       }
     });
-  }, [this](std::exception_ptr ep) {
-    logger().debug(
-      "{}: interrupted with {}",
-      *this,
-      ep);
+  }, [FNAME, this](std::exception_ptr ep) {
+    DEBUGDPP("{} interrupted with {}", *pg, *this, ep);
   }, pg);
 }
 
@@ -282,13 +274,11 @@ ScrubSimpleIO::ScrubSimpleIO(Ref<PG> pg) : pg(pg) {}
 
 seastar::future<> ScrubSimpleIO::start()
 {
+  LOG_PREFIX(ScrubSimpleIO::start);
   return interruptor::with_interruption([this] {
     return run(*pg);
-  }, [this](std::exception_ptr ep) {
-    logger().debug(
-      "{}: interrupted with {}",
-      *this,
-      ep);
+  }, [FNAME, this](std::exception_ptr ep) {
+    DEBUGDPP("{} interrupted with {}", *pg, *this, ep);
   }, pg);
 }
 
