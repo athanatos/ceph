@@ -56,6 +56,8 @@ public:
 
   PGScrubber(PG &pg);
 
+  void initiate() { machine.initiate(); }
+
   void on_primary_active_clean();
   void on_replica_activate();
   void on_interval_change();

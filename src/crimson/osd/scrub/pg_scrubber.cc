@@ -138,6 +138,7 @@ void PGScrubber::request_range(const hobject_t &start)
   LOG_PREFIX(PGScrubber::request_range);
   DEBUGDPP("start: {}", pg, start);
   using crimson::common::local_conf;
+  // TODOSAM
   std::ignore = ifut<>(seastar::yield()
   ).then_interruptible([this, start] {
     return pg.shard_services.get_store().list_objects(

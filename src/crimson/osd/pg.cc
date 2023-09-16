@@ -156,6 +156,7 @@ PG::PG(
       pgid.shard),
     wait_for_active_blocker(this)
 {
+  scrubber.initiate();
   peering_state.set_backend_predicates(
     new ReadablePredicate(pg_whoami),
     new RecoverablePredicate());

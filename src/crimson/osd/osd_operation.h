@@ -50,7 +50,7 @@ enum class OperationTypeCode {
   scrub_requested,
   scrub_message,
   scrub_scan,
-  scrub_find_range,
+  scrub_simple_io,
   last_op
 };
 
@@ -71,7 +71,7 @@ static constexpr const char* const OP_NAMES[] = {
   "scrub_requested",
   "scrub_message",
   "scrub_scan",
-  "scrub_find_range",
+  "scrub_simple_io",
 };
 
 // prevent the addition of OperationTypeCode-s with no matching OP_NAMES entry:

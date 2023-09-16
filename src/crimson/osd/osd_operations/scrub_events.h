@@ -156,7 +156,23 @@ public:
   ScrubScan(
     Ref<PG> pg, bool deep, bool local,
     const hobject_t &begin, const hobject_t &end);
-  ~ScrubScan();
+};
+
+class ScrubSimpleIO : public TrackableOperationT<ScrubSimpleIO> {
+  Ref<PG> pg;
+public:
+  static constexpr OperationTypeCode type = OperationTypeCode::scrub_simple_io;
+
+  void print(std::ostream &) const final {}
+  void dump_detail(ceph::Formatter *) const final {}
+
+  seastar::future<> start();
+
+  ScrubSimpleIO(Ref<PG> pg);
+  ~ScrubSimpleIO();
+
+protected:
+  virtual interruptible_future<> run(PG &pg) { return seastar::now(); }
 };
 
 }
@@ -172,6 +188,13 @@ struct EventBackendRegistry<osd::ScrubRequested> {
 
 template <>
 struct EventBackendRegistry<osd::ScrubMessage> {
+  static std::tuple<> get_backends() {
+    return {};
+  }
+};
+
+template <>
+struct EventBackendRegistry<osd::ScrubSimpleIO> {
   static std::tuple<> get_backends() {
     return {};
   }

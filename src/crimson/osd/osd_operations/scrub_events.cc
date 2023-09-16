@@ -277,6 +277,18 @@ ScrubScan::interruptible_future<> ScrubScan::deep_scan_object(
     });
 }
 
-ScrubScan::~ScrubScan() {}
+ScrubSimpleIO::ScrubSimpleIO(Ref<PG> pg) : pg(pg) {}
+
+seastar::future<> ScrubSimpleIO::start()
+{
+#if 0
+  return interruptor::with_interruption([this] {
+    return run(*pg);
+  }, *pg);
+#endif
+  return seastar::now();
+}
+
+ScrubSimpleIO::~ScrubSimpleIO() {}
 
 }
