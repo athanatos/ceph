@@ -145,7 +145,6 @@ void PGScrubber::request_range(const hobject_t &start)
   LOG_PREFIX(PGScrubber::request_range);
   DEBUGDPP("start: {}", pg, start);
   using crimson::common::local_conf;
-
   do_async_io([FNAME, this, start](PG &pg) {
     return ifut<>(seastar::yield()
     ).then_interruptible([this, start, &pg] {
@@ -160,23 +159,6 @@ void PGScrubber::request_range(const hobject_t &start)
       machine.process_event(request_range_complete_t{start, next.hobj});
     });
   });
-#if 0
-  std::ignore = pg.shard_services.start_operation<
-    ScrubSimpleIOT<decltype(f)>>(&pg, std::move(f));
-  // TODOSAM
-  std::ignore = ifut<>(seastar::yield()
-  ).then_interruptible([this, start] {
-    return pg.shard_services.get_store().list_objects(
-      pg.get_collection_ref(),
-      ghobject_t(start, ghobject_t::NO_GEN, pg.get_pgid().shard),
-      ghobject_t::get_max(),
-      local_conf().get_val<uint64_t>("osd_scrub_chunk_max"));
-  }).then_interruptible([FNAME, this, start](auto ret) {
-    auto &[_, next] = ret;
-    DEBUGDPP("returning start, end: {}, {}", pg, start, next.hobj);
-    machine.process_event(request_range_complete_t{start, next.hobj});
-  });
-#endif
 }
 
 /* TODOSAM: This isn't actually enough.  Here, classic would
@@ -189,24 +171,26 @@ void PGScrubber::reserve_range(const hobject_t &start, const hobject_t &end)
 {
   LOG_PREFIX(PGScrubber::reserve_range);
   DEBUGDPP("start: {}, end: {}", pg, start, end);
-  std::ignore = ifut<>(seastar::yield()
-  ).then_interruptible([this] {
-    return pg.background_io_mutex.lock();
-  }).then_interruptible([this, start, end] {
-    ceph_assert(!blocked);
-    blocked = blocked_range_t{start, end};
-    auto& log = pg.peering_state.get_pg_log().get_log().log;
-    auto p = find_if(
-      log.crbegin(), log.crend(),
-      [this, &start, &end](const auto& e) -> bool {
-	return e.soid >= start && e.soid < end;
-      });
-    
-    if (p == log.crend()) {
-      return machine.process_event(reserve_range_complete_t{eversion_t{}});
-    } else {
-      return machine.process_event(reserve_range_complete_t{p->version});
-    }
+  do_async_io([this, start, end](PG &) {
+    return ifut<>(seastar::yield()
+    ).then_interruptible([this] {
+      return pg.background_io_mutex.lock();
+    }).then_interruptible([this, start, end] {
+      ceph_assert(!blocked);
+      blocked = blocked_range_t{start, end};
+      auto& log = pg.peering_state.get_pg_log().get_log().log;
+      auto p = find_if(
+	log.crbegin(), log.crend(),
+	[this, &start, &end](const auto& e) -> bool {
+	  return e.soid >= start && e.soid < end;
+	});
+      
+      if (p == log.crend()) {
+	return machine.process_event(reserve_range_complete_t{eversion_t{}});
+      } else {
+	return machine.process_event(reserve_range_complete_t{p->version});
+      }
+    });
   });
 }
 
