@@ -146,8 +146,9 @@ void PGScrubber::request_range(const hobject_t &start)
   DEBUGDPP("start: {}", pg, start);
   using crimson::common::local_conf;
   do_async_io([FNAME, this, start](PG &pg) {
-    return ifut<>(seastar::yield()
-    ).then_interruptible([this, start, &pg] {
+    return ifut<>(seastar::now()
+    ).then_interruptible([FNAME, this, start, &pg] {
+      DEBUGDPP("about to list objects", pg);
       return pg.shard_services.get_store().list_objects(
 	pg.get_collection_ref(),
 	ghobject_t(start, ghobject_t::NO_GEN, pg.get_pgid().shard),
@@ -172,7 +173,7 @@ void PGScrubber::reserve_range(const hobject_t &start, const hobject_t &end)
   LOG_PREFIX(PGScrubber::reserve_range);
   DEBUGDPP("start: {}, end: {}", pg, start, end);
   do_async_io([this, start, end](PG &) {
-    return ifut<>(seastar::yield()
+    return ifut<>(seastar::now()
     ).then_interruptible([this] {
       return pg.background_io_mutex.lock();
     }).then_interruptible([this, start, end] {

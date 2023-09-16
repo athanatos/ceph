@@ -1,6 +1,7 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#include "crimson/common/log.h"
 #include "crimson/osd/pg.h"
 #include "crimson/osd/osd_connection_priv.h"
 #include "messages/MOSDRepScrubMap.h"
@@ -11,6 +12,8 @@ namespace {
     return crimson::get_logger(ceph_subsys_osd);
   }
 }
+
+SET_SUBSYS(osd);
 
 namespace crimson::osd {
 
@@ -30,8 +33,9 @@ template <class T>
 seastar::future<> RemoteScrubEventBaseT<T>::with_pg(
   ShardServices &shard_services, Ref<PG> pg)
 {
-  return interruptor::with_interruption([this, pg, &shard_services] {
-    logger().debug("{}: pg present", *that());
+  LOG_PREFIX(RemoteEventBaseT::with_pg);
+  return interruptor::with_interruption([FNAME, this, pg, &shard_services] {
+    DEBUGDPP("{} pg present", *pg, *that());
     return this->template enter_stage<interruptor>(pp(*pg).await_map
     ).then_interruptible([this, pg] {
       return this->template with_blocking_event<
@@ -45,11 +49,8 @@ seastar::future<> RemoteScrubEventBaseT<T>::with_pg(
     }).then_interruptible([this, pg] {
       return handle_event(*pg);
     });
-  }, [this](std::exception_ptr ep) {
-    logger().debug(
-      "{}: interrupted with {}",
-      *that(),
-      ep);
+  }, [FNAME, pg, this](std::exception_ptr ep) {
+    DEBUGDPP("{} interrupted with {}", *pg, *that(), ep);
   }, pg);
 }
 
