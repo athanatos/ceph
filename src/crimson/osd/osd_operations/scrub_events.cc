@@ -275,13 +275,12 @@ ScrubSimpleIO::ScrubSimpleIO(Ref<PG> pg) : pg(pg) {}
 seastar::future<> ScrubSimpleIO::start()
 {
   LOG_PREFIX(ScrubSimpleIO::start);
-  return interruptor::with_interruption([this] {
+  return interruptor::with_interruption([FNAME, this] {
+    DEBUGDPP("{} running IO", *pg, *this);
     return run(*pg);
   }, [FNAME, this](std::exception_ptr ep) {
     DEBUGDPP("{} interrupted with {}", *pg, *this, ep);
   }, pg);
 }
-
-ScrubSimpleIO::~ScrubSimpleIO() {}
 
 }

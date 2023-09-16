@@ -16,7 +16,7 @@ template <typename F>
 void PGScrubber::do_async_io(F &&f)
 {
   std::ignore = pg.shard_services.start_operation<
-    ScrubSimpleIOT<decltype(f)>>(&pg, std::move(f));
+    ScrubSimpleIOT<decltype(f)>>(&pg, std::forward<F>(f));
 }
 
 void PGScrubber::dump_detail(Formatter *f) const
@@ -146,6 +146,7 @@ void PGScrubber::request_range(const hobject_t &start)
   DEBUGDPP("start: {}", pg, start);
   using crimson::common::local_conf;
   do_async_io([FNAME, this, start](PG &pg) {
+    DEBUGDPP("in io lambda", pg);
     return ifut<>(seastar::now()
     ).then_interruptible([FNAME, this, start, &pg] {
       DEBUGDPP("about to list objects", pg);
@@ -153,7 +154,7 @@ void PGScrubber::request_range(const hobject_t &start)
 	pg.get_collection_ref(),
 	ghobject_t(start, ghobject_t::NO_GEN, pg.get_pgid().shard),
 	ghobject_t::get_max(),
-	local_conf().get_val<uint64_t>("osd_scrub_chunk_max"));
+	local_conf().get_val<int64_t>("osd_scrub_chunk_max"));
     }).then_interruptible([FNAME, this, start, &pg](auto ret) {
       auto &[_, next] = ret;
       DEBUGDPP("returning start, end: {}, {}", pg, start, next.hobj);

@@ -169,7 +169,6 @@ public:
   seastar::future<> start();
 
   ScrubSimpleIO(Ref<PG> pg);
-  ~ScrubSimpleIO();
 
 protected:
   virtual interruptible_future<> run(PG &pg) = 0;
