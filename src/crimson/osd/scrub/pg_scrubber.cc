@@ -144,7 +144,9 @@ void PGScrubber::request_range(const hobject_t &start)
 {
   LOG_PREFIX(PGScrubber::request_range);
   DEBUGDPP("start: {}", pg, start);
-  using crimson::common::local_conf;
+  std::ignore = pg.shard_services.start_operation<ScrubFindRange>(
+    start, &pg);
+#if 0
   do_async_io([FNAME, this, start](PG &) {
     //DEBUGDPP("in io lambda", pg);
     DEBUG("in io lambda");
@@ -159,7 +161,9 @@ void PGScrubber::request_range(const hobject_t &start)
       DEBUGDPP("returning start, end: {}, {}", pg, start, next.hobj);
       machine.process_event(request_range_complete_t{start, next.hobj});
     });
+    return interruptor::make_interruptible(seastar::now());
   });
+#endif
 }
 
 /* TODOSAM: This isn't actually enough.  Here, classic would

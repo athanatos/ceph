@@ -9,6 +9,7 @@
 namespace crimson::osd {
 class PG;
 class ScrubScan;
+class ScrubFindRange;
 }
 
 namespace crimson::osd::scrub {
@@ -21,6 +22,7 @@ struct blocked_range_t {
 
 class PGScrubber : public crimson::BlockerT<PGScrubber>, ScrubContext {
   friend class ::crimson::osd::ScrubScan;
+  friend class ::crimson::osd::ScrubFindRange;
 
   using interruptor = ::crimson::interruptible::interruptor<
     ::crimson::osd::IOInterruptCondition>;

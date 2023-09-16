@@ -90,6 +90,8 @@ public:
     PGPeeringPipeline::Process::BlockingEvent,
     class TrackableOperationT<T>::CompletionEvent
   > tracking_events;
+
+  virtual ~RemoteScrubEventBaseT() = default;
 };
 
 class ScrubRequested final : public RemoteScrubEventBaseT<ScrubRequested> {
@@ -126,6 +128,40 @@ public:
       m(m) {
     ceph_assert(scrub::PGScrubber::is_scrub_message(*m));
   }
+};
+
+template <typename T>
+class LocalScrubIO : public TrackableOperationT<T> {
+  Ref<PG> pg;
+
+public:
+  using interruptor = InterruptibleOperation::interruptor;
+  template <typename U=void>
+  using ifut = InterruptibleOperation::interruptible_future<U>;
+
+  LocalScrubIO(Ref<PG> pg);
+
+  void print(std::ostream &) const final {}
+  void dump_detail(ceph::Formatter *) const final {}
+  seastar::future<> start();
+
+  virtual ~LocalScrubIO() = default;
+
+protected:
+  virtual ifut<> run(PG &pg) = 0;
+};
+
+class ScrubFindRange : public LocalScrubIO<ScrubFindRange> {
+  hobject_t begin;
+public:
+  static constexpr OperationTypeCode type = OperationTypeCode::scrub_find_range;
+
+  template <typename... Args>
+  ScrubFindRange(const hobject_t &begin, Args&&... args)
+    : LocalScrubIO(std::forward<Args>(args)...), begin(begin) {}
+
+protected:
+  ifut<> run(PG &pg) final;
 };
 
 class ScrubScan : public TrackableOperationT<ScrubScan> {
@@ -219,6 +255,13 @@ template <> struct fmt::formatter<crimson::osd::ScrubRequested>
   : fmt::ostream_formatter {};
 
 template <> struct fmt::formatter<crimson::osd::ScrubMessage>
+  : fmt::ostream_formatter {};
+
+template <typename T>
+struct fmt::formatter<crimson::osd::LocalScrubIO<T>>
+  : fmt::ostream_formatter {};
+
+template <> struct fmt::formatter<crimson::osd::ScrubFindRange>
   : fmt::ostream_formatter {};
 
 template <> struct fmt::formatter<crimson::osd::ScrubScan>

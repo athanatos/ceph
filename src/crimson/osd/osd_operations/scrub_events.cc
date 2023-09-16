@@ -63,6 +63,42 @@ ScrubMessage::ifut<> ScrubMessage::handle_event(PG &pg)
 template class RemoteScrubEventBaseT<ScrubRequested>;
 template class RemoteScrubEventBaseT<ScrubMessage>;
 
+template <typename T>
+LocalScrubIO<T>::LocalScrubIO(Ref<PG> pg) : pg(pg) {}
+
+template <typename T>
+seastar::future<> LocalScrubIO<T>::start()
+{
+  LOG_PREFIX(LocalScrubIO::start);
+  return interruptor::with_interruption([FNAME, this] {
+    DEBUGDPP("{} running IO", *pg, *this);
+    return run(*pg);
+  }, [FNAME, this](std::exception_ptr ep) {
+    DEBUGDPP("{} interrupted with {}", *pg, *this, ep);
+  }, pg);
+}
+
+ScrubFindRange::ifut<> ScrubFindRange::run(PG &pg)
+{
+  LOG_PREFIX(ScrubFindRange::run);
+  using crimson::common::local_conf;
+  return interruptor::make_interruptible(
+    pg.shard_services.get_store().list_objects(
+      pg.get_collection_ref(),
+      ghobject_t(begin, ghobject_t::NO_GEN, pg.get_pgid().shard),
+      ghobject_t::get_max(),
+      local_conf().get_val<int64_t>("osd_scrub_chunk_max")
+    )
+  ).then_interruptible([FNAME, this, &pg](auto ret) {
+    auto &[_, next] = ret;
+    DEBUGDPP("returning begin, end: {}, {}", pg, begin, next.hobj);
+    pg.scrubber.machine.process_event(
+      scrub::ScrubContext::request_range_complete_t{begin, next.hobj});
+  });
+}
+
+template class LocalScrubIO<ScrubFindRange>;
+
 ScrubScan::ScrubScan(
   Ref<PG> pg, bool deep, bool local,
   const hobject_t &begin, const hobject_t &end)
