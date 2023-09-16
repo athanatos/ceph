@@ -211,4 +211,7 @@ template <> struct fmt::formatter<crimson::osd::ScrubMessage>
 
 template <> struct fmt::formatter<crimson::osd::ScrubScan>
   : fmt::ostream_formatter {};
+
+template <> struct fmt::formatter<crimson::osd::ScrubSimpleIO>
+  : fmt::ostream_formatter {};
 #endif
