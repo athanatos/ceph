@@ -17,6 +17,7 @@
 #include <boost/statechart/transition.hpp>
 
 #include "common/hobject.h"
+#include "crimson/common/log.h"
 #include "scrub_validator.h"
 
 namespace crimson::osd::scrub {
@@ -172,8 +173,9 @@ VALUE_EVENT(StartScrub, start_scrub_event_t);
  */
 class ScrubMachine
   : public sc::state_machine<ScrubMachine, Inactive> {
-  static constexpr std::string_view full_name = "ScrubMachine";
 public:
+  static constexpr std::string_view full_name = "ScrubMachine";
+
   ScrubContext &context;
   ScrubMachine(ScrubContext &context) : context(context) {}
 };
@@ -197,14 +199,24 @@ struct ScrubState : sc::state<S, P, T...> {
   template <std::string_view const &PN, std::size_t... PI,
 	    std::string_view const &CN, std::size_t... CI>
   struct concat<PN, std::index_sequence<PI...>, CN, std::index_sequence<CI...>> {
-    static constexpr const char value[]{PN[PI]..., '/', CN[CI]...};
+    static constexpr size_t value_size = PN.size() + CN.size() + 1;
+    static constexpr const char value[value_size]{PN[PI]..., '/', CN[CI]...};
   };
   
   template <std::string_view const &PN, std::string_view const &CN>
   struct join {
+    using conc = concat<
+      PN, std::make_index_sequence<PN.size()>,
+      CN, std::make_index_sequence<CN.size()>>;
+    static constexpr std::string_view value{
+      conc::value,
+      conc::value_size
+    };
+#if 0
     static constexpr std::string_view value = concat<
       PN, std::make_index_sequence<PN.size()>,
       CN, std::make_index_sequence<CN.size()>>::value;
+#endif
   };
 
   /// Populated with ScrubMachine/.../Parent/Child for each state Child
@@ -212,7 +224,10 @@ struct ScrubState : sc::state<S, P, T...> {
     join<P::full_name, S::state_name>::value;
 
   template <typename C>
-  explicit ScrubState(C ctx) : sc_base(ctx) {}
+  explicit ScrubState(C ctx) : sc_base(ctx) {
+    LOG_PREFIX(ScrubState::ScrubState);
+    SUBDEBUGDPP(osd, "entering state {}", get_scrub_context().get_dpp(), full_name);
+  }
 
   auto &get_scrub_context() {
     return sc_base::template context<ScrubMachine>().context;
