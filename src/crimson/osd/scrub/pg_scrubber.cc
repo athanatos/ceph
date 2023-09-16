@@ -12,6 +12,13 @@ SET_SUBSYS(osd);
 
 namespace crimson::osd::scrub {
 
+template <typename F>
+void PGScrubber::do_async_io(F &&f)
+{
+  std::ignore = pg.shard_services.start_operation<
+    ScrubSimpleIOT<decltype(f)>>(&pg, std::move(f));
+}
+
 void PGScrubber::dump_detail(Formatter *f) const
 {
   f->dump_stream("pgid") << pg.get_pgid();
@@ -138,7 +145,8 @@ void PGScrubber::request_range(const hobject_t &start)
   LOG_PREFIX(PGScrubber::request_range);
   DEBUGDPP("start: {}", pg, start);
   using crimson::common::local_conf;
-  auto f = [FNAME, this, start](PG &pg) {
+
+  do_async_io([FNAME, this, start](PG &pg) {
     return ifut<>(seastar::yield()
     ).then_interruptible([this, start, &pg] {
       return pg.shard_services.get_store().list_objects(
@@ -151,10 +159,10 @@ void PGScrubber::request_range(const hobject_t &start)
       DEBUGDPP("returning start, end: {}, {}", pg, start, next.hobj);
       machine.process_event(request_range_complete_t{start, next.hobj});
     });
-  };
+  });
+#if 0
   std::ignore = pg.shard_services.start_operation<
     ScrubSimpleIOT<decltype(f)>>(&pg, std::move(f));
-#if 0
   // TODOSAM
   std::ignore = ifut<>(seastar::yield()
   ).then_interruptible([this, start] {

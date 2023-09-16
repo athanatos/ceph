@@ -38,6 +38,9 @@ class PGScrubber : public crimson::BlockerT<PGScrubber>, ScrubContext {
 
   std::optional<eversion_t> waiting_for_update;
 
+  template <typename F>
+  void do_async_io(F &&f);
+
 public:
   static constexpr const char *type_name = "PGScrubber";
   using Blocker = PGScrubber;
