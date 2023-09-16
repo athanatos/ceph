@@ -212,11 +212,6 @@ struct ScrubState : sc::state<S, P, T...> {
       conc::value,
       conc::value_size
     };
-#if 0
-    static constexpr std::string_view value = concat<
-      PN, std::make_index_sequence<PN.size()>,
-      CN, std::make_index_sequence<CN.size()>>::value;
-#endif
   };
 
   /// Populated with ScrubMachine/.../Parent/Child for each state Child
@@ -227,6 +222,11 @@ struct ScrubState : sc::state<S, P, T...> {
   explicit ScrubState(C ctx) : sc_base(ctx) {
     LOG_PREFIX(ScrubState::ScrubState);
     SUBDEBUGDPP(osd, "entering state {}", get_scrub_context().get_dpp(), full_name);
+  }
+
+  ~ScrubState() {
+    LOG_PREFIX(ScrubState::~ScrubState);
+    SUBDEBUGDPP(osd, "exiting state {}", get_scrub_context().get_dpp(), full_name);
   }
 
   auto &get_scrub_context() {
