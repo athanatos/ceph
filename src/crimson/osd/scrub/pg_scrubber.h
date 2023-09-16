@@ -22,6 +22,8 @@ struct blocked_range_t {
 class PGScrubber : public crimson::BlockerT<PGScrubber>, ScrubContext {
   friend class ::crimson::osd::ScrubScan;
 
+  using interruptor = ::crimson::interruptible::interruptor<
+    ::crimson::osd::IOInterruptCondition>;
   template <typename T = void>
   using ifut =
     ::crimson::interruptible::interruptible_future<

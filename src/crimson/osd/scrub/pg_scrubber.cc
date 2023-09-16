@@ -145,17 +145,16 @@ void PGScrubber::request_range(const hobject_t &start)
   LOG_PREFIX(PGScrubber::request_range);
   DEBUGDPP("start: {}", pg, start);
   using crimson::common::local_conf;
-  do_async_io([FNAME, this, start](PG &pg) {
-    DEBUGDPP("in io lambda", pg);
-    return ifut<>(seastar::now()
-    ).then_interruptible([FNAME, this, start, &pg] {
-      DEBUGDPP("about to list objects", pg);
-      return pg.shard_services.get_store().list_objects(
+  do_async_io([FNAME, this, start](PG &) {
+    //DEBUGDPP("in io lambda", pg);
+    DEBUG("in io lambda");
+    return interruptor::make_interruptible(
+      pg.shard_services.get_store().list_objects(
 	pg.get_collection_ref(),
 	ghobject_t(start, ghobject_t::NO_GEN, pg.get_pgid().shard),
 	ghobject_t::get_max(),
-	local_conf().get_val<int64_t>("osd_scrub_chunk_max"));
-    }).then_interruptible([FNAME, this, start, &pg](auto ret) {
+	64)//local_conf().get_val<int64_t>("osd_scrub_chunk_max"));
+    ).then_interruptible([FNAME, this, start](auto ret) {
       auto &[_, next] = ret;
       DEBUGDPP("returning start, end: {}, {}", pg, start, next.hobj);
       machine.process_event(request_range_complete_t{start, next.hobj});
