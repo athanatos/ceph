@@ -172,7 +172,19 @@ public:
   ~ScrubSimpleIO();
 
 protected:
-  virtual interruptible_future<> run(PG &pg) { return seastar::now(); }
+  virtual interruptible_future<> run(PG &pg) = 0;
+};
+
+template <typename F>
+class ScrubSimpleIOT : public ScrubSimpleIO {
+  F f;
+protected:
+  interruptible_future<> run(PG &pg) final {
+    return std::invoke(f, pg);
+  }
+public:
+  ScrubSimpleIOT(Ref<PG> pg, F &&f)
+    : ScrubSimpleIO(pg), f(std::forward<F>(f)) {}
 };
 
 }
@@ -213,5 +225,9 @@ template <> struct fmt::formatter<crimson::osd::ScrubScan>
   : fmt::ostream_formatter {};
 
 template <> struct fmt::formatter<crimson::osd::ScrubSimpleIO>
+  : fmt::ostream_formatter {};
+
+template <typename T>
+struct fmt::formatter<crimson::osd::ScrubSimpleIOT<T>>
   : fmt::ostream_formatter {};
 #endif

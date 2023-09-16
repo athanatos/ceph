@@ -138,6 +138,23 @@ void PGScrubber::request_range(const hobject_t &start)
   LOG_PREFIX(PGScrubber::request_range);
   DEBUGDPP("start: {}", pg, start);
   using crimson::common::local_conf;
+  auto f = [FNAME, this, start](PG &pg) {
+    return ifut<>(seastar::yield()
+    ).then_interruptible([this, start, &pg] {
+      return pg.shard_services.get_store().list_objects(
+	pg.get_collection_ref(),
+	ghobject_t(start, ghobject_t::NO_GEN, pg.get_pgid().shard),
+	ghobject_t::get_max(),
+	local_conf().get_val<uint64_t>("osd_scrub_chunk_max"));
+    }).then_interruptible([FNAME, this, start, &pg](auto ret) {
+      auto &[_, next] = ret;
+      DEBUGDPP("returning start, end: {}, {}", pg, start, next.hobj);
+      machine.process_event(request_range_complete_t{start, next.hobj});
+    });
+  };
+  std::ignore = pg.shard_services.start_operation<
+    ScrubSimpleIOT<decltype(f)>>(&pg, std::move(f));
+#if 0
   // TODOSAM
   std::ignore = ifut<>(seastar::yield()
   ).then_interruptible([this, start] {
@@ -151,6 +168,7 @@ void PGScrubber::request_range(const hobject_t &start)
     DEBUGDPP("returning start, end: {}, {}", pg, start, next.hobj);
     machine.process_event(request_range_complete_t{start, next.hobj});
   });
+#endif
 }
 
 /* TODOSAM: This isn't actually enough.  Here, classic would
