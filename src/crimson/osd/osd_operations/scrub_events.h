@@ -179,8 +179,7 @@ protected:
   ifut<> run(PG &pg) final;
 };
 
-class ScrubScan : public TrackableOperationT<ScrubScan> {
-  Ref<PG> pg;
+class ScrubScan : public ScrubAsyncOp<ScrubScan> {
   /// deep or shallow scrub
   const bool deep;
 
@@ -194,19 +193,19 @@ class ScrubScan : public TrackableOperationT<ScrubScan> {
   /// result, see local
   ScrubMap ret;
 
+  ifut<> scan_object(PG &pg, const ghobject_t &obj);
+  ifut<> deep_scan_object(PG &pg, const ghobject_t &obj);
+
 public:
   static constexpr OperationTypeCode type = OperationTypeCode::scrub_scan;
 
-  void print(std::ostream &) const final;
-  void dump_detail(ceph::Formatter *) const final;
-
-  seastar::future<> start();
-  interruptible_future<> scan_object(const ghobject_t &obj);
-  interruptible_future<> deep_scan_object(const ghobject_t &obj);
-
   ScrubScan(
     Ref<PG> pg, bool deep, bool local,
-    const hobject_t &begin, const hobject_t &end);
+    const hobject_t &begin, const hobject_t &end)
+    : ScrubAsyncOp(pg), deep(deep), local(local), begin(begin), end(end) {}
+
+protected:
+  ifut<> run(PG &pg) final;
 };
 
 }

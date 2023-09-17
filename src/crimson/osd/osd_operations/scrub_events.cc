@@ -102,9 +102,12 @@ template class ScrubAsyncOp<ScrubFindRange>;
 ScrubReserveRange::ifut<> ScrubReserveRange::run(PG &pg)
 {
   LOG_PREFIX(ScrubReserveRange::run);
+  DEBUGDPP("", pg);
   return interruptor::make_interruptible(
+    // TODOSAM: lock can probably be leaked on interval change
     pg.background_io_mutex.lock()
-  ).then_interruptible([this, &pg] {
+  ).then_interruptible([FNAME, this, &pg] {
+    DEBUGDPP("pg_background_io_mutex locked", pg);
     auto &scrubber = pg.scrubber;
     ceph_assert(!scrubber.blocked);
     scrubber.blocked = scrub::blocked_range_t{begin, end};
@@ -127,79 +130,62 @@ ScrubReserveRange::ifut<> ScrubReserveRange::run(PG &pg)
 
 template class ScrubAsyncOp<ScrubReserveRange>;
 
-ScrubScan::ScrubScan(
-  Ref<PG> pg, bool deep, bool local,
-  const hobject_t &begin, const hobject_t &end)
-  : pg(pg), deep(deep), local(local), begin(begin), end(end) {}
-
-void ScrubScan::print(std::ostream &) const
-{
-  // TODOSAM
-}
-
-void ScrubScan::dump_detail(ceph::Formatter *) const
-{
-  // TODOSAM
-}
-
-seastar::future<> ScrubScan::start()
+ScrubScan::ifut<> ScrubScan::run(PG &pg)
 {
   LOG_PREFIX(ScrubScan::start);
   // legacy value, unused
-  ret.valid_through = pg->get_info().last_update;
+  ret.valid_through = pg.get_info().last_update;
 
-  return interruptor::with_interruption([this] {
-    return interruptor::make_interruptible(
-      pg->shard_services.get_store().list_objects(
-	pg->get_collection_ref(),
-	ghobject_t(begin, ghobject_t::NO_GEN, pg->get_pgid().shard),
-	ghobject_t(end, ghobject_t::NO_GEN, pg->get_pgid().shard),
-	std::numeric_limits<uint64_t>::max())
-    ).then_interruptible([this](auto &&result) {
-      auto [objects, _] = std::move(result);
-      return interruptor::do_for_each(
-	objects,
-	[this](auto &obj) {
-	  return scan_object(obj);
-	});
-    }).then_interruptible([this] {
-      if (local) {
-	pg->scrubber.machine.process_event(
-	  scrub::ScrubContext::scan_range_complete_t(
-	    pg->get_pg_whoami(),
-	    std::move(ret)));
-	return seastar::now();
-      } else {
-	auto m = crimson::make_message<MOSDRepScrubMap>(
-	  spg_t(pg->get_pgid().pgid, pg->get_primary().shard),
-	  pg->get_osdmap_epoch(),
-	  pg->get_pg_whoami());
-	encode(ret, m->scrub_map_bl);
-	pg->scrubber.machine.process_event(
-	  scrub::ScrubContext::generate_and_submit_chunk_result_complete_t{});
-	return pg->shard_services.send_to_osd(
-	  pg->get_primary().osd,
-	  std::move(m),
-	  pg->get_osdmap_epoch());
-      }
-    });
-  }, [FNAME, this](std::exception_ptr ep) {
-    DEBUGDPP("{} interrupted with {}", *pg, *this, ep);
-  }, pg);
+  DEBUGDPP("pg_background_io_mutex locked", pg);
+  return interruptor::make_interruptible(
+    pg.shard_services.get_store().list_objects(
+      pg.get_collection_ref(),
+      ghobject_t(begin, ghobject_t::NO_GEN, pg.get_pgid().shard),
+      ghobject_t(end, ghobject_t::NO_GEN, pg.get_pgid().shard),
+      std::numeric_limits<uint64_t>::max())
+  ).then_interruptible([this, &pg](auto &&result) {
+    auto [objects, _] = std::move(result);
+    return interruptor::do_for_each(
+      objects,
+      [this, &pg](auto &obj) {
+	return scan_object(pg, obj);
+      });
+  }).then_interruptible([this, &pg] {
+    if (local) {
+      pg.scrubber.machine.process_event(
+	scrub::ScrubContext::scan_range_complete_t(
+	  pg.get_pg_whoami(),
+	  std::move(ret)));
+      return seastar::now();
+    } else {
+      auto m = crimson::make_message<MOSDRepScrubMap>(
+	spg_t(pg.get_pgid().pgid, pg.get_primary().shard),
+	pg.get_osdmap_epoch(),
+	pg.get_pg_whoami());
+      encode(ret, m->scrub_map_bl);
+      pg.scrubber.machine.process_event(
+	scrub::ScrubContext::generate_and_submit_chunk_result_complete_t{});
+      return pg.shard_services.send_to_osd(
+	pg.get_primary().osd,
+	std::move(m),
+	pg.get_osdmap_epoch());
+    }
+  });
 }
 
-ScrubScan::interruptible_future<> ScrubScan::scan_object(
+ScrubScan::ifut<> ScrubScan::scan_object(
+  PG &pg,
   const ghobject_t &obj)
 {
   auto &entry = ret.objects[obj.hobj];
   return interruptor::make_interruptible(
-    pg->shard_services.get_store().stat(
-      pg->get_collection_ref(),
+    pg.shard_services.get_store().stat(
+      pg.get_collection_ref(),
       obj)
-  ).then_interruptible([this, &obj, &entry](struct stat obj_stat) {
+  ).then_interruptible([this, &pg, &obj, &entry](struct stat obj_stat) {
     entry.size = obj_stat.st_size;
-    return pg->shard_services.get_store().get_attrs(
-      pg->get_collection_ref(),
+    return pg.shard_services.get_store().get_attrs(
+      pg.get_collection_ref(),
       obj);
   }).safe_then_interruptible([this, &entry](auto &&attrs) {
     for (auto &i : attrs) {
@@ -210,9 +196,9 @@ ScrubScan::interruptible_future<> ScrubScan::scan_object(
     ct_error::all_same_way([this, &entry](auto e) {
       entry.stat_error = true;
     })
-  ).then_interruptible([this, &obj] {
+  ).then_interruptible([this, &obj, &pg] {
     if (deep) {
-      return deep_scan_object(obj);
+      return deep_scan_object(pg, obj);
     } else {
       return interruptor::now();
     }
@@ -220,7 +206,8 @@ ScrubScan::interruptible_future<> ScrubScan::scan_object(
     
 }
 
-ScrubScan::interruptible_future<> ScrubScan::deep_scan_object(
+ScrubScan::ifut<> ScrubScan::deep_scan_object(
+  PG &pg,
   const ghobject_t &obj)
 {
   using crimson::common::local_conf;
@@ -236,13 +223,14 @@ ScrubScan::interruptible_future<> ScrubScan::deep_scan_object(
   };
   auto &entry = ret.objects[obj.hobj];
   return interruptor::repeat(
-    [this, progress = std::make_unique<obj_scrub_progress_t>(), &obj, &entry]()
+    [this, progress = std::make_unique<obj_scrub_progress_t>(),
+     &obj, &entry, &pg]()
     -> interruptible_future<seastar::stop_iteration> {
       if (progress->offset) {
 	const auto stride = local_conf().get_val<uint64_t>(
 	  "osd_deep_scrub_stride");
-	return pg->shard_services.get_store().read(
-	  pg->get_collection_ref(),
+	return pg.shard_services.get_store().read(
+	  pg.get_collection_ref(),
 	  obj,
 	  *(progress->offset),
 	  stride
@@ -267,8 +255,8 @@ ScrubScan::interruptible_future<> ScrubScan::deep_scan_object(
 	      seastar::stop_iteration::no));
 	});
       } else if (!progress->header_done) {
-	return pg->shard_services.get_store().omap_get_header(
-	  pg->get_collection_ref(),
+	return pg.shard_services.get_store().omap_get_header(
+	  pg.get_collection_ref(),
 	  obj
 	).safe_then([this, &progress, &entry](auto bl) {
 	  progress->omap_hash << bl;
@@ -284,8 +272,8 @@ ScrubScan::interruptible_future<> ScrubScan::deep_scan_object(
 	      seastar::stop_iteration::no));
 	});
       } else if (!progress->keys_done) {
-	return pg->shard_services.get_store().omap_get_values(
-	  pg->get_collection_ref(),
+	return pg.shard_services.get_store().omap_get_values(
+	  pg.get_collection_ref(),
 	  obj,
 	  progress->next_key
 	).safe_then([this, &progress, &entry](auto result) {
@@ -333,5 +321,7 @@ ScrubScan::interruptible_future<> ScrubScan::deep_scan_object(
       }
     });
 }
+
+template class ScrubAsyncOp<ScrubScan>;
 
 }
