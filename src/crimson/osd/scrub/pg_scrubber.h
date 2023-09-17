@@ -10,6 +10,7 @@ namespace crimson::osd {
 class PG;
 class ScrubScan;
 class ScrubFindRange;
+class ScrubReserveRange;
 }
 
 namespace crimson::osd::scrub {
@@ -23,6 +24,7 @@ struct blocked_range_t {
 class PGScrubber : public crimson::BlockerT<PGScrubber>, ScrubContext {
   friend class ::crimson::osd::ScrubScan;
   friend class ::crimson::osd::ScrubFindRange;
+  friend class ::crimson::osd::ScrubReserveRange;
 
   using interruptor = ::crimson::interruptible::interruptor<
     ::crimson::osd::IOInterruptCondition>;
@@ -41,9 +43,6 @@ class PGScrubber : public crimson::BlockerT<PGScrubber>, ScrubContext {
   std::optional<blocked_range_t> blocked;
 
   std::optional<eversion_t> waiting_for_update;
-
-  template <typename F>
-  void do_async_io(F &&f);
 
 public:
   static constexpr const char *type_name = "PGScrubber";

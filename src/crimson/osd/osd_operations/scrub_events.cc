@@ -99,6 +99,34 @@ ScrubFindRange::ifut<> ScrubFindRange::run(PG &pg)
 
 template class ScrubAsyncOp<ScrubFindRange>;
 
+ScrubReserveRange::ifut<> ScrubReserveRange::run(PG &pg)
+{
+  LOG_PREFIX(ScrubReserveRange::run);
+  return interruptor::make_interruptible(
+    pg.background_io_mutex.lock()
+  ).then_interruptible([this, &pg] {
+    auto &scrubber = pg.scrubber;
+    ceph_assert(!scrubber.blocked);
+    scrubber.blocked = scrub::blocked_range_t{begin, end};
+    auto& log = pg.peering_state.get_pg_log().get_log().log;
+    auto p = find_if(
+      log.crbegin(), log.crend(),
+      [this](const auto& e) -> bool {
+	return e.soid >= begin && e.soid < end;
+      });
+    
+    if (p == log.crend()) {
+      return scrubber.machine.process_event(
+	scrub::ScrubContext::reserve_range_complete_t{eversion_t{}});
+    } else {
+      return scrubber.machine.process_event(
+	scrub::ScrubContext::reserve_range_complete_t{p->version});
+    }
+  });
+}
+
+template class ScrubAsyncOp<ScrubReserveRange>;
+
 ScrubScan::ScrubScan(
   Ref<PG> pg, bool deep, bool local,
   const hobject_t &begin, const hobject_t &end)
@@ -304,19 +332,6 @@ ScrubScan::interruptible_future<> ScrubScan::deep_scan_object(
 	    seastar::stop_iteration::yes));
       }
     });
-}
-
-ScrubSimpleIO::ScrubSimpleIO(Ref<PG> pg) : pg(pg) {}
-
-seastar::future<> ScrubSimpleIO::start()
-{
-  LOG_PREFIX(ScrubSimpleIO::start);
-  return interruptor::with_interruption([FNAME, this] {
-    DEBUGDPP("{} running IO", *pg, *this);
-    return run(*pg);
-  }, [FNAME, this](std::exception_ptr ep) {
-    DEBUGDPP("{} interrupted with {}", *pg, *this, ep);
-  }, pg);
 }
 
 }

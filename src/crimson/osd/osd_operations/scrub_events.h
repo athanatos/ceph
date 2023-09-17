@@ -164,6 +164,21 @@ protected:
   ifut<> run(PG &pg) final;
 };
 
+class ScrubReserveRange : public ScrubAsyncOp<ScrubReserveRange> {
+  hobject_t begin;
+  hobject_t end;
+public:
+  static constexpr OperationTypeCode type =
+    OperationTypeCode::scrub_reserve_range;
+
+  template <typename... Args>
+  ScrubReserveRange(const hobject_t &begin, const hobject_t &end, Args&&... args)
+    : ScrubAsyncOp(std::forward<Args>(args)...), begin(begin), end(end) {}
+
+protected:
+  ifut<> run(PG &pg) final;
+};
+
 class ScrubScan : public TrackableOperationT<ScrubScan> {
   Ref<PG> pg;
   /// deep or shallow scrub
@@ -194,35 +209,6 @@ public:
     const hobject_t &begin, const hobject_t &end);
 };
 
-class ScrubSimpleIO : public TrackableOperationT<ScrubSimpleIO> {
-  Ref<PG> pg;
-public:
-  static constexpr OperationTypeCode type = OperationTypeCode::scrub_simple_io;
-
-  void print(std::ostream &) const final {}
-  void dump_detail(ceph::Formatter *) const final {}
-
-  seastar::future<> start();
-
-  ScrubSimpleIO(Ref<PG> pg);
-  virtual ~ScrubSimpleIO() = default;
-
-protected:
-  virtual interruptible_future<> run(PG &pg) = 0;
-};
-
-template <typename F>
-class ScrubSimpleIOT : public ScrubSimpleIO {
-  F f;
-protected:
-  interruptible_future<> run(PG &pg) final {
-    return std::invoke(f, pg);
-  }
-public:
-  ScrubSimpleIOT(Ref<PG> pg, F &&f)
-    : ScrubSimpleIO(pg), f(std::forward<F>(f)) {}
-};
-
 }
 
 namespace crimson {
@@ -236,13 +222,6 @@ struct EventBackendRegistry<osd::ScrubRequested> {
 
 template <>
 struct EventBackendRegistry<osd::ScrubMessage> {
-  static std::tuple<> get_backends() {
-    return {};
-  }
-};
-
-template <>
-struct EventBackendRegistry<osd::ScrubSimpleIO> {
   static std::tuple<> get_backends() {
     return {};
   }
@@ -264,13 +243,10 @@ struct fmt::formatter<crimson::osd::ScrubAsyncOp<T>>
 template <> struct fmt::formatter<crimson::osd::ScrubFindRange>
   : fmt::ostream_formatter {};
 
+template <> struct fmt::formatter<crimson::osd::ScrubReserveRange>
+  : fmt::ostream_formatter {};
+
 template <> struct fmt::formatter<crimson::osd::ScrubScan>
   : fmt::ostream_formatter {};
 
-template <> struct fmt::formatter<crimson::osd::ScrubSimpleIO>
-  : fmt::ostream_formatter {};
-
-template <typename T>
-struct fmt::formatter<crimson::osd::ScrubSimpleIOT<T>>
-  : fmt::ostream_formatter {};
 #endif
