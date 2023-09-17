@@ -131,7 +131,7 @@ public:
 };
 
 template <typename T>
-class LocalScrubIO : public TrackableOperationT<T> {
+class ScrubAsyncOp : public TrackableOperationT<T> {
   Ref<PG> pg;
 
 public:
@@ -139,26 +139,26 @@ public:
   template <typename U=void>
   using ifut = InterruptibleOperation::interruptible_future<U>;
 
-  LocalScrubIO(Ref<PG> pg);
+  ScrubAsyncOp(Ref<PG> pg);
 
   void print(std::ostream &) const final {}
   void dump_detail(ceph::Formatter *) const final {}
   seastar::future<> start();
 
-  virtual ~LocalScrubIO() = default;
+  virtual ~ScrubAsyncOp() = default;
 
 protected:
   virtual ifut<> run(PG &pg) = 0;
 };
 
-class ScrubFindRange : public LocalScrubIO<ScrubFindRange> {
+class ScrubFindRange : public ScrubAsyncOp<ScrubFindRange> {
   hobject_t begin;
 public:
   static constexpr OperationTypeCode type = OperationTypeCode::scrub_find_range;
 
   template <typename... Args>
   ScrubFindRange(const hobject_t &begin, Args&&... args)
-    : LocalScrubIO(std::forward<Args>(args)...), begin(begin) {}
+    : ScrubAsyncOp(std::forward<Args>(args)...), begin(begin) {}
 
 protected:
   ifut<> run(PG &pg) final;
@@ -258,7 +258,7 @@ template <> struct fmt::formatter<crimson::osd::ScrubMessage>
   : fmt::ostream_formatter {};
 
 template <typename T>
-struct fmt::formatter<crimson::osd::LocalScrubIO<T>>
+struct fmt::formatter<crimson::osd::ScrubAsyncOp<T>>
   : fmt::ostream_formatter {};
 
 template <> struct fmt::formatter<crimson::osd::ScrubFindRange>

@@ -64,12 +64,12 @@ template class RemoteScrubEventBaseT<ScrubRequested>;
 template class RemoteScrubEventBaseT<ScrubMessage>;
 
 template <typename T>
-LocalScrubIO<T>::LocalScrubIO(Ref<PG> pg) : pg(pg) {}
+ScrubAsyncOp<T>::ScrubAsyncOp(Ref<PG> pg) : pg(pg) {}
 
 template <typename T>
-seastar::future<> LocalScrubIO<T>::start()
+seastar::future<> ScrubAsyncOp<T>::start()
 {
-  LOG_PREFIX(LocalScrubIO::start);
+  LOG_PREFIX(ScrubAsyncOp::start);
   return interruptor::with_interruption([FNAME, this] {
     DEBUGDPP("{} running IO", *pg, *this);
     return run(*pg);
@@ -97,7 +97,7 @@ ScrubFindRange::ifut<> ScrubFindRange::run(PG &pg)
   });
 }
 
-template class LocalScrubIO<ScrubFindRange>;
+template class ScrubAsyncOp<ScrubFindRange>;
 
 ScrubScan::ScrubScan(
   Ref<PG> pg, bool deep, bool local,
