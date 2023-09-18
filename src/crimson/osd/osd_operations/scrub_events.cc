@@ -206,89 +206,97 @@ ScrubScan::ifut<> ScrubScan::scan_object(
     
 }
 
+struct obj_scrub_progress_t {
+  // nullopt once complete
+  std::optional<uint64_t> offset;
+  ceph::buffer::hash data_hash{std::numeric_limits<uint32_t>::max()};
+  
+  bool header_done = false;
+  std::optional<std::string> next_key;
+  bool keys_done = false;
+  ceph::buffer::hash omap_hash{std::numeric_limits<uint32_t>::max()};
+};
 ScrubScan::ifut<> ScrubScan::deep_scan_object(
   PG &pg,
   const ghobject_t &obj)
 {
+  LOG_PREFIX(ScrubScan::deep_scan_object);
+  DEBUGDPP("obj: {}", pg, obj);
   using crimson::common::local_conf;
-  struct obj_scrub_progress_t {
-    // nullopt once complete
-    std::optional<uint64_t> offset;
-    ceph::buffer::hash data_hash{std::numeric_limits<uint32_t>::max()};
-
-    bool header_done = false;
-    std::optional<std::string> next_key;
-    bool keys_done = false;
-    ceph::buffer::hash omap_hash{std::numeric_limits<uint32_t>::max()};
-  };
   auto &entry = ret.objects[obj.hobj];
   return interruptor::repeat(
-    [this, progress = std::make_unique<obj_scrub_progress_t>(),
-     &obj, &entry, &pg]()
+    [FNAME, this, progress = obj_scrub_progress_t(),
+     &obj, &entry, &pg]() mutable
     -> interruptible_future<seastar::stop_iteration> {
-      if (progress->offset) {
+      if (progress.offset) {
+	DEBUGDPP("op: {}, obj: {}, progress: {} scanning data",
+		 pg, *this, obj, 0);
 	const auto stride = local_conf().get_val<uint64_t>(
 	  "osd_deep_scrub_stride");
 	return pg.shard_services.get_store().read(
 	  pg.get_collection_ref(),
 	  obj,
-	  *(progress->offset),
+	  *(progress.offset),
 	  stride
 	).safe_then([this, stride, &progress, &entry](auto bl) {
-	  progress->data_hash << bl;
+	  progress.data_hash << bl;
 	  if (bl.length() < stride) {
-	    progress->offset = std::nullopt;
-	    entry.digest = progress->data_hash.digest();
+	    progress.offset = std::nullopt;
+	    entry.digest = progress.data_hash.digest();
 	    entry.digest_present = true;
 	  } else {
 	    ceph_assert(stride == bl.length());
-	    *(progress->offset) += stride;
+	    *(progress.offset) += stride;
 	  }
 	}).handle_error(
 	  ct_error::all_same_way([this, &progress, &entry](auto e) {
 	    entry.read_error = true;
-	    progress->offset = std::nullopt;
+	    progress.offset = std::nullopt;
 	  })
 	).then([] {
 	  return interruptor::make_interruptible(
 	    seastar::make_ready_future<seastar::stop_iteration>(
 	      seastar::stop_iteration::no));
 	});
-      } else if (!progress->header_done) {
+      } else if (!progress.header_done) {
+	DEBUGDPP("op: {}, obj: {}, progress: {} scanning omap header",
+		 pg, *this, obj, 0);
 	return pg.shard_services.get_store().omap_get_header(
 	  pg.get_collection_ref(),
 	  obj
 	).safe_then([this, &progress, &entry](auto bl) {
-	  progress->omap_hash << bl;
+	  progress.omap_hash << bl;
 	}).handle_error(
 	  ct_error::enodata::handle([] {}),
 	  ct_error::all_same_way([this, &progress, &entry](auto e) {
 	    entry.read_error = true;
 	  })
 	).then([&progress] {
-	  progress->header_done = true;
+	  progress.header_done = true;
 	  return interruptor::make_interruptible(
 	    seastar::make_ready_future<seastar::stop_iteration>(
 	      seastar::stop_iteration::no));
 	});
-      } else if (!progress->keys_done) {
+      } else if (!progress.keys_done) {
+	DEBUGDPP("op: {}, obj: {}, progress: {} scanning omap keys",
+		 pg, *this, obj, 0);
 	return pg.shard_services.get_store().omap_get_values(
 	  pg.get_collection_ref(),
 	  obj,
-	  progress->next_key
+	  progress.next_key
 	).safe_then([this, &progress, &entry](auto result) {
 	  const auto &[done, omap] = result;
 	  for (const auto &p : omap) {
 	    bufferlist bl;
 	    encode(p.first, bl);
 	    encode(p.second, bl);
-	    progress->omap_hash << bl;
+	    progress.omap_hash << bl;
 	    entry.object_omap_keys++;
 	    entry.object_omap_bytes += p.second.length();
 	  }
 	  if (done) {
-	    progress->keys_done = true;
-	    entry.omap_digest = progress->omap_hash.digest();
+	    progress.keys_done = true;
+	    entry.omap_digest = progress.omap_hash.digest();
 	    entry.omap_digest_present = true;
 
 	    if ((entry.object_omap_keys >
@@ -303,7 +311,7 @@ ScrubScan::ifut<> ScrubScan::deep_scan_object(
 	    }
 	  } else {
 	    ceph_assert(!omap.empty()); // omap_get_values invariant
-	    progress->next_key = omap.crbegin()->first;
+	    progress.next_key = omap.crbegin()->first;
 	  }
 	}).handle_error(
 	  ct_error::all_same_way([this, &progress, &entry](auto e) {
@@ -315,6 +323,8 @@ ScrubScan::ifut<> ScrubScan::deep_scan_object(
 	      seastar::stop_iteration::no));
 	});
       } else {
+	DEBUGDPP("op: {}, obj: {}, progress: {} done",
+		 pg, *this, obj, 0);
 	return interruptor::make_interruptible(
 	  seastar::make_ready_future<seastar::stop_iteration>(
 	    seastar::stop_iteration::yes));
@@ -325,3 +335,22 @@ ScrubScan::ifut<> ScrubScan::deep_scan_object(
 template class ScrubAsyncOp<ScrubScan>;
 
 }
+
+template <>
+struct fmt::formatter<crimson::osd::obj_scrub_progress_t> {
+  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+  template <typename FormatContext>
+  auto format(const crimson::osd::obj_scrub_progress_t &progress,
+	      FormatContext& ctx)
+  {
+    return fmt::format_to(
+      ctx.out(),
+      "");
+#if 0
+      "obj_scrub_progress_t{offset: {}, data_hash: {}, "
+      "header_done: {}, next_key: {}, keys_done: {}, omap_hash: {}",
+      progress.offset, progress.data_hash, progress.header_done,
+      progress.next_key, progress.keys_done, progress.omap_hash);
+#endif
+  }
+};

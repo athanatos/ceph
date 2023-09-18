@@ -2,6 +2,8 @@
 // vim: ts=8 sw=2 smarttab
 #pragma once
 
+#include <optional>
+
 /**
  * \file default fmtlib formatters for specifically-tagged types
  */
@@ -61,4 +63,20 @@ struct formatter<T> {
   }
   bool verbose{true};
 };
+
+#if 0
+template <typename T>
+struct formatter<std::optional<T>> {
+  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+  template <typename FormatContext>
+  auto format(const std::optional<T> &k, FormatContext& ctx) const {
+    if (k) {
+      return fmt::format_to(ctx.out(), "{}", *k);
+    } else {
+      return fmt::format_to(ctx.out(), "{}", *k);
+    }
+  }
+};
+#endif
+
 }  // namespace fmt
