@@ -230,7 +230,7 @@ ScrubScan::ifut<> ScrubScan::deep_scan_object(
     -> interruptible_future<seastar::stop_iteration> {
       if (progress.offset) {
 	DEBUGDPP("op: {}, obj: {}, progress: {} scanning data",
-		 pg, *this, obj, 0);
+		 pg, *this, obj, progress);
 	const auto stride = local_conf().get_val<uint64_t>(
 	  "osd_deep_scrub_stride");
 	return pg.shard_services.get_store().read(
@@ -345,12 +345,9 @@ struct fmt::formatter<crimson::osd::obj_scrub_progress_t> {
   {
     return fmt::format_to(
       ctx.out(),
-      "");
-#if 0
-      "obj_scrub_progress_t{offset: {}, data_hash: {}, "
-      "header_done: {}, next_key: {}, keys_done: {}, omap_hash: {}",
-      progress.offset, progress.data_hash, progress.header_done,
-      progress.next_key, progress.keys_done, progress.omap_hash);
-#endif
+      "obj_scrub_progress_t(offset: {}, "
+      "header_done: {}, next_key: {}, keys_done: {})",
+      progress.offset, progress.header_done,
+      progress.next_key, progress.keys_done);
   }
 };

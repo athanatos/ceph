@@ -64,19 +64,16 @@ struct formatter<T> {
   bool verbose{true};
 };
 
-#if 0
 template <typename T>
 struct formatter<std::optional<T>> {
   constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
   template <typename FormatContext>
-  auto format(const std::optional<T> &k, FormatContext& ctx) const {
-    if (k) {
-      return fmt::format_to(ctx.out(), "{}", *k);
-    } else {
-      return fmt::format_to(ctx.out(), "{}", *k);
+  auto format(const std::optional<T> &v, FormatContext& ctx) const {
+    if (v.has_value()) {
+      return fmt::format_to(ctx.out(), "{}", *v);
     }
+    return fmt::format_to(ctx.out(), "<null>");
   }
 };
-#endif
 
 }  // namespace fmt
