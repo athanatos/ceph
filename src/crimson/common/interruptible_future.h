@@ -1178,7 +1178,7 @@ public:
 	    (typename Iterator::reference x) mutable {
 	    return call_with_interruption(
 		      interrupt_condition,
-		      std::move(action),
+		      action,
 		      std::forward<decltype(*begin)>(x)).to_future();
 	  })
       );
@@ -1190,7 +1190,7 @@ public:
 	    (typename Iterator::reference x) mutable {
 	    return call_with_interruption(
 		      interrupt_condition,
-		      std::move(action),
+		      action,
 		      std::forward<decltype(*begin)>(x)).to_future();
 	  })
       );
@@ -1209,7 +1209,7 @@ public:
 	    (typename Iterator::reference x) mutable {
 	    return call_with_interruption(
 		      interrupt_condition,
-		      std::move(action),
+		      action,
 		      std::forward<decltype(*begin)>(x));
 	  })
       );
@@ -1221,7 +1221,7 @@ public:
 	    (typename Iterator::reference x) mutable {
 	    return call_with_interruption(
 		      interrupt_condition,
-		      std::move(action),
+		      action,
 		      std::forward<decltype(*begin)>(x));
 	  })
       );
@@ -1236,10 +1236,10 @@ public:
       return make_interruptible(
 	  ::seastar::repeat(
 	    [action=std::move(action),
-	    interrupt_condition=interrupt_cond<InterruptCond>.interrupt_cond] {
+	    interrupt_condition=interrupt_cond<InterruptCond>.interrupt_cond]() mutable {
 	    return call_with_interruption(
 		      interrupt_condition,
-		      std::move(action)).to_future();
+		      action).to_future();
 	  })
       );
     } else {
@@ -1249,7 +1249,7 @@ public:
 	    interrupt_condition=interrupt_cond<InterruptCond>.interrupt_cond]() mutable {
 	    return call_with_interruption(
 		      interrupt_condition,
-		      std::move(action)).to_future();
+		      action).to_future();
 	  })
       );
     }
@@ -1262,20 +1262,20 @@ public:
       return make_interruptible(
 	  ::seastar::repeat(
 	    [action=std::move(action),
-	    interrupt_condition=interrupt_cond<InterruptCond>.interrupt_cond] {
+	    interrupt_condition=interrupt_cond<InterruptCond>.interrupt_cond]() mutable {
 	    return call_with_interruption(
 		      interrupt_condition,
-		      std::move(action));
+		      action);
 	  })
       );
     } else {
       return make_interruptible(
 	  ::crimson::repeat(
 	    [action=std::move(action),
-	    interrupt_condition=interrupt_cond<InterruptCond>.interrupt_cond] {
+	    interrupt_condition=interrupt_cond<InterruptCond>.interrupt_cond]() mutable {
 	    return call_with_interruption(
 		      interrupt_condition,
-		      std::move(action));
+		      action);
 	  })
       );
     }
