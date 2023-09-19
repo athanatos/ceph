@@ -133,9 +133,10 @@ void iterate_scrub_checked_stats(Func &&op) {
  * iterate_scrub_maintained_stats
  *
  * For each scrub_maintained_stat member of object_stat_sum_t, invokes
- * op with two arguments:
+ * op with three arguments:
  * - name of member (string_view)
  * - pointer to member (T object_stat_sum_t::*)
+ * - skip for shallow (bool)
  *
  * Should be used to perform operations on all scrub_maintained_stat members
  * such as updating the pg maintained instance once scrub is complete.
@@ -146,12 +147,16 @@ void iterate_scrub_checked_stats(Func &&op) {
 template <typename Func>
 void iterate_scrub_maintained_stats(Func &&op) {
   using namespace std::string_view_literals;
-  op("num_scrub_errors"sv, &object_stat_sum_t::num_scrub_errors);
-  op("num_shallow_scrub_errors"sv, &object_stat_sum_t::num_shallow_scrub_errors);
-  op("num_deep_scrub_errors"sv, &object_stat_sum_t::num_deep_scrub_errors);
-  op("num_omap_bytes"sv, &object_stat_sum_t::num_omap_bytes);
-  op("num_omap_keys"sv, &object_stat_sum_t::num_omap_keys);
-  op("num_large_omap_objects"sv, &object_stat_sum_t::num_large_omap_objects);
+  op("num_scrub_errors"sv, &object_stat_sum_t::num_scrub_errors, false);
+  op("num_shallow_scrub_errors"sv,
+     &object_stat_sum_t::num_shallow_scrub_errors,
+     false);
+  op("num_deep_scrub_errors"sv, &object_stat_sum_t::num_deep_scrub_errors, true);
+  op("num_omap_bytes"sv, &object_stat_sum_t::num_omap_bytes, true);
+  op("num_omap_keys"sv, &object_stat_sum_t::num_omap_keys, true);
+  op("num_large_omap_objects"sv,
+     &object_stat_sum_t::num_large_omap_objects,
+     true);
 }
 
 object_stat_sum_t project_scrub_checked_stats(const object_stat_sum_t &sum);

@@ -238,8 +238,11 @@ void PGScrubber::emit_scrub_result(
   pg.peering_state.update_stats(
     [this, deep, &in_stats](auto &history, auto &pg_stats) {
       iterate_scrub_maintained_stats(
-	[&pg_stats, &in_stats](const auto &name, auto statptr) {
-	  pg_stats.stats.sum.*statptr = in_stats.*statptr;
+	[deep, &pg_stats, &in_stats](
+	  const auto &name, auto statptr, bool skip_for_shallow) {
+	  if (deep && !skip_for_shallow) {
+	    pg_stats.stats.sum.*statptr = in_stats.*statptr;
+	  }
 	});
       iterate_scrub_checked_stats(
 	[&pg_stats, &in_stats](
