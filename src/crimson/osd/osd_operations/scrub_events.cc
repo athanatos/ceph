@@ -151,7 +151,11 @@ ScrubScan::ifut<> ScrubScan::run(PG &pg)
 	return interruptor::do_for_each(
 	  objects,
 	  [this, &pg](auto &obj) {
-	    return scan_object(pg, obj);
+	    if (obj.is_pgmeta() || obj.hobj.is_temp()) {
+	      return interruptor::now();
+	    } else {
+	      return scan_object(pg, obj);
+	    }
 	  });
       });
   }).then_interruptible([FNAME, this, &pg] {
@@ -168,7 +172,7 @@ ScrubScan::ifut<> ScrubScan::run(PG &pg)
 	spg_t(pg.get_pgid().pgid, pg.get_primary().shard),
 	pg.get_osdmap_epoch(),
 	pg.get_pg_whoami());
-      encode(ret, m->scrub_map_bl);
+      encode(ret, m->get_data());
       pg.scrubber.machine.process_event(
 	scrub::ScrubContext::generate_and_submit_chunk_result_complete_t{});
       return pg.shard_services.send_to_osd(

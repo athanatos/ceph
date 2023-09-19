@@ -140,6 +140,45 @@ struct start_scrub_event_t {
 };
 VALUE_EVENT(StartScrub, start_scrub_event_t);
 
+struct replica_scan_event_t {
+  hobject_t start;
+  hobject_t end;
+  eversion_t version;
+  bool deep = false;
+};
+VALUE_EVENT(ReplicaScan, replica_scan_event_t);
+
+}
+
+template <>
+struct fmt::formatter<crimson::osd::scrub::start_scrub_event_t> {
+  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+  template <typename FormatContext>
+  auto format(const crimson::osd::Scrub::start_scrub_event_t &event,
+	      FormatContext& ctx)
+  {
+    return fmt::format_to(
+      ctx.out(), "start_scrub_event_t(deep: {})", event.deep);
+  }
+};
+
+
+template <>
+struct fmt::formatter<crimson::osd::scrub::replica_scan_event_t> {
+  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+  template <typename FormatContext>
+  auto format(const crimson::osd::scrub::replica_scan_event_t &event,
+	      FormatContext& ctx)
+  {
+    return fmt::format_to(
+      ctx.out(),
+      "replica_scan_event(start: {}, end: {}, version: {}, deep: {})",
+      event.start, event.end, event.version, event.deep);
+  }
+};
+
+namespace crimson::osd::scrub {
+
 /**
  * ScrubMachine
  *
@@ -386,13 +425,6 @@ struct ScanRange : ScrubState<ScanRange, ChunkState> {
   sc::result react(const ScrubContext::scan_range_complete_t &);
 };
 
-struct replica_scan_event_t {
-  hobject_t start;
-  hobject_t end;
-  eversion_t version;
-  bool deep = false;
-};
-VALUE_EVENT(ReplicaScan, replica_scan_event_t);
 struct ReplicaIdle;
 struct ReplicaActive :
     ScrubState<ReplicaActive, ScrubMachine, ReplicaIdle> {
@@ -419,6 +451,8 @@ struct ReplicaIdle : ScrubState<ReplicaIdle, ReplicaActive> {
     >;
 
   sc::result react(const ReplicaScan &event) {
+    LOG_PREFIX(ScrubState::ReplicaIdle::react(ReplicaScan));
+    SUBDEBUGDPP(osd, "", get_scrub_context().get_dpp());
     post_event(event);
     return transit<ReplicaChunkState>();
   }
@@ -430,17 +464,6 @@ struct ReplicaChunkState : ScrubState<ReplicaChunkState, ReplicaActive, ReplicaW
   explicit ReplicaChunkState(my_context ctx) : ScrubState(ctx) {}
 
   replica_scan_event_t to_scan;
-
-  using reactions = boost::mpl::list<
-    sc::custom_reaction<ReplicaScan>
-    >;
-
-  sc::result react(const ReplicaScan &event) {
-    LOG_PREFIX(ScrubState::ReplicaChunkState::react(ReplicaScan));
-    SUBDEBUGDPP(osd, "", get_scrub_context().get_dpp());
-    to_scan = event.value;
-    return discard_event();
-  }
 };
 
 struct ReplicaScanChunk;
@@ -454,6 +477,9 @@ struct ReplicaWaitUpdate : ScrubState<ReplicaWaitUpdate, ReplicaChunkState> {
     >;
 
   sc::result react(const ReplicaScan &event) {
+    LOG_PREFIX(ScrubState::ReplicaWaitUpdate::react(ReplicaScan));
+    SUBDEBUGDPP(osd, "event: {}", get_scrub_context().get_dpp(), event);
+    context<ReplicaChunkState>().to_scan = event.value;
     get_scrub_context().await_update(event.value.version);
     return forward_event();
   }
@@ -473,3 +499,4 @@ struct ReplicaScanChunk : ScrubState<ReplicaScanChunk, ReplicaChunkState> {
 #undef VALUE_EVENT
 
 }
+

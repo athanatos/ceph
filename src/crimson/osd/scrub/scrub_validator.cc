@@ -403,7 +403,9 @@ void add_object_to_stats(
   object_stat_sum_t *out)
 {
   auto &ss = eval.snapset;
-  ceph_assert(eval.object_info);
+  if (!eval.object_info) {
+    return;
+  }
   auto &oi = *eval.object_info;
   ceph_assert(out);
   if (ss) {

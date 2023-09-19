@@ -78,7 +78,7 @@ void PGScrubber::handle_scrub_message(Message &_m)
     MOSDRepScrubMap &m = *static_cast<MOSDRepScrubMap*>(&_m);
     DEBUGDPP("MOSDRepScrubMap: {}", pg, m);
     ScrubMap map;
-    auto iter = m.scrub_map_bl.cbegin();
+    auto iter = m.get_data().cbegin();
     ::decode(map, iter);
     machine.process_event(scan_range_complete_t{
 	std::make_pair(m.from, std::move(map))
