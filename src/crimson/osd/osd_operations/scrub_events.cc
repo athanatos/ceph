@@ -249,8 +249,6 @@ ScrubScan::ifut<> ScrubScan::deep_scan_object(
 		 pg, *this, obj, progress);
 	const auto stride = local_conf().get_val<Option::size_t>(
 	  "osd_deep_scrub_stride");
-	DEBUGDPP("op: {}, obj: {}, progress: {} got stride {}",
-		 pg, *this, obj, progress, stride);
 	return pg.shard_services.get_store().read(
 	  pg.get_collection_ref(),
 	  obj,
@@ -285,16 +283,11 @@ ScrubScan::ifut<> ScrubScan::deep_scan_object(
 	).safe_then([this, &progress, &entry](auto bl) {
 	  progress.omap_hash << bl;
 	}).handle_error(
-	  ct_error::enodata::handle([FNAME, this, &pg, &obj, &progress] {
-	    DEBUGDPP("op: {}, obj: {}, progress: {} no omap header",
-		     pg, *this, obj, progress);
-	  }),
+	  ct_error::enodata::handle([] {}),
 	  ct_error::all_same_way([this, &progress, &entry](auto e) {
 	    entry.read_error = true;
 	  })
 	).then([FNAME, this, &pg, &obj, &progress] {
-	  DEBUGDPP("op: {}, obj: {}, progress: {} omap header complete",
-		   pg, *this, obj, progress);
 	  progress.header_done = true;
 	  return interruptor::make_interruptible(
 	    seastar::make_ready_future<seastar::stop_iteration>(

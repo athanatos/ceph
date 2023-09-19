@@ -41,14 +41,6 @@ struct chunk_validation_policy_t {
 using scrub_map_set_t = std::map<pg_shard_t, ScrubMap>;
 
 struct chunk_result_t {
-  unsigned shallow_errors{0};
-  unsigned deep_errors{0};
-
-  // omap specific stats
-  uint64_t large_omap_objects{0};
-  uint64_t omap_bytes{0};
-  uint64_t omap_keys{0};
-
   /* Scrub interacts with stats in two ways:
    * 1. scrub accumulates a subset of object_stat_sum_t members to
    *    to ultimately compare to the object_stat_sum_t value maintained
