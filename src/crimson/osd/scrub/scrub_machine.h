@@ -436,6 +436,8 @@ struct ReplicaChunkState : ScrubState<ReplicaChunkState, ReplicaActive, ReplicaW
     >;
 
   sc::result react(const ReplicaScan &event) {
+    LOG_PREFIX(ScrubState::ReplicaChunkState::react(ReplicaScan));
+    SUBDEBUGDPP(osd, "", get_scrub_context().get_dpp());
     to_scan = event.value;
     return discard_event();
   }
