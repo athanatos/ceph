@@ -81,11 +81,6 @@ public:
 private:
   DoutPrefixProvider &get_dpp() final { return dpp; }
 
-  // ScrubContext interface
-  pg_shard_t get_my_id() const final {
-    return pg_shard_t{};
-  }
-
   void notify_scrub_start(bool deep) final;
   void notify_scrub_end(bool deep) final;
 

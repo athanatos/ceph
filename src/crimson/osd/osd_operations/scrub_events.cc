@@ -144,21 +144,26 @@ ScrubScan::ifut<> ScrubScan::run(PG &pg)
       ghobject_t(end, ghobject_t::NO_GEN, pg.get_pgid().shard),
       std::numeric_limits<uint64_t>::max())
   ).then_interruptible([FNAME, this, &pg](auto &&result) {
-    auto [objects, _] = std::move(result);
-    DEBUGDPP("listed {} objects", pg, objects.size());
-    return interruptor::do_for_each(
-      objects,
-      [this, &pg](auto &obj) {
-	return scan_object(pg, obj);
+    DEBUGDPP("listed {} objects", pg, std::get<0>(result).size());
+    return seastar::do_with(
+      std::move(std::get<0>(result)),
+      [this, &pg](auto &objects) {
+	return interruptor::do_for_each(
+	  objects,
+	  [this, &pg](auto &obj) {
+	    return scan_object(pg, obj);
+	  });
       });
-  }).then_interruptible([this, &pg] {
+  }).then_interruptible([FNAME, this, &pg] {
     if (local) {
+      DEBUGDPP("complete, submitting local event", pg);
       pg.scrubber.machine.process_event(
 	scrub::ScrubContext::scan_range_complete_t(
 	  pg.get_pg_whoami(),
 	  std::move(ret)));
       return seastar::now();
     } else {
+      DEBUGDPP("complete, sending response to primary", pg);
       auto m = crimson::make_message<MOSDRepScrubMap>(
 	spg_t(pg.get_pgid().pgid, pg.get_primary().shard),
 	pg.get_osdmap_epoch(),
@@ -185,22 +190,26 @@ ScrubScan::ifut<> ScrubScan::scan_object(
     pg.shard_services.get_store().stat(
       pg.get_collection_ref(),
       obj)
-  ).then_interruptible([this, &pg, &obj, &entry](struct stat obj_stat) {
+  ).then_interruptible([FNAME, this, &pg, &obj, &entry](struct stat obj_stat) {
+    DEBUGDPP("obj: {}, stat complete, size {}", pg, obj, obj_stat.st_size);
     entry.size = obj_stat.st_size;
     return pg.shard_services.get_store().get_attrs(
       pg.get_collection_ref(),
       obj);
-  }).safe_then_interruptible([this, &entry](auto &&attrs) {
+  }).safe_then_interruptible([FNAME, this, &pg, &obj, &entry](auto &&attrs) {
+    DEBUGDPP("obj: {}, got {} attrs", pg, obj, attrs.size());
     for (auto &i : attrs) {
       i.second.rebuild();
       entry.attrs.emplace(i.first, *(i.second.begin()));
     }
   }).handle_error_interruptible(
-    ct_error::all_same_way([this, &entry](auto e) {
+    ct_error::all_same_way([FNAME, this, &pg, &obj, &entry](auto e) {
+      DEBUGDPP("obj: {} stat error", pg, obj);
       entry.stat_error = true;
     })
-  ).then_interruptible([this, &obj, &pg] {
+  ).then_interruptible([FNAME, this, &pg, &obj] {
     if (deep) {
+      DEBUGDPP("obj: {} doing deep scan", pg, obj);
       return deep_scan_object(pg, obj);
     } else {
       return interruptor::now();

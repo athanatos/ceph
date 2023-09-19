@@ -21,7 +21,7 @@ ScanRange::ScanRange(my_context ctx) : ScrubState(ctx)
   const auto &cs = context<ChunkState>();
   const auto &range = cs.range.value();
   get_scrub_context(
-  ).foreach_remote_id_to_scrub([this, &range, &cs](const auto &id) {
+  ).foreach_id_to_scrub([this, &range, &cs](const auto &id) {
     get_scrub_context().scan_range(
       id, cs.version,
       context<Scrubbing>().deep,

@@ -69,25 +69,12 @@ namespace sc = boost::statechart;
  * within ScrubContext.  Other events are defined within ScrubMachine.
  */
 struct ScrubContext {
-  /// return id of local instance
-  virtual pg_shard_t get_my_id() const = 0;
-
   /// return ids to scrub
   virtual const std::set<pg_shard_t> &get_ids_to_scrub() const = 0;
 
   template <typename F>
   void foreach_id_to_scrub(F &&f) {
     for (const auto &id : get_ids_to_scrub()) {
-      std::invoke(f, id);
-    }
-  }
-
-  template <typename F>
-  void foreach_remote_id_to_scrub(F &&f) {
-    auto not_me = [me = get_my_id()](const auto &i) {
-      return me != i;
-    };
-    for (const auto &id : get_ids_to_scrub() | std::views::filter(not_me)) {
       std::invoke(f, id);
     }
   }

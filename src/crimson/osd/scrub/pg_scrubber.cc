@@ -174,14 +174,14 @@ void PGScrubber::scan_range(
 {
   LOG_PREFIX(PGScrubber::scan_range);
   DEBUGDPP("target: {}, version: {}, deep: {}, start: {}, end: {}",
-	   pg, version, deep, start, end);
+	   pg, target, version, deep, start, end);
   if (target == pg.get_pg_whoami()) {
     std::ignore = pg.shard_services.start_operation<ScrubScan>(
       &pg, deep, true /* local */, start, end
     );
   } else {
     std::ignore = pg.shard_services.send_to_osd(
-      pg.get_primary().osd,
+      target.osd,
       crimson::make_message<MOSDRepScrub>(
 	spg_t(pg.get_pgid().pgid, target.shard),
 	version,
