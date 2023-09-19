@@ -29,7 +29,6 @@ public:
   spg_t pgid;            // primary spg_t
   epoch_t map_epoch = 0;
   pg_shard_t from;   // whose scrubmap this is
-  ceph::buffer::list scrub_map_bl;
   bool preempted = false;
 
   epoch_t get_map_epoch() const override {
