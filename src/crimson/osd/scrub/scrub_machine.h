@@ -17,7 +17,9 @@
 #include <boost/statechart/transition.hpp>
 
 #include "common/hobject.h"
+#include "common/hobject_fmt.h"
 #include "crimson/common/log.h"
+#include "osd/osd_types_fmt.h"
 #include "scrub_validator.h"
 
 namespace crimson::osd::scrub {
@@ -139,45 +141,6 @@ struct start_scrub_event_t {
   bool deep = false;
 };
 VALUE_EVENT(StartScrub, start_scrub_event_t);
-
-struct replica_scan_event_t {
-  hobject_t start;
-  hobject_t end;
-  eversion_t version;
-  bool deep = false;
-};
-VALUE_EVENT(ReplicaScan, replica_scan_event_t);
-
-}
-
-template <>
-struct fmt::formatter<crimson::osd::scrub::start_scrub_event_t> {
-  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-  template <typename FormatContext>
-  auto format(const crimson::osd::Scrub::start_scrub_event_t &event,
-	      FormatContext& ctx)
-  {
-    return fmt::format_to(
-      ctx.out(), "start_scrub_event_t(deep: {})", event.deep);
-  }
-};
-
-
-template <>
-struct fmt::formatter<crimson::osd::scrub::replica_scan_event_t> {
-  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-  template <typename FormatContext>
-  auto format(const crimson::osd::scrub::replica_scan_event_t &event,
-	      FormatContext& ctx)
-  {
-    return fmt::format_to(
-      ctx.out(),
-      "replica_scan_event(start: {}, end: {}, version: {}, deep: {})",
-      event.start, event.end, event.version, event.deep);
-  }
-};
-
-namespace crimson::osd::scrub {
 
 /**
  * ScrubMachine
@@ -441,6 +404,13 @@ struct ReplicaActive :
   }
 };
 
+struct replica_scan_event_t {
+  hobject_t start;
+  hobject_t end;
+  eversion_t version;
+  bool deep = false;
+};
+VALUE_EVENT(ReplicaScan, replica_scan_event_t);
 struct ReplicaChunkState;
 struct ReplicaIdle : ScrubState<ReplicaIdle, ReplicaActive> {
   static constexpr std::string_view state_name = "ReplicaIdle";
@@ -452,7 +422,7 @@ struct ReplicaIdle : ScrubState<ReplicaIdle, ReplicaActive> {
 
   sc::result react(const ReplicaScan &event) {
     LOG_PREFIX(ScrubState::ReplicaIdle::react(ReplicaScan));
-    SUBDEBUGDPP(osd, "", get_scrub_context().get_dpp());
+    SUBDEBUGDPP(osd, "event.value: {}", get_scrub_context().get_dpp(), event.value);
     post_event(event);
     return transit<ReplicaChunkState>();
   }
@@ -478,7 +448,7 @@ struct ReplicaWaitUpdate : ScrubState<ReplicaWaitUpdate, ReplicaChunkState> {
 
   sc::result react(const ReplicaScan &event) {
     LOG_PREFIX(ScrubState::ReplicaWaitUpdate::react(ReplicaScan));
-    SUBDEBUGDPP(osd, "event: {}", get_scrub_context().get_dpp(), event);
+    SUBDEBUGDPP(osd, "event.value: {}", get_scrub_context().get_dpp(), event.value);
     context<ReplicaChunkState>().to_scan = event.value;
     get_scrub_context().await_update(event.value.version);
     return forward_event();
@@ -500,3 +470,16 @@ struct ReplicaScanChunk : ScrubState<ReplicaScanChunk, ReplicaChunkState> {
 
 }
 
+template <>
+struct fmt::formatter<crimson::osd::scrub::replica_scan_event_t> {
+  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+  template <typename FormatContext>
+  auto format(const crimson::osd::scrub::replica_scan_event_t &event,
+	      FormatContext& ctx)
+  {
+    return fmt::format_to(
+      ctx.out(),
+      "replica_scan_event(start: {}, end: {}, version: {}, deep: {})",
+      event.start, event.end, event.version, event.deep);
+  }
+};
