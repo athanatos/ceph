@@ -247,8 +247,10 @@ ScrubScan::ifut<> ScrubScan::deep_scan_object(
       if (progress.offset) {
 	DEBUGDPP("op: {}, obj: {}, progress: {} scanning data",
 		 pg, *this, obj, progress);
-	const auto stride = local_conf().get_val<size_t>(
+	const auto stride = local_conf().get_val<Option::size_t>(
 	  "osd_deep_scrub_stride");
+	DEBUGDPP("op: {}, obj: {}, progress: {} got stride {}",
+		 pg, *this, obj, progress, stride);
 	return pg.shard_services.get_store().read(
 	  pg.get_collection_ref(),
 	  obj,
@@ -324,7 +326,7 @@ ScrubScan::ifut<> ScrubScan::deep_scan_object(
 		 local_conf().get_val<uint64_t>(
 		   "osd_deep_scrub_large_omap_object_key_threshold")) ||
 		(entry.object_omap_bytes >
-		 local_conf().get_val<size_t>(
+		 local_conf().get_val<Option::size_t>(
 		   "osd_deep_scrub_large_omap_object_value_sum_threshold"))) {
 	      entry.large_omap_object_found = true;
 	      entry.large_omap_object_key_count = entry.object_omap_keys;
