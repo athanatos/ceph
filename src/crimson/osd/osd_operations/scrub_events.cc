@@ -224,7 +224,7 @@ ScrubScan::ifut<> ScrubScan::scan_object(
 
 struct obj_scrub_progress_t {
   // nullopt once complete
-  std::optional<uint64_t> offset;
+  std::optional<uint64_t> offset = 0;
   ceph::buffer::hash data_hash{std::numeric_limits<uint32_t>::max()};
   
   bool header_done = false;
@@ -247,7 +247,7 @@ ScrubScan::ifut<> ScrubScan::deep_scan_object(
       if (progress.offset) {
 	DEBUGDPP("op: {}, obj: {}, progress: {} scanning data",
 		 pg, *this, obj, progress);
-	const auto stride = local_conf().get_val<uint64_t>(
+	const auto stride = local_conf().get_val<size_t>(
 	  "osd_deep_scrub_stride");
 	return pg.shard_services.get_store().read(
 	  pg.get_collection_ref(),
@@ -276,18 +276,23 @@ ScrubScan::ifut<> ScrubScan::deep_scan_object(
 	});
       } else if (!progress.header_done) {
 	DEBUGDPP("op: {}, obj: {}, progress: {} scanning omap header",
-		 pg, *this, obj, 0);
+		 pg, *this, obj, progress);
 	return pg.shard_services.get_store().omap_get_header(
 	  pg.get_collection_ref(),
 	  obj
 	).safe_then([this, &progress, &entry](auto bl) {
 	  progress.omap_hash << bl;
 	}).handle_error(
-	  ct_error::enodata::handle([] {}),
+	  ct_error::enodata::handle([FNAME, this, &pg, &obj, &progress] {
+	    DEBUGDPP("op: {}, obj: {}, progress: {} no omap header",
+		     pg, *this, obj, progress);
+	  }),
 	  ct_error::all_same_way([this, &progress, &entry](auto e) {
 	    entry.read_error = true;
 	  })
-	).then([&progress] {
+	).then([FNAME, this, &pg, &obj, &progress] {
+	  DEBUGDPP("op: {}, obj: {}, progress: {} omap header complete",
+		   pg, *this, obj, progress);
 	  progress.header_done = true;
 	  return interruptor::make_interruptible(
 	    seastar::make_ready_future<seastar::stop_iteration>(
@@ -295,7 +300,7 @@ ScrubScan::ifut<> ScrubScan::deep_scan_object(
 	});
       } else if (!progress.keys_done) {
 	DEBUGDPP("op: {}, obj: {}, progress: {} scanning omap keys",
-		 pg, *this, obj, 0);
+		 pg, *this, obj, progress);
 	return pg.shard_services.get_store().omap_get_values(
 	  pg.get_collection_ref(),
 	  obj,
@@ -319,7 +324,7 @@ ScrubScan::ifut<> ScrubScan::deep_scan_object(
 		 local_conf().get_val<uint64_t>(
 		   "osd_deep_scrub_large_omap_object_key_threshold")) ||
 		(entry.object_omap_bytes >
-		 local_conf().get_val<uint64_t>(
+		 local_conf().get_val<size_t>(
 		   "osd_deep_scrub_large_omap_object_value_sum_threshold"))) {
 	      entry.large_omap_object_found = true;
 	      entry.large_omap_object_key_count = entry.object_omap_keys;
@@ -340,7 +345,7 @@ ScrubScan::ifut<> ScrubScan::deep_scan_object(
 	});
       } else {
 	DEBUGDPP("op: {}, obj: {}, progress: {} done",
-		 pg, *this, obj, 0);
+		 pg, *this, obj, progress);
 	return interruptor::make_interruptible(
 	  seastar::make_ready_future<seastar::stop_iteration>(
 	    seastar::stop_iteration::yes));

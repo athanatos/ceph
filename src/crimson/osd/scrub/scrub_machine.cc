@@ -50,9 +50,16 @@ sc::result ScanRange::react(const ScrubContext::scan_range_complete_t &event)
 	*(context<ChunkState>().range),
 	std::move(results));
     }
-    context<Scrubbing>().advance_current(
-      context<ChunkState>().range->end);
-    return transit<ChunkState>();
+    if (context<ChunkState>().range->end.is_max()) {
+      get_scrub_context().emit_scrub_result(
+	context<Scrubbing>().deep,
+	context<Scrubbing>().stats);
+      return transit<PrimaryActive>();
+    } else {
+      context<Scrubbing>().advance_current(
+	context<ChunkState>().range->end);
+      return transit<ChunkState>();
+    }
   }
 }
 

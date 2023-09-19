@@ -433,7 +433,19 @@ struct ReplicaChunkState : ScrubState<ReplicaChunkState, ReplicaActive, ReplicaW
   static constexpr std::string_view state_name = "ReplicaChunkState";
   explicit ReplicaChunkState(my_context ctx) : ScrubState(ctx) {}
 
+  using reactions = boost::mpl::list<
+    sc::custom_reaction<ReplicaScan>
+    >;
+
   replica_scan_event_t to_scan;
+
+  sc::result react(const ReplicaScan &event) {
+    LOG_PREFIX(ScrubState::ReplicaWaitUpdate::react(ReplicaScan));
+    SUBDEBUGDPP(osd, "event.value: {}", get_scrub_context().get_dpp(), event.value);
+    to_scan = event.value;
+    get_scrub_context().await_update(event.value.version);
+    return forward_event();
+  }
 };
 
 struct ReplicaScanChunk;
@@ -442,17 +454,8 @@ struct ReplicaWaitUpdate : ScrubState<ReplicaWaitUpdate, ReplicaChunkState> {
   explicit ReplicaWaitUpdate(my_context ctx) : ScrubState(ctx) {}
 
   using reactions = boost::mpl::list<
-    sc::custom_reaction<ReplicaScan>,
     sc::transition<ScrubContext::await_update_complete_t, ReplicaScanChunk>
     >;
-
-  sc::result react(const ReplicaScan &event) {
-    LOG_PREFIX(ScrubState::ReplicaWaitUpdate::react(ReplicaScan));
-    SUBDEBUGDPP(osd, "event.value: {}", get_scrub_context().get_dpp(), event.value);
-    context<ReplicaChunkState>().to_scan = event.value;
-    get_scrub_context().await_update(event.value.version);
-    return forward_event();
-  }
 };
 
 struct ReplicaScanChunk : ScrubState<ReplicaScanChunk, ReplicaChunkState> {
