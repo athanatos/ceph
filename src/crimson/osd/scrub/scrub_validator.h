@@ -168,12 +168,12 @@ struct fmt::formatter<crimson::osd::scrub::chunk_result_t> {
       "chunk_result_t("
       "num_scrub_errors: {}, "
       "num_deep_scrub_errors: {}, "
-      //"snapset_errors: {}, "
+      "snapset_errors: {}, "
       //"object_errors: {})",
       ,
       result.stats.num_scrub_errors,
-      result.stats.num_deep_scrub_errors
-      //result.snapset_errors,
+      result.stats.num_deep_scrub_errors,
+      result.snapset_errors.begin()->errors
       //result.object_errors
     );
   }
