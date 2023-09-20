@@ -248,6 +248,36 @@ struct fmt::formatter<librados::err_t> {
 };
 
 template <>
+struct fmt::formatter<librados::shard_info_t> {
+  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+
+  template <typename FormatContext>
+  auto format(const auto &err, FormatContext& ctx)
+  {
+    fmt::format_to(
+      ctx.out(),
+      "shard_info_t(error: {},"
+      "size: {},"
+      "omap_digest_present: {},"
+      "omap_digest: {},"
+      "data_digest_present: {},"
+      "data_digest: {},"
+      "selected_io: {},"
+      "primary: {},"
+      "authoritative: {})",
+      static_cast<librados::err_t>(err),
+      err.size,
+      err.omap_digest_present,
+      err.omap_digest,
+      err.data_digest_present,
+      err.data_digest,
+      err.selected_oi,
+      err.primary,
+      err.authoritative);
+  }
+};
+
+template <>
 struct fmt::formatter<librados::obj_err_t> {
   constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
