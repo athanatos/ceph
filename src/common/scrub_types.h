@@ -284,6 +284,7 @@ struct fmt::formatter<librados::inconsistent_snapset_t> {
   template <typename FormatContext>
   auto format(const auto &err, FormatContext& ctx)
   {
+    fmt::format_to(ctx.out(), "inconsistent_snapset_t(errors=");
     bool first = true;
 #define F(FLAG_NAME)							\
     if (err.errors | librados::inconsistent_snapset_t::FLAG_NAME) {	\
@@ -307,6 +308,9 @@ struct fmt::formatter<librados::inconsistent_snapset_t> {
     F(INFO_CORRUPTED);
     F(EXTRA_CLONES);
 #undef F
+    fmt::format_to(
+      ctx.out(), ", object: {}, clones: {}, missing: {}",
+      err.object, err.clones, err.missing);
   }
 };
 
