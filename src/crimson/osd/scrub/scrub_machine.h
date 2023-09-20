@@ -291,9 +291,7 @@ struct ChunkState;
 struct Scrubbing : ScrubState<Scrubbing, PrimaryActive, ChunkState> {
   static constexpr std::string_view state_name = "Scrubbing";
   explicit Scrubbing(my_context ctx)
-    : ScrubState(ctx), policy(get_scrub_context().get_policy()) {
-    get_scrub_context().notify_scrub_start(deep);
-  }
+    : ScrubState(ctx), policy(get_scrub_context().get_policy()) {}
 
   using reactions = boost::mpl::list<
     sc::custom_reaction<StartScrub>
@@ -315,6 +313,7 @@ struct Scrubbing : ScrubState<Scrubbing, PrimaryActive, ChunkState> {
 
   sc::result react(const StartScrub &event) {
     deep = event.value.deep;
+    get_scrub_context().notify_scrub_start(deep);
     return discard_event();
   }
 

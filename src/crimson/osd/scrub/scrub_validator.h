@@ -132,9 +132,6 @@ void iterate_scrub_checked_stats(Func &&op) {
  *
  * Should be used to perform operations on all scrub_maintained_stat members
  * such as updating the pg maintained instance once scrub is complete.
- *
- * TODOSAM: add param for which are specific to deep scrub (num_omap*
- * and num_large_omap*)
  */
 template <typename Func>
 void iterate_scrub_maintained_stats(Func &&op) {
