@@ -256,14 +256,14 @@ struct fmt::formatter<librados::shard_info_t> {
   {
     fmt::format_to(
       ctx.out(),
-      "shard_info_t(error: {},"
-      "size: {},"
-      "omap_digest_present: {},"
-      "omap_digest: {},"
-      "data_digest_present: {},"
-      "data_digest: {},"
-      "selected_io: {},"
-      "primary: {},"
+      "shard_info_t(error: {}, "
+      "size: {}, "
+      "omap_digest_present: {}, "
+      "omap_digest: {}, "
+      "data_digest_present: {}, "
+      "data_digest: {}, "
+      "selected_io: {}, "
+      "primary: {}, "
       "authoritative: {})",
       static_cast<librados::err_t>(err),
       err.size,
@@ -304,6 +304,40 @@ struct fmt::formatter<librados::obj_err_t> {
     F(HINFO_INCONSISTENCY);
     F(SIZE_TOO_LARGE);
 #undef F
+  }
+};
+
+template <>
+struct fmt::formatter<librados::osd_shard_t> {
+  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+
+  template <typename FormatContext>
+  auto format(const auto &shard, FormatContext& ctx)
+  {
+    fmt::format_to(
+      ctx.out(),
+      "osd_shard_t(osd: {}, shard: {})",
+      shard.osd, shard.shard);
+  }
+};
+
+template <>
+struct fmt::formatter<librados::inconsistent_obj_t> {
+  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+
+  template <typename FormatContext>
+  auto format(const auto &err, FormatContext& ctx)
+  {
+    fmt::format_to(
+      ctx.out(),
+      "inconsistent_obj_t(error: {}, "
+      "object: {}, "
+      "version: {}, "
+      "shards: {})",
+      static_cast<librados::obj_err_t>(err),
+      err.object,
+      err.version,
+      err.shards);
   }
 };
 
