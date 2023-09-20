@@ -18,15 +18,15 @@ struct chunk_validation_policy_t {
   std::optional<ECUtil::stripe_info_t> stripe_info;
 
   // osd_max_object_size
-  size_t max_object_size = 32<<20;
+  size_t max_object_size;
 
   // osd_hit_set_namespace
-  std::string hitset_namespace{".ceph_internal"};
+  std::string hitset_namespace;
 
   // osd_deep_scrub_large_omap_object_key_threshold
   // osd_deep_scrub_large_omap_object_value_sum_threshold
-  uint64_t omap_key_limit{20000};
-  size_t omap_bytes_limit{1<<30};
+  uint64_t omap_key_limit;
+  size_t omap_bytes_limit;
   
 
   bool is_ec() const {
