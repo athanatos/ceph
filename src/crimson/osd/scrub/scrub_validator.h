@@ -162,19 +162,19 @@ struct fmt::formatter<crimson::osd::scrub::chunk_result_t> {
   auto format(
     const crimson::osd::scrub::chunk_result_t &result, FormatContext& ctx)
   {
+    librados::err_t err;
     return fmt::format_to(
       ctx.out(),
-      "");
-#if 0
       "chunk_result_t("
-      "num_scrub_errors: {},"
-      "num_deep_scrub_errors: {},"
-      "snapset_errors: {},"
-      "object_errors: {})",
+      "num_scrub_errors: {}, "
+      "num_deep_scrub_errors: {}, "
+      //"snapset_errors: {}, "
+      //"object_errors: {})",
+      ,
       result.stats.num_scrub_errors,
-      result.stats.num_deep_scrub_errors,
-      result.snapset_errors,
-      result.object_errors);
-#endif
+      result.stats.num_deep_scrub_errors
+      //result.snapset_errors,
+      //result.object_errors
+    );
   }
 };

@@ -244,6 +244,7 @@ struct fmt::formatter<librados::err_t> {
     F(HINFO_MISSING);
     F(HINFO_CORRUPTED);
 #undef F
+    return ctx.out();
   }
 };
 
@@ -254,7 +255,7 @@ struct fmt::formatter<librados::shard_info_t> {
   template <typename FormatContext>
   auto format(const auto &err, FormatContext& ctx)
   {
-    fmt::format_to(
+    return fmt::format_to(
       ctx.out(),
       "shard_info_t(error: {}, "
       "size: {}, "
@@ -304,6 +305,7 @@ struct fmt::formatter<librados::obj_err_t> {
     F(HINFO_INCONSISTENCY);
     F(SIZE_TOO_LARGE);
 #undef F
+    return ctx.out();
   }
 };
 
@@ -314,7 +316,7 @@ struct fmt::formatter<librados::osd_shard_t> {
   template <typename FormatContext>
   auto format(const auto &shard, FormatContext& ctx)
   {
-    fmt::format_to(
+    return fmt::format_to(
       ctx.out(),
       "osd_shard_t(osd: {}, shard: {})",
       shard.osd, shard.shard);
@@ -328,7 +330,7 @@ struct fmt::formatter<librados::inconsistent_obj_t> {
   template <typename FormatContext>
   auto format(const auto &err, FormatContext& ctx)
   {
-    fmt::format_to(
+    return fmt::format_to(
       ctx.out(),
       "inconsistent_obj_t(error: {}, "
       "object: {}, "
@@ -372,7 +374,7 @@ struct fmt::formatter<librados::inconsistent_snapset_t> {
     F(INFO_CORRUPTED);
     F(EXTRA_CLONES);
 #undef F
-    fmt::format_to(
+    return fmt::format_to(
       ctx.out(), ", object: {}, clones: {}, missing: {}",
       err.object, err.clones, err.missing);
   }
