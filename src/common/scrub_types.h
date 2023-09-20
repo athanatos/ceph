@@ -211,4 +211,70 @@ struct scrub_ls_result_t {
 
 WRITE_CLASS_ENCODER(scrub_ls_result_t);
 
+template <>
+struct fmt::formatter<librados::err_t> {
+  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+
+  template <typename FormatContext>
+  auto format(const auto &err, FormatContext& ctx)
+  {
+    bool first = true;
+#define F(FLAG_NAME)					\
+    if (err.errors | librados::err_t::FLAG_NAME) {	\
+      if (!first) {					\
+	fmt::format_to(ctx.out(), "|");			\
+      } else {						\
+	first = false;					\
+      }							\
+      fmt::format_to(ctx.out(), "FLAG_NAME");		\
+    }
+    F(SHARD_MISSING);
+    F(SHARD_STAT_ERR);
+    F(SHARD_READ_ERR);
+    F(DATA_DIGEST_MISMATCH_INFO);
+    F(OMAP_DIGEST_MISMATCH_INFO);
+    F(SIZE_MISMATCH_INFO);
+    F(SHARD_EC_HASH_MISMATCH);
+    F(SHARD_EC_SIZE_MISMATCH);
+    F(INFO_MISSING);
+    F(INFO_CORRUPTED);
+    F(SNAPSET_MISSING);
+    F(SNAPSET_CORRUPTED);
+    F(OBJ_SIZE_INFO_MISMATCH);
+    F(HINFO_MISSING);
+    F(HINFO_CORRUPTED);
+#undef F
+  }
+};
+
+template <>
+struct fmt::formatter<librados::obj_err_t> {
+  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+
+  template <typename FormatContext>
+  auto format(const auto &err, FormatContext& ctx)
+  {
+    bool first = true;
+#define F(FLAG_NAME)					\
+    if (err.errors | librados::obj_err_t::FLAG_NAME) {	\
+      if (!first) {					\
+	fmt::format_to(ctx.out(), "|");			\
+      } else {						\
+	first = false;					\
+      }							\
+      fmt::format_to(ctx.out(), "FLAG_NAME");		\
+    }
+    F(OBJECT_INFO_INCONSISTENCY);
+    F(DATA_DIGEST_MISMATCH);
+    F(OMAP_DIGEST_MISMATCH);
+    F(SIZE_MISMATCH);
+    F(ATTR_VALUE_MISMATCH);
+    F(ATTR_NAME_MISMATCH);
+    F(SNAPSET_INCONSISTENCY);
+    F(HINFO_INCONSISTENCY);
+    F(SIZE_TOO_LARGE);
+#undef F
+  }
+};
+
 #endif

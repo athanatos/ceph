@@ -487,3 +487,21 @@ struct fmt::formatter<crimson::osd::scrub::replica_scan_event_t> {
       event.start, event.end, event.version, event.deep);
   }
 };
+
+
+template <>
+struct fmt::formatter<
+  crimson::osd::scrub::ScrubContext::request_range_result_t
+  > {
+  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+  template <typename FormatContext>
+  auto format(const auto &range,
+	      FormatContext& ctx)
+  {
+    return fmt::format_to(
+      ctx.out(),
+      "request_range_result_t({}~{})",
+      range.start, range.end);
+  }
+};
+

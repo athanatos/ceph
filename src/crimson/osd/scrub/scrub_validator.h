@@ -61,6 +61,10 @@ struct chunk_result_t {
   // detected errors
   std::vector<inconsistent_snapset_wrapper> snapset_errors;
   std::vector<inconsistent_obj_wrapper> object_errors;
+
+  bool has_errors() const {
+    return !snapset_errors.empty() || !object_errors.empty();
+  }
 };
 
 /**
@@ -87,7 +91,7 @@ chunk_result_t validate_chunk(
  * pg stats.
  */
 template <typename Func>
-void iterate_scrub_checked_stats(Func &&op) {
+void foreach_scrub_checked_stat(Func &&op) {
   using namespace std::string_view_literals;
   op("num_objects"sv,
      &object_stat_sum_t::num_objects,
@@ -134,7 +138,7 @@ void iterate_scrub_checked_stats(Func &&op) {
  * such as updating the pg maintained instance once scrub is complete.
  */
 template <typename Func>
-void iterate_scrub_maintained_stats(Func &&op) {
+void foreach_scrub_maintained_stat(Func &&op) {
   using namespace std::string_view_literals;
   op("num_scrub_errors"sv, &object_stat_sum_t::num_scrub_errors, false);
   op("num_shallow_scrub_errors"sv,
@@ -149,3 +153,28 @@ void iterate_scrub_maintained_stats(Func &&op) {
 }
 
 }
+
+template <>
+struct fmt::formatter<crimson::osd::scrub::chunk_result_t> {
+  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+
+  template <typename FormatContext>
+  auto format(
+    const crimson::osd::scrub::chunk_result_t &result, FormatContext& ctx)
+  {
+    return fmt::format_to(
+      ctx.out(),
+      "");
+#if 0
+      "chunk_result_t("
+      "num_scrub_errors: {},"
+      "num_deep_scrub_errors: {},"
+      "snapset_errors: {},"
+      "object_errors: {})",
+      result.stats.num_scrub_errors,
+      result.stats.num_deep_scrub_errors,
+      result.snapset_errors,
+      result.object_errors);
+#endif
+  }
+};

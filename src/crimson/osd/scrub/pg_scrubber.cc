@@ -241,8 +241,13 @@ void PGScrubber::emit_chunk_result(
   chunk_result_t &&result)
 {
   LOG_PREFIX(PGScrubber::emit_chunk_result);
-  DEBUGDPP("", pg);
-  // TODO: repair and updating durable scrub results
+  if (result.has_errors()) {
+    ERRORDPP(
+      "Scrub errors found. range: {}, result: {}",
+      pg, range, result);
+  } else {
+    DEBUGDPP("Chunk complete. range: {}", pg, range);
+  }
 }
 
 void PGScrubber::emit_scrub_result(
@@ -253,14 +258,14 @@ void PGScrubber::emit_scrub_result(
   DEBUGDPP("", pg);
   pg.peering_state.update_stats(
     [this, deep, &in_stats](auto &history, auto &pg_stats) {
-      iterate_scrub_maintained_stats(
+      foreach_scrub_maintained_stat(
 	[deep, &pg_stats, &in_stats](
 	  const auto &name, auto statptr, bool skip_for_shallow) {
 	  if (deep && !skip_for_shallow) {
 	    pg_stats.stats.sum.*statptr = in_stats.*statptr;
 	  }
 	});
-      iterate_scrub_checked_stats(
+      foreach_scrub_checked_stat(
 	[&pg_stats, &in_stats](
 	  const auto &name, auto statptr, const auto &invalid_predicate) {
 	  if (!invalid_predicate(pg_stats) &&
