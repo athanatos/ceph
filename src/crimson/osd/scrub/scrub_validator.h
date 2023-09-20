@@ -25,7 +25,7 @@ struct chunk_validation_policy_t {
 
   // osd_deep_scrub_large_omap_object_key_threshold
   // osd_deep_scrub_large_omap_object_value_sum_threshold
-  size_t omap_key_limit{20000};
+  uint64_t omap_key_limit{20000};
   size_t omap_bytes_limit{1<<30};
   
 

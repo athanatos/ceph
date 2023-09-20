@@ -82,7 +82,7 @@ struct ScrubContext {
   }
 
   /// return struct defining chunk validation rules
-  virtual const chunk_validation_policy_t &get_policy() const = 0;
+  virtual chunk_validation_policy_t get_policy() const = 0;
 
   virtual void notify_scrub_start(bool deep) = 0;
   virtual void notify_scrub_end(bool deep) = 0;
@@ -290,7 +290,8 @@ struct AwaitScrub : ScrubState<AwaitScrub, PrimaryActive> {
 struct ChunkState;
 struct Scrubbing : ScrubState<Scrubbing, PrimaryActive, ChunkState> {
   static constexpr std::string_view state_name = "Scrubbing";
-  explicit Scrubbing(my_context ctx) : ScrubState(ctx) {
+  explicit Scrubbing(my_context ctx)
+    : ScrubState(ctx), policy(get_scrub_context().get_policy()) {
     get_scrub_context().notify_scrub_start(deep);
   }
 
@@ -298,6 +299,7 @@ struct Scrubbing : ScrubState<Scrubbing, PrimaryActive, ChunkState> {
     sc::custom_reaction<StartScrub>
     >;
 
+  chunk_validation_policy_t policy;
 
   /// hobjects < current have been scrubbed
   hobject_t current;

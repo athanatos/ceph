@@ -86,10 +86,7 @@ private:
 
   const std::set<pg_shard_t> &get_ids_to_scrub() const final;
 
-  chunk_validation_policy_t policy;
-  const chunk_validation_policy_t &get_policy() const final {
-    return policy;
-  }
+  chunk_validation_policy_t get_policy() const final;
 
   void request_range(const hobject_t &start) final;
   void reserve_range(const hobject_t &start, const hobject_t &end) final;

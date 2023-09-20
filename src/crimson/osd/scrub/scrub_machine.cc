@@ -43,7 +43,7 @@ sc::result ScanRange::react(const ScrubContext::scan_range_complete_t &event)
     ceph_assert(context<ChunkState>().range);
     {
       auto results = validate_chunk(
-	get_scrub_context().get_policy(),
+	context<Scrubbing>().policy,
 	maps);
       context<Scrubbing>().stats.add(results.stats);
       get_scrub_context().emit_chunk_result(

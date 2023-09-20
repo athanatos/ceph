@@ -133,6 +133,22 @@ const std::set<pg_shard_t> &PGScrubber::get_ids_to_scrub() const
   return pg.peering_state.get_actingset();
 }
 
+chunk_validation_policy_t PGScrubber::get_policy() const
+{
+  return chunk_validation_policy_t{
+    pg.get_primary(),
+    std::nullopt /* stripe_info, populate when EC is implemented */,
+    crimson::common::local_conf().get_val<Option::size_t>(
+      "osd_max_object_size"),
+    crimson::common::local_conf().get_val<std::string>(
+      "osd_hit_set_namespace"),
+    crimson::common::local_conf().get_val<Option::size_t>(
+      "osd_deep_scrub_large_omap_object_value_sum_threshold"),
+    crimson::common::local_conf().get_val<uint64_t>(
+      "osd_deep_scrub_large_omap_object_key_threshold")
+  };
+}
+
 void PGScrubber::request_range(const hobject_t &start)
 {
   LOG_PREFIX(PGScrubber::request_range);
