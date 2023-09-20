@@ -277,4 +277,37 @@ struct fmt::formatter<librados::obj_err_t> {
   }
 };
 
+template <>
+struct fmt::formatter<librados::inconsistent_snapset_t> {
+  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+
+  template <typename FormatContext>
+  auto format(const auto &err, FormatContext& ctx)
+  {
+    bool first = true;
+#define F(FLAG_NAME)							\
+    if (err.errors | librados::inconsistent_snapset_t::FLAG_NAME) {	\
+      if (!first) {							\
+	fmt::format_to(ctx.out(), "|");					\
+      } else {								\
+	first = false;							\
+      }									\
+      fmt::format_to(ctx.out(), "FLAG_NAME");				\
+    }
+    F(SNAPSET_MISSING);
+    F(SNAPSET_CORRUPTED);
+    F(CLONE_MISSING);
+    F(SNAP_ERROR);
+    F(HEAD_MISMATCH);
+    F(HEADLESS_CLONE);
+    F(SIZE_MISMATCH);
+    F(OI_MISSING);
+    F(INFO_MISSING);
+    F(OI_CORRUPTED);
+    F(INFO_CORRUPTED);
+    F(EXTRA_CLONES);
+#undef F
+  }
+};
+
 #endif
