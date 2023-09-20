@@ -148,7 +148,4 @@ void iterate_scrub_maintained_stats(Func &&op) {
      true);
 }
 
-object_stat_sum_t project_scrub_checked_stats(const object_stat_sum_t &sum);
-object_stat_sum_t project_scrub_maintained_stats(const object_stat_sum_t &sum);
-
 }
