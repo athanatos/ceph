@@ -231,13 +231,13 @@ struct fmt::formatter<librados::err_t> {
   {
     bool first = true;
 #define F(FLAG_NAME)					\
-    if (err.errors | librados::err_t::FLAG_NAME) {	\
+    if (err.errors & librados::err_t::FLAG_NAME) {	\
       if (!first) {					\
 	fmt::format_to(ctx.out(), "|");			\
       } else {						\
 	first = false;					\
       }							\
-      fmt::format_to(ctx.out(), "FLAG_NAME");		\
+      fmt::format_to(ctx.out(), #FLAG_NAME);		\
     }
     F(SHARD_MISSING);
     F(SHARD_STAT_ERR);
@@ -298,13 +298,13 @@ struct fmt::formatter<librados::obj_err_t> {
   {
     bool first = true;
 #define F(FLAG_NAME)					\
-    if (err.errors | librados::obj_err_t::FLAG_NAME) {	\
+    if (err.errors & librados::obj_err_t::FLAG_NAME) {	\
       if (!first) {					\
 	fmt::format_to(ctx.out(), "|");			\
       } else {						\
 	first = false;					\
       }							\
-      fmt::format_to(ctx.out(), "FLAG_NAME");		\
+      fmt::format_to(ctx.out(), #FLAG_NAME);		\
     }
     F(OBJECT_INFO_INCONSISTENCY);
     F(DATA_DIGEST_MISMATCH);
@@ -350,7 +350,7 @@ struct fmt::formatter<librados::inconsistent_obj_t> {
       static_cast<librados::obj_err_t>(err),
       err.object,
       err.version,
-      err.shards);
+      fmt::join(err.shards, ", "));
   }
 };
 
@@ -368,13 +368,13 @@ struct fmt::formatter<librados::inconsistent_snapset_t> {
     fmt::format_to(ctx.out(), "inconsistent_snapset_t(errors: ");
     bool first = true;
 #define F(FLAG_NAME)							\
-    if (err.errors | librados::inconsistent_snapset_t::FLAG_NAME) {	\
+    if (err.errors & librados::inconsistent_snapset_t::FLAG_NAME) {	\
       if (!first) {							\
 	fmt::format_to(ctx.out(), "|");					\
       } else {								\
 	first = false;							\
       }									\
-      fmt::format_to(ctx.out(), "FLAG_NAME");				\
+      fmt::format_to(ctx.out(), #FLAG_NAME);				\
     }
     F(SNAPSET_MISSING);
     F(SNAPSET_CORRUPTED);
