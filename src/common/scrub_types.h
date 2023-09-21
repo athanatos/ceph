@@ -212,11 +212,22 @@ struct scrub_ls_result_t {
 WRITE_CLASS_ENCODER(scrub_ls_result_t);
 
 template <>
+struct fmt::formatter<librados::object_id_t> {
+  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+
+  template <typename FormatContext>
+  auto format(const auto &oid, FormatContext& ctx) const
+  {
+    return format_to(ctx.out(), "{}/{}/{}", oid.locator, oid.nspace, oid.name);
+  }
+};
+
+template <>
 struct fmt::formatter<librados::err_t> {
   constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
   template <typename FormatContext>
-  auto format(const auto &err, FormatContext& ctx)
+  auto format(const auto &err, FormatContext& ctx) const
   {
     bool first = true;
 #define F(FLAG_NAME)					\
@@ -253,7 +264,7 @@ struct fmt::formatter<librados::shard_info_t> {
   constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
   template <typename FormatContext>
-  auto format(const auto &err, FormatContext& ctx)
+  auto format(const auto &err, FormatContext& ctx) const
   {
     return fmt::format_to(
       ctx.out(),
@@ -283,7 +294,7 @@ struct fmt::formatter<librados::obj_err_t> {
   constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
   template <typename FormatContext>
-  auto format(const auto &err, FormatContext& ctx)
+  auto format(const auto &err, FormatContext& ctx) const
   {
     bool first = true;
 #define F(FLAG_NAME)					\
@@ -314,7 +325,7 @@ struct fmt::formatter<librados::osd_shard_t> {
   constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
   template <typename FormatContext>
-  auto format(const auto &shard, FormatContext& ctx)
+  auto format(const auto &shard, FormatContext& ctx) const
   {
     return fmt::format_to(
       ctx.out(),
@@ -328,7 +339,7 @@ struct fmt::formatter<librados::inconsistent_obj_t> {
   constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
   template <typename FormatContext>
-  auto format(const auto &err, FormatContext& ctx)
+  auto format(const auto &err, FormatContext& ctx) const
   {
     return fmt::format_to(
       ctx.out(),
@@ -344,13 +355,17 @@ struct fmt::formatter<librados::inconsistent_obj_t> {
 };
 
 template <>
+struct fmt::formatter<inconsistent_obj_wrapper> :
+  fmt::formatter<librados::inconsistent_obj_t> {};
+
+template <>
 struct fmt::formatter<librados::inconsistent_snapset_t> {
   constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
   template <typename FormatContext>
-  auto format(const auto &err, FormatContext& ctx)
+  auto format(const auto &err, FormatContext& ctx) const
   {
-    fmt::format_to(ctx.out(), "inconsistent_snapset_t(errors=");
+    fmt::format_to(ctx.out(), "inconsistent_snapset_t(errors: ");
     bool first = true;
 #define F(FLAG_NAME)							\
     if (err.errors | librados::inconsistent_snapset_t::FLAG_NAME) {	\
@@ -375,9 +390,13 @@ struct fmt::formatter<librados::inconsistent_snapset_t> {
     F(EXTRA_CLONES);
 #undef F
     return fmt::format_to(
-      ctx.out(), ", object: {}, clones: {}, missing: {}",
+      ctx.out(), 
+      ", object: {}, clones: {}, missing: {}",
       err.object, err.clones, err.missing);
   }
 };
+template <>
+struct fmt::formatter<inconsistent_snapset_wrapper> :
+  fmt::formatter<librados::inconsistent_snapset_t> {};
 
 #endif
