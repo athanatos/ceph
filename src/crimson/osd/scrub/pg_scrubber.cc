@@ -266,10 +266,13 @@ void PGScrubber::emit_scrub_result(
 	  }
 	});
       foreach_scrub_checked_stat(
-	[&pg_stats, &in_stats](
+	[this, FNAME, &pg_stats, &in_stats](
 	  const auto &name, auto statptr, const auto &invalid_predicate) {
 	  if (!invalid_predicate(pg_stats) &&
 	      (in_stats.*statptr != pg_stats.stats.sum.*statptr)) {
+	    ERRORDPP(
+	      "stat mismatch for {}: scrub: {}, pg: {}",
+	      pg, name, in_stats.*statptr, pg_stats.stats.sum.*statptr);
 	    ++pg_stats.stats.sum.num_shallow_scrub_errors;
 	  }
 	});

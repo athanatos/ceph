@@ -346,11 +346,13 @@ struct fmt::formatter<librados::inconsistent_obj_t> {
       "inconsistent_obj_t(error: {}, "
       "object: {}, "
       "version: {}, "
-      "shards: {})",
+      "shards: {}, "
+      "union_shards: {})",
       static_cast<librados::obj_err_t>(err),
       err.object,
       err.version,
-      fmt::join(err.shards, ", "));
+      fmt::join(err.shards, ", "),
+      err.union_shards);
   }
 };
 

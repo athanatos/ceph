@@ -329,7 +329,6 @@ object_evaluation_t evaluate_object(
   if (iow.errors ||
       std::any_of(shards.begin(), shards.end(),
 		  [](auto &p) { return p.second.has_errors(); })) {
-    ret.inconsistency = iow;
     for (auto &[source, eval] : shards) {
       iow.shards.emplace(
 	librados::osd_shard_t{source.osd, source.shard},
@@ -339,7 +338,7 @@ object_evaluation_t evaluate_object(
     if (auth_eval.object_info) {
       iow.version = auth_eval.object_info->version.version;
     }
-    
+    ret.inconsistency = iow;
   }
   return ret;
 }
