@@ -210,7 +210,7 @@ librados::obj_err_t compare_candidate_to_authoritative(
     ceph_assert(aiter != auth_si.attrs.end());
 
     auto citer = cand_si.attrs.find(OI_ATTR);
-    if (citer != cand_si.attrs.end() &&
+    if (citer == cand_si.attrs.end() ||
 	aiter->second.contents_equal(citer->second)) {
       ret.errors &= obj_err_t::SNAPSET_INCONSISTENCY;
     }
@@ -221,7 +221,7 @@ librados::obj_err_t compare_candidate_to_authoritative(
     ceph_assert(aiter != auth_si.attrs.end());
 
     auto citer = cand_si.attrs.find(SS_ATTR);
-    if (citer != cand_si.attrs.end() &&
+    if (citer == cand_si.attrs.end() ||
 	aiter->second.contents_equal(citer->second)) {
       ret.errors &= obj_err_t::OBJECT_INFO_INCONSISTENCY;
     }
@@ -232,7 +232,7 @@ librados::obj_err_t compare_candidate_to_authoritative(
     ceph_assert(aiter != auth_si.attrs.end());
 
     auto citer = cand_si.attrs.find(ECUtil::get_hinfo_key());
-    if (citer != cand_si.attrs.end() &&
+    if (citer == cand_si.attrs.end() ||
 	aiter->second.contents_equal(citer->second)) {
       ret.errors &= obj_err_t::HINFO_INCONSISTENCY;
     }
