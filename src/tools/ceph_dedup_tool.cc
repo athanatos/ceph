@@ -548,7 +548,7 @@ public:
     bufferlist data;
   };
 
-  using dup_count_t = ssize_t;
+  using dup_count_t = size_t;
 
   template <typename K, typename V>
   class FpMap {
