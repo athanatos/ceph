@@ -187,7 +187,7 @@ po::options_description make_usage() {
     ("daemon", ": execute sample dedup in daemon mode")
     ("loop", ": execute sample dedup in a loop until terminated. Sleeps 'wakeup-period' seconds between iterations")
     ("wakeup-period", po::value<int>(), ": set the wakeup period of crawler thread (sec)")
-    ("fpstore-threshold", po::value<int>()->default_value(100_M), ": set max size of in-memory fingerprint store (bytes)")
+    ("fpstore-threshold", po::value<size_t>()->default_value(100_M), ": set max size of in-memory fingerprint store (bytes)")
   ;
   desc.add(op_desc);
   return desc;
@@ -697,13 +697,13 @@ public:
     }
 
     FpStore(size_t chunk_threshold,
-      ssize_t memory_threshold) :
+      size_t memory_threshold) :
       memory_threshold(memory_threshold), fp_map(chunk_threshold) { }
     FpStore() = delete;
 
   private:
     std::shared_mutex fingerprint_lock;
-    const uint64_t memory_threshold;
+    const size_t memory_threshold;
     FpMap<std::string, dup_count_t> fp_map;
   };
 
@@ -713,7 +713,7 @@ public:
     SampleDedupGlobal(
       int chunk_threshold,
       int sampling_ratio,
-      unsigned fpstore_threshold) :
+      size_t fpstore_threshold) :
       fp_store(chunk_threshold, fpstore_threshold),
       sampling_ratio(static_cast<double>(sampling_ratio) / 100) { }
   };
@@ -1699,7 +1699,7 @@ int make_crawling_daemon(const po::variables_map &opts)
     cout << "100 second is set as wakeup period by default" << std::endl;
   }
 
-  const unsigned fp_threshold = opts["fpstore-threshold"].as<int>();
+  const size_t fp_threshold = opts["fpstore-threshold"].as<size_t>();
 
   std::string fp_algo = get_opts_fp_algo(opts);
 
