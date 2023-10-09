@@ -15,9 +15,6 @@ class PG;
 
 template <typename T>
 class RemoteScrubEventBaseT : public PhasedOperationT<T> {
-  virtual void scrub_event_print(std::ostream &) const = 0;
-  virtual void scrub_event_dump_detail(ceph::Formatter* f) const = 0;
-
   T* that() {
     return static_cast<T*>(this);
   }
@@ -42,13 +39,6 @@ public:
   RemoteScrubEventBaseT(
     crimson::net::ConnectionRef conn, epoch_t epoch, spg_t pgid)
     : conn(conn), epoch(epoch), pgid(pgid) {}
-
-  void print(std::ostream &) const final {
-    // TODO
-  }
-  void dump_detail(ceph::Formatter *) const final {
-    // TODO
-  }
 
   PGPeeringPipeline &pp(PG &pg);
   ConnectionPipeline &get_connection_pipeline();
@@ -95,9 +85,6 @@ public:
 };
 
 class ScrubRequested final : public RemoteScrubEventBaseT<ScrubRequested> {
-  void scrub_event_print(std::ostream &) const final { /* TODO */ }
-  void scrub_event_dump_detail(ceph::Formatter* f) const final { /* TODO */ }
-
   bool deep = false;
 protected:
   ifut<> handle_event(PG &pg) final;
@@ -109,12 +96,17 @@ public:
   ScrubRequested(bool deep, Args&&... base_args)
     : RemoteScrubEventBaseT<ScrubRequested>(std::forward<Args>(base_args)...),
       deep(deep) {}
+
+  void print(std::ostream &out) const final {
+    out << "(deep=" << deep << ")";
+  }
+  void dump_detail(ceph::Formatter *f) const final {
+    f->dump_bool("deep", deep);
+  }
+
 };
 
 class ScrubMessage final : public RemoteScrubEventBaseT<ScrubMessage> {
-  void scrub_event_print(std::ostream &) const final { /* TODO */ }
-  void scrub_event_dump_detail(ceph::Formatter* f) const final { /* TODO */ }
-
   MessageRef m;
 protected:
   ifut<> handle_event(PG &pg) final;
@@ -128,6 +120,14 @@ public:
       m(m) {
     ceph_assert(scrub::PGScrubber::is_scrub_message(*m));
   }
+
+  void print(std::ostream &out) const final {
+    out << "(m=" << *m << ")";
+  }
+  void dump_detail(ceph::Formatter *f) const final {
+    f->dump_stream("m") << *m;
+  }
+
 };
 
 template <typename T>
@@ -141,8 +141,6 @@ public:
 
   ScrubAsyncOp(Ref<PG> pg);
 
-  void print(std::ostream &) const final {}
-  void dump_detail(ceph::Formatter *) const final {}
   seastar::future<> start();
 
   virtual ~ScrubAsyncOp() = default;
@@ -160,6 +158,14 @@ public:
   ScrubFindRange(const hobject_t &begin, Args&&... args)
     : ScrubAsyncOp(std::forward<Args>(args)...), begin(begin) {}
 
+  void print(std::ostream &out) const final {
+    out << "(begin=" << begin << ")";
+  }
+  void dump_detail(ceph::Formatter *f) const final {
+    f->dump_stream("begin") << begin;
+  }
+
+
 protected:
   ifut<> run(PG &pg) final;
 };
@@ -174,6 +180,15 @@ public:
   template <typename... Args>
   ScrubReserveRange(const hobject_t &begin, const hobject_t &end, Args&&... args)
     : ScrubAsyncOp(std::forward<Args>(args)...), begin(begin), end(end) {}
+
+  void print(std::ostream &out) const final {
+    out << "(begin=" << begin << ", end=" << end << ")";
+  }
+  void dump_detail(ceph::Formatter *f) const final {
+    f->dump_stream("begin") << begin;
+    f->dump_stream("end") << end;
+  }
+
 
 protected:
   ifut<> run(PG &pg) final;
@@ -198,6 +213,20 @@ class ScrubScan : public ScrubAsyncOp<ScrubScan> {
 
 public:
   static constexpr OperationTypeCode type = OperationTypeCode::scrub_scan;
+
+  void print(std::ostream &out) const final {
+    out << "(deep=" << deep
+	<< ", local=" << local
+	<< ", begin=" << begin
+	<< ", end=" << end
+	<< ")";
+  }
+  void dump_detail(ceph::Formatter *f) const final {
+    f->dump_bool("deep", deep);
+    f->dump_bool("local", local);
+    f->dump_stream("begin") << begin;
+    f->dump_stream("end") << end;
+  }
 
   ScrubScan(
     Ref<PG> pg, bool deep, bool local,
