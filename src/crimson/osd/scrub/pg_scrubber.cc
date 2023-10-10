@@ -12,6 +12,14 @@ SET_SUBSYS(osd);
 
 namespace crimson::osd::scrub {
 
+template <typename E>
+void PGScrubber::handle_event(E &&e)
+{
+  LOG_PREFIX(PGScrubber::handle_event);
+  SUBDEBUGDPP(osd, "handle_event: {}", pg, e);
+  machine.process_event(std::forward<E>(e));
+}
+
 void PGScrubber::dump_detail(Formatter *f) const
 {
   f->dump_stream("pgid") << pg.get_pgid();
@@ -23,14 +31,14 @@ void PGScrubber::on_primary_active_clean()
 {
   LOG_PREFIX(PGScrubber::on_primary_active_clean);
   DEBUGDPP("", pg);
-  machine.process_event(PrimaryActivate{});
+  handle_event(PrimaryActivate{});
 }
 
 void PGScrubber::on_replica_activate()
 {
   LOG_PREFIX(PGScrubber::on_replica_activate);
   DEBUGDPP("", pg);
-  machine.process_event(ReplicaActivate{});
+  handle_event(ReplicaActivate{});
 }
 
 void PGScrubber::on_interval_change()
@@ -40,7 +48,7 @@ void PGScrubber::on_interval_change()
   /* Once reservations and scheduling are introduced, we'll need an
    * IntervalChange event to drop remote resources (they'll be automatically
    * released on the other side */
-  machine.process_event(Reset{});
+  handle_event(Reset{});
   waiting_for_update = std::nullopt;
   ceph_assert(!blocked);
 }
@@ -50,7 +58,7 @@ void PGScrubber::on_log_update(eversion_t v)
   LOG_PREFIX(PGScrubber::on_interval_change);
   if (waiting_for_update && v >= *waiting_for_update) {
     DEBUGDPP("waiting_for_update: {}, v: {}", pg, *waiting_for_update, v);
-    machine.process_event(await_update_complete_t{});
+    handle_event(await_update_complete_t{});
     waiting_for_update = std::nullopt;
   }
 }
@@ -59,7 +67,7 @@ void PGScrubber::handle_scrub_requested(bool deep)
 {
   LOG_PREFIX(PGScrubber::handle_scrub_requested);
   DEBUGDPP("deep: {}", pg, deep);
-  machine.process_event(StartScrub{deep});
+  handle_event(StartScrub{deep});
 }
 
 void PGScrubber::handle_scrub_message(Message &_m)
@@ -69,7 +77,7 @@ void PGScrubber::handle_scrub_message(Message &_m)
   case MSG_OSD_REP_SCRUB: {
     MOSDRepScrub &m = *static_cast<MOSDRepScrub*>(&_m);
     DEBUGDPP("MOSDRepScrub: {}", pg, m);
-    machine.process_event(ReplicaScan{
+    handle_event(ReplicaScan{
 	m.start, m.end, m.scrub_from, m.deep
       });
     break;
@@ -80,7 +88,7 @@ void PGScrubber::handle_scrub_message(Message &_m)
     ScrubMap map;
     auto iter = m.get_data().cbegin();
     ::decode(map, iter);
-    machine.process_event(scan_range_complete_t{
+    handle_event(scan_range_complete_t{
 	std::make_pair(m.from, std::move(map))
       });
     break;
@@ -89,6 +97,12 @@ void PGScrubber::handle_scrub_message(Message &_m)
     DEBUGDPP("invalid message: {}", pg, _m);
     ceph_assert(is_scrub_message(_m));
   }
+}
+
+void PGScrubber::handle_op_stats(
+  const hobject_t &on_object,
+  object_stat_sum_t delta_stats) {
+  handle_event(OpStats{on_object, delta_stats});
 }
 
 PGScrubber::ifut<> PGScrubber::wait_scrub(

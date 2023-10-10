@@ -41,12 +41,17 @@ namespace crimson::osd::scrub {
 
 namespace sc = boost::statechart;
 
-#define SIMPLE_EVENT(E) struct E : sc::event<E> {			\
-    static constexpr std::string_view event_name = #E;			\
+template <typename T>
+struct scrub_event_t : sc::event<T> {
+  std::string fmt_print() const { return T::event_name; }
+};
+
+#define SIMPLE_EVENT(E) struct E : scrub_event_t<E> {			\
+    static constexpr const char * event_name = #E;			\
   }
 
-#define VALUE_EVENT(E, T) struct E : sc::event<E> {			\
-    static constexpr std::string_view event_name = #E;			\
+#define VALUE_EVENT(E, T) struct E : scrub_event_t<E> {			\
+    static constexpr const char * event_name = #E;			\
 									\
     const T value;							\
 									\
@@ -523,7 +528,6 @@ struct fmt::formatter<crimson::osd::scrub::replica_scan_event_t> {
       event.start, event.end, event.version, event.deep);
   }
 };
-
 
 template <>
 struct fmt::formatter<

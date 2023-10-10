@@ -44,6 +44,9 @@ class PGScrubber : public crimson::BlockerT<PGScrubber>, ScrubContext {
 
   std::optional<eversion_t> waiting_for_update;
 
+  template <typename E>
+  void handle_event(E &&e);
+
 public:
   static constexpr const char *type_name = "PGScrubber";
   using Blocker = PGScrubber;
@@ -87,9 +90,7 @@ public:
   /// notify machine of a mutation of on_object resulting in delta_stats
   void handle_op_stats(
     const hobject_t &on_object,
-    object_stat_sum_t delta_stats) {
-    machine.process_event(OpStats{on_object, delta_stats});
-  }
+    object_stat_sum_t delta_stats);
 
   /// maybe block an op trying to mutate hoid until chunk is complete
   ifut<> wait_scrub(
