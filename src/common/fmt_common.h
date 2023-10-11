@@ -2,6 +2,7 @@
 // vim: ts=8 sw=2 smarttab
 #pragma once
 
+#include <vector>
 #include <optional>
 
 /**
@@ -22,6 +23,9 @@
  * *or*
  * std::string alt_fmt_print(bool short_format) const
  * as public member functions.
+ * *or*
+ * template <typename FormatContext>
+ * FormatContext &fmt_print_ctx(FormatContext &ctx);
  */
 template<class T>
 concept has_fmt_print = requires(T t) {
@@ -30,6 +34,11 @@ concept has_fmt_print = requires(T t) {
 template<class T>
 concept has_alt_fmt_print = requires(T t) {
   { t.alt_fmt_print(bool{}) } -> std::same_as<std::string>;
+};
+template<class T>
+concept has_fmt_print_ctx = requires(
+  T t, fmt::buffer_context<char> &ctx) {
+  { t.fmt_print_ctx(ctx) } -> std::same_as<decltype(ctx.out())>;
 };
 
 namespace fmt {
@@ -62,6 +71,16 @@ struct formatter<T> {
     return fmt::format_to(ctx.out(), "{}", k.alt_fmt_print(false));
   }
   bool verbose{true};
+};
+
+template <has_fmt_print_ctx T>
+struct formatter<T> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) { return ctx.begin(); }
+  template <typename FormatContext>
+  auto format(const T& k, FormatContext& ctx) const {
+    return k.fmt_print_ctx(ctx);
+  }
 };
 
 template <typename T>

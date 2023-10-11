@@ -16,6 +16,7 @@
 #include <boost/statechart/state_machine.hpp>
 #include <boost/statechart/transition.hpp>
 
+#include "common/fmt_common.h"
 #include "common/hobject.h"
 #include "common/hobject_fmt.h"
 #include "crimson/common/log.h"
@@ -43,12 +44,21 @@ namespace sc = boost::statechart;
 
 template <typename T>
 struct scrub_event_t : sc::event<T> {
-  std::string fmt_print() const { return T::event_name; }
+  template <typename FormatContext>
+  auto fmt_print_ctx(FormatContext & ctx) const {
+    return fmt::format_to(ctx.out(), "{}", T::event_name);
+  }
 };
+
+template <typename T>
+struct checker { constexpr static bool value = false; };
+template <has_fmt_print_ctx T>
+struct checker<T> { constexpr static bool value = true; };
 
 #define SIMPLE_EVENT(E) struct E : scrub_event_t<E> {			\
     static constexpr const char * event_name = #E;			\
-  }
+  };									\
+  static_assert(checker<E>::value);
 
 #define VALUE_EVENT(E, T) struct E : scrub_event_t<E> {			\
     static constexpr const char * event_name = #E;			\
