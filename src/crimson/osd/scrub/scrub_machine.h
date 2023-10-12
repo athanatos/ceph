@@ -76,6 +76,10 @@ struct value_event_t : sc::event<T> {
 
 #define VALUE_EVENT(T, V) struct T : value_event_t<T, V> {		\
     static constexpr const char * event_name = #T;			\
+    									\
+    template <typename... Args>						\
+    T(Args&&... args) : value_event_t(					\
+      std::forward<Args>(args)...) {}					\
   };									\
   static_assert(has_fmt_print_ctx<T>);
 
@@ -142,6 +146,9 @@ struct ScrubContext {
   struct scan_range_complete_value_t {
     pg_shard_t from;
     ScrubMap map;
+    scan_range_complete_value_t(pg_shard_t from, ScrubMap &&map)
+      : from(from), map(std::move(map)) {}
+
     auto to_pair() const { return std::make_pair(from, map); }
     auto fmt_print_ctx(auto &ctx) const -> decltype(ctx.out()) {
       return fmt::format_to(ctx.out(), "from: {}", from);
@@ -182,6 +189,7 @@ struct Inactive;
 SIMPLE_EVENT(Reset);
 struct start_scrub_event_t {
   bool deep = false;
+  start_scrub_event_t(bool deep) : deep(deep) {}
   auto fmt_print_ctx(auto &ctx) const -> decltype(ctx.out()) {
     return fmt::format_to(ctx.out(), "deep: {}", deep);
   }
@@ -190,6 +198,8 @@ VALUE_EVENT(StartScrub, start_scrub_event_t);
 struct op_stat_event_t {
   hobject_t oid;
   object_stat_sum_t delta_stats;
+  op_stat_event_t(const hobject_t &oid, object_stat_sum_t delta_stats)
+    : oid(oid), delta_stats(delta_stats) {}
   auto fmt_print_ctx(auto &ctx) const -> decltype(ctx.out()) {
     return fmt::format_to(ctx.out(), "oid: {}", oid);
   }
@@ -481,6 +491,10 @@ struct replica_scan_event_t {
   hobject_t end;
   eversion_t version;
   bool deep = false;
+  replica_scan_event_t() = default;
+  replica_scan_event_t(
+    const hobject_t &start, const hobject_t &end, eversion_t version, bool deep)
+    : start(start), end(end), version(version), deep(deep) {}
   auto fmt_print_ctx(auto &ctx) const -> decltype(ctx.out()) {
     return fmt::format_to(
       ctx.out(), "start: {}, end: {}, version: {}, deep: {}",

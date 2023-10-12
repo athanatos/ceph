@@ -89,7 +89,7 @@ void PGScrubber::handle_scrub_message(Message &_m)
     auto iter = m.get_data().cbegin();
     ::decode(map, iter);
     handle_event(scan_range_complete_t{
-	std::make_pair(m.from, std::move(map))
+	m.from, std::move(map)
       });
     break;
   }
