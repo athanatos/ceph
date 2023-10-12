@@ -31,14 +31,14 @@ void PGScrubber::on_primary_active_clean()
 {
   LOG_PREFIX(PGScrubber::on_primary_active_clean);
   DEBUGDPP("", pg);
-  handle_event(PrimaryActivate{});
+  handle_event(events::primary_activate_t{});
 }
 
 void PGScrubber::on_replica_activate()
 {
   LOG_PREFIX(PGScrubber::on_replica_activate);
   DEBUGDPP("", pg);
-  handle_event(ReplicaActivate{});
+  handle_event(events::replica_activate_t{});
 }
 
 void PGScrubber::on_interval_change()
@@ -48,7 +48,7 @@ void PGScrubber::on_interval_change()
   /* Once reservations and scheduling are introduced, we'll need an
    * IntervalChange event to drop remote resources (they'll be automatically
    * released on the other side */
-  handle_event(Reset{});
+  handle_event(events::reset_t{});
   waiting_for_update = std::nullopt;
   ceph_assert(!blocked);
 }
@@ -67,7 +67,7 @@ void PGScrubber::handle_scrub_requested(bool deep)
 {
   LOG_PREFIX(PGScrubber::handle_scrub_requested);
   DEBUGDPP("deep: {}", pg, deep);
-  handle_event(StartScrub{deep});
+  handle_event(events::start_scrub_t{deep});
 }
 
 void PGScrubber::handle_scrub_message(Message &_m)
@@ -102,7 +102,7 @@ void PGScrubber::handle_scrub_message(Message &_m)
 void PGScrubber::handle_op_stats(
   const hobject_t &on_object,
   object_stat_sum_t delta_stats) {
-  handle_event(OpStats{on_object, delta_stats});
+  handle_event(events::op_stats_t{on_object, delta_stats});
 }
 
 PGScrubber::ifut<> PGScrubber::wait_scrub(

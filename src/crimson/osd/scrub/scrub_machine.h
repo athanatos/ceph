@@ -143,18 +143,16 @@ struct ScrubContext {
   virtual void release_range() = 0;
 
   /// scans [begin, end) on target as of version
-  struct scan_range_complete_value_t {
+  struct scan_range_value_t {
     pg_shard_t from;
     ScrubMap map;
-    scan_range_complete_value_t(pg_shard_t from, ScrubMap &&map)
-      : from(from), map(std::move(map)) {}
 
     auto to_pair() const { return std::make_pair(from, map); }
     auto fmt_print_ctx(auto &ctx) const -> decltype(ctx.out()) {
       return fmt::format_to(ctx.out(), "from: {}", from);
     }
   };
-  VALUE_EVENT(scan_range_complete_t, scan_range_complete_value_t);
+  VALUE_EVENT(scan_range_complete_t, scan_range_value_t);
   virtual void scan_range(
     pg_shard_t target,
     eversion_t version,
@@ -186,25 +184,51 @@ struct ScrubContext {
 struct Crash;
 struct Inactive;
 
-SIMPLE_EVENT(Reset);
+namespace events {
+/// reset ScrubMachine
+SIMPLE_EVENT(reset_t);
+
+/// start (deep) scrub
 struct start_scrub_event_t {
   bool deep = false;
-  start_scrub_event_t(bool deep) : deep(deep) {}
   auto fmt_print_ctx(auto &ctx) const -> decltype(ctx.out()) {
     return fmt::format_to(ctx.out(), "deep: {}", deep);
   }
 };
-VALUE_EVENT(StartScrub, start_scrub_event_t);
+VALUE_EVENT(start_scrub_t, start_scrub_event_t);
+
+/// notifies ScrubMachine about a write on oid resulting in delta_stats
 struct op_stat_event_t {
   hobject_t oid;
   object_stat_sum_t delta_stats;
-  op_stat_event_t(const hobject_t &oid, object_stat_sum_t delta_stats)
-    : oid(oid), delta_stats(delta_stats) {}
   auto fmt_print_ctx(auto &ctx) const -> decltype(ctx.out()) {
     return fmt::format_to(ctx.out(), "oid: {}", oid);
   }
 };
-VALUE_EVENT(OpStats, op_stat_event_t);
+VALUE_EVENT(op_stats_t, op_stat_event_t);
+
+/// Prepares statemachine for primary events
+SIMPLE_EVENT(primary_activate_t);
+
+/// Prepares statemachine for replica events
+SIMPLE_EVENT(replica_activate_t);
+
+}
+
+
+/// Instructs replica to (deep) scrub [start, end) as of version version
+struct replica_scan_event_t {
+  hobject_t start;
+  hobject_t end;
+  eversion_t version;
+  bool deep = false;
+  auto fmt_print_ctx(auto &ctx) const -> decltype(ctx.out()) {
+    return fmt::format_to(
+      ctx.out(), "start: {}, end: {}, version: {}, deep: {}",
+      start, end, version, deep);
+  }
+};
+VALUE_EVENT(ReplicaScan, replica_scan_event_t);
 
 /**
  * ScrubMachine
@@ -295,8 +319,6 @@ struct Crash : ScrubState<Crash, ScrubMachine> {
 
 };
 
-SIMPLE_EVENT(PrimaryActivate);
-SIMPLE_EVENT(ReplicaActivate);
 struct PrimaryActive;
 struct ReplicaActive;
 struct Inactive : ScrubState<Inactive, ScrubMachine> {
@@ -304,17 +326,17 @@ struct Inactive : ScrubState<Inactive, ScrubMachine> {
   explicit Inactive(my_context ctx) : ScrubState(ctx) {}
 
   using reactions = boost::mpl::list<
-    sc::transition<PrimaryActivate, PrimaryActive>,
-    sc::transition<ReplicaActivate, ReplicaActive>,
-    sc::custom_reaction<Reset>,
-    sc::custom_reaction<StartScrub>,
+    sc::transition<events::primary_activate_t, PrimaryActive>,
+    sc::transition<events::replica_activate_t, ReplicaActive>,
+    sc::custom_reaction<events::reset_t>,
+    sc::custom_reaction<events::start_scrub_t>,
     sc::transition< boost::statechart::event_base, Crash >
     >;
 
-  sc::result react(const Reset &) {
+  sc::result react(const events::reset_t &) {
     return discard_event();
   }
-  sc::result react(const StartScrub &) {
+  sc::result react(const events::start_scrub_t &) {
     return discard_event();
   }
 };
@@ -328,17 +350,17 @@ struct PrimaryActive : ScrubState<PrimaryActive, ScrubMachine, AwaitScrub> {
   std::set<pg_shard_t> remote_reservations_held;
 
   using reactions = boost::mpl::list<
-    sc::transition<Reset, Inactive>,
-    sc::custom_reaction<StartScrub>,
-    sc::custom_reaction<OpStats>,
+    sc::transition<events::reset_t, Inactive>,
+    sc::custom_reaction<events::start_scrub_t>,
+    sc::custom_reaction<events::op_stats_t>,
     sc::transition< boost::statechart::event_base, Crash >
     >;
 
-  sc::result react(const StartScrub &event) {
+  sc::result react(const events::start_scrub_t &event) {
     return discard_event();
   }
 
-  sc::result react(const OpStats &) {
+  sc::result react(const events::op_stats_t &) {
     return discard_event();
   }
 };
@@ -349,10 +371,10 @@ struct AwaitScrub : ScrubState<AwaitScrub, PrimaryActive> {
   explicit AwaitScrub(my_context ctx) : ScrubState(ctx) {}
 
   using reactions = boost::mpl::list<
-    sc::custom_reaction<StartScrub>
+    sc::custom_reaction<events::start_scrub_t>
     >;
 
-  sc::result react(const StartScrub &event) {
+  sc::result react(const events::start_scrub_t &event) {
     post_event(event);
     return transit<Scrubbing>();
   }
@@ -365,8 +387,8 @@ struct Scrubbing : ScrubState<Scrubbing, PrimaryActive, ChunkState> {
     : ScrubState(ctx), policy(get_scrub_context().get_policy()) {}
 
   using reactions = boost::mpl::list<
-    sc::custom_reaction<StartScrub>,
-    sc::custom_reaction<OpStats>
+    sc::custom_reaction<events::start_scrub_t>,
+    sc::custom_reaction<events::op_stats_t>
     >;
 
   chunk_validation_policy_t policy;
@@ -377,14 +399,14 @@ struct Scrubbing : ScrubState<Scrubbing, PrimaryActive, ChunkState> {
   /// true for deep scrub
   bool deep = false;
 
-  /// stats for objects < current, maintained via OpStats
+  /// stats for objects < current, maintained via events::op_stats_t
   object_stat_sum_t stats;
 
   void advance_current(const hobject_t &next) {
     current = next;
   }
 
-  sc::result react(const StartScrub &event) {
+  sc::result react(const events::start_scrub_t &event) {
     deep = event.value.deep;
     get_scrub_context().notify_scrub_start(deep);
     return discard_event();
@@ -394,7 +416,7 @@ struct Scrubbing : ScrubState<Scrubbing, PrimaryActive, ChunkState> {
     get_scrub_context().notify_scrub_end(deep);
   }
 
-  sc::result react(const OpStats &event) {
+  sc::result react(const events::op_stats_t &event) {
     if (event.value.oid < current) {
       stats.add(event.value.delta_stats);
     }
@@ -476,32 +498,16 @@ struct ReplicaActive :
   explicit ReplicaActive(my_context ctx) : ScrubState(ctx) {}
 
   using reactions = boost::mpl::list<
-    sc::transition<Reset, Inactive>,
-    sc::custom_reaction<StartScrub>,
+    sc::transition<events::reset_t, Inactive>,
+    sc::custom_reaction<events::start_scrub_t>,
     sc::transition< boost::statechart::event_base, Crash >
     >;
 
-  sc::result react(const StartScrub &) {
+  sc::result react(const events::start_scrub_t &) {
     return discard_event();
   }
 };
 
-struct replica_scan_event_t {
-  hobject_t start;
-  hobject_t end;
-  eversion_t version;
-  bool deep = false;
-  replica_scan_event_t() = default;
-  replica_scan_event_t(
-    const hobject_t &start, const hobject_t &end, eversion_t version, bool deep)
-    : start(start), end(end), version(version), deep(deep) {}
-  auto fmt_print_ctx(auto &ctx) const -> decltype(ctx.out()) {
-    return fmt::format_to(
-      ctx.out(), "start: {}, end: {}, version: {}, deep: {}",
-      start, end, version, deep);
-  }
-};
-VALUE_EVENT(ReplicaScan, replica_scan_event_t);
 struct ReplicaChunkState;
 struct ReplicaIdle : ScrubState<ReplicaIdle, ReplicaActive> {
   static constexpr std::string_view state_name = "ReplicaIdle";
