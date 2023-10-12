@@ -43,35 +43,41 @@ namespace crimson::osd::scrub {
 namespace sc = boost::statechart;
 
 template <typename T>
-struct scrub_event_t : sc::event<T> {
+struct simple_event_t : sc::event<T> {
   template <typename FormatContext>
   auto fmt_print_ctx(FormatContext & ctx) const {
     return fmt::format_to(ctx.out(), "{}", T::event_name);
   }
 };
 
-template <typename T>
-struct checker { constexpr static bool value = false; };
-template <has_fmt_print_ctx T>
-struct checker<T> { constexpr static bool value = true; };
+template <typename T, has_formatter V>
+struct value_event_t : sc::event<T> {
+  const V value;
 
-#define SIMPLE_EVENT(E) struct E : scrub_event_t<E> {			\
-    static constexpr const char * event_name = #E;			\
-  };									\
-  static_assert(checker<E>::value);
+  template <typename... Args>
+  value_event_t(Args&&... args) : value(std::forward<Args>(args)...) {}
 
-#define VALUE_EVENT(E, T) struct E : scrub_event_t<E> {			\
-    static constexpr const char * event_name = #E;			\
-									\
-    const T value;							\
-									\
-    template <typename... Args>						\
-    E(Args&&... args) : value(std::forward<Args>(args)...) {}		\
-    E(const E &) = default;						\
-    E(E &&) = default;							\
-    E &operator=(const E&) = default;					\
-    E &operator=(E&&) = default;					\
+  value_event_t(const value_event_t &) = default;
+  value_event_t(value_event_t &&) = default;
+  value_event_t &operator=(const value_event_t&) = default;
+  value_event_t &operator=(value_event_t&&) = default;
+
+  template <typename FormatContext>
+  auto fmt_print_ctx(FormatContext & ctx) const {
+    return fmt::format_to(ctx.out(), "{}", T::event_name);
   }
+};
+
+
+#define SIMPLE_EVENT(T) struct T : simple_event_t<T> {			\
+    static constexpr const char * event_name = #T;			\
+  };									\
+  static_assert(has_fmt_print_ctx<T>);
+
+#define VALUE_EVENT(T, V) struct T : value_event_t<T, V> {		\
+    static constexpr const char * event_name = #T;			\
+  };									\
+  static_assert(has_fmt_print_ctx<T>);
 
 /**
  * ScrubContext
@@ -110,6 +116,9 @@ struct ScrubContext {
   struct request_range_result_t {
     hobject_t start;
     hobject_t end;
+    auto fmt_print_ctx(auto &ctx) const -> decltype(ctx.out()) {
+      return fmt::format_to(ctx.out(), "start: {}, end: {}", start, end);
+    }
   };
   VALUE_EVENT(request_range_complete_t, request_range_result_t);
   virtual void request_range(
@@ -130,7 +139,14 @@ struct ScrubContext {
   virtual void release_range() = 0;
 
   /// scans [begin, end) on target as of version
-  using scan_range_complete_value_t = std::pair<pg_shard_t, ScrubMap>;
+  struct scan_range_complete_value_t {
+    pg_shard_t from;
+    ScrubMap map;
+    auto to_pair() const { return std::make_pair(from, map); }
+    auto fmt_print_ctx(auto &ctx) const -> decltype(ctx.out()) {
+      return fmt::format_to(ctx.out(), "from: {}", from);
+    }
+  };
   VALUE_EVENT(scan_range_complete_t, scan_range_complete_value_t);
   virtual void scan_range(
     pg_shard_t target,
@@ -166,11 +182,17 @@ struct Inactive;
 SIMPLE_EVENT(Reset);
 struct start_scrub_event_t {
   bool deep = false;
+  auto fmt_print_ctx(auto &ctx) const -> decltype(ctx.out()) {
+    return fmt::format_to(ctx.out(), "deep: {}", deep);
+  }
 };
 VALUE_EVENT(StartScrub, start_scrub_event_t);
 struct op_stat_event_t {
   hobject_t oid;
   object_stat_sum_t delta_stats;
+  auto fmt_print_ctx(auto &ctx) const -> decltype(ctx.out()) {
+    return fmt::format_to(ctx.out(), "oid: {}", oid);
+  }
 };
 VALUE_EVENT(OpStats, op_stat_event_t);
 
@@ -459,6 +481,11 @@ struct replica_scan_event_t {
   hobject_t end;
   eversion_t version;
   bool deep = false;
+  auto fmt_print_ctx(auto &ctx) const -> decltype(ctx.out()) {
+    return fmt::format_to(
+      ctx.out(), "start: {}, end: {}, version: {}, deep: {}",
+      start, end, version, deep);
+  }
 };
 VALUE_EVENT(ReplicaScan, replica_scan_event_t);
 struct ReplicaChunkState;
@@ -524,33 +551,3 @@ struct ReplicaScanChunk : ScrubState<ReplicaScanChunk, ReplicaChunkState> {
 #undef VALUE_EVENT
 
 }
-
-template <>
-struct fmt::formatter<crimson::osd::scrub::replica_scan_event_t> {
-  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-  template <typename FormatContext>
-  auto format(const crimson::osd::scrub::replica_scan_event_t &event,
-	      FormatContext& ctx)
-  {
-    return fmt::format_to(
-      ctx.out(),
-      "replica_scan_event(start: {}, end: {}, version: {}, deep: {})",
-      event.start, event.end, event.version, event.deep);
-  }
-};
-
-template <>
-struct fmt::formatter<
-  crimson::osd::scrub::ScrubContext::request_range_result_t
-  > {
-  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-  template <typename FormatContext>
-  auto format(const auto &range,
-	      FormatContext& ctx)
-  {
-    return fmt::format_to(
-      ctx.out(),
-      "request_range_result_t({}~{})",
-      range.start, range.end);
-  }
-};

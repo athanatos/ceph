@@ -32,7 +32,7 @@ ScanRange::ScanRange(my_context ctx) : ScrubState(ctx)
 
 sc::result ScanRange::react(const ScrubContext::scan_range_complete_t &event)
 {
-  auto [_, inserted] = maps.insert(event.value);
+  auto [_, inserted] = maps.insert(event.value.to_pair());
   ceph_assert(inserted);
   ceph_assert(waiting_on > 0);
   --waiting_on;

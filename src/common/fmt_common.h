@@ -16,6 +16,10 @@
  * has a begin()/end() method pair. This is a problem because we have
  * such classes in Crimson.
  */
+
+template <typename T>
+concept has_formatter = fmt::is_formattable<T>::value;
+
 /**
  * Tagging classes that provide support for default fmtlib formatting,
  * by having either
@@ -24,8 +28,7 @@
  * std::string alt_fmt_print(bool short_format) const
  * as public member functions.
  * *or*
- * template <typename FormatContext>
- * FormatContext &fmt_print_ctx(FormatContext &ctx);
+ * auto fmt_print_ctx(auto &ctx) -> decltype(ctx.out());
  */
 template<class T>
 concept has_fmt_print = requires(T t) {
