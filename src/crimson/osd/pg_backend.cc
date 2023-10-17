@@ -991,6 +991,12 @@ PGBackend::remove(ObjectState& os, ceph::os::Transaction& txn,
 	     ghobject_t{os.oi.soid, ghobject_t::NO_GEN, shard});
   delta_stats.num_bytes -= os.oi.size;
 
+  // todo: update watchers
+  if (os.oi.is_whiteout()) {
+    os.oi.clear_flag(object_info_t::FLAG_WHITEOUT);
+    delta_stats.num_whiteouts--;
+  }
+
   if (os.oi.is_omap()) {
     os.oi.clear_flag(object_info_t::FLAG_OMAP);
     delta_stats.num_objects_omap--;
@@ -1007,11 +1013,6 @@ PGBackend::remove(ObjectState& os, ceph::os::Transaction& txn,
     txn.create(coll->get_cid(),
                ghobject_t{os.oi.soid, ghobject_t::NO_GEN, shard});
     return seastar::now();
-  }
-  // todo: update watchers
-  if (os.oi.is_whiteout()) {
-    os.oi.clear_flag(object_info_t::FLAG_WHITEOUT);
-    delta_stats.num_whiteouts--;
   }
   delta_stats.num_objects--;
   os.exists = false;
