@@ -172,6 +172,7 @@ shard_evaluation_t evaluate_object_shard(
       ret.shard_info.set_data_digest_mismatch_info();
     }
     if (ret.shard_info.omap_digest_present &&
+	ret.object_info->is_omap_digest() &&
 	(ret.object_info->omap_digest != ret.shard_info.omap_digest)) {
       ret.shard_info.set_omap_digest_mismatch_info();
     }
