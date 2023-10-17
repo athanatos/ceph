@@ -248,7 +248,7 @@ void PGScrubber::generate_and_submit_chunk_result(
   );
 }
 
-#define LOG_SCRUB_ERROR(MSG, PG, ...) {					\
+#define LOG_SCRUB_ERROR(MSG, ...) {					\
     auto errorstr = fmt::format(MSG, __VA_ARGS__);			\
     ERRORDPP("{}", pg, errorstr);					\
     pg.get_clog_error() << "pg " << pg.get_pgid() << ": " << errorstr;	\
@@ -261,9 +261,8 @@ void PGScrubber::emit_chunk_result(
   LOG_PREFIX(PGScrubber::emit_chunk_result);
   if (result.has_errors()) {
     LOG_SCRUB_ERROR(
-      FNAME,
       "Scrub errors found. range: {}, result: {}",
-      pg, range, result);
+      range, result);
   } else {
     DEBUGDPP("Chunk complete. range: {}", pg, range);
   }
@@ -290,9 +289,8 @@ void PGScrubber::emit_scrub_result(
 	  if (!invalid_predicate(pg_stats) &&
 	      (in_stats.*statptr != pg_stats.stats.sum.*statptr)) {
 	    LOG_SCRUB_ERROR(
-	      FNAME,
-	      "stat mismatch for {}: scrub: {}, pg: {}",
-	      pg, name, in_stats.*statptr, pg_stats.stats.sum.*statptr);
+	      "stat mismatch for {}: scrubbed value: {}, stored pg value: {}",
+	      name, in_stats.*statptr, pg_stats.stats.sum.*statptr);
 	    ++pg_stats.stats.sum.num_shallow_scrub_errors;
 	  }
 	});
