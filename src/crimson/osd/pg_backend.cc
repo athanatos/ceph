@@ -1002,6 +1002,8 @@ PGBackend::remove(ObjectState& os, ceph::os::Transaction& txn,
     delta_stats.num_objects_omap--;
   }
 
+  delta_stats.num_objects--;
+
   os.oi.size = 0;
   os.oi.new_object();
 
@@ -1014,7 +1016,6 @@ PGBackend::remove(ObjectState& os, ceph::os::Transaction& txn,
                ghobject_t{os.oi.soid, ghobject_t::NO_GEN, shard});
     return seastar::now();
   }
-  delta_stats.num_objects--;
   os.exists = false;
   return seastar::now();
 }
