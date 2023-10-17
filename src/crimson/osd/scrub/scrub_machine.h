@@ -502,10 +502,15 @@ struct ReplicaActive :
   using reactions = boost::mpl::list<
     sc::transition<events::reset_t, Inactive>,
     sc::custom_reaction<events::start_scrub_t>,
+    sc::custom_reaction<events::op_stats_t>,
     sc::transition< boost::statechart::event_base, Crash >
     >;
 
   sc::result react(const events::start_scrub_t &) {
+    return discard_event();
+  }
+
+  sc::result react(const events::op_stats_t &) {
     return discard_event();
   }
 };
