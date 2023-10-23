@@ -1449,7 +1449,7 @@ void PG::on_change(ceph::os::Transaction &t) {
     client_request_orderer.requeue(shard_services, this);
   } else {
     logger().debug("{} {}: dropping requests", *this, __func__);
-    client_request_orderer.clear_and_cancel();
+    client_request_orderer.clear_and_cancel(*this);
   }
 }
 
