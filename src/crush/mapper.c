@@ -25,7 +25,7 @@
 #include "crush_ln_table.h"
 #include "mapper.h"
 
-#define dprintk(args...) /* printf(args) */
+#define dprintk(args...) fprintf(stderr, args)
 
 #define MIN(x, y) ((x) > (y) ? (y) : (x))
 
@@ -370,7 +370,7 @@ static int crush_bucket_choose(const struct crush_bucket *in,
                                const struct crush_choose_arg *arg,
                                int position)
 {
-	dprintk(" crush_bucket_choose %d x=%d r=%d\n", in->id, x, r);
+	dprintk("  crush_bucket_choose %d x=%d r=%d position=%d\n", in->id, x, r, position);
 	BUG_ON(in->size == 0);
 	switch (in->alg) {
 	case CRUSH_BUCKET_UNIFORM:
