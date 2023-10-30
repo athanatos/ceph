@@ -90,6 +90,8 @@ struct crush_rule {
 enum crush_rule_type {
   CRUSH_RULE_TYPE_REPLICATED = 1,
   CRUSH_RULE_TYPE_ERASURE = 3,
+  CRUSH_RULE_TYPE_MSR_FIRSTN = 4,
+  CRUSH_RULE_TYPE_MSR_INDEP = 5
 };
 
 /*

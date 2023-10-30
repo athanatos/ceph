@@ -1064,3 +1064,140 @@ TEST_F(CRUSHTest, 4_host_chooseleaf_rule_rep) {
 
   EXPECT_EQ(before.size(), after_host_out.size());
 }
+
+unsigned count_mapped(const auto &v) {
+  unsigned ret = 0;
+  for (const auto &i : v) ret += (i != CRUSH_ITEM_NONE);
+  return ret;
+}
+
+TEST_F(CRUSHTest, msr_4_host_2_choose_rule) {
+  cluster_test_spec_t spec{3, 4, 3, 1, 3};
+  auto [rootno, c] = create_crush_heirarchy(cct, spec);
+
+  auto ruleno = c->add_rule(-1, 4, CRUSH_RULE_TYPE_MSR_INDEP);
+  EXPECT_EQ(0, c->set_rule_step_take(ruleno, 0, rootno));
+  EXPECT_EQ(
+    0, c->set_rule_step_choose_indep(ruleno, 1, spec.num_hosts_mapped, HOST_TYPE));
+  EXPECT_EQ(
+    0,
+    c->set_rule_step_choose_indep(
+      ruleno, 2, 1, OSD_TYPE));
+  EXPECT_EQ(0, c->set_rule_step_emit(ruleno, 3));
+
+  auto weights_all_in = create_weight_vector(spec);
+  auto before = get_mapping(spec, *c, weights_all_in, ruleno);
+  for (auto i : before) { spec.validate_osd(i); }
+
+  /* MSR test case, marking all of the OSDs on the host out doesn't cause
+   * the 'step choose indep 3 host' step to retry with normal crush.
+   * See https://tracker.ceph.com/issues/62214 */
+  auto weights_host_out = create_weight_vector_first_host_out(spec, before);
+  auto after_host_out = get_mapping(spec, *c, weights_host_out, ruleno);
+
+  CrushCompiler cc{*c, std::cout};
+  cc.decompile(std::cout);
+
+  fmt::print("weights_all_in: {}\n", fmt::join(weights_all_in, ", "));
+  fmt::print("weights_host_out: {}\n", fmt::join(weights_host_out, ", "));
+  fmt::print("before        : {}\n", fmt::join(before, ", "));
+  fmt::print("after_host_out: {}\n", fmt::join(after_host_out, ", "));
+
+  auto count_mapped = [](const auto &v) {
+    unsigned ret = 0;
+    for (const auto &i : v) ret += (i != CRUSH_ITEM_NONE);
+    return ret;
+  };
+
+  EXPECT_EQ(count_mapped(before), count_mapped(after_host_out));
+
+  auto weights_osd_out = create_weight_vector_first_osd_out(spec, before);
+  auto after_osd_out = get_mapping(spec, *c, weights_osd_out, ruleno);
+  EXPECT_EQ(count_mapped(before), count_mapped(after_osd_out));
+}
+
+TEST_F(CRUSHTest, msr_2_host_2_osd) {
+  cluster_test_spec_t spec{2, 2, 2, 2, 3};
+  auto [rootno, c] = create_crush_heirarchy(cct, spec);
+
+  auto ruleno = c->add_rule(-1, 4, CRUSH_RULE_TYPE_MSR_INDEP);
+  EXPECT_EQ(0, c->set_rule_step_take(ruleno, 0, rootno));
+  EXPECT_EQ(
+    0, c->set_rule_step_choose_indep(ruleno, 1, spec.num_hosts_mapped, HOST_TYPE));
+  EXPECT_EQ(
+    0,
+    c->set_rule_step_choose_indep(
+      ruleno, 2, spec.num_mapped_per_host, OSD_TYPE));
+  EXPECT_EQ(0, c->set_rule_step_emit(ruleno, 3));
+
+  auto weights_all_in = create_weight_vector(spec);
+  auto before = get_mapping(spec, *c, weights_all_in, ruleno);
+  for (auto i : before) { spec.validate_osd(i); }
+
+  fmt::print("before        : {}\n", fmt::join(before, ", "));
+  ASSERT_EQ(count_mapped(before), 3);
+}
+
+TEST_F(CRUSHTest, msr_5_host_8_6_ec_choose) {
+  /* 24 because collisions are causing some trouble
+   * Without a local retry, a collision has a high 
+   * probability of pulling another bucket to the
+   * same stride.  Perhaps collisions should always
+   * retried?
+   *
+   * Do we actually need a full retry for collisions?
+   * Are they different from out?
+   */
+  cluster_test_spec_t spec{4, 5, 4, 4, 14};
+  auto [rootno, c] = create_crush_heirarchy(cct, spec);
+
+  auto ruleno = c->add_rule(-1, 4, CRUSH_RULE_TYPE_MSR_INDEP);
+  EXPECT_EQ(0, c->set_rule_step_take(ruleno, 0, rootno));
+  EXPECT_EQ(
+    0,
+    c->set_rule_step_choose_indep(
+      ruleno, 1, spec.num_hosts_mapped, HOST_TYPE));
+  EXPECT_EQ(
+    0,
+    c->set_rule_step_choose_indep(
+      ruleno, 2, spec.num_mapped_per_host, OSD_TYPE));
+  EXPECT_EQ(0, c->set_rule_step_emit(ruleno, 3));
+
+  auto weights_all_in = create_weight_vector(spec);
+  auto before = get_mapping(spec, *c, weights_all_in, ruleno);
+  for (auto i : before) { spec.validate_osd(i); }
+
+  /* MSR test case, marking all of the OSDs on the host out doesn't cause
+   * the 'step choose indep 4 host' step to retry with normal crush.
+   * See https://tracker.ceph.com/issues/62214 */
+  auto weights_host_out = create_weight_vector_first_host_out(spec, before);
+  auto after_host_out = get_mapping(spec, *c, weights_host_out, ruleno);
+
+  CrushCompiler cc{*c, std::cout};
+  cc.decompile(std::cout);
+
+  fmt::print("weights_all_in: {}\n", fmt::join(weights_all_in, ", "));
+  fmt::print("weights_host_out: {}\n", fmt::join(weights_host_out, ", "));
+  fmt::print("before        : {}\n", fmt::join(before, ", "));
+  fmt::print("after_host_out: {}\n", fmt::join(after_host_out, ", "));
+
+  compare_mappings(
+    spec, before, after_host_out, mapping_change_t::NEW_HOST,
+    {0, spec.num_mapped_per_host});
+  compare_mappings(
+    spec, before, after_host_out, mapping_change_t::SAME,
+    {spec.num_mapped_per_host, spec.num_mapped_size});
+
+#if 0
+  auto weights_osd_out = create_weight_vector_first_osd_out(spec, before);
+  auto after_osd_out = get_mapping(spec, *c, weights_osd_out, ruleno);
+
+  compare_mappings(
+    spec, before, after_osd_out, mapping_change_t::SAME_HOST,
+    {0, 1});
+  compare_mappings(
+    spec, before, after_osd_out, mapping_change_t::SAME,
+    {1, spec.num_mapped_size});
+#endif
+}
+
