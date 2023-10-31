@@ -1165,20 +1165,52 @@ static int crush_msr_descend(
   }
 }
 
+/**
+ * crush_msr_valid_candidate  
+ *
+ * Checks whether candidate is a valid choice given buckets already
+ * mapped for step stepno.
+ * 
+ * If candidate has already been mapped for a position in
+ * [exclude_start, exclude_end), candidate is valid.
+ *
+ * Else, if candidate has already been mapped for a position in
+ * [include_start, include_end), candidate is invalid.
+ *
+ * Otherwise, candidate is valid.
+ *
+ * @stepno step to check
+ * @exclude_start start of exclusion range
+ * @exclude_end end of exlusion range
+ * @include_start start of inclusion range
+ * @include_end end of inclusion range
+ * @candidate bucket to check
+ *
+ * Note, [exclude_start, exclude_end) must contain [include_start, include_end).
+ */
 static int crush_msr_valid_candidate(
   const struct crush_msr_workspace *workspace,
   unsigned stepno,
-  unsigned stride_start,
-  unsigned stride_end,
+  unsigned exclude_start,
+  unsigned exclude_end,
+  unsigned include_start,
+  unsigned include_end,
   int candidate)
 {
   BUG_ON(stepno >= workspace->step_len);
-  BUG_ON(stride_end <= stride_start);
-  BUG_ON(stride_end > workspace->result_len);
+
+  BUG_ON(exclude_end <= exclude_start);
+  BUG_ON(include_end <= include_start);
+
+  BUG_ON(exclude_start > include_start);
+  BUG_ON(exclude_end < include_end);
+
+  BUG_ON(exclude_end > workspace->result_len);
+
   int *vec = workspace->step_vecs[stepno];
-  for (unsigned i = 0; i < workspace->result_len; ++i) {
+  for (unsigned i = exclude_start; i < exclude_end; ++i) {
     if (vec[i] == candidate) {
-      if (i >= stride_start && i < stride_end) {
+      if (i >= include_start && i < include_end) {
 	dprintk(" crush_msr_valid_candidate: candidate %d already chosen for stride\n",
 		candidate);
 	return 1;
@@ -1194,7 +1226,7 @@ static int crush_msr_valid_candidate(
   return 1;
 }
 
-static void crush_msr_push_used(
+static int crush_msr_push_used(
   const struct crush_msr_workspace *workspace,
   unsigned stepno,
   unsigned stride_start,
@@ -1207,13 +1239,14 @@ static void crush_msr_push_used(
   int *vec = workspace->step_vecs[stepno];
   for (unsigned i = stride_start; i < stride_end; ++i) {
     if (vec[i] == candidate) {
-      return;
+      return 0;
     } else if (vec[i] == CRUSH_ITEM_UNDEF) {
       vec[i] = candidate;
-      return;
+      return 1;
     }
   }
   BUG_ON(0 == "impossible");
+  return 0;
 }
 
 static void crush_msr_pop_used(
@@ -1227,7 +1260,8 @@ static void crush_msr_pop_used(
   BUG_ON(stride_end <= stride_start);
   BUG_ON(stride_end > workspace->result_len);
   int *vec = workspace->step_vecs[stepno];
-  for (unsigned i = stride_end - 1; i <= stride_start; --i) {
+  for (unsigned i = stride_end; i > stride_start;) {
+    --i;
     if (vec[i] != CRUSH_ITEM_UNDEF) {
       BUG_ON(vec[i] != candidate);
       vec[i] = CRUSH_ITEM_UNDEF;
@@ -1239,14 +1273,20 @@ static void crush_msr_pop_used(
 
 static void crush_msr_emit_result(
   struct crush_msr_output *output,
+  int rule_type,
   unsigned position,
   int result)
 {
   BUG_ON(position >= output->result_len);
-  BUG_ON(output->out[position] != CRUSH_ITEM_NONE);
   BUG_ON(output->returned_so_far >= output->result_len);
-  output->out[position] = result;
-  ++output->returned_so_far;
+  if (rule_type == CRUSH_RULE_TYPE_MSR_FIRSTN) {
+    BUG_ON(output->out[output->returned_so_far] != CRUSH_ITEM_NONE);
+    output->out[++(output->returned_so_far)] = result;
+  } else {
+    BUG_ON(output->out[position] != CRUSH_ITEM_NONE);
+    output->out[position] = result;
+    ++output->returned_so_far;
+  }
   dprintk(" emit: %d, returned_so_far: %d\n", result, output->returned_so_far);
 }
 
@@ -1306,10 +1346,11 @@ static unsigned crush_msr_choose(
 	input, workspace, bucket,
 	curstep->arg2, tryno, local_tryno, sub_start);
 
-      // TODOSAM we only actually need to scan from start_index to end_index
       if (crush_msr_valid_candidate(
 	    workspace,
 	    current_stepno,
+	    start_index,
+	    end_index,
 	    sub_start,
 	    sub_end,
 	    child_bucket_candidate)) {
@@ -1336,8 +1377,9 @@ static unsigned crush_msr_choose(
       crush_msr_push_used(
 	workspace, current_stepno, sub_start, sub_end,
 	child_bucket_candidate);
-      // TODOSAM add support for firstn
-      crush_msr_emit_result(output, sub_start, child_bucket_candidate);
+      crush_msr_emit_result(
+	output, input->rule->type,
+	sub_start, child_bucket_candidate);
       mapped++;
     } else {
       if (current_stepno + 1 >= end_stepno) {
@@ -1352,14 +1394,14 @@ static unsigned crush_msr_choose(
 	sub_start, sub_end,
 	current_stepno + 1, end_stepno,
 	tryno);
-      crush_msr_push_used(
+      int pushed = crush_msr_push_used(
 	workspace,
 	current_stepno,
 	sub_start,
 	sub_end,
 	child_bucket_candidate);
-      if (child_mapped == 0) {
-	undo[index] = child_mapped;
+      if (pushed && (child_mapped == 0)) {
+	undo[index] = child_bucket_candidate;
       } else {
 	mapped += child_mapped;
       }
@@ -1446,7 +1488,8 @@ static int crush_msr_do_rule(
 	return 0;
       } else {
 	crush_msr_emit_result(
-	  &output, start_index, take_step->arg1);
+	  &output, input.rule->type,
+	  start_index, take_step->arg1);
       }
     } else {
       dprintk("start_stepno %d\n", start_stepno);
