@@ -1039,9 +1039,12 @@ struct crush_msr_input {
 
   const unsigned weight_len;
   const __u32 *weights;
-    
+
   const int map_input;
   const struct crush_choose_arg *choose_args;
+
+  const unsigned total_tries;
+  const unsigned local_tries;
 };
 
 // encapsulates work space
@@ -1060,6 +1063,28 @@ struct crush_msr_output {
   unsigned returned_so_far;
   int *out;
 };
+
+static unsigned crush_msr_scan_config_steps(
+  struct crush_rule_step *steps,
+  unsigned step_len,
+  unsigned *total_tries,
+  unsigned *local_tries) {
+  unsigned stepno = 0;
+  for (; stepno < step_len; ++stepno) {
+    struct crush_rule_step *step = &steps[stepno];
+    switch (step->op) {
+    case CRUSH_RULE_SET_CHOOSE_TRIES:
+      if (total_tries) *total_tries = step->arg1;
+      break;
+    case CRUSH_RULE_SET_CHOOSE_LOCAL_TRIES:
+      if (local_tries) *local_tries = step->arg1;
+      break;
+    default:
+      return stepno;
+    }
+  }
+  return stepno;
+}
 
 static void crush_msr_clear_workspace(
   struct crush_msr_workspace *ws)
@@ -1341,7 +1366,8 @@ static unsigned crush_msr_choose(
      * Generally, audit these choices later */
     int found = 0;
     int child_bucket_candidate;
-    for (unsigned local_tryno = 0; local_tryno < 10; ++local_tryno) {
+    for (unsigned local_tryno = 0; local_tryno < input->local_tries;
+	 ++local_tryno) {
       child_bucket_candidate = crush_msr_descend(
 	input, workspace, bucket,
 	curstep->arg2, tryno, local_tryno, sub_start);
@@ -1432,6 +1458,12 @@ static int crush_msr_do_rule(
   const __u32 *weight, int weight_max,
   void *cwin, const struct crush_choose_arg *choose_args)
 {
+  unsigned total_tries = map->choose_total_tries;
+  unsigned local_tries = map->choose_local_tries;
+  struct crush_rule *rule = map->rules[ruleno];
+  unsigned start_stepno = crush_msr_scan_config_steps(
+    rule->steps, rule->len, &total_tries, &local_tries);
+
   struct crush_msr_input input = {
     .map = map,
     .rule = map->rules[ruleno],
@@ -1439,7 +1471,9 @@ static int crush_msr_do_rule(
     .weight_len = weight_max,
     .weights = weight,
     .map_input = map_input,
-    .choose_args = choose_args
+    .choose_args = choose_args,
+    .total_tries = total_tries,
+    .local_tries = local_tries
   };
 
   struct crush_work *cw = cwin;
@@ -1466,7 +1500,6 @@ static int crush_msr_do_rule(
     output.out[i] = CRUSH_ITEM_NONE;
   }
 
-  unsigned start_stepno = 0;
   unsigned start_index = 0;
   while (start_stepno < input.rule->len) {
     unsigned emit_stepno, total_children = 1;
@@ -1507,7 +1540,7 @@ static int crush_msr_do_rule(
       BUG_ON(start_stepno >= input.rule->len);
 
       unsigned tries_so_far = 0;
-      while (tries_so_far < input.map->choose_total_tries &&
+      while (tries_so_far < input.total_tries &&
 	     output.returned_so_far < input.result_max) {
 	crush_msr_choose(
 	  &input, &workspace, &output,
