@@ -116,6 +116,8 @@ public:
   /// true if any buckets that aren't straw2
   bool has_non_straw2_buckets() const;
 
+  // TODOSAM bool has_msr_rules() const;
+
   // tunables
   void set_tunables_argonaut() {
     crush->choose_local_tries = 2;
