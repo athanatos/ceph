@@ -1122,7 +1122,7 @@ static int crush_msr_scan_next(
       return -1;
     }
     if (total_children) {
-      *total_children *= curstep->arg1;
+      *total_children *= curstep->arg1 ? curstep->arg1 : input->result_max;
     }
   }
   if (stepno >= input->rule->len) {
@@ -1332,7 +1332,7 @@ static unsigned crush_msr_choose(
   const struct crush_rule_step *curstep = &(input->rule->steps[current_stepno]);
   BUG_ON(curstep->op != CRUSH_RULE_CHOOSE_INDEP);
 
-  unsigned children = curstep->arg1;
+  unsigned children = curstep->arg1 ? curstep->arg1 : input->result_max;
   BUG_ON(total_children % children != 0);
   unsigned stride = total_children / children;
 

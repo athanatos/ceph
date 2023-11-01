@@ -23,65 +23,6 @@
 
 using namespace std;
 
-std::unique_ptr<CrushWrapper> build_indep_map(CephContext *cct, int num_rack,
-                              int num_host, int num_osd)
-{
-  std::unique_ptr<CrushWrapper> c(new CrushWrapper);
-  c->create();
-
-  c->set_type_name(5, "root");
-  c->set_type_name(4, "row");
-  c->set_type_name(3, "rack");
-  c->set_type_name(2, "chasis");
-  c->set_type_name(1, "host");
-  c->set_type_name(0, "osd");
-
-  int rootno;
-  c->add_bucket(0, CRUSH_BUCKET_STRAW, CRUSH_HASH_RJENKINS1,
-		5, 0, NULL, NULL, &rootno);
-  c->set_item_name(rootno, "default");
-
-  map<string,string> loc;
-  loc["root"] = "default";
-
-  int osd = 0;
-  for (int r=0; r<num_rack; ++r) {
-    loc["rack"] = string("rack-") + stringify(r);
-    for (int h=0; h<num_host; ++h) {
-      loc["host"] = string("host-") + stringify(r) + string("-") + stringify(h);
-      for (int o=0; o<num_osd; ++o, ++osd) {
-	c->insert_item(cct, osd, 1.0, string("osd.") + stringify(osd), loc);
-      }
-    }
-  }
-  int ret;
-  int ruleno = 0;
-  ret = c->add_rule(ruleno, 4, 123);
-  ceph_assert(ret == ruleno);
-  ret = c->set_rule_step(ruleno, 0, CRUSH_RULE_SET_CHOOSELEAF_TRIES, 10, 0);
-  ceph_assert(ret == 0);
-  ret = c->set_rule_step(ruleno, 1, CRUSH_RULE_TAKE, rootno, 0);
-  ceph_assert(ret == 0);
-  ret = c->set_rule_step(ruleno, 2, CRUSH_RULE_CHOOSELEAF_INDEP, CRUSH_CHOOSE_N, 1);
-  ceph_assert(ret == 0);
-  ret = c->set_rule_step(ruleno, 3, CRUSH_RULE_EMIT, 0, 0);
-  ceph_assert(ret == 0);
-  c->set_rule_name(ruleno, "data");
-
-  c->finalize();
-
-  if (false) {
-    Formatter *f = Formatter::create("json-pretty");
-    f->open_object_section("crush_map");
-    c->dump(f);
-    f->close_section();
-    f->flush(cout);
-    delete f;
-  }
-
-  return c;
-}
-
 int get_num_dups(const vector<int>& v)
 {
   std::set<int> s;
@@ -95,7 +36,7 @@ int get_num_dups(const vector<int>& v)
   return dups;
 }
 
-class CRUSHTest : public ::testing::Test
+class IndepTest : public ::testing::TestWithParam<bool>
 {
 public:
   void SetUp() final
@@ -109,11 +50,90 @@ public:
     cct->put();
     cct = nullptr;
   }
+
+  std::unique_ptr<CrushWrapper> build_indep_map(
+    CephContext *cct, int num_rack, int num_host, int num_osd)
+  {
+    std::unique_ptr<CrushWrapper> c(new CrushWrapper);
+    c->create();
+
+    c->set_type_name(5, "root");
+    c->set_type_name(4, "row");
+    c->set_type_name(3, "rack");
+    c->set_type_name(2, "chasis");
+    c->set_type_name(1, "host");
+    c->set_type_name(0, "osd");
+
+    int rootno;
+    c->add_bucket(0, CRUSH_BUCKET_STRAW, CRUSH_HASH_RJENKINS1,
+		  5, 0, NULL, NULL, &rootno);
+    c->set_item_name(rootno, "default");
+
+    map<string,string> loc;
+    loc["root"] = "default";
+
+    int osd = 0;
+    for (int r=0; r<num_rack; ++r) {
+      loc["rack"] = string("rack-") + stringify(r);
+      for (int h=0; h<num_host; ++h) {
+	loc["host"] = string("host-") + stringify(r) + string("-") + stringify(h);
+	for (int o=0; o<num_osd; ++o, ++osd) {
+	  c->insert_item(cct, osd, 1.0, string("osd.") + stringify(osd), loc);
+	}
+      }
+    }
+    int ret;
+    int ruleno = 0;
+
+    if (GetParam()) {
+      ret = c->add_rule(ruleno, 4, 123);
+      ceph_assert(ret == ruleno);
+      ret = c->set_rule_step(ruleno, 0, CRUSH_RULE_SET_CHOOSELEAF_TRIES, 10, 0);
+      ceph_assert(ret == 0);
+      ret = c->set_rule_step(ruleno, 1, CRUSH_RULE_TAKE, rootno, 0);
+      ceph_assert(ret == 0);
+      ret = c->set_rule_step(ruleno, 2, CRUSH_RULE_CHOOSELEAF_INDEP, CRUSH_CHOOSE_N, 1);
+      ceph_assert(ret == 0);
+      ret = c->set_rule_step(ruleno, 3, CRUSH_RULE_EMIT, 0, 0);
+      ceph_assert(ret == 0);
+    } else {
+      unsigned rule_id = 0;
+      ret = c->add_rule(ruleno, 6, CRUSH_RULE_TYPE_MSR_INDEP);
+      ceph_assert(ret == ruleno);
+      ret = c->set_rule_step(ruleno, rule_id++, CRUSH_RULE_SET_CHOOSE_TRIES, 100, 0);
+      ceph_assert(ret == 0);
+      ret = c->set_rule_step(ruleno, rule_id++, CRUSH_RULE_SET_CHOOSE_LOCAL_TRIES, 5, 0);
+      ceph_assert(ret == 0);
+      ret = c->set_rule_step(ruleno, rule_id++, CRUSH_RULE_TAKE, rootno, 0);
+      ceph_assert(ret == 0);
+      ret = c->set_rule_step(ruleno, rule_id++, CRUSH_RULE_CHOOSE_INDEP, CRUSH_CHOOSE_N, 1);
+      ceph_assert(ret == 0);
+      ret = c->set_rule_step(ruleno, rule_id++, CRUSH_RULE_CHOOSE_INDEP, 1, 0);
+      ceph_assert(ret == 0);
+      ret = c->set_rule_step(ruleno, rule_id++, CRUSH_RULE_EMIT, 0, 0);
+      ceph_assert(ret == 0);
+    }
+
+    c->set_rule_name(ruleno, "data");
+    c->finalize();
+
+    if (false) {
+      Formatter *f = Formatter::create("json-pretty");
+      f->open_object_section("crush_map");
+      c->dump(f);
+      f->close_section();
+      f->flush(cout);
+      delete f;
+    }
+
+    return c;
+  }
+
 protected:
   CephContext *cct = nullptr;
 };
 
-TEST_F(CRUSHTest, indep_toosmall) {
+TEST_P(IndepTest, indep_toosmall) {
   std::unique_ptr<CrushWrapper> c(build_indep_map(cct, 1, 3, 1));
   vector<__u32> weight(c->get_max_devices(), 0x10000);
   c->dump_tree(&cout, NULL);
@@ -132,7 +152,7 @@ TEST_F(CRUSHTest, indep_toosmall) {
   }
 }
 
-TEST_F(CRUSHTest, indep_basic) {
+TEST_P(IndepTest, indep_basic) {
   std::unique_ptr<CrushWrapper> c(build_indep_map(cct, 3, 3, 3));
   vector<__u32> weight(c->get_max_devices(), 0x10000);
   c->dump_tree(&cout, NULL);
@@ -151,7 +171,7 @@ TEST_F(CRUSHTest, indep_basic) {
   }
 }
 
-TEST_F(CRUSHTest, indep_out_alt) {
+TEST_P(IndepTest, indep_out_alt) {
   std::unique_ptr<CrushWrapper> c(build_indep_map(cct, 3, 3, 3));
   vector<__u32> weight(c->get_max_devices(), 0x10000);
 
@@ -177,7 +197,7 @@ TEST_F(CRUSHTest, indep_out_alt) {
   }
 }
 
-TEST_F(CRUSHTest, indep_out_contig) {
+TEST_P(IndepTest, indep_out_contig) {
   std::unique_ptr<CrushWrapper> c(build_indep_map(cct, 3, 3, 3));
   vector<__u32> weight(c->get_max_devices(), 0x10000);
 
@@ -203,7 +223,7 @@ TEST_F(CRUSHTest, indep_out_contig) {
 }
 
 
-TEST_F(CRUSHTest, indep_out_progressive) {
+TEST_P(IndepTest, indep_out_progressive) {
   std::unique_ptr<CrushWrapper> c(build_indep_map(cct, 3, 3, 3));
   c->set_choose_total_tries(100);
   vector<__u32> tweight(c->get_max_devices(), 0x10000);
@@ -265,6 +285,29 @@ TEST_F(CRUSHTest, indep_out_progressive) {
   cout << tchanged << " total changed" << std::endl;
 
 }
+
+INSTANTIATE_TEST_SUITE_P(
+  IndepTest,
+  IndepTest,
+  ::testing::Bool());
+
+class CRUSHTest : public ::testing::Test
+{
+public:
+  void SetUp() final
+  {
+    CephInitParameters params(CEPH_ENTITY_TYPE_CLIENT);
+    cct = common_preinit(params, CODE_ENVIRONMENT_UTILITY,
+			 CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
+  }
+  void TearDown() final
+  {
+    cct->put();
+    cct = nullptr;
+  }
+protected:
+  CephContext *cct = nullptr;
+};
 
 TEST_F(CRUSHTest, straw_zero) {
   // zero weight items should have no effect on placement.
