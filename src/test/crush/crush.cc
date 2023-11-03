@@ -102,7 +102,7 @@ public:
       ceph_assert(ret == ruleno);
       ret = c->set_rule_step(ruleno, rule_id++, CRUSH_RULE_SET_CHOOSE_TRIES, 100, 0);
       ceph_assert(ret == 0);
-      ret = c->set_rule_step(ruleno, rule_id++, CRUSH_RULE_SET_CHOOSE_LOCAL_TRIES, 5, 0);
+      ret = c->set_rule_step(ruleno, rule_id++, CRUSH_RULE_SET_CHOOSE_LOCAL_TRIES, 20, 0);
       ceph_assert(ret == 0);
       ret = c->set_rule_step(ruleno, rule_id++, CRUSH_RULE_TAKE, rootno, 0);
       ceph_assert(ret == 0);
@@ -168,6 +168,43 @@ TEST_P(IndepTest, indep_basic) {
     }
     ASSERT_EQ(0, num_none);
     ASSERT_EQ(0, get_num_dups(out));
+  }
+}
+
+TEST_P(IndepTest, indep_single_out_first) {
+  std::unique_ptr<CrushWrapper> c(build_indep_map(cct, 3, 3, 3));
+  c->dump_tree(&cout, NULL);
+
+  for (int x = 0; x < 10000; ++x) {
+    vector<__u32> weight(c->get_max_devices(), 0x10000);
+    vector<int> out;
+    c->do_rule(0, x, out, 5, weight, 0);
+
+    int num_none = 0;
+    for (unsigned i=0; i<out.size(); ++i) {
+      if (out[i] == CRUSH_ITEM_NONE)
+	num_none++;
+    }
+    ASSERT_EQ(0, num_none);
+    ASSERT_EQ(0, get_num_dups(out));
+
+    // mark first osd out
+    weight[out[0]] = 0;
+
+    vector<int> out2;
+    c->do_rule(0, x, out2, 5, weight, 0);
+
+    cout << "input " << x
+	 << " marked out " << out[0]
+	 << " out " << out
+	 << " -> out2 " << out2
+	 << std::endl;
+
+    ASSERT_NE(CRUSH_ITEM_NONE, out2[0]);
+    for (unsigned i=1; i<out.size(); ++i) {
+      ASSERT_EQ(out[i], out2[i]);
+    }
+    ASSERT_EQ(0, get_num_dups(out2));
   }
 }
 
