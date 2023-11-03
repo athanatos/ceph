@@ -1165,8 +1165,8 @@ static int crush_msr_descend(
   unsigned local_tryno,
   unsigned index)
 {
-  dprintk(" crush_msr_descend type %d tryno %d index %d\n",
-	  type, tryno, index);
+  dprintk(" crush_msr_descend type %d tryno %d local_tryno %d index %d\n",
+	  type, tryno, local_tryno, index);
   while (1) {
     int child_bucket_candidate = crush_bucket_choose(
       bucket,
@@ -1366,7 +1366,8 @@ static unsigned crush_msr_choose(
      * Generally, audit these choices later */
     int found = 0;
     int child_bucket_candidate;
-    for (unsigned local_tryno = 0; local_tryno < input->local_tries;
+    for (unsigned local_tryno = 0;
+	 local_tryno <= input->local_tries;
 	 ++local_tryno) {
       child_bucket_candidate = crush_msr_descend(
 	input, workspace, bucket,
@@ -1540,7 +1541,7 @@ static int crush_msr_do_rule(
       BUG_ON(start_stepno >= input.rule->len);
 
       unsigned tries_so_far = 0;
-      while (tries_so_far < input.total_tries &&
+      while (tries_so_far <= input.total_tries &&
 	     output.returned_so_far < input.result_max) {
 	crush_msr_choose(
 	  &input, &workspace, &output,
