@@ -386,6 +386,7 @@ void add_object_to_stats(
   }
   auto &oi = *eval.object_info;
   ceph_assert(out);
+  out->num_objects++;
   if (ss) {
     out->num_bytes += oi.size;
     for (auto clone : ss->clones) {
@@ -394,11 +395,7 @@ void add_object_to_stats(
     }
     if (oi.is_whiteout()) {
       out->num_whiteouts++;
-    } else {
-      out->num_objects++;
     }
-  } else {
-    out->num_objects++;
   }
   if (oi.is_dirty()) {
     out->num_objects_dirty++;

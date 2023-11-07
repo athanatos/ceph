@@ -1262,7 +1262,6 @@ TEST(TestSnapSet, Stats) {
     ceph_assert(maybe_oi);
     maybe_oi->set_flag(object_info_t::FLAG_WHITEOUT);
     expected_stats.num_whiteouts++;
-    expected_stats.num_objects--;
     return maybe_oi;
   });
 
