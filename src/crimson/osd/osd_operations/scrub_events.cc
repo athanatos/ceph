@@ -28,7 +28,7 @@ seastar::future<> RemoteScrubEventBaseT<T>::with_pg(
   ShardServices &shard_services, Ref<PG> pg)
 {
   LOG_PREFIX(RemoteEventBaseT::with_pg);
-  return interruptor::with_interruption([FNAME, this, pg, &shard_services] {
+  return interruptor::with_interruption([FNAME, this, pg] {
     DEBUGDPP("{} pg present", *pg, *that());
     return this->template enter_stage<interruptor>(pp(*pg).await_map
     ).then_interruptible([this, pg] {
@@ -67,7 +67,7 @@ template <typename T>
 ScrubAsyncOpT<T>::ScrubAsyncOpT(Ref<PG> pg) : pg(pg) {}
 
 template <typename T>
-ScrubAsyncOpT<T>::template ifut<> ScrubAsyncOpT<T>::start()
+typename ScrubAsyncOpT<T>::template ifut<> ScrubAsyncOpT<T>::start()
 {
   LOG_PREFIX(ScrubAsyncOpT::start);
   DEBUGDPP("{} starting", *pg, *this);
@@ -198,13 +198,13 @@ ScrubScan::ifut<> ScrubScan::scan_object(
     pg.shard_services.get_store().stat(
       pg.get_collection_ref(),
       obj)
-  ).then_interruptible([FNAME, this, &pg, &obj, &entry](struct stat obj_stat) {
+  ).then_interruptible([FNAME, &pg, &obj, &entry](struct stat obj_stat) {
     DEBUGDPP("obj: {}, stat complete, size {}", pg, obj, obj_stat.st_size);
     entry.size = obj_stat.st_size;
     return pg.shard_services.get_store().get_attrs(
       pg.get_collection_ref(),
       obj);
-  }).safe_then_interruptible([FNAME, this, &pg, &obj, &entry](auto &&attrs) {
+  }).safe_then_interruptible([FNAME, &pg, &obj, &entry](auto &&attrs) {
     DEBUGDPP("obj: {}, got {} attrs", pg, obj, attrs.size());
     for (auto &i : attrs) {
       i.second.rebuild();
@@ -215,7 +215,7 @@ ScrubScan::ifut<> ScrubScan::scan_object(
       }
     }
   }).handle_error_interruptible(
-    ct_error::all_same_way([FNAME, this, &pg, &obj, &entry](auto e) {
+    ct_error::all_same_way([FNAME, &pg, &obj, &entry](auto e) {
       DEBUGDPP("obj: {} stat error", pg, obj);
       entry.stat_error = true;
     })
@@ -262,7 +262,7 @@ ScrubScan::ifut<> ScrubScan::deep_scan_object(
 	  obj,
 	  *(progress.offset),
 	  stride
-	).safe_then([this, stride, &progress, &entry](auto bl) {
+	).safe_then([stride, &progress, &entry](auto bl) {
 	  progress.data_hash << bl;
 	  if (bl.length() < stride) {
 	    progress.offset = std::nullopt;
@@ -273,7 +273,7 @@ ScrubScan::ifut<> ScrubScan::deep_scan_object(
 	    *(progress.offset) += stride;
 	  }
 	}).handle_error(
-	  ct_error::all_same_way([this, &progress, &entry](auto e) {
+	  ct_error::all_same_way([&progress, &entry](auto e) {
 	    entry.read_error = true;
 	    progress.offset = std::nullopt;
 	  })
@@ -288,14 +288,14 @@ ScrubScan::ifut<> ScrubScan::deep_scan_object(
 	return pg.shard_services.get_store().omap_get_header(
 	  pg.get_collection_ref(),
 	  obj
-	).safe_then([this, &progress, &entry](auto bl) {
+	).safe_then([&progress](auto bl) {
 	  progress.omap_hash << bl;
 	}).handle_error(
 	  ct_error::enodata::handle([] {}),
-	  ct_error::all_same_way([this, &progress, &entry](auto e) {
+	  ct_error::all_same_way([&entry](auto e) {
 	    entry.read_error = true;
 	  })
-	).then([FNAME, this, &pg, &obj, &progress] {
+	).then([&progress] {
 	  progress.header_done = true;
 	  return interruptor::make_interruptible(
 	    seastar::make_ready_future<seastar::stop_iteration>(

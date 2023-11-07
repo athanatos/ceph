@@ -357,7 +357,7 @@ ClientRequest::do_process(
     [FNAME, this, pg, this_instance_id, &ihref](
       auto submitted, auto all_completed) mutable {
       return submitted.then_interruptible(
-	[FNAME, this, pg, this_instance_id, &ihref] {
+	[this, pg, this_instance_id, &ihref] {
 	return ihref.enter_stage<interruptor>(client_pp(*pg).wait_repop, *this);
       }).then_interruptible(
 	[FNAME, this, pg, this_instance_id,
@@ -374,12 +374,12 @@ ClientRequest::do_process(
 		  return conn->send(std::move(reply));
 		});
 	    }, crimson::ct_error::eagain::handle(
-	      [FNAME, this, pg, this_instance_id, &ihref]() mutable {
+	      [this, pg, this_instance_id, &ihref]() mutable {
 		return process_op(ihref, pg, this_instance_id);
 	    }));
 	});
     }, crimson::ct_error::eagain::handle(
-      [FNAME, this, pg, this_instance_id, &ihref]() mutable {
+      [this, pg, this_instance_id, &ihref]() mutable {
 	return process_op(ihref, pg, this_instance_id);
       }));
 }
