@@ -118,6 +118,11 @@ struct ScrubContext {
   struct request_range_result_t {
     hobject_t start;
     hobject_t end;
+
+    request_range_result_t(
+      const hobject_t &start,
+      const hobject_t &end) : start(start), end(end) {}
+
     auto fmt_print_ctx(auto &ctx) const -> decltype(ctx.out()) {
       return fmt::format_to(ctx.out(), "start: {}, end: {}", start, end);
     }
@@ -144,6 +149,11 @@ struct ScrubContext {
   struct scan_range_value_t {
     pg_shard_t from;
     ScrubMap map;
+
+    template <typename Map>
+    scan_range_value_t(
+      pg_shard_t from,
+      Map &&map) : from(from), map(std::forward<Map>(map)) {}
 
     auto to_pair() const { return std::make_pair(from, map); }
     auto fmt_print_ctx(auto &ctx) const -> decltype(ctx.out()) {
