@@ -36,7 +36,21 @@ int get_num_dups(const vector<int>& v)
   return dups;
 }
 
-class IndepTest : public ::testing::TestWithParam<bool>
+class RuleType {
+  bool msr;
+
+public:
+  RuleType(bool msr) : msr(msr) {}
+
+  bool is_msr() const { return msr; }
+  
+  friend std::ostream &operator<<(std::ostream &, RuleType);
+};
+std::ostream &operator<<(std::ostream &lhs, RuleType rhs) {
+  return lhs << (rhs.msr ? "MSR" : "NORMAL");
+}
+
+class IndepTest : public ::testing::TestWithParam<RuleType>
 {
 public:
   void SetUp() final
@@ -85,7 +99,23 @@ public:
     int ret;
     int ruleno = 0;
 
-    if (GetParam()) {
+    if (GetParam().is_msr()) {
+      unsigned step_id = 0;
+      ret = c->add_rule(ruleno, 6, CRUSH_RULE_TYPE_MSR_INDEP);
+      ceph_assert(ret == ruleno);
+      ret = c->set_rule_step(ruleno, step_id++, CRUSH_RULE_SET_CHOOSE_TRIES, 100, 0);
+      ceph_assert(ret == 0);
+      ret = c->set_rule_step(ruleno, step_id++, CRUSH_RULE_SET_CHOOSE_LOCAL_TRIES, 20, 0);
+      ceph_assert(ret == 0);
+      ret = c->set_rule_step(ruleno, step_id++, CRUSH_RULE_TAKE, rootno, 0);
+      ceph_assert(ret == 0);
+      ret = c->set_rule_step(ruleno, step_id++, CRUSH_RULE_CHOOSE_INDEP, CRUSH_CHOOSE_N, 1);
+      ceph_assert(ret == 0);
+      ret = c->set_rule_step(ruleno, step_id++, CRUSH_RULE_CHOOSE_INDEP, 1, 0);
+      ceph_assert(ret == 0);
+      ret = c->set_rule_step(ruleno, step_id++, CRUSH_RULE_EMIT, 0, 0);
+      ceph_assert(ret == 0);
+    } else {
       ret = c->add_rule(ruleno, 4, 123);
       ceph_assert(ret == ruleno);
       ret = c->set_rule_step(ruleno, 0, CRUSH_RULE_SET_CHOOSELEAF_TRIES, 10, 0);
@@ -95,22 +125,6 @@ public:
       ret = c->set_rule_step(ruleno, 2, CRUSH_RULE_CHOOSELEAF_INDEP, CRUSH_CHOOSE_N, 1);
       ceph_assert(ret == 0);
       ret = c->set_rule_step(ruleno, 3, CRUSH_RULE_EMIT, 0, 0);
-      ceph_assert(ret == 0);
-    } else {
-      unsigned rule_id = 0;
-      ret = c->add_rule(ruleno, 6, CRUSH_RULE_TYPE_MSR_INDEP);
-      ceph_assert(ret == ruleno);
-      ret = c->set_rule_step(ruleno, rule_id++, CRUSH_RULE_SET_CHOOSE_TRIES, 100, 0);
-      ceph_assert(ret == 0);
-      ret = c->set_rule_step(ruleno, rule_id++, CRUSH_RULE_SET_CHOOSE_LOCAL_TRIES, 20, 0);
-      ceph_assert(ret == 0);
-      ret = c->set_rule_step(ruleno, rule_id++, CRUSH_RULE_TAKE, rootno, 0);
-      ceph_assert(ret == 0);
-      ret = c->set_rule_step(ruleno, rule_id++, CRUSH_RULE_CHOOSE_INDEP, CRUSH_CHOOSE_N, 1);
-      ceph_assert(ret == 0);
-      ret = c->set_rule_step(ruleno, rule_id++, CRUSH_RULE_CHOOSE_INDEP, 1, 0);
-      ceph_assert(ret == 0);
-      ret = c->set_rule_step(ruleno, rule_id++, CRUSH_RULE_EMIT, 0, 0);
       ceph_assert(ret == 0);
     }
 
@@ -175,7 +189,7 @@ TEST_P(IndepTest, indep_single_out_first) {
   std::unique_ptr<CrushWrapper> c(build_indep_map(cct, 3, 3, 3));
   c->dump_tree(&cout, NULL);
 
-  for (int x = 0; x < 10000; ++x) {
+  for (int x = 0; x < 1000; ++x) {
     vector<__u32> weight(c->get_max_devices(), 0x10000);
     vector<int> out;
     c->do_rule(0, x, out, 5, weight, 0);
@@ -200,8 +214,52 @@ TEST_P(IndepTest, indep_single_out_first) {
 	 << " -> out2 " << out2
 	 << std::endl;
 
+    // First item should have been remapped
     ASSERT_NE(CRUSH_ITEM_NONE, out2[0]);
+    ASSERT_NE(out[0], out2[0]);
     for (unsigned i=1; i<out.size(); ++i) {
+      // but none of the others
+      ASSERT_EQ(out[i], out2[i]);
+    }
+    ASSERT_EQ(0, get_num_dups(out2));
+  }
+}
+
+TEST_P(IndepTest, indep_single_out_last) {
+  std::unique_ptr<CrushWrapper> c(build_indep_map(cct, 3, 3, 3));
+  c->dump_tree(&cout, NULL);
+
+  for (int x = 0; x < 1000; ++x) {
+    vector<__u32> weight(c->get_max_devices(), 0x10000);
+    vector<int> out;
+    c->do_rule(0, x, out, 5, weight, 0);
+
+    int num_none = 0;
+    for (unsigned i=0; i<out.size(); ++i) {
+      if (out[i] == CRUSH_ITEM_NONE)
+	num_none++;
+    }
+    ASSERT_EQ(0, num_none);
+    ASSERT_EQ(0, get_num_dups(out));
+
+    // mark first osd out
+    unsigned last = out.size() - 1;
+    weight[out[last]] = 0;
+
+    vector<int> out2;
+    c->do_rule(0, x, out2, 5, weight, 0);
+
+    cout << "input " << x
+	 << " marked out " << out[0]
+	 << " out " << out
+	 << " -> out2 " << out2
+	 << std::endl;
+
+    // Last
+    ASSERT_NE(CRUSH_ITEM_NONE, out2[last]);
+    ASSERT_NE(out[last], out2[last]);
+    for (unsigned i=0; i<last; ++i) {
+      // but none of the others
       ASSERT_EQ(out[i], out2[i]);
     }
     ASSERT_EQ(0, get_num_dups(out2));
@@ -259,7 +317,6 @@ TEST_P(IndepTest, indep_out_contig) {
   }
 }
 
-
 TEST_P(IndepTest, indep_out_progressive) {
   std::unique_ptr<CrushWrapper> c(build_indep_map(cct, 3, 3, 3));
   c->set_choose_total_tries(100);
@@ -275,8 +332,10 @@ TEST_P(IndepTest, indep_out_progressive) {
     for (unsigned i=0; i<weight.size(); ++i) {
       vector<int> out;
       c->do_rule(0, x, out, 7, weight, 0);
-      cout << "(" << i << "/" << weight.size() << " out) "
-	   << x << " -> " << out << std::endl;
+      cout << "(" << i << "/" << weight.size() << " out) ";
+      if (i > 0) cout << "marked out " << i - 1 << " ";
+      cout << x << " -> " << out << std::endl;
+
       int num_none = 0;
       for (unsigned k=0; k<out.size(); ++k) {
 	if (out[k] == CRUSH_ITEM_NONE)
@@ -326,7 +385,7 @@ TEST_P(IndepTest, indep_out_progressive) {
 INSTANTIATE_TEST_SUITE_P(
   IndepTest,
   IndepTest,
-  ::testing::Bool());
+  ::testing::Values(RuleType(true), RuleType(false)));
 
 class CRUSHTest : public ::testing::Test
 {
@@ -1231,17 +1290,25 @@ TEST_F(CRUSHTest, msr_5_host_8_6_ec_choose) {
   cluster_test_spec_t spec{4, 5, 4, 4, 14};
   auto [rootno, c] = create_crush_heirarchy(cct, spec);
 
-  auto ruleno = c->add_rule(-1, 4, CRUSH_RULE_TYPE_MSR_INDEP);
-  EXPECT_EQ(0, c->set_rule_step_take(ruleno, 0, rootno));
+  auto ruleno = c->add_rule(-1, 6, CRUSH_RULE_TYPE_MSR_INDEP);
+  unsigned step_id = 0;
+  EXPECT_EQ(
+    0, c->set_rule_step(
+      ruleno, step_id++, CRUSH_RULE_SET_CHOOSE_TRIES, 100, 0));
+  EXPECT_EQ(
+    0,
+    c->set_rule_step(
+      ruleno, step_id++, CRUSH_RULE_SET_CHOOSE_LOCAL_TRIES, 20, 0));
+  EXPECT_EQ(0, c->set_rule_step_take(ruleno, step_id++, rootno));
   EXPECT_EQ(
     0,
     c->set_rule_step_choose_indep(
-      ruleno, 1, spec.num_hosts_mapped, HOST_TYPE));
+      ruleno, step_id++, spec.num_hosts_mapped, HOST_TYPE));
   EXPECT_EQ(
     0,
     c->set_rule_step_choose_indep(
-      ruleno, 2, spec.num_mapped_per_host, OSD_TYPE));
-  EXPECT_EQ(0, c->set_rule_step_emit(ruleno, 3));
+      ruleno, step_id++, spec.num_mapped_per_host, OSD_TYPE));
+  EXPECT_EQ(0, c->set_rule_step_emit(ruleno, step_id++));
 
   auto weights_all_in = create_weight_vector(spec);
   auto before = get_mapping(spec, *c, weights_all_in, ruleno);

@@ -25,7 +25,7 @@
 #include "crush_ln_table.h"
 #include "mapper.h"
 
-#define dprintk(args...) fprintf(stderr, args)
+#define dprintk(args...) /*fprintf(stdout, args)*/
 
 #define MIN(x, y) ((x) > (y) ? (y) : (x))
 
