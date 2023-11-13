@@ -415,6 +415,12 @@ struct crush_map {
          */
 	__u8 chooseleaf_stable;
 
+	/*! Sets total retries for MSR rules */
+	__u8 choose_msr_total_retries;
+
+	/*! Sets local collision retries for MSR rules */
+	__u8 choose_msr_local_collision_retries;
+
         /*! @cond INTERNAL */
 	/* This value is calculated after decode or construction by
 	   the builder. It is exposed here (rather than having a

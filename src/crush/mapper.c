@@ -1032,162 +1032,164 @@ static int crush_do_rule_no_retry(
 
 // invariant through crush_msr_do_rule invocation
 struct crush_msr_input {
-  const struct crush_map *map;
-  const struct crush_rule *rule;
-
-  const unsigned result_max;
-
-  const unsigned weight_len;
-  const __u32 *weights;
-
-  const int map_input;
-  const struct crush_choose_arg *choose_args;
-
-  const unsigned total_tries;
-  const unsigned local_tries;
+	const struct crush_map *map;
+	const struct crush_rule *rule;
+	
+	const unsigned result_max;
+	
+	const unsigned weight_len;
+	const __u32 *weights;
+	
+	const int map_input;
+	const struct crush_choose_arg *choose_args;
+	
+	const unsigned total_tries;
+	const unsigned local_tries;
 };
 
 // encapsulates work space
 struct crush_msr_workspace {
-  const unsigned step_len;
-  const unsigned result_len;
+	const unsigned step_len;
+	const unsigned result_len;
 
-  const struct crush_work *crush_work;
+	const struct crush_work *crush_work;
 
-  // int[step_len][result_len]
-  int **step_vecs;
+	// int[step_len][result_len]
+	int **step_vecs;
 };
 
 struct crush_msr_output {
-  const unsigned result_len;
-  unsigned returned_so_far;
-  int *out;
+	const unsigned result_len;
+	unsigned returned_so_far;
+	int *out;
 };
 
 static unsigned crush_msr_scan_config_steps(
-  struct crush_rule_step *steps,
-  unsigned step_len,
-  unsigned *total_tries,
-  unsigned *local_tries) {
-  unsigned stepno = 0;
-  for (; stepno < step_len; ++stepno) {
-    struct crush_rule_step *step = &steps[stepno];
-    switch (step->op) {
-    case CRUSH_RULE_SET_CHOOSE_TRIES:
-      if (total_tries) *total_tries = step->arg1;
-      break;
-    case CRUSH_RULE_SET_CHOOSE_LOCAL_TRIES:
-      if (local_tries) *local_tries = step->arg1;
-      break;
-    default:
-      return stepno;
-    }
-  }
-  return stepno;
+	struct crush_rule_step *steps,
+	unsigned step_len,
+	unsigned *total_tries,
+	unsigned *local_tries) {
+	unsigned stepno = 0;
+	for (; stepno < step_len; ++stepno) {
+		struct crush_rule_step *step = &steps[stepno];
+		switch (step->op) {
+		case CRUSH_RULE_SET_CHOOSE_TRIES:
+			if (total_tries) *total_tries = step->arg1;
+			break;
+		case CRUSH_RULE_SET_CHOOSE_LOCAL_TRIES:
+			if (local_tries) *local_tries = step->arg1;
+			break;
+		default:
+			return stepno;
+		}
+	}
+	return stepno;
 }
 
 static void crush_msr_clear_workspace(
-  struct crush_msr_workspace *ws)
+	struct crush_msr_workspace *ws)
 {
-  for (unsigned stepno = 0; stepno < ws->step_len; ++stepno) {
-    for (unsigned i = 0; i < ws->result_len; ++i) {
-      ws->step_vecs[stepno][i] = CRUSH_ITEM_UNDEF;
-    }
-  }
+	for (unsigned stepno = 0; stepno < ws->step_len; ++stepno) {
+		for (unsigned i = 0; i < ws->result_len; ++i) {
+			ws->step_vecs[stepno][i] = CRUSH_ITEM_UNDEF;
+		}
+	}
 }
 
 static int crush_msr_scan_next(
-  const struct crush_msr_input *input,
-  unsigned stepno,
-  unsigned *total_children,
-  unsigned *next_emit)
+	const struct crush_msr_input *input,
+	unsigned stepno,
+	unsigned *total_children,
+	unsigned *next_emit)
 {
-  if (stepno + 1 >= input->rule->len) {
-    dprintk("stepno too large\n");
-    return -1;
-  }
-  if (input->rule->steps[stepno].op != CRUSH_RULE_TAKE) {
-    dprintk("first rule not CRUSH_RULE_TAKE\n");
-    return -1;
-  }
-  ++stepno;
+	if (stepno + 1 >= input->rule->len) {
+		dprintk("stepno too large\n");
+		return -1;
+	}
+	if (input->rule->steps[stepno].op != CRUSH_RULE_TAKE) {
+		dprintk("first rule not CRUSH_RULE_TAKE\n");
+		return -1;
+	}
+	++stepno;
 
-  for (; stepno < input->rule->len; ++stepno) {
-    const struct crush_rule_step *curstep = &(input->rule->steps[stepno]);
-    if (curstep->op == CRUSH_RULE_EMIT) {
-      break;
-    }
-    if (input->rule->steps[stepno].op != CRUSH_RULE_CHOOSE_INDEP) {
-      dprintk("found non-choose non-emit step %d\n", stepno);
-      return -1;
-    }
-    if (total_children) {
-      *total_children *= curstep->arg1 ? curstep->arg1 : input->result_max;
-    }
-  }
-  if (stepno >= input->rule->len) {
-    dprintk("did not find emit\n");
-    return -1;
-  }
-  if (next_emit) {
-    *next_emit = stepno;
-  }
-  return 0;
+	for (; stepno < input->rule->len; ++stepno) {
+		const struct crush_rule_step *curstep =
+			&(input->rule->steps[stepno]);
+		if (curstep->op == CRUSH_RULE_EMIT) {
+			break;
+		}
+		if (input->rule->steps[stepno].op != CRUSH_RULE_CHOOSE_INDEP) {
+			dprintk("found non-choose non-emit step %d\n", stepno);
+			return -1;
+		}
+		if (total_children) {
+			*total_children *= curstep->arg1 ? curstep->arg1
+				: input->result_max;
+		}
+	}
+	if (stepno >= input->rule->len) {
+		dprintk("did not find emit\n");
+		return -1;
+	}
+	if (next_emit) {
+		*next_emit = stepno;
+	}
+	return 0;
 }
 
 static int crush_msr_output_populated(
-  struct crush_msr_output *output,
-  unsigned start, unsigned end)
+	struct crush_msr_output *output,
+	unsigned start, unsigned end)
 {
-  BUG_ON(start >= end);
-  BUG_ON(end > output->result_len);
-  for (unsigned i = start; i < end; ++i) {
-    if (output->out[i] == CRUSH_ITEM_NONE) {
-      return 0;
-    }
-  }
-  return 1;
+	BUG_ON(start >= end);
+	BUG_ON(end > output->result_len);
+	for (unsigned i = start; i < end; ++i) {
+		if (output->out[i] == CRUSH_ITEM_NONE) {
+			return 0;
+		}
+	}
+	return 1;
 }
 
 static unsigned crush_msr_get_retry_value(
-  unsigned retries,
-  unsigned local_retries)
+	unsigned retries,
+	unsigned local_retries)
 {
-  return (retries << 16) + local_retries;
+	return (retries << 16) + local_retries;
 }
 
 static int crush_msr_descend(
-  const struct crush_msr_input *input,
-  const struct crush_msr_workspace *workspace,
-  const struct crush_bucket *bucket,
-  int type,
-  unsigned tryno,
-  unsigned local_tryno,
-  unsigned index)
+	const struct crush_msr_input *input,
+	const struct crush_msr_workspace *workspace,
+	const struct crush_bucket *bucket,
+	int type,
+	unsigned tryno,
+	unsigned local_tryno,
+	unsigned index)
 {
-  dprintk(" crush_msr_descend type %d tryno %d local_tryno %d index %d\n",
-	  type, tryno, local_tryno, index);
-  while (1) {
-    int child_bucket_candidate = crush_bucket_choose(
-      bucket,
-      workspace->crush_work->work[-1 - bucket->id],
-      input->map_input,
-      crush_msr_get_retry_value(
-	(tryno * input->result_max) + index,
-        local_tryno),
-      (input->choose_args ?
-       &(input->choose_args[-1 - bucket->id]) : 0),
-      index);
+	dprintk(" crush_msr_descend type %d tryno %d local_tryno %d index %d\n",
+		type, tryno, local_tryno, index);
+	while (1) {
+		int child_bucket_candidate = crush_bucket_choose(
+			bucket,
+			workspace->crush_work->work[-1 - bucket->id],
+			input->map_input,
+			crush_msr_get_retry_value(
+				(tryno * input->result_max) + index,
+				local_tryno),
+			(input->choose_args ?
+			 &(input->choose_args[-1 - bucket->id]) : 0),
+			index);
 
-    if (child_bucket_candidate >= 0) {
-      return child_bucket_candidate;
-    }
+		if (child_bucket_candidate >= 0) {
+			return child_bucket_candidate;
+		}
 
-    bucket = input->map->buckets[-1 - child_bucket_candidate];
-    if (bucket->type == type) {
-      return child_bucket_candidate;
-    }
-  }
+		bucket = input->map->buckets[-1 - child_bucket_candidate];
+		if (bucket->type == type) {
+			return child_bucket_candidate;
+		}
+	}
 }
 
 /**
@@ -1214,356 +1216,367 @@ static int crush_msr_descend(
  * Note, [exclude_start, exclude_end) must contain [include_start, include_end).
  */
 static int crush_msr_valid_candidate(
-  const struct crush_msr_workspace *workspace,
-  unsigned stepno,
-  unsigned exclude_start,
-  unsigned exclude_end,
-  unsigned include_start,
-  unsigned include_end,
-  int candidate)
+	const struct crush_msr_workspace *workspace,
+	unsigned stepno,
+	unsigned exclude_start,
+	unsigned exclude_end,
+	unsigned include_start,
+	unsigned include_end,
+	int candidate)
 {
-  BUG_ON(stepno >= workspace->step_len);
+	BUG_ON(stepno >= workspace->step_len);
 
-  BUG_ON(exclude_end <= exclude_start);
-  BUG_ON(include_end <= include_start);
+	BUG_ON(exclude_end <= exclude_start);
+	BUG_ON(include_end <= include_start);
 
-  BUG_ON(exclude_start > include_start);
-  BUG_ON(exclude_end < include_end);
+	BUG_ON(exclude_start > include_start);
+	BUG_ON(exclude_end < include_end);
 
-  BUG_ON(exclude_end > workspace->result_len);
+	BUG_ON(exclude_end > workspace->result_len);
 
-  int *vec = workspace->step_vecs[stepno];
-  for (unsigned i = exclude_start; i < exclude_end; ++i) {
-    if (vec[i] == candidate) {
-      if (i >= include_start && i < include_end) {
-	dprintk(" crush_msr_valid_candidate: candidate %d already chosen for stride\n",
+	int *vec = workspace->step_vecs[stepno];
+	for (unsigned i = exclude_start; i < exclude_end; ++i) {
+		if (vec[i] == candidate) {
+			if (i >= include_start && i < include_end) {
+				dprintk(" crush_msr_valid_candidate: "
+					"candidate %d already chosen for "
+					"stride\n",
+					candidate);
+				return 1;
+			} else {
+				dprintk(" crush_msr_valid_candidate: "
+					"candidate %d collision\n",
+					candidate);
+				return 0;
+			}
+		}
+	}
+	dprintk(" crush_msr_valid_candidate: candidate %d no collision\n",
 		candidate);
 	return 1;
-      } else {
-	dprintk(" crush_msr_valid_candidate: candidate %d collision\n",
-		candidate);
-	return 0;
-      }
-    }
-  }
-  dprintk(" crush_msr_valid_candidate: candidate %d no collision\n",
-	  candidate);
-  return 1;
 }
 
 static int crush_msr_push_used(
-  const struct crush_msr_workspace *workspace,
-  unsigned stepno,
-  unsigned stride_start,
-  unsigned stride_end,
-  int candidate)
+	const struct crush_msr_workspace *workspace,
+	unsigned stepno,
+	unsigned stride_start,
+	unsigned stride_end,
+	int candidate)
 {
-  BUG_ON(stepno >= workspace->step_len);
-  BUG_ON(stride_end <= stride_start);
-  BUG_ON(stride_end > workspace->result_len);
-  int *vec = workspace->step_vecs[stepno];
-  for (unsigned i = stride_start; i < stride_end; ++i) {
-    if (vec[i] == candidate) {
-      return 0;
-    } else if (vec[i] == CRUSH_ITEM_UNDEF) {
-      vec[i] = candidate;
-      return 1;
-    }
-  }
-  BUG_ON(0 == "impossible");
-  return 0;
+	BUG_ON(stepno >= workspace->step_len);
+	BUG_ON(stride_end <= stride_start);
+	BUG_ON(stride_end > workspace->result_len);
+	int *vec = workspace->step_vecs[stepno];
+	for (unsigned i = stride_start; i < stride_end; ++i) {
+		if (vec[i] == candidate) {
+			return 0;
+		} else if (vec[i] == CRUSH_ITEM_UNDEF) {
+			vec[i] = candidate;
+			return 1;
+		}
+	}
+	BUG_ON(0 == "impossible");
+	return 0;
 }
 
 static void crush_msr_pop_used(
-  const struct crush_msr_workspace *workspace,
-  unsigned stepno,
-  unsigned stride_start,
-  unsigned stride_end,
-  int candidate)
+	const struct crush_msr_workspace *workspace,
+	unsigned stepno,
+	unsigned stride_start,
+	unsigned stride_end,
+	int candidate)
 {
-  BUG_ON(stepno >= workspace->step_len);
-  BUG_ON(stride_end <= stride_start);
-  BUG_ON(stride_end > workspace->result_len);
-  int *vec = workspace->step_vecs[stepno];
-  for (unsigned i = stride_end; i > stride_start;) {
-    --i;
-    if (vec[i] != CRUSH_ITEM_UNDEF) {
-      BUG_ON(vec[i] != candidate);
-      vec[i] = CRUSH_ITEM_UNDEF;
-      return;
-    }
-  }
-  BUG_ON(0 == "impossible");
+	BUG_ON(stepno >= workspace->step_len);
+	BUG_ON(stride_end <= stride_start);
+	BUG_ON(stride_end > workspace->result_len);
+	int *vec = workspace->step_vecs[stepno];
+	for (unsigned i = stride_end; i > stride_start;) {
+		--i;
+		if (vec[i] != CRUSH_ITEM_UNDEF) {
+			BUG_ON(vec[i] != candidate);
+			vec[i] = CRUSH_ITEM_UNDEF;
+			return;
+		}
+	}
+	BUG_ON(0 == "impossible");
 }
 
 static void crush_msr_emit_result(
-  struct crush_msr_output *output,
-  int rule_type,
-  unsigned position,
-  int result)
+	struct crush_msr_output *output,
+	int rule_type,
+	unsigned position,
+	int result)
 {
-  BUG_ON(position >= output->result_len);
-  BUG_ON(output->returned_so_far >= output->result_len);
-  if (rule_type == CRUSH_RULE_TYPE_MSR_FIRSTN) {
-    BUG_ON(output->out[output->returned_so_far] != CRUSH_ITEM_NONE);
-    output->out[++(output->returned_so_far)] = result;
-  } else {
-    BUG_ON(output->out[position] != CRUSH_ITEM_NONE);
-    output->out[position] = result;
-    ++output->returned_so_far;
-  }
-  dprintk(" emit: %d, returned_so_far: %d\n", result, output->returned_so_far);
+	BUG_ON(position >= output->result_len);
+	BUG_ON(output->returned_so_far >= output->result_len);
+	if (rule_type == CRUSH_RULE_TYPE_MSR_FIRSTN) {
+		BUG_ON(output->out[output->returned_so_far] != CRUSH_ITEM_NONE);
+		output->out[++(output->returned_so_far)] = result;
+	} else {
+		BUG_ON(output->out[position] != CRUSH_ITEM_NONE);
+		output->out[position] = result;
+		++output->returned_so_far;
+	}
+	dprintk(" emit: %d, returned_so_far: %d\n",
+		result, output->returned_so_far);
 }
 
 static unsigned crush_msr_choose(
-  const struct crush_msr_input *input,
-  const struct crush_msr_workspace *workspace,
-  struct crush_msr_output *output,
-  const struct crush_bucket *bucket,
-  unsigned total_children,
-  unsigned start_index, unsigned end_index,
-  unsigned current_stepno, unsigned end_stepno,
-  unsigned tryno)
+	const struct crush_msr_input *input,
+	const struct crush_msr_workspace *workspace,
+	struct crush_msr_output *output,
+	const struct crush_bucket *bucket,
+	unsigned total_children,
+	unsigned start_index, unsigned end_index,
+	unsigned current_stepno, unsigned end_stepno,
+	unsigned tryno)
 {
-  dprintk("crush_msr_choose: bucket %d, start_index %d, end_index %d\n",
-	  bucket->id, start_index, end_index);
+	dprintk("crush_msr_choose: bucket %d, start_index %d, end_index %d\n",
+		bucket->id, start_index, end_index);
 
-  BUG_ON(current_stepno >= input->rule->len);
-  const struct crush_rule_step *curstep = &(input->rule->steps[current_stepno]);
-  BUG_ON(curstep->op != CRUSH_RULE_CHOOSE_INDEP);
+	BUG_ON(current_stepno >= input->rule->len);
+	const struct crush_rule_step *curstep =
+		&(input->rule->steps[current_stepno]);
+	BUG_ON(curstep->op != CRUSH_RULE_CHOOSE_INDEP);
 
-  unsigned children = curstep->arg1 ? curstep->arg1 : input->result_max;
-  BUG_ON(total_children % children != 0);
-  unsigned stride = total_children / children;
+	unsigned children = curstep->arg1 ? curstep->arg1
+		: input->result_max;
+	BUG_ON(total_children % children != 0);
+	unsigned stride = total_children / children;
 
-  /* TODOSAM If we don't add the internal nodes to the set, mapping a
-   * host out could cause it could cause a subsequent descent to fail
-   * to collide on it changing the result of that stride -- probably
-   * record anyway until this try is over? */
-  /* We could restructure this as selecting N distinct items for this
-   * pass, maybe that would be easier to understand than undo? */
-  int undo[children];
-  for (unsigned i = 0; i < children; ++i) {
-    undo[i] = CRUSH_ITEM_UNDEF;
-  }
+	/* TODOSAM If we don't add the internal nodes to the set, mapping a
+	 * host out could cause it could cause a subsequent descent to fail
+	 * to collide on it changing the result of that stride -- probably
+	 * record anyway until this try is over? */
+	/* We could restructure this as selecting N distinct items for this
+	 * pass, maybe that would be easier to understand than undo? */
+	int undo[children];
+	for (unsigned i = 0; i < children; ++i) {
+		undo[i] = CRUSH_ITEM_UNDEF;
+	}
 
-  dprintk(
-    "crush_msr_choose: bucket %d, start_index %d, end_index %d, stride %d\n",
-    bucket->id, start_index, end_index, stride);
+	dprintk("crush_msr_choose: bucket %d, start_index %d, "
+		"end_index %d, stride %d\n",
+		bucket->id, start_index, end_index, stride);
 
-  unsigned mapped = 0;
-  unsigned index = 0;
-  for (unsigned sub_start = start_index;
-       sub_start < end_index;
-       sub_start += stride, ++index) {
-    unsigned sub_end = MIN(sub_start + stride, end_index);
+	unsigned mapped = 0;
+	unsigned index = 0;
+	for (unsigned sub_start = start_index;
+	     sub_start < end_index;
+	     sub_start += stride, ++index) {
+		unsigned sub_end = MIN(sub_start + stride, end_index);
     
-    if (crush_msr_output_populated(output, sub_start, sub_end)) {
-      continue;
-    }
+		if (crush_msr_output_populated(output, sub_start, sub_end)) {
+			continue;
+		}
 
-    /* TODOSAM: passing sub_start for the interior bucket may not be good
-     * Generally, audit these choices later */
-    int found = 0;
-    int child_bucket_candidate;
-    for (unsigned local_tryno = 0;
-	 local_tryno <= input->local_tries;
-	 ++local_tryno) {
-      child_bucket_candidate = crush_msr_descend(
-	input, workspace, bucket,
-	curstep->arg2, tryno, local_tryno, sub_start);
+		/* TODOSAM: passing sub_start for the interior bucket may
+		 * not be good. Generally, audit these choices later */
+		int found = 0;
+		int child_bucket_candidate;
+		for (unsigned local_tryno = 0;
+		     local_tryno <= input->local_tries;
+		     ++local_tryno) {
+			child_bucket_candidate = crush_msr_descend(
+				input, workspace, bucket,
+				curstep->arg2, tryno, local_tryno, sub_start);
 
-      if (crush_msr_valid_candidate(
-	    workspace,
-	    current_stepno,
-	    start_index,
-	    end_index,
-	    sub_start,
-	    sub_end,
-	    child_bucket_candidate)) {
-	found = 1;
-	break;
-      }
-    }
+			if (crush_msr_valid_candidate(
+				    workspace,
+				    current_stepno,
+				    start_index,
+				    end_index,
+				    sub_start,
+				    sub_end,
+				    child_bucket_candidate)) {
+				found = 1;
+				break;
+			}
+		}
 
-    if (!found) continue;
+		if (!found) continue;
 
-    if (curstep->arg2 == 0) {
-      if (stride != 1 || (current_stepno + 1 != end_stepno) ||
-	  curstep->arg2 != 0) {
-	continue;
-      }
-      if (is_out(
-	    input->map, input->weights, input->weight_len,
-	    child_bucket_candidate, input->map_input)) {
-	dprintk(
-	  " crush_msr_choose: item %d out\n",
-	  child_bucket_candidate);
-	continue;
-      }
-      crush_msr_push_used(
-	workspace, current_stepno, sub_start, sub_end,
-	child_bucket_candidate);
-      crush_msr_emit_result(
-	output, input->rule->type,
-	sub_start, child_bucket_candidate);
-      mapped++;
-    } else {
-      if (current_stepno + 1 >= end_stepno) {
-	continue;
-      }
-      struct crush_bucket *child_bucket = input->map->buckets[
-	-1 - child_bucket_candidate];
-      unsigned child_mapped = crush_msr_choose(
-	input, workspace, output,
-	child_bucket,
-	stride,
-	sub_start, sub_end,
-	current_stepno + 1, end_stepno,
-	tryno);
-      int pushed = crush_msr_push_used(
-	workspace,
-	current_stepno,
-	sub_start,
-	sub_end,
-	child_bucket_candidate);
-      if (pushed && (child_mapped == 0)) {
-	undo[index] = child_bucket_candidate;
-      } else {
-	mapped += child_mapped;
-      }
-    }
-  }
+		if (curstep->arg2 == 0) {
+			if (stride != 1 || (current_stepno + 1 != end_stepno) ||
+			    curstep->arg2 != 0) {
+				continue;
+			}
+			if (is_out(input->map, input->weights,
+				   input->weight_len,
+				   child_bucket_candidate, input->map_input)) {
+				dprintk(" crush_msr_choose: item %d out\n",
+					child_bucket_candidate);
+				continue;
+			}
+			crush_msr_push_used(
+				workspace, current_stepno, sub_start, sub_end,
+				child_bucket_candidate);
+			crush_msr_emit_result(
+				output, input->rule->type,
+				sub_start, child_bucket_candidate);
+			mapped++;
+		} else {
+			if (current_stepno + 1 >= end_stepno) {
+				continue;
+			}
+			struct crush_bucket *child_bucket = input->map->buckets[
+				-1 - child_bucket_candidate];
+			unsigned child_mapped = crush_msr_choose(
+				input, workspace, output,
+				child_bucket,
+				stride,
+				sub_start, sub_end,
+				current_stepno + 1, end_stepno,
+				tryno);
+			int pushed = crush_msr_push_used(
+				workspace,
+				current_stepno,
+				sub_start,
+				sub_end,
+				child_bucket_candidate);
+			if (pushed && (child_mapped == 0)) {
+				undo[index] = child_bucket_candidate;
+			} else {
+				mapped += child_mapped;
+			}
+		}
+	}
 
-  index = 0;
-  for (unsigned sub_start = start_index;
-       sub_start < end_index;
-       sub_start += stride, ++index) {
-    if (undo[index] != CRUSH_ITEM_UNDEF) {
-      unsigned sub_end = MIN(sub_start + stride, end_index);
-      crush_msr_pop_used(
-	workspace,
-	current_stepno,
-	sub_start,
-	sub_end,
-	undo[index]);
-    }
-  }
+	index = 0;
+	for (unsigned sub_start = start_index;
+	     sub_start < end_index;
+	     sub_start += stride, ++index) {
+		if (undo[index] != CRUSH_ITEM_UNDEF) {
+			unsigned sub_end = MIN(sub_start + stride, end_index);
+			crush_msr_pop_used(
+				workspace,
+				current_stepno,
+				sub_start,
+				sub_end,
+				undo[index]);
+		}
+	}
   
-  return mapped;
+	return mapped;
 }
 
 static int crush_msr_do_rule(
-  const struct crush_map *map,
-  int ruleno, int map_input, int *result, int result_max,
-  const __u32 *weight, int weight_max,
-  void *cwin, const struct crush_choose_arg *choose_args)
+	const struct crush_map *map,
+	int ruleno, int map_input, int *result, int result_max,
+	const __u32 *weight, int weight_max,
+	void *cwin, const struct crush_choose_arg *choose_args)
 {
-  unsigned total_tries = map->choose_total_tries;
-  unsigned local_tries = map->choose_local_tries;
-  struct crush_rule *rule = map->rules[ruleno];
-  unsigned start_stepno = crush_msr_scan_config_steps(
-    rule->steps, rule->len, &total_tries, &local_tries);
+	unsigned total_tries = map->choose_total_tries;
+	unsigned local_tries = map->choose_local_tries;
+	struct crush_rule *rule = map->rules[ruleno];
+	unsigned start_stepno = crush_msr_scan_config_steps(
+		rule->steps, rule->len, &total_tries, &local_tries);
 
-  struct crush_msr_input input = {
-    .map = map,
-    .rule = map->rules[ruleno],
-    .result_max = result_max,
-    .weight_len = weight_max,
-    .weights = weight,
-    .map_input = map_input,
-    .choose_args = choose_args,
-    .total_tries = total_tries,
-    .local_tries = local_tries
-  };
+	struct crush_msr_input input = {
+		.map = map,
+		.rule = map->rules[ruleno],
+		.result_max = result_max,
+		.weight_len = weight_max,
+		.weights = weight,
+		.map_input = map_input,
+		.choose_args = choose_args,
+		.total_tries = total_tries,
+		.local_tries = local_tries
+	};
 
-  struct crush_work *cw = cwin;
+	struct crush_work *cw = cwin;
 
-  int *out_vecs[input.rule->len];
-  for (unsigned stepno = 0; stepno < input.rule->len; ++stepno) {
-    out_vecs[stepno] = (int*)((char*)cw + map->working_size) +
-      (stepno * result_max);
-  }
-  struct crush_msr_workspace workspace = {
-    .step_len = input.rule->len,
-    .result_len = result_max,
-    .crush_work = cw,
-    .step_vecs = out_vecs
-  };
-  crush_msr_clear_workspace(&workspace);
+	int *out_vecs[input.rule->len];
+	for (unsigned stepno = 0; stepno < input.rule->len; ++stepno) {
+		out_vecs[stepno] = (int*)((char*)cw + map->working_size) +
+			(stepno * result_max);
+	}
+	struct crush_msr_workspace workspace = {
+		.step_len = input.rule->len,
+		.result_len = result_max,
+		.crush_work = cw,
+		.step_vecs = out_vecs
+	};
+	crush_msr_clear_workspace(&workspace);
 
-  struct crush_msr_output output = {
-    .result_len = result_max,
-    .returned_so_far = 0,
-    .out = result
-  };
-  for (unsigned i = 0; i < output.result_len; ++i) {
-    output.out[i] = CRUSH_ITEM_NONE;
-  }
+	struct crush_msr_output output = {
+		.result_len = result_max,
+		.returned_so_far = 0,
+		.out = result
+	};
+	for (unsigned i = 0; i < output.result_len; ++i) {
+		output.out[i] = CRUSH_ITEM_NONE;
+	}
 
-  unsigned start_index = 0;
-  while (start_stepno < input.rule->len) {
-    unsigned emit_stepno, total_children = 1;
-    if (crush_msr_scan_next(
-	  &input, start_stepno, &total_children, &emit_stepno) != 0) {
-      // invalid rule
-      dprintk("crush_msr_scan_returned -1\n");
-      return 0;
-    }
+	unsigned start_index = 0;
+	while (start_stepno < input.rule->len) {
+		unsigned emit_stepno, total_children = 1;
+		if (crush_msr_scan_next(
+			    &input, start_stepno, &total_children,
+			    &emit_stepno) != 0) {
+			// invalid rule
+			dprintk("crush_msr_scan_returned -1\n");
+			return 0;
+		}
 
-    const struct crush_rule_step *take_step = &(input.rule->steps[start_stepno]);
-    BUG_ON(take_step->op != CRUSH_RULE_TAKE);
+		const struct crush_rule_step *take_step =
+			&(input.rule->steps[start_stepno]);
+		BUG_ON(take_step->op != CRUSH_RULE_TAKE);
 
-    if (take_step->arg1 >= 0) {
-      if (start_stepno + 1 != emit_stepno) {
-	// invalid rule
-	dprintk(
-	  "take step specifies osd, but there are subsequent choose steps\n");
-	return 0;
-      } else {
-	crush_msr_emit_result(
-	  &output, input.rule->type,
-	  start_index, take_step->arg1);
-      }
-    } else {
-      dprintk("start_stepno %d\n", start_stepno);
-      dprintk("root bucket: %d\n", input.rule->steps[start_stepno].arg1);
-      struct crush_bucket *root_bucket = input.map->buckets[
-	-1 - input.rule->steps[start_stepno].arg1];
-      dprintk(
-	"root bucket: %d %p\n",
-	input.rule->steps[start_stepno].arg1,
-	root_bucket);
+		if (take_step->arg1 >= 0) {
+			if (start_stepno + 1 != emit_stepno) {
+				// invalid rule
+				dprintk("take step specifies osd, but "
+					"there are subsequent choose steps\n");
+				return 0;
+			} else {
+				crush_msr_emit_result(
+					&output, input.rule->type,
+					start_index, take_step->arg1);
+			}
+		} else {
+			dprintk("start_stepno %d\n", start_stepno);
+			dprintk("root bucket: %d\n",
+				input.rule->steps[start_stepno].arg1);
+			struct crush_bucket *root_bucket = input.map->buckets[
+				-1 - input.rule->steps[start_stepno].arg1];
+			dprintk(
+				"root bucket: %d %p\n",
+				input.rule->steps[start_stepno].arg1,
+				root_bucket);
 
-      ++start_stepno;
-      BUG_ON(emit_stepno >= input.rule->len);
-      BUG_ON(emit_stepno < start_stepno);
-      BUG_ON(start_stepno >= input.rule->len);
+			++start_stepno;
+			BUG_ON(emit_stepno >= input.rule->len);
+			BUG_ON(emit_stepno < start_stepno);
+			BUG_ON(start_stepno >= input.rule->len);
 
-      unsigned tries_so_far = 0;
-      while (tries_so_far <= input.total_tries &&
-	     output.returned_so_far < input.result_max) {
-	crush_msr_choose(
-	  &input, &workspace, &output,
-	  root_bucket,
-	  total_children,
-	  start_index, MIN(start_index + input.result_max, input.result_max),
-	  start_stepno, emit_stepno,
-	  tries_so_far);
-	dprintk("returned_so_far: %d\n", output.returned_so_far);
-	++tries_so_far;
-      }
-      start_index = MIN(start_index + total_children, input.result_max);
-      start_stepno = emit_stepno + 1;
-    }
-  }
-  return input.result_max; // output.returned_so_far;
+			unsigned tries_so_far = 0;
+			while (tries_so_far <= input.total_tries &&
+			       output.returned_so_far < input.result_max) {
+				crush_msr_choose(
+					&input, &workspace, &output,
+					root_bucket,
+					total_children,
+					start_index,
+					MIN(start_index + input.result_max,
+					    input.result_max),
+					start_stepno, emit_stepno,
+					tries_so_far);
+				dprintk("returned_so_far: %d\n", output.returned_so_far);
+				++tries_so_far;
+			}
+			start_index = MIN(start_index + total_children,
+					  input.result_max);
+			start_stepno = emit_stepno + 1;
+		}
+	}
+	return input.result_max; // output.returned_so_far;
 }
 
 static int rule_type_is_msr(int type)
 {
 	return type == CRUSH_RULE_TYPE_MSR_FIRSTN ||
-	  type == CRUSH_RULE_TYPE_MSR_INDEP;
+		type == CRUSH_RULE_TYPE_MSR_INDEP;
 }
 
 size_t crush_work_size(const struct crush_map *map,
