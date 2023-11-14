@@ -127,6 +127,8 @@ public:
     crush->chooseleaf_vary_r = 0;
     crush->chooseleaf_stable = 0;
     crush->allowed_bucket_algs = CRUSH_LEGACY_ALLOWED_BUCKET_ALGS;
+    crush->choose_msr_total_tries = 0;
+    crush->choose_msr_local_collision_tries = 0;
   }
   void set_tunables_bobtail() {
     crush->choose_local_tries = 0;
@@ -136,6 +138,8 @@ public:
     crush->chooseleaf_vary_r = 0;
     crush->chooseleaf_stable = 0;
     crush->allowed_bucket_algs = CRUSH_LEGACY_ALLOWED_BUCKET_ALGS;
+    crush->choose_msr_total_tries = 0;
+    crush->choose_msr_local_collision_tries = 0;
   }
   void set_tunables_firefly() {
     crush->choose_local_tries = 0;
@@ -145,6 +149,8 @@ public:
     crush->chooseleaf_vary_r = 1;
     crush->chooseleaf_stable = 0;
     crush->allowed_bucket_algs = CRUSH_LEGACY_ALLOWED_BUCKET_ALGS;
+    crush->choose_msr_total_tries = 0;
+    crush->choose_msr_local_collision_tries = 0;
   }
   void set_tunables_hammer() {
     crush->choose_local_tries = 0;
@@ -158,6 +164,8 @@ public:
       (1 << CRUSH_BUCKET_LIST) |
       (1 << CRUSH_BUCKET_STRAW) |
       (1 << CRUSH_BUCKET_STRAW2);
+    crush->choose_msr_total_tries = 0;
+    crush->choose_msr_local_collision_tries = 0;
   }
   void set_tunables_jewel() {
     crush->choose_local_tries = 0;
@@ -171,6 +179,23 @@ public:
       (1 << CRUSH_BUCKET_LIST) |
       (1 << CRUSH_BUCKET_STRAW) |
       (1 << CRUSH_BUCKET_STRAW2);
+    crush->choose_msr_total_tries = 0;
+    crush->choose_msr_local_collision_tries = 0;
+  }
+  void set_tunables_squid() {
+    crush->choose_local_tries = 0;
+    crush->choose_local_fallback_tries = 0;
+    crush->choose_total_tries = 50;
+    crush->chooseleaf_descend_once = 1;
+    crush->chooseleaf_vary_r = 1;
+    crush->chooseleaf_stable = 1;
+    crush->allowed_bucket_algs =
+      (1 << CRUSH_BUCKET_UNIFORM) |
+      (1 << CRUSH_BUCKET_LIST) |
+      (1 << CRUSH_BUCKET_STRAW) |
+      (1 << CRUSH_BUCKET_STRAW2);
+    crush->choose_msr_total_tries = 100;
+    crush->choose_msr_local_collision_tries = 100;
   }
 
   void set_tunables_legacy() {
@@ -178,7 +203,7 @@ public:
     crush->straw_calc_version = 0;
   }
   void set_tunables_optimal() {
-    set_tunables_jewel();
+    set_tunables_squid();
     crush->straw_calc_version = 1;
   }
   void set_tunables_default() {
@@ -233,6 +258,20 @@ public:
   }
   void set_straw_calc_version(int n) {
     crush->straw_calc_version = n;
+  }
+
+  int get_choose_msr_total_tries() const {
+    return crush->choose_msr_total_tries;
+  }
+  void set_choose_msr_total_tries(int n) {
+    crush->choose_msr_total_tries = n;
+  }
+
+  int get_choose_msr_local_collision_tries() const {
+    return crush->choose_msr_local_collision_tries;
+  }
+  void set_choose_msr_local_collision_tries(int n) {
+    crush->choose_msr_local_collision_tries = n;
   }
 
   unsigned get_allowed_bucket_algs() const {

@@ -321,6 +321,13 @@ int CrushCompiler::decompile(ostream &out)
   if (crush.get_allowed_bucket_algs() != CRUSH_LEGACY_ALLOWED_BUCKET_ALGS)
     out << "tunable allowed_bucket_algs " << crush.get_allowed_bucket_algs()
 	<< "\n";
+  if (crush.get_choose_msr_total_tries() != 0)
+    out << "tunable crush_msr_total_tries " << crush.get_choose_msr_total_tries()
+	<< "\n";
+  if (crush.get_choose_msr_local_collision_tries() != 0)
+    out << "tunable choose_msr_local_collision_tries "
+	<< crush.get_choose_msr_local_collision_tries()
+	<< "\n";
 
   out << "\n# devices\n";
   for (int i=0; i<crush.get_max_devices(); i++) {
