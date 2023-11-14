@@ -1152,10 +1152,10 @@ static int crush_msr_output_populated(
 }
 
 static unsigned crush_msr_get_retry_value(
-	unsigned retries,
-	unsigned local_retries)
+	unsigned tries,
+	unsigned local_tries)
 {
-	return (retries << 16) + local_retries;
+	return (tries << 16) + local_tries;
 }
 
 static int crush_msr_descend(
@@ -1466,8 +1466,8 @@ static int crush_msr_do_rule(
 	const __u32 *weight, int weight_max,
 	void *cwin, const struct crush_choose_arg *choose_args)
 {
-	unsigned total_tries = map->choose_total_tries;
-	unsigned local_tries = map->choose_local_tries;
+	unsigned total_tries = map->choose_msr_total_tries;
+	unsigned local_tries = map->choose_msr_local_collision_tries;
 	struct crush_rule *rule = map->rules[ruleno];
 	unsigned start_stepno = crush_msr_scan_config_steps(
 		rule->steps, rule->len, &total_tries, &local_tries);
@@ -1562,7 +1562,8 @@ static int crush_msr_do_rule(
 					    input.result_max),
 					start_stepno, emit_stepno,
 					tries_so_far);
-				dprintk("returned_so_far: %d\n", output.returned_so_far);
+				dprintk("returned_so_far: %d\n",
+					output.returned_so_far);
 				++tries_so_far;
 			}
 			start_index = MIN(start_index + total_children,

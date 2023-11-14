@@ -3064,7 +3064,6 @@ void CrushWrapper::encode(bufferlist& bl, uint64_t features) const
   if (features & CEPH_FEATURE_CRUSH_TUNABLES5) {
     encode(crush->chooseleaf_stable, bl);
   }
-
   if (HAVE_FEATURE(features, SERVER_LUMINOUS)) {
     // device classes
     encode(class_map, bl);
@@ -3104,6 +3103,10 @@ void CrushWrapper::encode(bufferlist& bl, uint64_t features) const
 	  encode(arg->ids[j], bl);
       }
     }
+  }
+  if (HAVE_FEATURE(features, CRUSH_MSR)) {
+    encode(crush->choose_msr_total_tries, bl);
+    encode(crush->choose_msr_local_collision_tries, bl);
   }
 }
 
@@ -3254,6 +3257,10 @@ void CrushWrapper::decode(bufferlist::const_iterator& blp)
 	}
 	choose_args[choose_args_index] = arg_map;
       }
+    }
+    if (!blp.end()) {
+      decode(crush->choose_msr_total_tries, blp);
+      decode(crush->choose_msr_local_collision_tries, blp);
     }
     update_choose_args(nullptr); // in case we decode a legacy "corrupted" map
     finalize();
