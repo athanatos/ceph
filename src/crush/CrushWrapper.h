@@ -125,6 +125,8 @@ public:
     crush->chooseleaf_vary_r = 0;
     crush->chooseleaf_stable = 0;
     crush->allowed_bucket_algs = CRUSH_LEGACY_ALLOWED_BUCKET_ALGS;
+    crush->choose_msr_total_tries = 0;
+    crush->choose_msr_local_collision_tries = 0;
   }
   void set_tunables_bobtail() {
     crush->choose_local_tries = 0;
@@ -134,6 +136,8 @@ public:
     crush->chooseleaf_vary_r = 0;
     crush->chooseleaf_stable = 0;
     crush->allowed_bucket_algs = CRUSH_LEGACY_ALLOWED_BUCKET_ALGS;
+    crush->choose_msr_total_tries = 0;
+    crush->choose_msr_local_collision_tries = 0;
   }
   void set_tunables_firefly() {
     crush->choose_local_tries = 0;
@@ -143,6 +147,8 @@ public:
     crush->chooseleaf_vary_r = 1;
     crush->chooseleaf_stable = 0;
     crush->allowed_bucket_algs = CRUSH_LEGACY_ALLOWED_BUCKET_ALGS;
+    crush->choose_msr_total_tries = 0;
+    crush->choose_msr_local_collision_tries = 0;
   }
   void set_tunables_hammer() {
     crush->choose_local_tries = 0;
@@ -156,6 +162,8 @@ public:
       (1 << CRUSH_BUCKET_LIST) |
       (1 << CRUSH_BUCKET_STRAW) |
       (1 << CRUSH_BUCKET_STRAW2);
+    crush->choose_msr_total_tries = 0;
+    crush->choose_msr_local_collision_tries = 0;
   }
   void set_tunables_jewel() {
     crush->choose_local_tries = 0;
@@ -169,6 +177,23 @@ public:
       (1 << CRUSH_BUCKET_LIST) |
       (1 << CRUSH_BUCKET_STRAW) |
       (1 << CRUSH_BUCKET_STRAW2);
+    crush->choose_msr_total_tries = 0;
+    crush->choose_msr_local_collision_tries = 0;
+  }
+  void set_tunables_squid() {
+    crush->choose_local_tries = 0;
+    crush->choose_local_fallback_tries = 0;
+    crush->choose_total_tries = 50;
+    crush->chooseleaf_descend_once = 1;
+    crush->chooseleaf_vary_r = 1;
+    crush->chooseleaf_stable = 1;
+    crush->allowed_bucket_algs =
+      (1 << CRUSH_BUCKET_UNIFORM) |
+      (1 << CRUSH_BUCKET_LIST) |
+      (1 << CRUSH_BUCKET_STRAW) |
+      (1 << CRUSH_BUCKET_STRAW2);
+    crush->choose_msr_total_tries = 100;
+    crush->choose_msr_local_collision_tries = 100;
   }
 
   void set_tunables_legacy() {
@@ -176,7 +201,7 @@ public:
     crush->straw_calc_version = 0;
   }
   void set_tunables_optimal() {
-    set_tunables_jewel();
+    set_tunables_squid();
     crush->straw_calc_version = 1;
   }
   void set_tunables_default() {
@@ -231,6 +256,20 @@ public:
   }
   void set_straw_calc_version(int n) {
     crush->straw_calc_version = n;
+  }
+
+  int get_choose_msr_total_tries() const {
+    return crush->choose_msr_total_tries;
+  }
+  void set_choose_msr_total_tries(int n) {
+    crush->choose_msr_total_tries = n;
+  }
+
+  int get_choose_msr_local_collision_tries() const {
+    return crush->choose_msr_local_collision_tries;
+  }
+  void set_choose_msr_local_collision_tries(int n) {
+    crush->choose_msr_local_collision_tries = n;
   }
 
   unsigned get_allowed_bucket_algs() const {
@@ -296,9 +335,24 @@ public:
 				      (1 << CRUSH_BUCKET_STRAW) |
 				      (1 << CRUSH_BUCKET_STRAW2));
   }
+  bool has_squid_tunables() const {
+    return
+      crush->choose_local_tries == 0 &&
+      crush->choose_local_fallback_tries == 0 &&
+      crush->choose_total_tries == 50 &&
+      crush->chooseleaf_descend_once == 1 &&
+      crush->chooseleaf_vary_r == 1 &&
+      crush->chooseleaf_stable == 1 &&
+      crush->allowed_bucket_algs == ((1 << CRUSH_BUCKET_UNIFORM) |
+				      (1 << CRUSH_BUCKET_LIST) |
+				      (1 << CRUSH_BUCKET_STRAW) |
+				      (1 << CRUSH_BUCKET_STRAW2)) &&
+      crush->choose_msr_total_tries == 100 &&
+      crush->choose_msr_local_collision_tries == 100;
+  }
 
   bool has_optimal_tunables() const {
-    return has_jewel_tunables();
+    return has_squid_tunables();
   }
   bool has_legacy_tunables() const {
     return has_argonaut_tunables();
@@ -322,6 +376,11 @@ public:
     return
         crush->chooseleaf_stable != 0;
   }
+  bool has_nondefault_tunables_msr() const {
+    return
+      crush->choose_msr_total_tries != 0 ||
+      crush->choose_msr_local_collision_tries != 0;
+  }
 
   bool has_v2_rules() const;
   bool has_v3_rules() const;
@@ -337,7 +396,7 @@ public:
   bool is_msr_rule(unsigned ruleid) const;
 
   std::string get_min_required_version() const {
-    if (has_msr_rules())
+    if (has_msr_rules() || has_nondefault_tunables_msr())
       return "squid";
     else if (has_v5_rules() || has_nondefault_tunables5())
       return "jewel";
@@ -1155,6 +1214,14 @@ public:
   int set_rule_step_set_chooseleaf_stable(unsigned ruleno, unsigned step, int val) {
     return set_rule_step(ruleno, step, CRUSH_RULE_SET_CHOOSELEAF_STABLE, val, 0);
   }
+
+  int set_rule_step_set_choose_msr_total_tries(unsigned ruleno, unsigned step, int val) {
+    return set_rule_step(ruleno, step, CRUSH_RULE_SET_CHOOSE_MSR_TOTAL_TRIES, val, 0);
+  }
+  int set_rule_step_set_choose_msr_local_collision_tries(unsigned ruleno, unsigned step, int val) {
+    return set_rule_step(ruleno, step, CRUSH_RULE_SET_CHOOSE_MSR_LOCAL_COLLISION_TRIES, val, 0);
+  }
+
   int set_rule_step_choose_firstn(unsigned ruleno, unsigned step, int val, int type) {
     return set_rule_step(ruleno, step, CRUSH_RULE_CHOOSE_FIRSTN, val, type);
   }
