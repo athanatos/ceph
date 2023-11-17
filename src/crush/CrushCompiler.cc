@@ -321,6 +321,13 @@ int CrushCompiler::decompile(ostream &out)
   if (crush.get_allowed_bucket_algs() != CRUSH_LEGACY_ALLOWED_BUCKET_ALGS)
     out << "tunable allowed_bucket_algs " << crush.get_allowed_bucket_algs()
 	<< "\n";
+  if (crush.get_choose_msr_total_tries() != 0)
+    out << "tunable choose_msr_total_tries " << crush.get_choose_msr_total_tries()
+	<< "\n";
+  if (crush.get_choose_msr_local_collision_tries() != 0)
+    out << "tunable choose_msr_local_collision_tries "
+	<< crush.get_choose_msr_local_collision_tries()
+	<< "\n";
 
   out << "\n# devices\n";
   for (int i=0; i<crush.get_max_devices(); i++) {
@@ -426,6 +433,15 @@ int CrushCompiler::decompile(ostream &out)
 	break;
       case CRUSH_RULE_SET_CHOOSELEAF_STABLE:
 	out << "\tstep set_chooseleaf_stable " << crush.get_rule_arg1(i, j)
+	    << "\n";
+	break;
+      case CRUSH_RULE_SET_CHOOSE_MSR_TOTAL_TRIES:
+	out << "\tstep set_choose_msr_total_tries " << crush.get_rule_arg1(i, j)
+	    << "\n";
+	break;
+      case CRUSH_RULE_SET_CHOOSE_MSR_LOCAL_COLLISION_TRIES:
+	out << "\tstep set_choose_msr_local_collision_tries "
+	    << crush.get_rule_arg1(i, j)
 	    << "\n";
 	break;
       case CRUSH_RULE_CHOOSE_FIRSTN:
@@ -538,6 +554,10 @@ int CrushCompiler::parse_tunable(iter_t const& i)
     crush.set_straw_calc_version(val);
   else if (name == "allowed_bucket_algs")
     crush.set_allowed_bucket_algs(val);
+  else if (name == "choose_msr_total_tries")
+    crush.set_choose_msr_total_tries(val);
+  else if (name == "choose_msr_local_collision_tries")
+    crush.set_choose_msr_local_collision_tries(val);
   else {
     err << "tunable " << name << " not recognized" << std::endl;
     return -1;
@@ -913,6 +933,18 @@ int CrushCompiler::parse_rule(iter_t const& i)
       {
 	int val = int_node(s->children[1]);
 	crush.set_rule_step_set_chooseleaf_stable(ruleno, step++, val);
+      }
+      break;
+    case crush_grammar::_step_set_choose_msr_total_tries:
+      {
+	int val = int_node(s->children[1]);
+	crush.set_rule_step_set_choose_msr_total_tries(ruleno, step++, val);
+      }
+      break;
+    case crush_grammar::_step_set_choose_msr_local_collision_tries:
+      {
+	int val = int_node(s->children[1]);
+	crush.set_rule_step_set_choose_msr_local_collision_tries(ruleno, step++, val);
       }
       break;
 
