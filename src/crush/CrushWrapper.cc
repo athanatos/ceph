@@ -3647,6 +3647,11 @@ void CrushWrapper::dump_rule(int rule_id, Formatter *f) const
       f->dump_int("num", get_rule_arg1(rule_id, j));
       f->dump_string("type", get_type_name(get_rule_arg2(rule_id, j)));
       break;
+    case CRUSH_RULE_CHOOSE_MSR:
+      f->dump_string("op", "choosemsr");
+      f->dump_int("num", get_rule_arg1(rule_id, j));
+      f->dump_string("type", get_type_name(get_rule_arg2(rule_id, j)));
+      break;
     case CRUSH_RULE_SET_CHOOSE_TRIES:
       f->dump_string("op", "set_choose_tries");
       f->dump_int("num", get_rule_arg1(rule_id, j));
