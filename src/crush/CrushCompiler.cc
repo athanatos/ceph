@@ -472,6 +472,13 @@ int CrushCompiler::decompile(ostream &out)
 	print_type_name(out, crush.get_rule_arg2(i, j), crush);
 	out << "\n";
 	break;
+      case CRUSH_RULE_CHOOSE_MSR:
+	out << "\tstep choosemsr "
+	    << crush.get_rule_arg1(i, j) 
+	    << " type ";
+	print_type_name(out, crush.get_rule_arg2(i, j), crush);
+	out << "\n";
+	break;
       }
     }
     out << "}\n";
@@ -971,6 +978,17 @@ int CrushCompiler::parse_rule(iter_t const& i)
 	    crush.set_rule_step_choose_leaf_indep(ruleno, step++, int_node(s->children[2]), type_id[type]);
 	  else ceph_abort();
 	} else ceph_abort();
+      }
+      break;
+
+    case crush_grammar::_step_choose_msr:
+      {
+	string type = string_node(s->children[3]);
+	if (!type_id.count(type)) {
+	  err << "in rule '" << rname << "' type '" << type << "' not defined" << std::endl;
+	  return -1;
+	}
+	crush.set_rule_step_choose_msr(ruleno, step++, int_node(s->children[1]), type_id[type]);
       }
       break;
 
