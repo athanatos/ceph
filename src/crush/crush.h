@@ -71,6 +71,9 @@ enum crush_opcodes {
 	CRUSH_RULE_SET_CHOOSE_MSR_TOTAL_TRIES = 14,
 	/* set choose_msr_local_collision_tries */
 	CRUSH_RULE_SET_CHOOSE_MSR_LOCAL_COLLISION_TRIES = 15,
+
+	/* choose variant without FIRSTN|INDEP */
+	CRUSH_RULE_CHOOSE_MSR = 16
 };
 
 /*
