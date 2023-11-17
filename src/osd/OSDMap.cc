@@ -1843,7 +1843,7 @@ ceph_release_t OSDMap::get_min_compat_client() const
   uint64_t f = get_features(CEPH_ENTITY_TYPE_CLIENT, nullptr);
 
   if (HAVE_FEATURE(f, CRUSH_MSR)) {      // TODOSAM
-    return ceph_release_t::squid;        // TODOSAM
+    return ceph_release_t::reef /* TODOSAM add squid release */;        // TODOSAM
   }
   if (HAVE_FEATURE(f, OSDMAP_PG_UPMAP) ||      // v12.0.0-1733-g27d6f43
       HAVE_FEATURE(f, CRUSH_CHOOSE_ARGS)) {    // v12.0.1-2172-gef1ef28
