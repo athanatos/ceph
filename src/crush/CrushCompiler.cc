@@ -926,6 +926,18 @@ int CrushCompiler::parse_rule(iter_t const& i)
 	crush.set_rule_step_set_chooseleaf_stable(ruleno, step++, val);
       }
       break;
+    case crush_grammar::_step_set_choose_msr_total_tries:
+      {
+	int val = int_node(s->children[1]);
+	crush.set_rule_step_set_choose_msr_total_tries(ruleno, step++, val);
+      }
+      break;
+    case crush_grammar::_step_set_choose_msr_local_collision_tries:
+      {
+	int val = int_node(s->children[1]);
+	crush.set_rule_step_set_choose_msr_local_collision_tries(ruleno, step++, val);
+      }
+      break;
 
     case crush_grammar::_step_choose:
     case crush_grammar::_step_chooseleaf:
@@ -952,7 +964,16 @@ int CrushCompiler::parse_rule(iter_t const& i)
 	} else ceph_abort();
       }
       break;
-
+    case crush_grammar::_step_choose_msr:
+      {
+	string type = string_node(s->children[3]);
+	if (!type_id.count(type)) {
+	  err << "in rule '" << rname << "' type '" << type << "' not defined" << std::endl;
+	  return -1;
+	}
+	crush.set_rule_step_choose_msr(ruleno, step++, int_node(s->children[1]), type_id[type]);
+      }
+      break;
     case crush_grammar::_step_emit:
       crush.set_rule_step_emit(ruleno, step++);
       break;
