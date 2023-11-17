@@ -73,16 +73,6 @@ struct ceph_pg {
 } __attribute__ ((packed));
 
 /*
- * pg pool types
- *
- * NOTE: These map 1:1 on to the pg_pool_t::TYPE_* values.  They are
- * duplicated here only for CrushCompiler's benefit.
- */
-#define CEPH_PG_TYPE_REPLICATED 1
-/* #define CEPH_PG_TYPE_RAID4   2   never implemented */
-#define CEPH_PG_TYPE_ERASURE 3
-
-/*
  * stable_mod func is used to control number of placement groups.
  * similar to straight-up modulo, but produces a stable mapping as b
  * increases over time.  b is the number of bins, and bmask is the
