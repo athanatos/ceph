@@ -65,7 +65,12 @@ enum crush_opcodes {
 	CRUSH_RULE_SET_CHOOSE_LOCAL_TRIES = 10,
 	CRUSH_RULE_SET_CHOOSE_LOCAL_FALLBACK_TRIES = 11,
 	CRUSH_RULE_SET_CHOOSELEAF_VARY_R = 12,
-	CRUSH_RULE_SET_CHOOSELEAF_STABLE = 13
+	CRUSH_RULE_SET_CHOOSELEAF_STABLE = 13,
+
+	/* set choose_msr_total_tries */
+	CRUSH_RULE_SET_CHOOSE_MSR_TOTAL_TRIES = 14,
+	/* set choose_msr_local_collision_tries */
+	CRUSH_RULE_SET_CHOOSE_MSR_LOCAL_COLLISION_TRIES = 15,
 };
 
 /*
@@ -414,6 +419,12 @@ struct crush_map {
          *  It should always be set to 1 except for backward compatibility.
          */
 	__u8 chooseleaf_stable;
+
+	/*! Sets total retries for MSR rules */
+	__u8 choose_msr_total_tries;
+
+	/*! Sets local collision retries for MSR rules */
+	__u8 choose_msr_local_collision_tries;
 
         /*! @cond INTERNAL */
 	/* This value is calculated after decode or construction by
