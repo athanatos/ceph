@@ -477,6 +477,7 @@ int CrushCompiler::decompile(ostream &out)
 	    << crush.get_rule_arg1(i, j) 
 	    << " type ";
 	print_type_name(out, crush.get_rule_arg2(i, j), crush);
+	out << "\n";
       }
     }
     out << "}\n";
