@@ -3508,6 +3508,13 @@ bool OSDMonitor::preprocess_boot(MonOpRequestRef op)
 		      << " because require_osd_release < pacific";
     goto ignore;
   }
+  if (HAVE_FEATURE(m->osd_features, SERVER_SQUID) &&
+      osdmap.require_osd_release < ceph_release_t::quincy) {
+    mon.clog->info() << "disallowing boot of squid+ OSD "
+		      << m->get_orig_source_inst()
+		      << " because require_osd_release < quincy";
+    goto ignore;
+  }
 
   // See crimson/osd/osd.cc: OSD::_send_boot
   if (auto type_iter = m->metadata.find("osd_type");
