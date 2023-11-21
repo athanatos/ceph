@@ -1587,6 +1587,7 @@ size_t crush_work_size(const struct crush_map *map,
 	unsigned out_vecs = 3; /* normal do_rule needs 3 outvecs */
 	for (ruleno = 0; ruleno < map->max_rules; ++ruleno) {
 		const struct crush_rule *rule = map->rules[ruleno];
+		if (!rule) continue;
 		if (!rule_type_is_msr(rule->type))
 			continue;
 		if (rule->len > out_vecs)
