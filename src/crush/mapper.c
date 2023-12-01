@@ -1112,6 +1112,7 @@ static int crush_msr_scan_next(
 	}
 	++stepno;
 
+	if (total_children) *total_children = 1;
 	for (; stepno < input->rule->len; ++stepno) {
 		const struct crush_rule_step *curstep =
 			&(input->rule->steps[stepno]);
@@ -1486,6 +1487,7 @@ static int crush_msr_do_rule(
 
 	struct crush_work *cw = cwin;
 
+	// TODOSAM: this setup needs to be redone between steps
 	int *out_vecs[input.rule->len];
 	for (unsigned stepno = 0; stepno < input.rule->len; ++stepno) {
 		out_vecs[stepno] = (int*)((char*)cw + map->working_size) +
@@ -1510,7 +1512,7 @@ static int crush_msr_do_rule(
 
 	unsigned start_index = 0;
 	while (start_stepno < input.rule->len) {
-		unsigned emit_stepno, total_children = 1;
+		unsigned emit_stepno, total_children;
 		if (crush_msr_scan_next(
 			    &input, start_stepno, &total_children,
 			    &emit_stepno) != 0) {
@@ -1551,6 +1553,8 @@ static int crush_msr_do_rule(
 			BUG_ON(start_stepno >= input.rule->len);
 
 			unsigned tries_so_far = 0;
+			unsigned end_index = MIN(start_index + total_children,
+						 input.result_max);
 			while (tries_so_far <= input.total_tries &&
 			       output.returned_so_far < input.result_max) {
 				crush_msr_choose(
@@ -1558,16 +1562,14 @@ static int crush_msr_do_rule(
 					root_bucket,
 					total_children,
 					start_index,
-					MIN(start_index + input.result_max,
-					    input.result_max),
+					end_index,
 					start_stepno, emit_stepno,
 					tries_so_far);
 				dprintk("returned_so_far: %d\n",
 					output.returned_so_far);
 				++tries_so_far;
 			}
-			start_index = MIN(start_index + total_children,
-					  input.result_max);
+			start_index = end_index;
 			start_stepno = emit_stepno + 1;
 		}
 	}
