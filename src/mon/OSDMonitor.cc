@@ -11754,6 +11754,19 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
 	err = -EPERM;
 	goto reply;
       }
+    } else if (rel == ceph_release_t::squid) {
+      if (!mon.monmap->get_required_features().contains_all(
+	    ceph::features::mon::FEATURE_SQUID)) {
+	ss << "not all mons are squid";
+	err = -EPERM;
+	goto reply;
+      }
+      if ((!HAVE_FEATURE(osdmap.get_up_osd_features(), SERVER_SQUID))
+           && !sure) {
+	ss << "not all up OSDs have CEPH_FEATURE_SERVER_SQUID feature";
+	err = -EPERM;
+	goto reply;
+      }
     } else {
       ss << "not supported for this release";
       err = -EPERM;
