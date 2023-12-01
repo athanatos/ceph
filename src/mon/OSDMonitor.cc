@@ -3529,10 +3529,10 @@ bool OSDMonitor::preprocess_boot(MonOpRequestRef op)
   ceph_assert(m->get_orig_source_inst().name.is_osd());
 
   // lower bound of N-2
-  if (!HAVE_FEATURE(m->osd_features, SERVER_PACIFIC)) {
+  if (!HAVE_FEATURE(m->osd_features, SERVER_QUINCY)) {
     mon.clog->info() << "disallowing boot of OSD "
 		     << m->get_orig_source_inst()
-		     << " because the osd lacks CEPH_FEATURE_SERVER_PACIFIC";
+		     << " because the osd lacks CEPH_FEATURE_SERVER_QUINCY";
     goto ignore;
   }
 
