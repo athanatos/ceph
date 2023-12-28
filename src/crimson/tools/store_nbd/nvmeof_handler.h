@@ -7,7 +7,14 @@
 #include "block_driver.h"
 
 class NVMEOFHandler {
-  spdk_nvmf_tgt *nvmf_tgt = nullptr;
+  spdk_nvmf_tgt *target = nullptr;
+  spdk_nvmf_subsystem *discovery_subsystrem = nullptr;
+
+  struct poll_group_association {
+    spdk_thread *thread = nullptr;
+    spdk_nvmf_poll_group *group = nullptr;
+  };
+  std::vector<poll_group_association> poll_group_associations;
 public:
   seastar::future<> run();
   seastar::future<> stop();
