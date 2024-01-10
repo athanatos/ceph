@@ -474,6 +474,10 @@ seastar::future<> OSDSingletonState::store_maps(ceph::os::Transaction& t,
     }).then([&t, FNAME, this, &added_maps] {
       auto [e, map] = *added_maps.begin();
       auto lastmap = osdmaps.find(e - 1).get();
+      INFO("storing final pool info lastmap epoch {}, added maps {}->{}",
+	   lastmap->get_epoch(),
+	   added_maps.begin()->first,
+	   added_maps.rbegin()->first);
       meta_coll->store_final_pool_info(t, lastmap, added_maps);
       return seastar::now();
     });
