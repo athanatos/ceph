@@ -222,8 +222,47 @@ ClientRequest::process_op(
   LOG_PREFIX(ClientRequest::process_op);
   return ihref.enter_stage<interruptor>(
     client_pp(*pg).recover_missing, *this
-  ).then_interruptible([pg, this]() mutable {
-    return recover_missings(pg, m->get_hobj(), snaps_need_to_recover());
+  ).then_interruptible([pg, this, FNAME]() mutable {
+    const hobject_t &soid = m->get_hobj();
+    std::set<snapid_t> snaps = snaps_need_to_recover();
+    if (!pg->is_primary()) {
+      DEBUGDPP(
+        "Skipping recover_missings on non primary pg for soid {}", *pg, soid);
+      return interruptor::now();
+    }
+    return do_recover_missing(
+      pg, soid.get_head()
+    ).then_interruptible([snaps=std::move(snaps), pg, soid]() mutable {
+      return pg->obc_loader.with_obc<RWState::RWREAD>(
+        soid.get_head(),
+        [snaps=std::move(snaps), pg, soid](auto head, auto) mutable {
+        return seastar::do_with(
+          std::move(snaps),
+          [pg, soid, head](auto &snaps) mutable {
+          return InterruptibleOperation::interruptor::do_for_each(
+            snaps,
+            [pg, soid, head](auto &snap) mutable ->
+            InterruptibleOperation::template interruptible_future<> {
+            auto coid = head->obs.oi.soid;
+            coid.snap = snap;
+            auto oid = resolve_oid(head->get_head_ss(), coid);
+            /* Rollback targets may legitimately not exist if, for instance,
+             * the object is an rbd block which happened to be sparse and
+             * therefore non-existent at the time of the specified snapshot.
+             * In such a case, rollback will simply delete the object.  Here,
+             * we skip the oid as there is no corresponding clone to recover.
+             * See https://tracker.ceph.com/issues/63821 */
+            if (oid) {
+              return do_recover_missing(pg, *oid);
+            } else {
+              return seastar::now();
+            }
+          });
+        });
+      });
+    }).handle_error_interruptible(
+      crimson::ct_error::assert_all("unexpected error")
+    );
   }).then_interruptible([FNAME, this, pg, this_instance_id, &ihref]() mutable {
     DEBUGDPP("{}.{}: checking already_complete",
 	     *pg, *this, this_instance_id);
