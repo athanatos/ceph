@@ -232,6 +232,9 @@ ClientRequest::process_op(
     return do_recover_missing(pg, m->get_hobj().get_head());
   }).then_interruptible([pg, this] {
     std::set<snapid_t> snaps = snaps_need_to_recover();
+    if (snaps.empty()) {
+      return interruptor::now();
+    }
     return seastar::do_with(
       std::move(snaps),
       [pg, this](auto &snaps) {
