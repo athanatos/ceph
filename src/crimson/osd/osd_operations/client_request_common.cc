@@ -15,7 +15,7 @@ namespace crimson::osd {
 
 typename InterruptibleOperation::template interruptible_future<>
 CommonClientRequest::do_recover_missing(
-  Ref<PG>& pg, const hobject_t& soid)
+  Ref<PG> pg, const hobject_t& soid)
 {
   eversion_t ver;
   assert(pg->is_primary());
