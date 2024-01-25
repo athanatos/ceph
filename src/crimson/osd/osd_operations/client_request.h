@@ -115,6 +115,7 @@ public:
       PGPipeline::RecoverMissingSnaps::BlockingEvent,
       scrub::PGScrubber::BlockingEvent,
       PGPipeline::GetOBC::BlockingEvent,
+      PGPipeline::LockOBC::BlockingEvent,
       PGPipeline::Process::BlockingEvent,
       PGPipeline::WaitRepop::BlockingEvent,
       PGPipeline::SendReply::BlockingEvent,
@@ -282,6 +283,19 @@ private:
   interruptible_future<> with_sequencer(FuncT&& func);
   auto reply_op_error(const Ref<PG>& pg, int err);
 
+  // same to pg.h
+  using load_obc_ertr = crimson::errorator<
+    crimson::ct_error::enoent,
+    crimson::ct_error::object_corrupted>;
+  using load_obc_iertr =
+    ::crimson::interruptible::interruptible_errorator<
+      ::crimson::osd::IOInterruptCondition,
+      load_obc_ertr>;
+  load_obc_iertr::future<>
+  process_lock_obc(
+    instance_handle_t &ihref,
+    Ref<PG> pg,
+    unsigned this_instance_id);
   interruptible_future<> do_process(
     instance_handle_t &ihref,
     Ref<PG>& pg,

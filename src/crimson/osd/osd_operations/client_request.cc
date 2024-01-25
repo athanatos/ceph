@@ -323,23 +323,20 @@ ClientRequest::process_op(
 	    m->get_hobj()
 	  ).then_interruptible(
 	    [FNAME, this, pg, this_instance_id, &ihref]() mutable {
-	      DEBUGDPP("{}.{}: past scrub blocker, getting obc",
-		       *pg, *this, this_instance_id);
-	    return pg->with_locked_obc(
-	      m->get_hobj(), op_info,
-	      [FNAME, this, pg, this_instance_id, &ihref](
-		auto head, auto obc) mutable {
-		DEBUGDPP("{}.{}: got obc {}, entering process stage",
-			 *pg, *this, this_instance_id, obc->obs);
-		return ihref.enter_stage<interruptor>(
-		  client_pp(*pg).process, *this
-		).then_interruptible(
-		  [FNAME, this, pg, this_instance_id, obc, &ihref]() mutable {
-		    DEBUGDPP("{}.{}: in process stage, calling do_process",
-			     *pg, *this, this_instance_id);
-		  return do_process(ihref, pg, obc, this_instance_id);
-		});
-	      });
+            DEBUGDPP("{}.{}: past scrub blocker, getting obc",
+                     *pg, *this, this_instance_id);
+            // call process_lock_obc() in order, but wait concurrently for loading.
+            auto maybe_fut = ihref.enter_stage_maybe_sync(
+                client_pp(*pg).lock_obc, *this);
+            if (maybe_fut.has_value()) {
+              return interruptor::make_interruptible(
+                std::move(maybe_fut.value())
+              ).then_interruptible([this, pg, this_instance_id, &ihref] {
+                return process_lock_obc(ihref, pg, this_instance_id);
+              });
+            } else {
+              return process_lock_obc(ihref, pg, this_instance_id);
+            }
 	  });
         });
       }
@@ -352,6 +349,30 @@ ClientRequest::process_op(
       assert(code.value() > 0);
       return reply_op_error(pg, -code.value());
   }));
+}
+
+ClientRequest::load_obc_iertr::future<>
+ClientRequest::process_lock_obc(
+  instance_handle_t &ihref,
+  Ref<PG> pg,
+  unsigned this_instance_id)
+{
+  LOG_PREFIX(ClientRequest::process_lock_obc);
+  return pg->with_locked_obc(
+    m->get_hobj(), op_info,
+    [FNAME, this, pg, this_instance_id, &ihref](
+    auto head, auto obc) mutable {
+    DEBUGDPP("{}.{}: got obc {}, entering process stage",
+             *pg, *this, this_instance_id, obc->obs);
+    return ihref.enter_stage<interruptor>(
+      client_pp(*pg).process, *this
+    ).then_interruptible(
+      [FNAME, this, pg, this_instance_id, obc, &ihref]() mutable {
+      DEBUGDPP("{}.{}: in process stage, calling do_process",
+               *pg, *this, this_instance_id);
+      return do_process(ihref, pg, obc, this_instance_id);
+    });
+  });
 }
 
 ClientRequest::interruptible_future<>

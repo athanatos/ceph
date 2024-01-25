@@ -37,6 +37,8 @@ struct LttngBackend
     ClientRequest::PGPipeline::RecoverMissingLockOBC::BlockingEvent::ExitBarrierEvent::Backend,
     ClientRequest::PGPipeline::RecoverMissingSnaps::BlockingEvent::Backend,
     ClientRequest::PGPipeline::GetOBC::BlockingEvent::Backend,
+    ClientRequest::PGPipeline::LockOBC::BlockingEvent::Backend,
+    ClientRequest::PGPipeline::LockOBC::BlockingEvent::ExitBarrierEvent::Backend,
     ClientRequest::PGPipeline::Process::BlockingEvent::Backend,
     ClientRequest::PGPipeline::WaitRepop::BlockingEvent::Backend,
     ClientRequest::PGPipeline::WaitRepop::BlockingEvent::ExitBarrierEvent::Backend,
@@ -123,6 +125,15 @@ struct LttngBackend
   void handle(ClientRequest::PGPipeline::GetOBC::BlockingEvent& ev,
               const Operation& op,
               const ClientRequest::PGPipeline::GetOBC& blocker) override {
+  }
+
+  void handle(ClientRequest::PGPipeline::LockOBC::BlockingEvent& ev,
+              const Operation& op,
+              const ClientRequest::PGPipeline::LockOBC& blocker) override {
+  }
+
+  void handle(ClientRequest::PGPipeline::LockOBC::BlockingEvent::ExitBarrierEvent& ev,
+              const Operation& op) override {
   }
 
   void handle(ClientRequest::PGPipeline::Process::BlockingEvent& ev,
@@ -166,6 +177,8 @@ struct HistoricBackend
     ClientRequest::PGPipeline::RecoverMissingLockOBC::BlockingEvent::ExitBarrierEvent::Backend,
     ClientRequest::PGPipeline::RecoverMissingSnaps::BlockingEvent::Backend,
     ClientRequest::PGPipeline::GetOBC::BlockingEvent::Backend,
+    ClientRequest::PGPipeline::LockOBC::BlockingEvent::Backend,
+    ClientRequest::PGPipeline::LockOBC::BlockingEvent::ExitBarrierEvent::Backend,
     ClientRequest::PGPipeline::Process::BlockingEvent::Backend,
     ClientRequest::PGPipeline::WaitRepop::BlockingEvent::Backend,
     ClientRequest::PGPipeline::WaitRepop::BlockingEvent::ExitBarrierEvent::Backend,
@@ -252,6 +265,15 @@ struct HistoricBackend
   void handle(ClientRequest::PGPipeline::GetOBC::BlockingEvent& ev,
               const Operation& op,
               const ClientRequest::PGPipeline::GetOBC& blocker) override {
+  }
+
+  void handle(ClientRequest::PGPipeline::LockOBC::BlockingEvent& ev,
+              const Operation& op,
+              const ClientRequest::PGPipeline::LockOBC& blocker) override {
+  }
+
+  void handle(ClientRequest::PGPipeline::LockOBC::BlockingEvent::ExitBarrierEvent& ev,
+              const Operation& op) override {
   }
 
   void handle(ClientRequest::PGPipeline::Process::BlockingEvent& ev,
