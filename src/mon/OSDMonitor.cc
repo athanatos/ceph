@@ -3541,6 +3541,20 @@ bool OSDMonitor::preprocess_boot(MonOpRequestRef op)
     goto ignore;
   }
 
+  {
+    uint64_t mask;
+    uint64_t osdmap_features =
+      osdmap.get_features(entity_name_t::TYPE_OSD, &mask);
+    if ((m->osd_features & mask) != osdmap_features) {
+      mon.clog->info() << "disallowing boot of OSD "
+		       << m->get_orig_source_inst()
+		       << " because advertised osd features ("
+		       << m->osd_features
+		       << ") do not support features required by the OSDMap ";
+      goto ignore;
+    }
+  }
+
   // already booted?
   if (osdmap.is_up(from) &&
       osdmap.get_addrs(from).legacy_equals(m->get_orig_source_addrs()) &&
