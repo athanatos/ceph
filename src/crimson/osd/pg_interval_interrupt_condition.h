@@ -4,6 +4,7 @@
 #pragma once
 
 #include "include/types.h"
+#include "common/debug_intrusive_ptr.h"
 #include "crimson/common/errorator.h"
 #include "crimson/common/exception.h"
 #include "crimson/common/type_helpers.h"
@@ -13,8 +14,9 @@ namespace crimson::osd {
 class PG;
 
 class IOInterruptCondition {
+  using PGRef = ceph::debug_intrusive_ptr<PG>;
 public:
-  IOInterruptCondition(Ref<PG>& pg);
+  IOInterruptCondition(PGRef &pg);
   ~IOInterruptCondition();
 
   bool new_interval_created();
@@ -49,7 +51,7 @@ public:
   }
 
 private:
-  Ref<PG> pg;
+  PGRef pg;
   epoch_t e;
 };
 

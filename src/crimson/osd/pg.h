@@ -10,6 +10,7 @@
 #include <seastar/core/shared_future.hh>
 
 #include "common/dout.h"
+#include "common/debug_intrusive_ref.h"
 #include "include/interval_set.h"
 #include "crimson/net/Fwd.h"
 #include "messages/MOSDRepOpReply.h"
@@ -64,12 +65,10 @@ class OpsExecuter;
 class BackfillRecovery;
 class SnapTrimEvent;
 
-class PG : public boost::intrusive_ref_counter<
-  PG,
-  boost::thread_unsafe_counter>,
-  public PGRecoveryListener,
-  PeeringState::PeeringListener,
-  DoutPrefixProvider
+class PG : public ceph::debug_intrusive_ref_counter<PG>,
+	   public PGRecoveryListener,
+	   PeeringState::PeeringListener,
+	   DoutPrefixProvider
 {
   using ec_profile_t = std::map<std::string,std::string>;
   using cached_map_t = OSDMapService::cached_map_t;

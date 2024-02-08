@@ -15,7 +15,7 @@ interrupt_cond<crimson::osd::IOInterruptCondition>;
 
 namespace crimson::osd {
 
-IOInterruptCondition::IOInterruptCondition(Ref<PG>& pg)
+IOInterruptCondition::IOInterruptCondition(PGRef &pg)
   : pg(pg), e(pg->get_osdmap_epoch()) {}
 
 IOInterruptCondition::~IOInterruptCondition() {
