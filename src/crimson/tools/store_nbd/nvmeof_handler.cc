@@ -163,7 +163,9 @@ seastar::future<> NVMEOFHandler::run()
    *   - spdk_nvmf_ns_opts_get_defaults
    *   - spdk_nvmf_subsystem_add_ns
    * - "nvmf_subsystem_add_listener"
-   *   - ?
+   *   - spdk_nvmf_subsystem_add_listener
+   *
+   * The bdev thing looks pretty straightforward, see bdev_rbd
    */
 }
 
