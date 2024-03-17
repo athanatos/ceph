@@ -22,17 +22,22 @@
 
 // borrowed liberally from examples/nvmf/nvmf.c
 
+void fulfill_promise_subsystem(spdk_nvmf_subsystem *, void *p, int r)
+{
+  assert(r == 0);
+  static_cast<seastar::promise<>*>(p)->set_value();
+}
+
 void fulfill_promise(int r, void *p)
 {
   assert(r == 0);
   static_cast<seastar::promise<>*>(p)->set_value();
 }
 
-void run_wrapped_function(int r, void *_f)
+void run_wrapped_function(void *_f)
 {
-  assert(r == 0);
-  static_cast<std::function<void()>*> f(_f);
-  std::invoke(f);
+  auto f = static_cast<std::function<void()>*>(_f);
+  std::invoke(*f);
 }
 
 template <typename F>
@@ -41,7 +46,7 @@ seastar::future<> run_on_thread(spdk_thread *thread, F &&f)
   seastar::promise<> p;
   std::function<void()> wrapped([f=std::forward<F>(f), &p] {
     std::invoke(f);
-    p->set_value();
+    p.set_value();
   });
   spdk_thread_send_msg(thread, run_wrapped_function, &wrapped);
   co_await p.get_future();
@@ -104,8 +109,6 @@ seastar::future<> NVMEOFHandler::run()
     char thread_name[32];
     struct spdk_thread *thread;
     
-    assert(g_init_thread != NULL);
-    
     SPDK_ENV_FOREACH_CORE(i) {
       spdk_cpuset_zero(&tmp_cpumask);
       spdk_cpuset_set_cpu(&tmp_cpumask, i, true);
@@ -120,9 +123,9 @@ seastar::future<> NVMEOFHandler::run()
       co_await run_on_thread(
 	thread,
 	[this, &pga = poll_group_associations.back()] {
-	  pg->thread = spdk_get_thread();
-	  pg->group = spdk_nvmf_poll_group_create(g_nvmf_tgt.tgt);
-	  if (!pg->group) {
+	  pga.thread = spdk_get_thread();
+	  pga.group = spdk_nvmf_poll_group_create(target);
+	  if (!pga.group) {
 	    std::cerr << "failed to create poll group" << std::endl;
 	    assert(0 == "unable to create poll group");
 	  }
@@ -136,7 +139,7 @@ seastar::future<> NVMEOFHandler::run()
     spdk_nvmf_subsystem *subsystem = spdk_nvmf_subsystem_get_first(target);
     while (subsystem) {
       seastar::promise<> p;
-      spdk_nvmf_subsystem_start(subsystem, fulfill_promise, &p);
+      spdk_nvmf_subsystem_start(subsystem, fulfill_promise_subsystem, &p);
       co_await p.get_future();
       subsystem = spdk_nvmf_subsystem_get_next(subsystem);
     }
