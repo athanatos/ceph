@@ -9,6 +9,8 @@
 class NVMEOFHandler {
   spdk_nvmf_tgt *target = nullptr;
   spdk_nvmf_subsystem *discovery_subsystem = nullptr;
+  spdk_poller *acceptor_poller = nullptr;
+  spdk_nvmf_transport *transport = nullptr;
 
   struct poll_group_association {
     spdk_thread *thread = nullptr;

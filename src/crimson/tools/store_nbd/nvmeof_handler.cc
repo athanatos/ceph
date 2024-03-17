@@ -34,10 +34,24 @@ void fulfill_promise(int r, void *p)
   static_cast<seastar::promise<>*>(p)->set_value();
 }
 
+void fulfill_promise_transport(void *p, int r)
+{
+  assert(r == 0);
+  static_cast<seastar::promise<>*>(p)->set_value();
+}
+
+
 void run_wrapped_function(void *_f)
 {
   auto f = static_cast<std::function<void()>*>(_f);
   std::invoke(*f);
+}
+
+int acceptor_poll(void *tgt)
+{
+  auto target = static_cast<spdk_nvmf_tgt*>(tgt);
+  spdk_nvmf_tgt_accept(target);
+  return -1;
 }
 
 template <typename F>
@@ -146,6 +160,33 @@ seastar::future<> NVMEOFHandler::run()
   }
 
   // start acceptor (NVMF_START_ACCEPTOR from example above)
+  {
+    acceptor_poller = SPDK_POLLER_REGISTER(
+      acceptor_poll,
+      &target,
+      10000 /* 10ms -- borrowed from top of examples/nvmf/nvmf.c */);
+  }
+
+  // create/add transport
+  {
+    spdk_nvmf_transport_opts opts;
+    int r = spdk_nvmf_transport_opts_init("tcp", &opts);
+    ceph_assert(r == 0);
+
+    transport = spdk_nvmf_tgt_get_transport(target, "tcp");
+    ceph_assert(transport == nullptr);
+    
+    transport = spdk_nvmf_transport_create("tcp", &opts);
+    ceph_assert(transport);
+
+    seastar::promise<> p;
+    spdk_nvmf_tgt_add_transport(target, transport, fulfill_promise_transport, &p);
+    co_await p.get_future();
+  }
+
+  {
+    
+  }
   /**
    * see lib/nvmf/nvmf_rpc.c, includes handlers for rpc commands in
    * examples/nvmf/README.md:
