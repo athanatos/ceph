@@ -152,159 +152,142 @@ TEST_F(LibRadosSnapshotsSelfManagedPP, SnapPP) {
   ASSERT_EQ(0, ioctx.remove("foo"));
 }
 
-TEST_F(LibRadosSnapshotsSelfManagedPP, RollbackOverlapPP) {
-  SKIP_IF_CRIMSON();
-  std::vector<uint64_t> my_snaps;
+struct SnapOverlapPP : LibRadosSnapshotsSelfManagedPP {
+  static constexpr std::string objname = "foo";
+  std::vector<snap_t> snaps;
+  IoCtx ioctx;
   IoCtx readioctx;
-  ASSERT_EQ(0, cluster.ioctx_create(pool_name.c_str(), readioctx));
-  readioctx.set_namespace(nspace);
-  readioctx.snap_set_read(LIBRADOS_SNAP_DIR);
+  void SetUp() override {
+    LibRadosSnapshotsSelfManagedPP::SetUp(); 
+    EXPECT_EQ(0, cluster.ioctx_create(pool_name.c_str(), ioctx));
+    EXPECT_EQ(0, cluster.ioctx_create(pool_name.c_str(), readioctx));
+    ioctx.set_namespace(nspace);
+    readioctx.set_namespace(nspace);
+    readioctx.snap_set_read(LIBRADOS_SNAP_DIR);
+  }
 
-  // 32k
-  unsigned int bsize = 1<<15;
-  char *buf = (char *)new char[bsize];
-  memset(buf, 0xcc, bsize);
-  bufferlist bl;
-  bl.append(buf, bsize);
-  ASSERT_EQ(0, ioctx.write("foo", bl, bsize, 0));
-  delete[] buf;
+  void TearDown() override {
+    ioctx.close();
+    LibRadosSnapshotsSelfManagedPP::TearDown(); 
+  }
 
-  my_snaps.push_back(-2);
-  ASSERT_EQ(0, ioctx.selfmanaged_snap_create(&my_snaps.back()));
-  ::std::reverse(my_snaps.begin(), my_snaps.end());
-  ASSERT_EQ(0, ioctx.selfmanaged_snap_set_write_ctx(my_snaps[0], my_snaps));
-  ::std::reverse(my_snaps.begin(), my_snaps.end());
+  void write(uint64_t off, uint64_t len) {
+    bufferlist bl;
+    {
+      char buf[len];
+      memset(buf, 0xdd, sizeof(buf));
+      bl.append(buf, sizeof(buf));
+    }
+    EXPECT_EQ(0, ioctx.write(objname, bl, bl.length(), off));
+  }
 
-  // overlap [0, 32k]
-  ioctx.selfmanaged_snap_rollback("foo", my_snaps[0]);
-  snap_set_t ss;
-  snap_t head = SNAP_HEAD;
-  ASSERT_EQ(0, readioctx.list_snaps("foo", &ss));
-  ASSERT_EQ(2u, ss.clones.size());
+  snap_t snapshot() {
+    snap_t snap;
+    EXPECT_EQ(0, ioctx.selfmanaged_snap_create(&snap));
+    snaps.push_back(snap);
 
-  ASSERT_EQ(my_snaps[0], ss.clones[0].cloneid);
-  ASSERT_EQ(1u, ss.clones[0].snaps.size());
-  ASSERT_EQ(my_snaps[0], ss.clones[0].snaps[0]);
-  ASSERT_EQ(1u, ss.clones[0].overlap.size());
-  ASSERT_EQ(0u, ss.clones[0].overlap[0].first);
-  ASSERT_EQ(bsize, ss.clones[0].overlap[0].second);
-  ASSERT_EQ(bsize, ss.clones[0].size);
+    std::vector<snap_t> revsnaps{snaps.rbegin(), snaps.rend()};
+    EXPECT_EQ(
+      0,
+      ioctx.selfmanaged_snap_set_write_ctx(
+	revsnaps[0],
+	revsnaps)
+    );
+    return snap;
+  }
 
-  ASSERT_EQ(head, ss.clones[1].cloneid);
-  ASSERT_EQ(0u, ss.clones[1].snaps.size());
-  ASSERT_EQ(0u, ss.clones[1].overlap.size());
-  ASSERT_EQ(bsize, ss.clones[1].size);
-  ASSERT_EQ(0, ioctx.selfmanaged_snap_remove(my_snaps.back()));
-  my_snaps.pop_back();
-  readioctx.close();
+  void rollback(snap_t snap) {
+    EXPECT_EQ(
+      0,
+      ioctx.selfmanaged_snap_rollback(
+	objname,
+	snap)
+    );
+  }
+
+  void assert_overlap(
+    std::vector<snap_t> clones, // reverse order
+    std::map<snap_t, std::vector<std::pair<uint64_t, uint64_t>>> overlaps) {
+    snap_set_t ss;
+    ASSERT_EQ(0, readioctx.list_snaps(objname, &ss));
+    ASSERT_GT(ss.clones.size(), 0);
+    ASSERT_EQ(ss.clones.rbegin()->cloneid, LIBRADOS_SNAP_HEAD);
+    ss.clones.pop_back();
+
+    ASSERT_EQ(clones.size(), ss.clones.size());
+    ASSERT_EQ(overlaps.size(), ss.clones.size());
+    for (unsigned i = 0; i < clones.size(); ++i) {
+      ASSERT_EQ(clones[i], ss.clones[i].cloneid);
+      auto check_iter = overlaps.find(clones[i]);
+      ASSERT_NE(check_iter, overlaps.end());
+      EXPECT_EQ(ss.clones[i].overlap, check_iter->second);
+    }
+  }
+};
+
+TEST_F(SnapOverlapPP, RollbackOverlapPP) {
+  write(0, 32<<10);
+  auto snap1 = snapshot();
+  rollback(snap1);
+  assert_overlap(
+    {snap1},
+    {
+      {
+	snap1,
+	{{0, 32<<10}}
+      }
+    }
+  );
 }
 
-TEST_F(LibRadosSnapshotsSelfManagedPP, RollbackOverlap1PP) {
-  SKIP_IF_CRIMSON();
-  std::vector<uint64_t> my_snaps;
-  IoCtx readioctx;
-  ASSERT_EQ(0, cluster.ioctx_create(pool_name.c_str(), readioctx));
-  readioctx.set_namespace(nspace);
-  readioctx.snap_set_read(LIBRADOS_SNAP_DIR);
+TEST_F(SnapOverlapPP, RollbackOverlap1PP) {
+  write(0, 32<<10);
+  auto snap1 = snapshot();
+  write(16<<10, 16<<10);
 
-  // 32k
-  unsigned int bsize = 1<<15;
-  char *buf = (char *)new char[bsize];
-  memset(buf, 0xcc, bsize);
-  bufferlist bl;
-  bl.append(buf, bsize);
-  ASSERT_EQ(0, ioctx.write("foo", bl, bsize, 0));
-  delete[] buf;
+  assert_overlap(
+    {snap1},
+    {
+      {
+	snap1,
+	{{0, 16<<10}}
+      }
+    }
+  );
+  
+  rollback(snap1);
+  assert_overlap(
+    {snap1},
+    {
+      {
+	snap1,
+	{{0, 32<<10}}
+      }
+    }
+  );
 
-  my_snaps.push_back(-2);
-  ASSERT_EQ(0, ioctx.selfmanaged_snap_create(&my_snaps.back()));
-  ::std::reverse(my_snaps.begin(), my_snaps.end());
-  ASSERT_EQ(0, ioctx.selfmanaged_snap_set_write_ctx(my_snaps[0], my_snaps));
-  ::std::reverse(my_snaps.begin(), my_snaps.end());
+  write(0, 32<<10);
 
-  // overlap [16k~16k]
-  unsigned int bsize1 = bsize>>1;
-  char *buf1 = (char *)new char[bsize1];
-  memset(buf1, 0xdd, bsize1);
-  bufferlist bl1;
-  bl1.append(buf1, bsize1);
-  ASSERT_EQ(0, ioctx.write("foo", bl1, bsize1, 0));
-  delete[] buf1;
-  snap_set_t ss;
-  snap_t head = SNAP_HEAD;
-  ASSERT_EQ(0, readioctx.list_snaps("foo", &ss));
-  ASSERT_EQ(2u, ss.clones.size());
-  ASSERT_EQ(my_snaps[0], ss.clones[0].cloneid);
-  ASSERT_EQ(1u, ss.clones[0].snaps.size());
-  ASSERT_EQ(my_snaps[0], ss.clones[0].snaps[0]);
-  ASSERT_EQ(1u, ss.clones[0].overlap.size());
-  ASSERT_EQ(bsize1, ss.clones[0].overlap[0].first);
-  ASSERT_EQ(bsize-bsize1, ss.clones[0].overlap[0].second);
-  ASSERT_EQ(bsize, ss.clones[0].size);
+  assert_overlap(
+    {snap1},
+    {
+      {
+	snap1,
+	{}
+      }
+    }
+  );
 
-  ASSERT_EQ(head, ss.clones[1].cloneid);
-  ASSERT_EQ(0u, ss.clones[1].snaps.size());
-  ASSERT_EQ(0u, ss.clones[1].overlap.size());
-  ASSERT_EQ(bsize, ss.clones[1].size);
-
-  //after rollback overlap [0~32k]
-  ioctx.selfmanaged_snap_rollback("foo", my_snaps[0]);
-  ASSERT_EQ(0, readioctx.list_snaps("foo", &ss));
-  ASSERT_EQ(2u, ss.clones.size());
-  ASSERT_EQ(my_snaps[0], ss.clones[0].cloneid);
-  ASSERT_EQ(1u, ss.clones[0].snaps.size());
-  ASSERT_EQ(my_snaps[0], ss.clones[0].snaps[0]);
-  ASSERT_EQ(1u, ss.clones[0].overlap.size());
-  ASSERT_EQ(0, ss.clones[0].overlap[0].first);
-  ASSERT_EQ(bsize, ss.clones[0].overlap[0].second);
-  ASSERT_EQ(bsize, ss.clones[0].size);
-
-  ASSERT_EQ(head, ss.clones[1].cloneid);
-  ASSERT_EQ(0u, ss.clones[1].snaps.size());
-  ASSERT_EQ(0u, ss.clones[1].overlap.size());
-  ASSERT_EQ(bsize, ss.clones[1].size);
-
-  // overlap [](empty), head size 64k
-  unsigned int bsize2 = bsize<<1;
-  char *buf2 = (char *)new char[bsize2];
-  memset(buf2, 0xee, bsize2);
-  bufferlist bl2;
-  bl2.append(buf2, bsize2);
-  ASSERT_EQ(0, ioctx.write("foo", bl2, bsize2, 0));
-  delete[] buf2;
-  ASSERT_EQ(0, readioctx.list_snaps("foo", &ss));
-  ASSERT_EQ(2u, ss.clones.size());
-  ASSERT_EQ(my_snaps[0], ss.clones[0].cloneid);
-  ASSERT_EQ(1u, ss.clones[0].snaps.size());
-  ASSERT_EQ(my_snaps[0], ss.clones[0].snaps[0]);
-  ASSERT_EQ(0u, ss.clones[0].overlap.size());
-  ASSERT_EQ(bsize, ss.clones[0].size);
-
-  ASSERT_EQ(head, ss.clones[1].cloneid);
-  ASSERT_EQ(0u, ss.clones[1].snaps.size());
-  ASSERT_EQ(0u, ss.clones[1].overlap.size());
-  ASSERT_EQ(bsize2, ss.clones[1].size);
-
-  // after rollback overlap [0~32k], head size 32k
-  ioctx.selfmanaged_snap_rollback("foo", my_snaps[0]);
-  ASSERT_EQ(0, readioctx.list_snaps("foo", &ss));
-  ASSERT_EQ(2u, ss.clones.size());
-  ASSERT_EQ(my_snaps[0], ss.clones[0].cloneid);
-  ASSERT_EQ(1u, ss.clones[0].snaps.size());
-  ASSERT_EQ(my_snaps[0], ss.clones[0].snaps[0]);
-  ASSERT_EQ(1u, ss.clones[0].overlap.size());
-  ASSERT_EQ(0, ss.clones[0].overlap[0].first);
-  ASSERT_EQ(bsize, ss.clones[0].overlap[0].second);
-  ASSERT_EQ(bsize, ss.clones[0].size);
-
-  ASSERT_EQ(head, ss.clones[1].cloneid);
-  ASSERT_EQ(0u, ss.clones[1].snaps.size());
-  ASSERT_EQ(0u, ss.clones[1].overlap.size());
-  ASSERT_EQ(bsize, ss.clones[1].size);
-
-  ASSERT_EQ(0, ioctx.selfmanaged_snap_remove(my_snaps.back()));
-  my_snaps.pop_back();
-  readioctx.close();
+  rollback(snap1);
+  assert_overlap(
+    {snap1},
+    {
+      {
+	snap1,
+	{{0, 32<<10}}
+      }
+    }
+  );
 }
 
 TEST_F(LibRadosSnapshotsSelfManagedPP, RollbackOverlap2PP) {
