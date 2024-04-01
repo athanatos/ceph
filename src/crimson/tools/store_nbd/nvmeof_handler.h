@@ -3,6 +3,7 @@
 
 #include <spdk/bdev.h>
 #include <spdk/nvmf.h>
+#include <spdk/thread.h>
 
 #include "block_driver.h"
 
