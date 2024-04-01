@@ -3,6 +3,7 @@
 
 #include <iostream>
 
+#include <fmt/printf.h>
 #include <seastar/core/app-template.hh>
 #include <seastar/core/future.hh>
 #include <seastar/core/reactor.hh>
@@ -69,13 +70,28 @@ seastar::future<> run_on_thread(spdk_thread *thread, F &&f)
 seastar::future<> NVMEOFHandler::run()
 {
   co_await spdk_reactor_start();
+  fmt::fprintf(stderr, "spdk_nvmf_start() suceeeded\n");
+
+  struct spdk_thread *admin_thread;
+  {
+    struct spdk_cpuset cpumask = {};
+    spdk_cpuset_zero(&cpumask);
+    spdk_cpuset_set_cpu(&cpumask, 0, true);
+    const char *thread_name = "store_nvmeof_admin";
+    admin_thread = spdk_thread_create(thread_name, &cpumask);
+    assert(admin_thread != NULL);
+  }
 
   // initialize bdev layer (NVMF_INIT_SUBSYSTEM from example above)
   {
     seastar::promise<> p;
-    spdk_subsystem_init(fulfill_promise, static_cast<void*>(&p));
+    co_await run_on_thread(admin_thread, [&p] {
+      spdk_subsystem_init(fulfill_promise, static_cast<void*>(&p));
+    });
     co_await p.get_future();
   }
+  fmt::fprintf(stderr, "spdk_subsystem_init() suceeeded\n");
+  co_return;
 
   /* TODO: examples/nvmf.c at this point initializes the rpc interface --
    * figure out how to configure */
@@ -92,9 +108,10 @@ seastar::future<> NVMEOFHandler::run()
     // Default nvmeof target
     target = spdk_nvmf_tgt_create(&tgt_opts);
     if (target == NULL) {
-      std::cerr << "spdk_nvmf_tgt_create() failed" << std::endl;
+      fmt::fprintf(stderr, "spdk_nvmf_tgt_create() failed\n");
       assert(0 == "cannot create target");
     }
+    fmt::fprintf(stderr, "spdk_nvmf_tgt_create() succeeded\n");
     
     /* Create the special discovery subsystem responsible for exposing to
      * hosts the subsystems exposing namespaces within the target. */
@@ -105,15 +122,14 @@ seastar::future<> NVMEOFHandler::run()
       0);                           // number of namespaces, 0 due to discovery?
 
     if (discovery_subsystem == NULL) {
-      std::cerr << "failed to create discovery nvmf library subsystem"
-		<< std::endl;
+      fmt::fprintf(stderr, "failed to create discovery nvmf library subsystem\n");
       assert(0 == "cannot create subsystem");
     }
     
     /* Allow any host to access the discovery subsystem */
     spdk_nvmf_subsystem_set_allow_any_host(discovery_subsystem, true);
     
-    std::cout << "created a nvmeof target service" << std::endl;
+    fmt::fprintf(stderr, "created a nvmeof target service\n");
   }
 
   // initialize poll groups (NVMF_INIT_POLL_GROUPS from example above)
@@ -140,7 +156,7 @@ seastar::future<> NVMEOFHandler::run()
 	  pga.thread = spdk_get_thread();
 	  pga.group = spdk_nvmf_poll_group_create(target);
 	  if (!pga.group) {
-	    std::cerr << "failed to create poll group" << std::endl;
+	    fmt::fprintf(stderr, "failed to create poll group\n");
 	    assert(0 == "unable to create poll group");
 	  }
 	});

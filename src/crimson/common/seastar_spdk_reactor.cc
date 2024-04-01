@@ -120,11 +120,54 @@ static int schedule_thread(struct spdk_thread *thread)
 
 seastar::future<> spdk_reactor_start()
 {
+  /* info on running as non-root in a container:
+   * https://stackoverflow.com/questions/66571932/can-you-run-dpdk-in-a-non-privileged-container-as-as-non-root-user/69178969#comment122283933_69178969
+   * Basically:
+   * - use va for iommu backed io addrs rather than the (default) pa, which requires privileges
+   * - mount hugetlbfs somewhere other than /sys/kernel/mm/hugepages and reuser to container user
+   *
+   * TODOSAM: current status is that I'm still trying to work out how to either pass --no-huge
+   * or actually make hugepages work.
+   *
+   * For the former, it seems that lib/env_dpdk/init.c's interpretation of spdk_env_opts
+   * and spdk_env_opts::env_context in particular is a bit odd, haven't quite got it to
+   * parse multiple arguments yet.
+   *
+   * For the latter, I've mounted hugetlbfs, but I'm missing something about how spdk is discovering
+   * hugepages status.  Also, it seems to want 1GB pages rather than the 2MB ones this workstation is
+   * configured with at present.
+   */
+
+
   struct spdk_env_opts opts;
   spdk_env_opts_init(&opts);
-  if (spdk_env_init(&opts) == -EALREADY) {
-    spdk_env_dpdk_post_init(false);
-  }
+  // this doesn't seem to be working -- typos in the arguments don't trigger the invalid argument
+  // behavior
+  const char *args[] = {
+    "--iova-mde=va",
+    "--no-huge",
+    "--in-memory",
+    nullptr
+  };
+  opts.env_context = (void*)args;
+
+  // pa mode basically requires root and doesn't play nicely with containers
+  // setting iova_mode here actually does work
+  //opts.iova_mode = "va";
+
+  // presumably, this has been mounted and chown'd to the right user
+  // TODOSAM obviously, this needs better configuration
+  // this also appears to influence behavior
+  //opts.hugedir = "/home/sam/tmp/hugepages";
+
+  // I guess env_context is the set of command line args usually passed to the eal?
+#if 0
+#endif
+
+  int r = spdk_env_init(&opts);
+  assert(r == 0);
+
+  // spdk_env_dpdk_post_init(false); ?
 
   assert(nullptr == g_reactor);
   g_reactor = new seastar_spdk_reactor_t;
