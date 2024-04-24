@@ -19,6 +19,8 @@
 #define PGBACKEND_H
 
 #include "osd_types.h"
+#include "pg_features.h"
+#include "common/intrusive_timer.h"
 #include "common/WorkQueue.h"
 #include "include/Context.h"
 #include "os/ObjectStore.h"
@@ -141,6 +143,7 @@ typedef std::shared_ptr<const OSDMap> OSDMapRef;
       * Wraps a context in whatever outer layers the parent usually
       * uses to call into the PGBackend
       */
+     virtual ceph::mutex &get_pg_lock() = 0;
      virtual Context *bless_context(Context *c) = 0;
      virtual GenContext<ThreadPool::TPHandle&> *bless_gencontext(
        GenContext<ThreadPool::TPHandle&> *c) = 0;
@@ -192,6 +195,7 @@ typedef std::shared_ptr<const OSDMap> OSDMapRef;
      virtual epoch_t pgb_get_osdmap_epoch() const = 0;
      virtual const pg_info_t &get_info() const = 0;
      virtual const pg_pool_t &get_pool() const = 0;
+     virtual eversion_t get_pg_committed_to() const = 0;
 
      virtual ObjectContextRef get_obc(
        const hobject_t &hoid,
@@ -239,12 +243,17 @@ typedef std::shared_ptr<const OSDMap> OSDMapRef;
      virtual void update_last_complete_ondisk(
        eversion_t lcod) = 0;
 
+     virtual void update_pct(
+       eversion_t pct) = 0;
+
      virtual void update_stats(
        const pg_stat_t &stat) = 0;
 
      virtual void schedule_recovery_work(
        GenContext<ThreadPool::TPHandle&> *c,
        uint64_t cost) = 0;
+
+     virtual common::intrusive_timer::thread_executor_t &get_pg_timer() = 0;
 
      virtual pg_shard_t whoami_shard() const = 0;
      int whoami() const {
@@ -258,6 +267,7 @@ typedef std::shared_ptr<const OSDMap> OSDMapRef;
      virtual pg_shard_t primary_shard() const = 0;
      virtual uint64_t min_peer_features() const = 0;
      virtual uint64_t min_upacting_features() const = 0;
+     virtual pg_feature_vec_t get_pg_acting_features() const = 0;
      virtual hobject_t get_temp_recovery_object(const hobject_t& target,
 						eversion_t version) = 0;
 

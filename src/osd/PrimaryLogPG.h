@@ -26,6 +26,7 @@
 #include "TierAgentState.h"
 #include "messages/MOSDOpReply.h"
 #include "common/Checksummer.h"
+#include "common/intrusive_timer.h"
 #include "common/sharedptr_registry.hpp"
 #include "common/shared_cache.hpp"
 #include "ReplicatedBackend.h"
@@ -348,6 +349,10 @@ public:
 			     eversion_t v,
 			     Context *on_complete) override;
 
+  ceph::mutex &get_pg_lock() override {
+    return _lock;
+  }
+
   template<class T> class BlessedGenContext;
   template<class T> class UnlockedBlessedGenContext;
   class BlessedContext;
@@ -437,6 +442,9 @@ public:
   }
   const pg_pool_t &get_pool() const override {
     return pool.info;
+  }
+  eversion_t get_pg_committed_to() const override {
+    return recovery_state.get_pg_committed_to();
   }
 
   ObjectContextRef get_obc(
@@ -551,6 +559,10 @@ public:
     recovery_state.update_last_complete_ondisk(lcod);
   }
 
+  void update_pct(eversion_t pct) override {
+    recovery_state.update_pct(pct);
+  }
+
   void update_stats(
     const pg_stat_t &stat) override {
     recovery_state.update_stats(
@@ -563,6 +575,8 @@ public:
   void schedule_recovery_work(
     GenContext<ThreadPool::TPHandle&> *c,
     uint64_t cost) override;
+
+  common::intrusive_timer::thread_executor_t &get_pg_timer() override;
 
   pg_shard_t whoami_shard() const override {
     return pg_whoami;
@@ -578,6 +592,9 @@ public:
   }
   uint64_t min_upacting_features() const override {
     return recovery_state.get_min_upacting_features();
+  }
+  pg_feature_vec_t get_pg_acting_features() const override {
+    return recovery_state.get_pg_acting_features();
   }
   void send_message_osd_cluster(
     int peer, Message *m, epoch_t from_epoch) override {

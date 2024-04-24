@@ -14,6 +14,7 @@
 #include "common/errno.h"
 #include "ReplicatedBackend.h"
 #include "messages/MOSDOp.h"
+#include "messages/MOSDPGPCT.h"
 #include "messages/MOSDRepOp.h"
 #include "messages/MOSDRepOpReply.h"
 #include "messages/MOSDPGPush.h"
@@ -124,7 +125,9 @@ ReplicatedBackend::ReplicatedBackend(
   ObjectStore::CollectionHandle &c,
   ObjectStore *store,
   CephContext *cct) :
-  PGBackend(cct, pg, store, coll, c) {}
+  PGBackend(cct, pg, store, coll, c),
+  pct_callback(pg->get_pg_lock(), [this] { send_pct_update(); } )
+{}
 
 void ReplicatedBackend::run_recovery_op(
   PGBackend::RecoveryHandle *_h,
@@ -228,6 +231,10 @@ bool ReplicatedBackend::_handle_message(
     do_repop_reply(op);
     return true;
   }
+
+  case MSG_OSD_PG_PCT:
+    do_pct(op);
+    return true;
 
   default:
     break;
@@ -462,6 +469,57 @@ void generate_transaction(
     });
 }
 
+void ReplicatedBackend::do_pct(OpRequestRef op)
+{
+  const MOSDPGPCT *m = static_cast<const MOSDPGPCT*>(op->get_req());
+  parent->update_pct(m->pg_committed_to);
+}
+
+void ReplicatedBackend::send_pct_update()
+{
+  ceph_assert(
+    PG_HAVE_FEATURE(parent->get_pg_acting_features(), PCT));
+  for (const auto &i: parent->get_acting_shards()) {
+    if (i == parent->whoami_shard()) continue;
+
+    auto *pct_update = new MOSDPGPCT(
+      spg_t(parent->whoami_spg_t().pgid, i.shard),
+      get_osdmap_epoch(), parent->get_interval_start_epoch(),
+      parent->get_pg_committed_to()
+    );
+
+    parent->send_message_osd_cluster(
+      i.osd, pct_update, parent->pgb_get_osdmap_epoch());
+  }
+}
+
+void ReplicatedBackend::maybe_kick_pct_update()
+{
+  if (!in_progress_ops.empty()) {
+    return;
+  }
+
+  if (!PG_HAVE_FEATURE(parent->get_pg_acting_features(), PCT)) {
+    return;
+  }
+
+  int64_t pct_delay;
+  if (!parent->get_pool().opts.get(
+	pool_opts_t::PCT_UPDATE_DELAY, &pct_delay)) {
+    return;
+  }
+
+  parent->get_pg_timer().schedule_after(
+    pct_callback, std::chrono::seconds(pct_delay));
+}
+
+void ReplicatedBackend::cancel_pct_update()
+{
+  if (pct_callback.is_scheduled()) {
+    parent->get_pg_timer().cancel(pct_callback);
+  }
+}
+
 void ReplicatedBackend::submit_transaction(
   const hobject_t &soid,
   const object_stat_sum_t &delta_stats,
@@ -476,6 +534,8 @@ void ReplicatedBackend::submit_transaction(
   osd_reqid_t reqid,
   OpRequestRef orig_op)
 {
+  cancel_pct_update();
+
   parent->apply_stats(
     soid,
     delta_stats);
@@ -627,6 +687,7 @@ void ReplicatedBackend::do_repop_reply(OpRequestRef op)
       ip_op.on_commit = 0;
       in_progress_ops.erase(iter);
     }
+    maybe_kick_pct_update();
   }
 }
 
