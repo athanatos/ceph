@@ -26,6 +26,7 @@
 
 #include "os/Transaction.h"
 
+#include "crimson/common/coroutine.h"
 #include "crimson/common/exception.h"
 #include "crimson/net/Connection.h"
 #include "crimson/net/Messenger.h"
@@ -1522,6 +1523,7 @@ seastar::future<> PG::stop()
   cancel_remote_recovery_reservation();
   check_readable_timer.cancel();
   renew_lease_timer.cancel();
+  backend->on_actingset_changed(is_primary());
   return osdmap_gate.stop().then([this] {
     return wait_for_active_blocker.stop();
   }).then([this] {
