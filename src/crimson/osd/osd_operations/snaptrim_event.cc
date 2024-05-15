@@ -74,9 +74,6 @@ SnapTrimEvent::start()
   }).then_interruptible([this] {
     return enter_stage<interruptor>(
       client_pp().recover_missing);
-  }).then_interruptible([] {
-    //return do_recover_missing(pg, get_target_oid());
-    return seastar::now();
   }).then_interruptible([this] {
     return enter_stage<interruptor>(
       client_pp().get_obc);
