@@ -288,6 +288,35 @@ def ceph_log(ctx, config):
                 ),
             )
 
+            # See https://tracker.ceph.com/issues/66339, the checksums may be of
+            # use in narrowing down where the logs are getting corrupted.
+            log.info('Checksumming logs...')
+            run.wait(
+                ctx.cluster.run(
+                    args=[
+                        'time',
+                        'sudo',
+                        'find',
+                        '/var/log/ceph',
+                        '-name',
+                        '*.gz',
+                        '-print0',
+                        run.Raw('|'),
+                        'sudo',
+                        'xargs',
+                        '--max-args=1',
+                        '--max-procs=0',
+                        '--verbose',
+                        '-0',
+                        '--no-run-if-empty',
+                        '--',
+                        'sha1sum',
+                        '--',
+                    ],
+                    wait=False,
+                ),
+            )
+
             log.info('Archiving logs...')
             path = os.path.join(ctx.archive, 'remote')
             try:
