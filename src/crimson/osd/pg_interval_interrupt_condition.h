@@ -15,6 +15,10 @@ class PG;
 class IOInterruptCondition {
 public:
   IOInterruptCondition(Ref<PG>& pg);
+  
+  struct disable_interval_t {};
+  IOInterruptCondition(disable_interval_t, Ref<PG>& pg);
+
   ~IOInterruptCondition();
 
   bool new_interval_created();
@@ -50,7 +54,7 @@ public:
 
 private:
   Ref<PG> pg;
-  epoch_t e;
+  std::optional<epoch_t> e;
 };
 
 } // namespace crimson::osd

@@ -18,6 +18,9 @@ namespace crimson::osd {
 IOInterruptCondition::IOInterruptCondition(Ref<PG>& pg)
   : pg(pg), e(pg->get_osdmap_epoch()) {}
 
+IOInterruptCondition::IOInterruptCondition(disable_interval_t, Ref<PG>& pg)
+  : pg(pg) {}
+
 IOInterruptCondition::~IOInterruptCondition() {
   // for the sake of forward declaring PG (which is a detivate of
   // intrusive_ref_counter<...>)
@@ -25,8 +28,12 @@ IOInterruptCondition::~IOInterruptCondition() {
 
 bool IOInterruptCondition::new_interval_created() {
   LOG_PREFIX(IOInterruptCondition::new_interval_created);
+  if (!e) {
+    DEBUGDPP("skipping interval check, e is nullopt", *pg);
+    return false;
+  }
   const epoch_t interval_start = pg->get_interval_start_epoch();
-  bool ret = e < interval_start;
+  bool ret = *e < interval_start;
   if (ret) {
     DEBUGDPP("stored interval e{} < interval_start e{}", *pg, e, interval_start);
   }

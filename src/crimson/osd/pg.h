@@ -794,6 +794,7 @@ private:
 
 private:
   friend class IOInterruptCondition;
+  friend class PGStopInterruptCondition;
   struct log_update_t {
     std::set<pg_shard_t> waiting_on;
     seastar::shared_promise<> all_committed;

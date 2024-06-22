@@ -27,6 +27,7 @@
 #include "os/Transaction.h"
 
 #include "crimson/common/exception.h"
+#include "crimson/common/log.h"
 #include "crimson/net/Connection.h"
 #include "crimson/net/Messenger.h"
 #include "crimson/os/cyanstore/cyan_store.h"
@@ -47,6 +48,8 @@ using std::ostream;
 using std::set;
 using std::string;
 using std::vector;
+
+SET_SUBSYS(osd);
 
 namespace {
   seastar::logger& logger() {
@@ -725,38 +728,53 @@ PG::interruptible_future<> PG::do_peering_event(
   }
 }
 
+template <typename F>
+seastar::future<> run_async_stop_interruptor(
+  auto FNAME, Ref<PG> pg, F &&f) {
+  return PG::interruptor::with_interruption(
+    [f=std::forward<F>(f)]() mutable {
+      return PG::interruptor::async(std::move(f));
+    }, [FNAME, pg](std::exception_ptr eptr) {
+      DEBUGDPP("interrupted: {}", *pg, eptr);
+    }, IOInterruptCondition::disable_interval_t{}, pg);
+}
+
 seastar::future<> PG::handle_advance_map(
   cached_map_t next_map, PeeringCtx &rctx)
 {
-  return seastar::async([this, next_map=std::move(next_map), &rctx] {
-    vector<int> newup, newacting;
-    int up_primary, acting_primary;
-    next_map->pg_to_up_acting_osds(
-      pgid.pgid,
-      &newup, &up_primary,
-      &newacting, &acting_primary);
-    peering_state.advance_map(
-      next_map,
-      peering_state.get_osdmap(),
-      newup,
-      up_primary,
-      newacting,
-      acting_primary,
-      rctx);
-    osdmap_gate.got_map(next_map->get_epoch());
-  });
+  LOG_PREFIX(PG::handle_advance_map);
+  return run_async_stop_interruptor(
+    FNAME, this, [this, next_map=std::move(next_map), &rctx] {
+      vector<int> newup, newacting;
+      int up_primary, acting_primary;
+      next_map->pg_to_up_acting_osds(
+	pgid.pgid,
+	&newup, &up_primary,
+	&newacting, &acting_primary);
+      peering_state.advance_map(
+	next_map,
+	peering_state.get_osdmap(),
+	newup,
+	up_primary,
+	newacting,
+	acting_primary,
+	rctx);
+      osdmap_gate.got_map(next_map->get_epoch());
+    });
 }
 
 seastar::future<> PG::handle_activate_map(PeeringCtx &rctx)
 {
-  return seastar::async([this, &rctx] {
+  LOG_PREFIX(PG::handle_activate_map);
+  return run_async_stop_interruptor(FNAME, this, [this, &rctx] {
     peering_state.activate_map(rctx);
   });
 }
 
 seastar::future<> PG::handle_initialize(PeeringCtx &rctx)
 {
-  return seastar::async([this, &rctx] {
+  LOG_PREFIX(PG::handle_initialize);
+  return run_async_stop_interruptor(FNAME, this, [this, &rctx] {
     peering_state.handle_event(PeeringState::Initialize{}, &rctx);
   });
 }
