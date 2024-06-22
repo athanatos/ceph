@@ -10,12 +10,8 @@
 
 #include "crimson/common/log.h"
 #include "crimson/common/errorator.h"
-#ifndef NDEBUG
 #define INTR_FUT_DEBUG(FMT_MSG, ...) crimson::get_logger(\
-  ceph_subsys_crimson_interrupt).trace(FMT_MSG, ##__VA_ARGS__)
-#else
-#define INTR_FUT_DEBUG(FMT_MSG, ...)
-#endif
+  ceph_subsys_osd).debug(FMT_MSG, ##__VA_ARGS__)
 
 // The interrupt condition generally works this way:
 //
@@ -116,6 +112,13 @@ struct interrupt_cond_t {
       ref_count);
   }
   void reset() {
+    if (ref_count == 0) {
+      INTR_FUT_DEBUG(
+	"{}: resetting interrupt_cond, refcount == 0: {},{}",
+        __func__,
+	(void*)interrupt_cond.get(),
+	typeid(InterruptCond).name());
+    }
     assert(ref_count >= 1);
     if (--ref_count == 0) {
       INTR_FUT_DEBUG(
