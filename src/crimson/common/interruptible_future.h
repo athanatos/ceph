@@ -136,6 +136,26 @@ struct interrupt_cond_t {
 	ref_count);
     }
   }
+  struct interrupt_cond_state_t {
+    InterruptCondRef<InterruptCond> interrupt_cond;
+    uint64_t ref_count = 0;
+
+    interrupt_cond_state_t() = default;
+    interrupt_cond_state_t(InterruptCondRef<InterruptCond> interrupt_cond)
+      : interrupt_cond(interrupt_cond), ref_count(1) {}
+  };
+  interrupt_cond_state_t swap(interrupt_cond_state_t other) {
+    INTR_FUT_DEBUG(
+      "{}: swapping ({}, {}) -> ({}, {})",
+      __func__,
+      (void*)interrupt_cond.get(),
+      ref_count,
+      (void*)other.interrupt_cond.get(),
+      other.ref_count);
+    std::swap(interrupt_cond, other.interrupt_cond);
+    std::swap(ref_count, other.ref_count);
+    return other;
+  }
 };
 
 template <typename InterruptCond>
@@ -205,14 +225,16 @@ auto call_with_interruption_impl(
   if (fut) {
     return std::move(*fut);
   }
-  interrupt_cond<InterruptCond>.set(interrupt_condition);
+  auto to_restore = interrupt_cond<InterruptCond>.swap(interrupt_condition);
 
   auto fut2 = seastar::futurize_invoke(
       std::forward<Func>(func),
       std::forward<Args>(args)...);
   // Clear the global "interrupt_cond" to prevent it from interfering other
   // continuation chains.
-  interrupt_cond<InterruptCond>.reset();
+  auto completed_cond = interrupt_cond<InterruptCond>.swap(to_restore);
+  ceph_assert(completed_cond.ref_count == 1);
+  ceph_assert(completed_cond.interrupt_cond.get() == interrupt_condition.get());
   return fut2;
 }
 
