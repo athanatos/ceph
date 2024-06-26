@@ -780,10 +780,7 @@ public:
     int64_t num_objects;
     C_DeleteMore(PG *p, epoch_t e, int64_t num) : pg(p), epoch(e),
 	                                          num_objects(num){}
-    void finish(int r) override {
-      ceph_abort();
-    }
-    void complete(int r) override;
+    void finish(int r) override;
   };
 
   virtual void set_dynamic_perf_stats_queries(

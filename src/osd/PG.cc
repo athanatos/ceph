@@ -2661,7 +2661,7 @@ void PG::on_pool_change()
   plpg_on_pool_change();
 }
 
-void PG::C_DeleteMore::complete(int r) {
+void PG::C_DeleteMore::finish(int r) {
   ceph_assert(r == 0);
   pg->lock();
   if (!pg->pg_has_reset_since(epoch)) {
@@ -2669,7 +2669,6 @@ void PG::C_DeleteMore::complete(int r) {
 	                         num_objects);
   }
   pg->unlock();
-  delete this;
 }
 
 std::pair<ghobject_t, bool> PG::do_delete_work(
