@@ -716,12 +716,11 @@ PG::interruptible_future<> PG::do_peering_event(
     // all peering event handling needs to be run in a dedicated seastar::thread,
     // so that event processing can involve I/O reqs freely, for example: PG::on_removal,
     // PG::on_new_interval
-    return interruptor::async([this, &evt, &rctx] {
-      peering_state.handle_event(
-        evt.get_event(),
-        &rctx);
-      peering_state.write_if_dirty(rctx.transaction);
-    });
+    peering_state.handle_event(
+      evt.get_event(),
+      &rctx);
+    peering_state.write_if_dirty(rctx.transaction);
+    return interruptor::now();
   }
 }
 
