@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <iostream>
+
 #include <seastar/core/future-util.hh>
 #include <seastar/core/do_with.hh>
 #include <seastar/core/when_all.hh>
@@ -10,6 +12,7 @@
 
 #include "crimson/common/log.h"
 #include "crimson/common/errorator.h"
+
 #define INTR_FUT_DEBUG(FMT_MSG, ...) crimson::get_logger(\
   ceph_subsys_osd).debug(FMT_MSG, ##__VA_ARGS__)
 
@@ -89,51 +92,46 @@ struct interruptor;
 template <typename InterruptCond>
 using InterruptCondRef = seastar::lw_shared_ptr<InterruptCond>;
 
+template <typename T>
+std::ostream &operator<<(std::ostream &lhs, const InterruptCondRef<T> &rhs) {
+  if (rhs.get()) {
+    return lhs << *rhs;
+  } else {
+    return lhs << typeid(T).name() << "(nullptr)";
+  }
+}
+
 template <typename InterruptCond>
 struct interrupt_cond_t {
+  SET_SUBSYS(crimson_interrupt);
+
   InterruptCondRef<InterruptCond> interrupt_cond;
   uint64_t ref_count = 0;
   void set(
     InterruptCondRef<InterruptCond>& ic) {
-    INTR_FUT_DEBUG(
-      "{}: going to set interrupt_cond: {}, ic: {}",
-      __func__,
-      (void*)interrupt_cond.get(),
-      (void*)ic.get());
+    LOG_PREFIX(interrupt_cond_t::set);
+    DEBUGDPP(
+      "existing ref_count: {}, new ic: {}",
+      interrupt_cond, ref_count, ic);
     if (!interrupt_cond) {
       interrupt_cond = ic;
     }
     assert(interrupt_cond.get() == ic.get());
     ref_count++;
-    INTR_FUT_DEBUG(
-      "{}: interrupt_cond: {}, ref_count: {}",
-      __func__,
-      (void*)interrupt_cond.get(),
-      ref_count);
+    DEBUGDPP("complete, ref_count: {}", interrupt_cond, ref_count);
   }
   void reset() {
+    LOG_PREFIX(interrupt_cond_t::reset);
+    DEBUGDPP("previous ref_count: {}", interrupt_cond, ref_count);
     if (ref_count == 0) {
-      INTR_FUT_DEBUG(
-	"{}: resetting interrupt_cond, refcount == 0: {},{}",
-        __func__,
-	(void*)interrupt_cond.get(),
-	typeid(InterruptCond).name());
+      DEBUGDPP("ref_count is 0", interrupt_cond);
     }
     assert(ref_count >= 1);
     if (--ref_count == 0) {
-      INTR_FUT_DEBUG(
-	"{}: clearing interrupt_cond: {},{}",
-        __func__,
-	(void*)interrupt_cond.get(),
-	typeid(InterruptCond).name());
+      DEBUGDPP("clearing", interrupt_cond);
       interrupt_cond.release();
     } else {
-      INTR_FUT_DEBUG(
-	"{}: end without clearing interrupt_cond: {},{}, ref_count: {}",
-        __func__,
-	(void*)interrupt_cond.get(),
-	typeid(InterruptCond).name(),
-	ref_count);
+      DEBUGDPP("final ref_count: {}", ref_count);
     }
   }
   struct interrupt_cond_state_t {
@@ -145,13 +143,13 @@ struct interrupt_cond_t {
       : interrupt_cond(interrupt_cond), ref_count(1) {}
   };
   interrupt_cond_state_t swap(interrupt_cond_state_t other) {
-    INTR_FUT_DEBUG(
-      "{}: swapping ({}, {}) -> ({}, {})",
-      __func__,
-      (void*)interrupt_cond.get(),
-      ref_count,
-      (void*)other.interrupt_cond.get(),
-      other.ref_count);
+    LOG_PREFIX(interrupt_cond_t::swap);
+    DEBUG("swapping ({}, {}) -> ({}, {})",
+	  __func__,
+	  interrupt_cond,
+	  ref_count,
+	  other.interrupt_cond,
+	  other.ref_count);
     std::swap(interrupt_cond, other.interrupt_cond);
     std::swap(ref_count, other.ref_count);
     return other;
@@ -192,6 +190,9 @@ auto call_with_interruption_impl(
   InterruptCondRef<InterruptCond> interrupt_condition,
   Func&& func, Args&&... args)
 {
+  SET_SUBSYS(crimson_interrupt);
+  LOG_PREFIX(call_with_interruption_impl);
+
   using futurator_t = seastar::futurize<std::invoke_result_t<Func, Args...>>;
   // there might be a case like this:
   // 	with_interruption([] {
@@ -214,14 +215,12 @@ auto call_with_interruption_impl(
   assert(interrupt_condition);
   auto fut = interrupt_condition->template may_interrupt<
     typename futurator_t::type>();
-  INTR_FUT_DEBUG(
-    "call_with_interruption_impl: may_interrupt: {}, "
-    "local interrupt_condition: {}, "
-    "global interrupt_cond: {},{}",
+  DEBUG(
+    "global interrupt_cond: {}, "
+    "may_interrupt: {}, interrupt_condition: {}",
+    interrupt_cond<InterruptCond>.interrupt_cond,
     (bool)fut,
-    (void*)interrupt_condition.get(),
-    (void*)interrupt_cond<InterruptCond>.interrupt_cond.get(),
-    typeid(InterruptCond).name());
+    interrupt_condition);
   if (fut) {
     return std::move(*fut);
   }
