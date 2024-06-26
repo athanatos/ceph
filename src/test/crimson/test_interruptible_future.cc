@@ -35,6 +35,13 @@ public:
       return true;
     return false;
   }
+
+  template <typename FormatContext>
+  auto fmt_print_ctx(FormatContext & ctx) const {
+    return fmt::format_to(
+      ctx.out(), "TestInterruptCondition({}, interrupt={})",
+      (void*)this, interrupt);
+  }
 private:
   bool interrupt = false;
 };

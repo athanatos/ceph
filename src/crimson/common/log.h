@@ -3,9 +3,9 @@
 
 #pragma once
 
-#include <fmt/format.h>
 #include <seastar/util/log.hh>
 
+#include "common/fmt_common.h"
 #include "common/subsys_types.h"
 
 namespace crimson {

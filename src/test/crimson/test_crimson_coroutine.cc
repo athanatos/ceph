@@ -49,6 +49,14 @@ struct coroutine_test_t : public seastar_test_suite_t {
 	return true;
       return false;
     }
+
+    template <typename FormatContext>
+    auto fmt_print_ctx(FormatContext & ctx) const {
+      ceph_assert(int_state);
+      return fmt::format_to(
+	ctx.out(), "test_interruption_cond({}, int_state={})",
+	(void*)this, int_state->interrupted);
+    }
   };
   using interruptor = crimson::interruptible::interruptor<test_interrupt_cond>;
 

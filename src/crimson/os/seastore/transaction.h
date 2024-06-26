@@ -651,6 +651,12 @@ public:
     return *eptr.__cxa_exception_type() == typeid(transaction_conflict);
   }
 
+
+  template <typename FormatContext>
+  auto fmt_print_ctx(FormatContext & ctx) const {
+    return fmt::format_to(
+      ctx.out(), "TransactionConflictCondition({}, t:{})", (void*)this, (void*)&t);
+  }
 private:
   Transaction &t;
 };

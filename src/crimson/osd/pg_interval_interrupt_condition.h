@@ -3,7 +3,11 @@
 
 #pragma once
 
+#include <iostream>
+
 #include "include/types.h"
+#include "osd/osd_types.h"
+
 #include "crimson/common/errorator.h"
 #include "crimson/common/exception.h"
 #include "crimson/common/type_helpers.h"
@@ -52,8 +56,16 @@ public:
             typeid(::crimson::common::system_shutdown_exception));
   }
 
+  template <typename FormatContext>
+  auto fmt_print_ctx(FormatContext & ctx) const {
+    return fmt::format_to(
+      ctx.out(), "IOInterruptCondition({}, pgid:{}, e:{})", (void*)this,
+      pgid, e);
+  }
+
 private:
   Ref<PG> pg;
+  const spg_t pgid;
   std::optional<epoch_t> e;
 };
 
