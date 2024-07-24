@@ -517,6 +517,9 @@ public:
     with_obc_func_t&& f);
 
   interruptible_future<> handle_rep_op(Ref<MOSDRepOp> m);
+  interruptible_future<> update_snap_map(
+    const std::vector<pg_log_entry_t> &log_entries,
+    ObjectStore::Transaction& t);
   void log_operation(
     std::vector<pg_log_entry_t>&& logv,
     const eversion_t &trim_to,
