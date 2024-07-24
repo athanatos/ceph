@@ -1368,11 +1368,6 @@ PG::with_locked_obc(const hobject_t &hobj,
 
 PG::interruptible_future<> PG::handle_rep_op(Ref<MOSDRepOp> req)
 {
-  if (__builtin_expect(stopping, false)) {
-    return seastar::make_exception_future<>(
-	crimson::common::system_shutdown_exception());
-  }
-
   logger().debug("{}: {}", __func__, *req);
   if (can_discard_replica_op(*req)) {
     return seastar::now();
