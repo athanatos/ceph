@@ -385,8 +385,7 @@ inline  void decode(
   DECODE_FINISH(bl);
 }
 
-inline void encode(const NvmeAnaNonceMap& nonce_map,  ceph::bufferlist &bl,
-  uint64_t features) {
+inline void encode(const NvmeAnaNonceMap& nonce_map,  ceph::bufferlist &bl) {
   ENCODE_START(1, 1, bl);
   encode((uint32_t)nonce_map.size(), bl);
   for (auto& ana_group_nonces : nonce_map) {
