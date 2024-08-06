@@ -669,20 +669,6 @@ inline void decode(
 }
 
 inline void encode(
-  const NvmeGwTimers& group_md,  ceph::bufferlist &bl, uint64_t features) {
-  uint8_t version;
-  if (HAVE_FEATURE(features, SERVER_SQUID)) version = STRUCT_VERSION;
-  else                                      version = OLD_STRUCT_VERSION;
-  ENCODE_START(version, 1, bl);
-  encode ((uint32_t)group_md.size(), bl); // number of groups
-  for (auto& gw_md: group_md) {
-    encode(gw_md.first, bl); // gw
-    encode(gw_md.second, bl, features); //  map of this gw
-  }
-  ENCODE_FINISH(bl);
-}
-
-inline void encode(
   const std::map<NvmeGroupKey, NvmeGwTimers>& gmetadata,
   ceph::bufferlist &bl,  uint64_t features) {
   ENCODE_START(1, 1, bl);
@@ -743,6 +729,17 @@ inline void decode(std::map<entity_addrvec_t , uint32_t> &peer2ver,
     peer2ver[peer] = version;
   }
   DECODE_FINISH(bl);
+}
+
+inline void encode(
+  const NvmeGwTimers& group_md,  ceph::bufferlist &bl, uint64_t features) {
+  ENCODE_START(1, 1, bl);
+  encode ((uint32_t)group_md.size(), bl); // number of groups
+  for (auto& gw_md: group_md) {
+    encode(gw_md.first, bl); // gw
+    encode(gw_md.second, bl, features); //  map of this gw
+  }
+  ENCODE_FINISH(bl);
 }
 
 inline void decode(NvmeGwTimers& md, ceph::buffer::list::const_iterator &bl) {
