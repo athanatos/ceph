@@ -231,7 +231,7 @@ inline std::ostream& operator<<(std::ostream& os, const NVMeofGwMap value) {
 }
 
 inline void encode(const ana_state_t& st,  ceph::bufferlist &bl) {
-  ENCODE_START(STRUCT_VERSION, 1, bl);
+  ENCODE_START(1, 1, bl);
   encode((uint32_t)st.size(), bl);
   for (const auto& gr: st) {
     encode((uint32_t)gr.first, bl);
@@ -242,7 +242,7 @@ inline void encode(const ana_state_t& st,  ceph::bufferlist &bl) {
 
 inline void decode(ana_state_t& st, ceph::buffer::list::const_iterator &bl) {
   uint32_t n;
-  DECODE_START(STRUCT_VERSION, bl);
+  DECODE_START(1, bl);
   decode(n, bl);
   st.resize(n);
   for (uint32_t i = 0; i < n; i++) {
@@ -256,7 +256,7 @@ inline void decode(ana_state_t& st, ceph::buffer::list::const_iterator &bl) {
 }
 
 inline void encode(const GwSubsystems& subsystems,  ceph::bufferlist &bl) {
-  ENCODE_START(STRUCT_VERSION, 1, bl);
+  ENCODE_START(1, 1, bl);
   encode((uint32_t)subsystems.size(), bl);
   for (const auto& sub: subsystems) {
     encode(sub.second.nqn, bl);
@@ -268,7 +268,7 @@ inline void encode(const GwSubsystems& subsystems,  ceph::bufferlist &bl) {
 inline  void decode(
   GwSubsystems& subsystems, ceph::bufferlist::const_iterator& bl) {
   uint32_t num_subsystems;
-  DECODE_START(STRUCT_VERSION, bl);
+  DECODE_START(1, bl);
   decode(num_subsystems, bl);
   subsystems.clear();
   for (uint32_t i=0; i<num_subsystems; i++) {
@@ -282,7 +282,7 @@ inline  void decode(
 }
 
 inline void encode(const NvmeGwClientState& state,  ceph::bufferlist &bl) {
-  ENCODE_START(STRUCT_VERSION, 1, bl);
+  ENCODE_START(1, 1, bl);
   encode(state.group_id, bl);
   encode(state.gw_map_epoch, bl);
   encode (state.subsystems, bl);
@@ -292,7 +292,7 @@ inline void encode(const NvmeGwClientState& state,  ceph::bufferlist &bl) {
 
 inline  void decode(
   NvmeGwClientState& state,  ceph::bufferlist::const_iterator& bl) {
-  DECODE_START(STRUCT_VERSION, bl);
+  DECODE_START(1, bl);
   decode(state.group_id, bl);
   decode(state.gw_map_epoch, bl);
   decode(state.subsystems, bl);
@@ -387,14 +387,13 @@ inline  void decode(
 
 inline void encode(const NvmeAnaNonceMap& nonce_map,  ceph::bufferlist &bl,
   uint64_t features) {
-  uint8_t version;
-  if (HAVE_FEATURE(features, SERVER_SQUID)) version = STRUCT_VERSION;
-  else                                      version = OLD_STRUCT_VERSION;
-  ENCODE_START(version, 1, bl);
+  ENCODE_START(1, 1, bl);
   encode((uint32_t)nonce_map.size(), bl);
   for (auto& ana_group_nonces : nonce_map) {
-    encode(ana_group_nonces.first, bl); // ana group id
-    encode ((uint32_t)ana_group_nonces.second.size(), bl); // encode the vector size
+    // ana group id
+    encode(ana_group_nonces.first, bl);
+    // encode the vector size
+    encode ((uint32_t)ana_group_nonces.second.size(), bl);
     for (auto& nonce: ana_group_nonces.second) encode(nonce, bl);
   }
   ENCODE_FINISH(bl);
@@ -402,12 +401,11 @@ inline void encode(const NvmeAnaNonceMap& nonce_map,  ceph::bufferlist &bl,
 
 inline void decode(
   NvmeAnaNonceMap& nonce_map, ceph::buffer::list::const_iterator &bl) {
-  dout(20) << "decode nonce map  " << dendl;
   uint32_t map_size;
   NvmeAnaGrpId ana_grp_id;
   uint32_t vector_size;
   std::string nonce;
-  DECODE_START(STRUCT_VERSION, bl);
+  DECODE_START(1, bl);
   decode(map_size, bl);
   for (uint32_t i = 0; i<map_size; i++) {
     decode(ana_grp_id, bl);
@@ -577,11 +575,7 @@ inline void decode(
 inline void encode(
   const std::map<NvmeGroupKey, NvmeGwMonStates>& created_gws,
   ceph::bufferlist &bl, uint64_t features) {
-  uint8_t version;
-  if (HAVE_FEATURE(features, SERVER_SQUID)) version = STRUCT_VERSION;
-  else                                      version = OLD_STRUCT_VERSION;
-  ENCODE_START(version, 1, bl);
-  dout(20) << "Start encode for " << version <<" " << (uint32_t)created_gws.size() << dendl;
+  ENCODE_START(1, 1, bl);
   encode ((uint32_t)created_gws.size(), bl); // number of groups
   for (auto& group_gws: created_gws) {
     auto& group_key = group_gws.first;
@@ -598,9 +592,8 @@ inline void decode(
   std::map<NvmeGroupKey, NvmeGwMonStates>& created_gws,
   ceph::buffer::list::const_iterator &bl) {
   created_gws.clear();
-  uint32_t ngroups = 0;
-  DECODE_START(STRUCT_VERSION, bl);
-  DECODE_OLDEST(1);
+  uint32_t ngroups;
+  DECODE_START(1, bl);
   decode(ngroups, bl);
   for (uint32_t i = 0; i<ngroups; i++) {
     std::string pool, group;
@@ -614,8 +607,8 @@ inline void decode(
 }
 
 inline void encode(
-  const NvmeGwMonClientStates& subsyst_gwmap,  ceph::bufferlist &bl) {
-  ENCODE_START(STRUCT_VERSION, 1, bl);
+  const NvmeGwMonClientStates& subsyst_gwmap, ceph::bufferlist &bl) {
+  ENCODE_START(1, 1, bl);
   encode((uint32_t)subsyst_gwmap.size(), bl);
   for (auto& subsyst: subsyst_gwmap) {
     encode(subsyst.first, bl);
@@ -628,7 +621,7 @@ inline void decode(
   NvmeGwMonClientStates& subsyst_gwmap, ceph::buffer::list::const_iterator &bl) {
   subsyst_gwmap.clear();
   uint32_t num_gws;
-  DECODE_START(STRUCT_VERSION, bl);
+  DECODE_START(1, bl);
   decode(num_gws, bl);
 
   for (uint32_t i = 0; i < num_gws; i++) {
@@ -645,7 +638,7 @@ inline void decode(
 inline void encode(
   const std::map<NvmeGroupKey, NvmeGwMonClientStates>& gmap,
   ceph::bufferlist &bl) {
-  ENCODE_START(STRUCT_VERSION, 1, bl);
+  ENCODE_START(1, 1, bl);
   encode ((uint32_t)gmap.size(), bl); // number of groups
   for (auto& group_state: gmap) {
     auto& group_key = group_state.first;
@@ -662,7 +655,7 @@ inline void decode(
   ceph::buffer::list::const_iterator &bl) {
   gmap.clear();
   uint32_t ngroups;
-  DECODE_START(STRUCT_VERSION, bl);
+  DECODE_START(1, bl);
   decode(ngroups, bl);
   for (uint32_t i = 0; i<ngroups; i++) {
     std::string pool, group;
@@ -692,10 +685,7 @@ inline void encode(
 inline void encode(
   const std::map<NvmeGroupKey, NvmeGwTimers>& gmetadata,
   ceph::bufferlist &bl,  uint64_t features) {
-  uint8_t version;
-  if (HAVE_FEATURE(features, SERVER_SQUID)) version = STRUCT_VERSION;
-  else                                      version = OLD_STRUCT_VERSION;
-  ENCODE_START(version, 1, bl);
+  ENCODE_START(1, 1, bl);
   encode ((uint32_t)gmetadata.size(), bl); // number of groups
   for (auto& group_md: gmetadata) {
     auto& group_key = group_md.first;
@@ -711,7 +701,7 @@ inline void decode(
   ceph::buffer::list::const_iterator &bl) {
   gmetadata.clear();
   uint32_t ngroups;
-  DECODE_START(STRUCT_VERSION, bl);
+  DECODE_START(1, bl);
   decode(ngroups, bl);
   for (uint32_t i = 0; i<ngroups; i++) {
     std::string pool, group;
@@ -757,7 +747,7 @@ inline void decode(std::map<entity_addrvec_t , uint32_t> &peer2ver,
 
 inline void decode(NvmeGwTimers& md, ceph::buffer::list::const_iterator &bl) {
   uint32_t num_gws;
-  DECODE_START(STRUCT_VERSION, bl);
+  DECODE_START(1, bl);
   decode(num_gws, bl);
   for (uint32_t i = 0; i < num_gws; i++) {
     std::string gw_id;
@@ -770,21 +760,21 @@ inline void decode(NvmeGwTimers& md, ceph::buffer::list::const_iterator &bl) {
 }
 
 inline void encode(const BeaconNamespace& ns,  ceph::bufferlist &bl) {
-  ENCODE_START(STRUCT_VERSION, 1, bl);
+  ENCODE_START(1, 1, bl);
   encode(ns.anagrpid, bl);
   encode(ns.nonce, bl);
   ENCODE_FINISH(bl);
 }
 
 inline void decode(BeaconNamespace& ns, ceph::buffer::list::const_iterator &bl) {
-  DECODE_START(STRUCT_VERSION, bl);
+  DECODE_START(1, bl);
   decode(ns.anagrpid, bl);
   decode(ns.nonce, bl);
   DECODE_FINISH(bl);
 }
 
 inline void encode(const BeaconListener& ls,  ceph::bufferlist &bl) {
-  ENCODE_START(STRUCT_VERSION, 1, bl);
+  ENCODE_START(1, 1, bl);
   encode(ls.address_family, bl);
   encode(ls.address, bl);
   encode(ls.svcid, bl);
@@ -792,7 +782,7 @@ inline void encode(const BeaconListener& ls,  ceph::bufferlist &bl) {
 }
 
 inline void decode(BeaconListener& ls, ceph::buffer::list::const_iterator &bl) {
-  DECODE_START(STRUCT_VERSION, bl);
+  DECODE_START(1, bl);
   decode(ls.address_family, bl);
   decode(ls.address, bl);
   decode(ls.svcid, bl);
@@ -800,7 +790,7 @@ inline void decode(BeaconListener& ls, ceph::buffer::list::const_iterator &bl) {
 }
 
 inline void encode(const BeaconSubsystem& sub,  ceph::bufferlist &bl) {
-  ENCODE_START(STRUCT_VERSION, 1, bl);
+  ENCODE_START(1, 1, bl);
   encode(sub.nqn, bl);
   encode((uint32_t)sub.listeners.size(), bl);
   for (const auto& ls: sub.listeners)
@@ -812,8 +802,7 @@ inline void encode(const BeaconSubsystem& sub,  ceph::bufferlist &bl) {
 }
 
 inline void decode(BeaconSubsystem& sub, ceph::buffer::list::const_iterator &bl) {
-  DECODE_START(STRUCT_VERSION, bl);
-  dout(20) << "decode BeaconSubsystems " << dendl;
+  DECODE_START(1, bl);
   decode(sub.nqn, bl);
   uint32_t s;
   sub.listeners.clear();
