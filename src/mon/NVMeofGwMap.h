@@ -137,7 +137,6 @@ public:
     using ceph::decode;
     epoch_t struct_version = 0;
     DECODE_START(STRUCT_VERSION, bl);
-    DECODE_OLDEST(1);
     struct_version = struct_v;
     dout(20) << "decode version " << struct_version   << dendl;
     decode(epoch, bl);
