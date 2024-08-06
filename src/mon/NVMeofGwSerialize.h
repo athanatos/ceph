@@ -304,11 +304,12 @@ inline  void decode(
 
 inline  void encode(const NvmeGwTimerState& state,  ceph::bufferlist &bl,
   uint64_t features) {
-  uint8_t version;
-  if (HAVE_FEATURE(features, SERVER_SQUID)) version = STRUCT_VERSION;
-  else                                      version = OLD_STRUCT_VERSION;
-  ENCODE_START(version, 1, bl);
-  if (version == STRUCT_VERSION) {
+  uint8_t version = 1;
+  if (HAVE_FEATURE(features, SERVER_SQUID)) {
+    version = 2;
+  }
+  ENCODE_START(version, version, bl); // version 1 can't decode version 2 correctly
+  if (version >= 2) {
     encode((uint32_t)state.data.size(), bl);
     for (auto &tm_itr:state.data) {
       encode((uint32_t)tm_itr.first, bl);// encode key
@@ -321,8 +322,7 @@ inline  void encode(const NvmeGwTimerState& state,  ceph::bufferlist &bl,
       uint64_t  millisecondsSinceEpoch = std::chrono::duration_cast<std::chrono::milliseconds>(endtime.time_since_epoch()).count();
       encode(millisecondsSinceEpoch , bl);
     }
-  }
-  else if (version == OLD_STRUCT_VERSION){
+  } else {
     encode((uint32_t)MAX_SUPPORTED_ANA_GROUPS, bl);
     Tmdata tmdata[MAX_SUPPORTED_ANA_GROUPS]; // Constructed objects with defaults
     for (auto &tm_itr:state.data) {
@@ -344,17 +344,15 @@ inline  void encode(const NvmeGwTimerState& state,  ceph::bufferlist &bl,
 
 inline  void decode(
   NvmeGwTimerState& state,  ceph::bufferlist::const_iterator& bl) {
-  epoch_t struct_version = 0;
+  DECODE_START(2, bl);
+  dout(20) << "decode NvmeGwTimers version = " << struct_v << dendl;
   uint32_t size;
-  DECODE_START(STRUCT_VERSION, bl);
-  struct_version = struct_v;
-  dout(20) << "decode NvmeGwTimers version = " << struct_version << dendl;
   decode(size, bl);
   for (uint32_t i = 0; i <size; i ++) {
     uint32_t tm_key;
     uint32_t tick;
     uint8_t val;
-    if (struct_version == STRUCT_VERSION) {
+    if (struct_v >= 2) {
       decode(tm_key, bl);
       decode(tick, bl);
       decode(val,  bl);
@@ -366,8 +364,7 @@ inline  void decode(
       auto duration = std::chrono::milliseconds(milliseconds);
       tm.end_time = std::chrono::time_point<std::chrono::system_clock>(duration);
       state.data[tm_key] = tm;
-    }
-    else if (struct_version == OLD_STRUCT_VERSION) {
+    } else {
       decode(tick, bl);
       decode(val,  bl);
       Tmdata tm;
@@ -419,16 +416,17 @@ inline void decode(
 
 inline void encode(const NvmeGwMonStates& gws,  ceph::bufferlist &bl,
   uint64_t features) {
-  uint8_t version;
-  if (HAVE_FEATURE(features, SERVER_SQUID)) version = STRUCT_VERSION;
-  else                                      version = OLD_STRUCT_VERSION;
-  ENCODE_START(version, 1, bl);
+  uint8_t version = 1;
+  if (HAVE_FEATURE(features, SERVER_SQUID)) {
+    version = 2;
+  }
+  ENCODE_START(version, version, bl); // version 1 can't decode version 2 correctly
   encode ((uint32_t)gws.size(), bl); // number of gws in the group
   for (auto& gw : gws) {
     encode(gw.first, bl);// GW_id
     encode(gw.second.ana_grp_id, bl); // GW owns this group-id
 
-    if (version == STRUCT_VERSION) {
+    if (version >= 2) {
       encode((uint32_t)gw.second.sm_state.size(), bl);
       for (auto &state_it:gw.second.sm_state) {
         encode((uint32_t)state_it.first, bl); //key of map
@@ -445,8 +443,7 @@ inline void encode(const NvmeGwMonStates& gws,  ceph::bufferlist &bl,
         encode((uint32_t)blklst_itr.second.osd_epoch, bl);
         encode((uint32_t)blklst_itr.second.is_failover, bl);
       }
-    }
-    else if (version == OLD_STRUCT_VERSION) {
+    } else {
       gw_states_per_group_t states[MAX_SUPPORTED_ANA_GROUPS];
       for (int i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i++) states[i] = gw_states_per_group_t::GW_IDLE_STATE;
       for (auto &state_it:gw.second.sm_state) states[state_it.first] = state_it.second;
@@ -475,11 +472,9 @@ inline void encode(const NvmeGwMonStates& gws,  ceph::bufferlist &bl,
 inline void decode(
   NvmeGwMonStates& gws, ceph::buffer::list::const_iterator &bl) {
   gws.clear();
-  epoch_t struct_version = 0;
   uint32_t num_created_gws;
-  DECODE_START(STRUCT_VERSION, bl);
-  struct_version = struct_v;
-  dout(20) << "decode NvmeGwMonStates. struct_v: " << struct_version << dendl;
+  DECODE_START(2, bl);
+  dout(20) << "decode NvmeGwMonStates. struct_v: " << struct_v << dendl;
   decode(num_created_gws, bl);
   dout(20) << "decode NvmeGwMonStates. num gws  " << num_created_gws << dendl;
   uint8_t anas[MAX_SUPPORTED_ANA_GROUPS];         // for old decode
@@ -497,15 +492,14 @@ inline void decode(
     //NvmeGwId peer_name;
     uint32_t size;
 
-    if (struct_version == STRUCT_VERSION) {
+    if (struct_v >= 2) {
       decode(size, bl);
       for (uint32_t i = 0; i <size; i ++) {
         decode(sm_key, bl);
         decode(sm_state, bl);
         gw_created.sm_state[sm_key] = ((gw_states_per_group_t)sm_state);
       }
-    }
-    else if ( struct_version == OLD_STRUCT_VERSION){
+    } else {
       for (uint32_t i = 0; i <MAX_SUPPORTED_ANA_GROUPS; i ++) {
         decode(sm_state, bl);
         dout(20) << "decode NvmeGwMonStates state: " << i << " " << sm_state << dendl;
@@ -529,7 +523,7 @@ inline void decode(
     decode(subsystems, bl);
     gw_created.subsystems = subsystems;
 
-    if (struct_version == STRUCT_VERSION) {
+    if (struct_v >= 2) {
       decode(size, bl);
       for (uint32_t i=0; i<size; i++) {
         uint32_t blklist_key;
@@ -541,8 +535,7 @@ inline void decode(
         Blocklist_data blst((epoch_t)osd_epoch, (bool)is_failover);
         gw_created.blocklist_data[blklist_key] = blst;
       }
-    }
-    else if (struct_version == OLD_STRUCT_VERSION) {
+    } else {
       for (uint32_t i=0; i<MAX_SUPPORTED_ANA_GROUPS; i++) {
         uint32_t osd_epoch;
         bool is_failover;
@@ -557,8 +550,8 @@ inline void decode(
     decode(gw_created.nonce_map, bl);
     gws[gw_name] = gw_created;
   }
-  if (struct_version == OLD_STRUCT_VERSION) {  //Fix allocations of states and blocklist_data
-    for (auto &gw_it:gws) {                    //since only after full loop on gws we know what states are relevant
+  if (struct_v == 1) {  //Fix allocations of states and blocklist_data
+    for (auto &gw_it:gws) {  //since only after full loop on gws we know what states are relevant
       auto &state = gw_it.second;
       for (uint32_t i=0; i<MAX_SUPPORTED_ANA_GROUPS; i++) {
         if (anas[i]==0) {

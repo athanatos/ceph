@@ -32,9 +32,6 @@
 #define dout_prefix *_dout << MODULE_PREFFIX << __PRETTY_FUNCTION__ << " "
 
 
-static const version_t STRUCT_VERSION = 2;
-static const version_t OLD_STRUCT_VERSION = 1;
-
 using ceph::coarse_mono_clock;
 class Monitor;
 /*-------------------*/
@@ -117,15 +114,16 @@ public:
 
 
   void encode(ceph::buffer::list &bl, uint64_t features) const {
-    uint8_t   version;
-    if (HAVE_FEATURE(features, SERVER_SQUID)) version = STRUCT_VERSION;
-    else                                      version = OLD_STRUCT_VERSION;
+    uint8_t version = 1;
+    if (HAVE_FEATURE(features, SERVER_SQUID)) {
+      version = 2;
+    }
     
     ENCODE_START(version, 1, bl);
-    dout(20) << "encode1 version " << (uint64_t)version  << version << " features " << features << dendl;
+    dout(20) << "encode version " << version << " features " << features << dendl;
     using ceph::encode;
     encode(epoch, bl);// global map epoch
-    if (version == STRUCT_VERSION) {
+    if (version >= 2) {
       encode(peer_addr_2_version, bl, features);
     }
     encode(created_gws, bl, features); //Encode created GWs
@@ -135,12 +133,10 @@ public:
   
   void decode(ceph::buffer::list::const_iterator &bl) {
     using ceph::decode;
-    epoch_t struct_version = 0;
-    DECODE_START(STRUCT_VERSION, bl);
-    struct_version = struct_v;
-    dout(20) << "decode version " << struct_version   << dendl;
+    DECODE_START(2, bl);
+    dout(20) << "decode version " << struct_v << dendl;
     decode(epoch, bl);
-    if (struct_version == STRUCT_VERSION) {
+    if (struct_v >= 2) {
       decode(peer_addr_2_version, bl);
     }
     decode(created_gws, bl);
