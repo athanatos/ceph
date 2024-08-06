@@ -698,37 +698,6 @@ inline void decode(
   }
   DECODE_FINISH(bl);
 }
-inline void encode(const entity_addrvec_t& peer,
-  ceph::bufferlist& b1){
-  peer.encode(b1, CEPH_FEATURES_ALL);
-}
-
-inline void encode(const std::map<entity_addrvec_t , uint32_t> &peer2ver, ceph::bufferlist &bl) {
-  ENCODE_START(STRUCT_VERSION, 1, bl);
-  encode ((uint32_t)peer2ver.size(), bl); // number of gws
-  for (auto& peer_it: peer2ver)
-  {
-    encode(peer_it.first, bl);
-    encode (peer_it.second, bl);
-  }
-  ENCODE_FINISH(bl);
-}
-
-inline void decode(std::map<entity_addrvec_t , uint32_t> &peer2ver,
-  ceph::buffer::list::const_iterator &bl) {
-  uint32_t num_gws;
-  dout(20) << "Decode peer_2_addr " << dendl;
-  DECODE_START(2, bl);
-  decode(num_gws, bl);
-  for (uint32_t i = 0; i < num_gws; i++) {
-    entity_addrvec_t peer;
-    decode(peer, bl);
-    uint32_t version;
-    decode(version, bl);
-    peer2ver[peer] = version;
-  }
-  DECODE_FINISH(bl);
-}
 
 inline void encode(
   const NvmeGwTimers& group_md,  ceph::bufferlist &bl, uint64_t features) {

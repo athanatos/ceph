@@ -126,7 +126,7 @@ public:
     using ceph::encode;
     encode(epoch, bl);// global map epoch
     if (version == STRUCT_VERSION) {
-      encode(peer_addr_2_version, bl);
+      encode(peer_addr_2_version, bl, features);
     }
     encode(created_gws, bl, features); //Encode created GWs
     encode(fsm_timers, bl, features);
