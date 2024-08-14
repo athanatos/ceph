@@ -160,8 +160,8 @@ void NVMeofGwMon::encode_pending(MonitorDBStore::TransactionRef t)
   bufferlist bl;
   uint64_t features = mon.get_quorum_con_features();
   pending_map.encode(bl, features);
-  dout(10) << "is SQUID: "
-        << HAVE_FEATURE(mon.get_quorum_con_features(), SERVER_SQUID) << dendl;
+  dout(10) << " has NVMEOFHA: "
+	   << HAVE_FEATURE(mon.get_quorum_con_features(), NVMEOFHA) << dendl;
   put_version(t, pending_map.epoch, bl);
   put_last_committed(t, pending_map.epoch);
 }
