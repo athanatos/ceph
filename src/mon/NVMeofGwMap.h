@@ -26,6 +26,7 @@
 #include "common/ceph_time.h"
 #include "NVMeofGwTypes.h"
 
+
 using ceph::coarse_mono_clock;
 class Monitor;
 /*-------------------*/
@@ -37,7 +38,6 @@ public:
   // epoch is for Paxos synchronization  mechanizm
   epoch_t epoch = 0;
   bool delay_propose = false;
-
   std::map<NvmeGroupKey, NvmeGwMonStates>  created_gws;
 
   // map that handles timers started by all Gateway FSMs
@@ -106,19 +106,19 @@ public:
     const NvmeGwId &gw_id, const NvmeGroupKey& group_key,
     NvmeAnaGrpId ANA_groupid, epoch_t &epoch, bool failover);
 
-  void encode(ceph::buffer::list &bl) const {
+  void encode(ceph::buffer::list &bl, uint64_t features) const {
     using ceph::encode;
     ENCODE_START(1, 1, bl);
     encode(epoch, bl);// global map epoch
 
-    encode(created_gws, bl); //Encode created GWs
-    encode(fsm_timers, bl);
+    encode(created_gws, bl, features); //Encode created GWs
+    encode(fsm_timers, bl, features);
     ENCODE_FINISH(bl);
   }
 
   void decode(ceph::buffer::list::const_iterator &bl) {
     using ceph::decode;
-    DECODE_START(1, bl);
+    DECODE_START(2, bl);
     decode(epoch, bl);
 
     decode(created_gws, bl);
