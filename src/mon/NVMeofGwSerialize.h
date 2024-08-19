@@ -345,16 +345,16 @@ inline  void encode(const NvmeGwTimerState& state,  ceph::bufferlist &bl,
     }
   } else {
     encode((uint32_t)MAX_SUPPORTED_ANA_GROUPS, bl);
-    Tmdata tmdata[MAX_SUPPORTED_ANA_GROUPS]; // Constructed objects with defaults
-    for (auto &tm_itr:state.data) {
-      tmdata[tm_itr.first].timer_started = tm_itr.second.timer_started;
-      tmdata[tm_itr.first].timer_value = tm_itr.second.timer_value;
-      tmdata[tm_itr.first].end_time = tm_itr.second.end_time;
-    }
+    Tmdata empty;
     for (uint32_t i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i++) {
-      encode(tmdata[i].timer_started, bl);
-      encode(tmdata[i].timer_value,  bl);
-      auto endtime  = tmdata[i].end_time;
+      auto tmiter = state.data.find(i);
+      const Tmdata *to_encode = &empty;
+      if (tmiter != state.data.end()) {
+	to_encode = &(tmiter->second);
+      }
+      encode(to_encode->timer_started, bl);
+      encode(to_encode->timer_value,  bl);
+      auto endtime  = to_encode->end_time;
       // Convert the time point to milliseconds since the epoch
       uint64_t  millisecondsSinceEpoch =
          std::chrono::duration_cast<std::chrono::milliseconds>(
