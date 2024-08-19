@@ -351,7 +351,7 @@ inline  void encode(const NvmeGwTimerState& state,  ceph::bufferlist &bl,
       tmdata[tm_itr.first].timer_value = tm_itr.second.timer_value;
       tmdata[tm_itr.first].end_time = tm_itr.second.end_time;
     }
-    for (uint32_t i=0; i<MAX_SUPPORTED_ANA_GROUPS; i++) {
+    for (uint32_t i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i++) {
       encode(tmdata[i].timer_started, bl);
       encode(tmdata[i].timer_value,  bl);
       auto endtime  = tmdata[i].end_time;
