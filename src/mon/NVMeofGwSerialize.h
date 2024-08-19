@@ -17,7 +17,7 @@
 #undef dout_prefix
 #define MODULE_PREFFIX "nvmeofgw "
 #define dout_prefix *_dout << MODULE_PREFFIX << __PRETTY_FUNCTION__ << " "
-#define MAX_SUPPORTED_ANA_GROUPS 16 //used for support backward compatibility
+#define MAX_SUPPORTED_ANA_GROUPS 16
 
 inline std::ostream& operator<<(
   std::ostream& os, const gw_exported_states_per_group_t value) {
