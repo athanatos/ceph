@@ -343,7 +343,7 @@ inline  void encode(const NvmeGwTimerState& state,  ceph::bufferlist &bl,
       endtime.time_since_epoch()).count();
       encode(millisecondsSinceEpoch , bl);
     }
-  }else {
+  } else {
     encode((uint32_t)MAX_SUPPORTED_ANA_GROUPS, bl);
     Tmdata tmdata[MAX_SUPPORTED_ANA_GROUPS]; // Constructed objects with defaults
     for (auto &tm_itr:state.data) {
