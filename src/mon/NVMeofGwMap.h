@@ -118,7 +118,7 @@ public:
 
   void decode(ceph::buffer::list::const_iterator &bl) {
     using ceph::decode;
-    DECODE_START(2, bl);
+    DECODE_START(1, bl);
     decode(epoch, bl);
 
     decode(created_gws, bl);
