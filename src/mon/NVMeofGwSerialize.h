@@ -258,10 +258,12 @@ inline void decode(ana_state_t& st, ceph::buffer::list::const_iterator &bl) {
 inline void encode(
   const GwSubsystems& subsystems,  ceph::bufferlist &bl, uint64_t features) {
   uint8_t version = 1;
+  uint8_t compat = 1;
   if (HAVE_FEATURE(features, NVMEOFHA)) {
     version = 2;
+    compat = 2;
   }
-  ENCODE_START(version, version, bl);
+  ENCODE_START(version, compat, bl);
   encode((uint32_t)subsystems.size(), bl);
   for (const auto& sub: subsystems) {
     encode(sub.second.nqn, bl);
@@ -323,10 +325,12 @@ inline  void decode(
 inline  void encode(const NvmeGwTimerState& state,  ceph::bufferlist &bl,
   uint64_t features) {
   uint8_t version = 1;
+  uint8_t compat = 1;
   if (HAVE_FEATURE(features, NVMEOFHA)) {
     version = 2;
+    compat = 2;
   }
-  ENCODE_START(version, version, bl);
+  ENCODE_START(version, compat, bl);
 
   if (version >= 2) {
     encode((uint32_t)state.data.size(), bl);
@@ -443,10 +447,12 @@ inline void decode(
 inline void encode(const NvmeGwMonStates& gws,  ceph::bufferlist &bl,
   uint64_t features) {
   uint8_t version = 1;
+  uint8_t compat = 1;
   if (HAVE_FEATURE(features, NVMEOFHA)) {
     version = 2;
+    compat = 2;
   }
-  ENCODE_START(version, version, bl);
+  ENCODE_START(version, compat, bl);
   encode ((uint32_t)gws.size(), bl); // number of gws in the group
   for (auto& gw : gws) {
     encode(gw.first, bl);// GW_id
