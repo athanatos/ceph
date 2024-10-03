@@ -1,3 +1,4 @@
+#include "crimson/common/coroutine.h"
 #include "crimson/osd/object_context_loader.h"
 #include "osd/osd_types_fmt.h"
 #include "osd/object_state_fmt.h"
@@ -7,6 +8,111 @@ SET_SUBSYS(osd);
 namespace crimson::osd {
 
 using crimson::common::local_conf;
+
+  ObjectContextLoader::load_and_lock_fut
+  ObjectContextLoader::load_and_lock(Manager &manager, RWState::State lock_type)
+  {
+    LOG_PREFIX(ObjectContextLoader::load_and_lock);
+    auto releaser = manager.get_releaser();
+    if (manager.head_state.is_empty() &&
+	!manager.target.is_head() &&
+	(!manager.options.clone_only ||
+	 manager.options.resolve_clone)) {
+      auto [obc, existed] = obc_registry.get_cached_obc(manager.target.get_head());
+      manager.head_state.obc = obc;
+      manager.head_state.obc->append_to(obc_set_accessing);
+
+      if (!existed) {
+	bool locked = obc->lock.try_lock_for_excl();
+	ceph_assert(locked);
+	manager.head_state.state = RWState::RWEXCL;
+
+	co_await load_obc(obc);
+	
+	obc->lock.demote_to_read();
+	manager.head_state.state = RWState::RWREAD;
+      } else {
+	co_await interruptor::make_interruptible(
+	  manager.head_state.obc->lock.lock_for_read());
+	manager.head_state.state = RWState::RWREAD;
+      }
+    }
+
+    if (!manager.target.is_head() && manager.options.resolve_clone) {
+      ceph_assert(!manager.head_state.is_empty());
+      auto resolved_oid = resolve_oid(
+	manager.head_state.obc->get_head_ss(),
+	manager.target);
+      if (!resolved_oid) {
+	ERRORDPP("clone {} not found", dpp, manager.target);
+	co_await load_obc_iertr::future<>(
+	  crimson::ct_error::enoent::make()
+	);
+      }
+      manager.target = *resolved_oid;
+    }
+
+    auto [obc, existed] = obc_registry.get_cached_obc(manager.target);
+    manager.target_state.obc = obc;
+    manager.target_state.obc->append_to(obc_set_accessing);
+
+    if (!existed) {
+      bool locked = obc->lock.try_lock_for_excl();
+      ceph_assert(locked);
+      manager.target_state.state = RWState::RWEXCL;
+      
+      co_await load_obc(obc);
+	
+      switch (lock_type) {
+      case RWState::RWWRITE:
+	obc->lock.demote_to_write();
+	manager.target_state.state = RWState::RWWRITE;
+	break;
+      case RWState::RWREAD:
+	obc->lock.demote_to_read();
+	manager.target_state.state = RWState::RWREAD;
+	break;
+      case RWState::RWNONE:
+	obc->lock.unlock_for_excl();
+	manager.target_state.state = RWState::RWNONE;
+	break;
+      case RWState::RWEXCL:
+	//noop
+	break;
+      default:
+	ceph_assert(0 == "impossible");
+      }
+    } else {
+      switch (lock_type) {
+      case RWState::RWWRITE:
+	co_await interruptor::make_interruptible(
+	  manager.target_state.obc->lock.lock_for_write());
+	manager.target_state.state = RWState::RWWRITE;
+	break;
+      case RWState::RWREAD:
+	co_await interruptor::make_interruptible(
+	  manager.target_state.obc->lock.lock_for_read());
+	manager.target_state.state = RWState::RWREAD;
+	break;
+      case RWState::RWNONE:
+	// noop
+	break;
+      case RWState::RWEXCL:
+	co_await interruptor::make_interruptible(
+	  manager.target_state.obc->lock.lock_for_excl());
+	manager.target_state.state = RWState::RWEXCL;
+	break;
+      default:
+	ceph_assert(0 == "impossible");
+      }
+    }
+
+    if (manager.target.is_head() && manager.head_state.is_empty()) {
+      manager.head_state.obc = manager.target_state.obc;
+      manager.head_state.obc->append_to(obc_set_accessing);
+    }
+    releaser.cancel();
+  }
 
   template<RWState::State State>
   ObjectContextLoader::load_obc_iertr::future<>
