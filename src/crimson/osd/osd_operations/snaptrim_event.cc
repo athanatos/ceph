@@ -395,23 +395,24 @@ SnapTrimObjSubEvent::start()
     handle.exit();
   });
 
-  co_await enter_stage<interruptor>(
-    client_pp().check_already_complete_get_obc);
-
   logger().debug("{}: getting obc for {}", *this, coid);
 
 
-  auto obc_manager = pg->obc_loader.get_obc_manager(
+  obc_manager = pg->obc_loader.get_obc_manager(
     coid, false /* resolve_oid */);
 
+  co_await enter_stage<interruptor>(obc_manager->obc_pp().process);
+
   co_await pg->obc_loader.load_and_lock(
-    obc_manager, RWState::RWWRITE
+    *obc_manager, RWState::RWWRITE
   ).handle_error_interruptible(
     remove_or_update_iertr::pass_further{},
     crimson::ct_error::assert_all{"unexpected error in SnapTrimObjSubEvent"}
   );
 
-  logger().debug("{}: got obc={}", *this, obc_manager.get_obc()->get_oid());
+  logger().debug(
+    "{}: processing obc={}", *this,
+    obc_manager->get_obc()->get_oid());
 
   auto submitted = interruptor::now();
   auto all_completed = interruptor::now();
@@ -422,9 +423,6 @@ SnapTrimObjSubEvent::start()
     auto unlocker = seastar::defer([this] {
       pg->submit_lock.unlock();
     });
-  co_await enter_stage<interruptor>(client_pp().process);
-
-  logger().debug("{}: processing obc={}", *this, obc_manager.get_obc()->get_oid());
 
     auto txn = co_await remove_or_update(
       obc_manager->get_obc(), obc_manager->get_head_obc());
@@ -439,7 +437,7 @@ SnapTrimObjSubEvent::start()
 
   co_await std::move(submitted);
 
-  co_await enter_stage<interruptor>(client_pp().wait_repop);
+  co_await enter_stage<interruptor>(obc_manager->obc_pp().wait_repop);
 
   co_await std::move(all_completed);
 

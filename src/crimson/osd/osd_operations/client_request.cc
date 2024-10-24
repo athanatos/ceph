@@ -322,7 +322,10 @@ ClientRequest::process_op(
   instance_handle_t &ihref, Ref<PG> pg, unsigned this_instance_id)
 {
   LOG_PREFIX(ClientRequest::process_op);
-  ihref.enter_stage_sync(client_pp(*pg).recover_missing, *this);
+  ihref.obc_manager = pg->obc_loader.get_obc_manager(m->get_hobj());
+  co_await ihref.enter_stage<interruptor>(
+    ihref.obc_manager->obc_pp().process, *this);
+
   if (!pg->is_primary()) {
     DEBUGDPP(
       "Skipping recover_missings on non primary pg for soid {}",
@@ -343,25 +346,16 @@ ClientRequest::process_op(
         m->get_hobj().get_head());
 
       co_await pg->obc_loader.load_and_lock(
-	obc_manager, RWState::RWREAD
+	*(ihref.obc_manager), RWState::RWREAD
       ).handle_error_interruptible(
 	crimson::ct_error::assert_all("unexpected error")
       );
 
-      co_await recover_missing_snaps(pg, ihref, obc_manager.get_obc(), snaps);
+      co_await recover_missing_snaps(
+	pg, ihref, ihref.obc_manager->get_obc(), snaps);
     }
   }
 
-  /**
-   * The previous stage of recover_missing is a concurrent phase.
-   * Checking for already_complete requests must done exclusively.
-   * Since get_obc is also an exclusive stage, we can merge both stages into
-   * a single stage and avoid stage switching overhead.
-   */
-  DEBUGDPP("{}.{}: entering check_already_complete_get_obc",
-	   *pg, *this, this_instance_id);
-  co_await ihref.enter_stage<interruptor>(
-    client_pp(*pg).check_already_complete_get_obc, *this);
   DEBUGDPP("{}.{}: checking already_complete",
 	   *pg, *this, this_instance_id);
   auto completed = co_await pg->already_complete(m->get_reqid());
@@ -389,14 +383,8 @@ ClientRequest::process_op(
   DEBUGDPP("{}.{}: past scrub blocker, getting obc",
 	   *pg, *this, this_instance_id);
 
-  auto obc_manager = pg->obc_loader.get_obc_manager(m->get_hobj());
-
-  // initiate load_and_lock in order, but wait concurrently
-  ihref.enter_stage_sync(
-      client_pp(*pg).lock_obc, *this);
-
   int load_err = co_await pg->obc_loader.load_and_lock(
-    obc_manager, pg->get_lock_type(op_info)
+    *(ihref.obc_manager), pg->get_lock_type(op_info)
   ).si_then([]() -> int {
     return 0;
   }).handle_error_interruptible(
@@ -412,25 +400,19 @@ ClientRequest::process_op(
     co_return;
   }
 
-  DEBUGDPP("{}.{}: got obc {}, entering process stage",
-	   *pg, *this, this_instance_id, obc_manager.get_obc()->obs);
-  co_await ihref.enter_stage<interruptor>(
-    client_pp(*pg).process, *this);
-
-  DEBUGDPP("{}.{}: in process stage, calling do_process",
-	   *pg, *this, this_instance_id);
-  co_await do_process(
-    ihref, pg, obc_manager.get_obc(), this_instance_id
-  );
+  DEBUGDPP("{}.{}: obc {} loaded and locked, calling do_process",
+	   *pg, *this, this_instance_id, ihref.obc_manager->get_obc()->obs);
+  co_await do_process(ihref, pg, this_instance_id);
 }
 
 ClientRequest::interruptible_future<>
 ClientRequest::do_process(
   instance_handle_t &ihref,
-  Ref<PG> pg, crimson::osd::ObjectContextRef obc,
+  Ref<PG> pg,
   unsigned this_instance_id)
 {
   LOG_PREFIX(ClientRequest::do_process);
+  auto obc = ihref.obc_manager->get_obc();
   if (m->has_flag(CEPH_OSD_FLAG_PARALLELEXEC)) {
     co_await reply_op_error(pg, -EINVAL);
     co_return;
@@ -540,12 +522,14 @@ ClientRequest::do_process(
 	std::move(ox), m->ops);
       co_await std::move(submitted);
     }
-    co_await ihref.enter_stage<interruptor>(client_pp(*pg).wait_repop, *this);
+    co_await ihref.enter_stage<interruptor>(
+      ihref.obc_manager->obc_pp().wait_repop, *this);
 
     co_await std::move(all_completed);
   }
 
-  co_await ihref.enter_stage<interruptor>(client_pp(*pg).send_reply, *this);
+  co_await ihref.enter_stage<interruptor>(
+    ihref.obc_manager->obc_pp().send_reply, *this);
 
   if (ret) {
     int err = -ret->value();
