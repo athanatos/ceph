@@ -42,6 +42,7 @@ struct LttngBackend
     ClientRequest::PGPipeline::WaitRepop::BlockingEvent::Backend,
     ClientRequest::PGPipeline::WaitRepop::BlockingEvent::ExitBarrierEvent::Backend,
     ClientRequest::PGPipeline::SendReply::BlockingEvent::Backend,
+    ClientRequest::PGPipeline::WaitPGReady::BlockingEvent::Backend,
     ClientRequest::CompletionEvent::Backend,
     CommonOBCPipeline::Process::BlockingEvent::Backend,
     CommonOBCPipeline::WaitRepop::BlockingEvent::Backend,
@@ -149,6 +150,11 @@ struct LttngBackend
               const ClientRequest::PGPipeline::SendReply& blocker) override {
   }
 
+  void handle(ClientRequest::PGPipeline::WaitPGReady::BlockingEvent& ev,
+              const Operation& op,
+              const ClientRequest::PGPipeline::WaitPGReady& blocker) override {
+  }
+
 
   void handle(CommonOBCPipeline::Process::BlockingEvent& ev,
               const Operation& op,
@@ -172,6 +178,7 @@ struct LttngBackend
 
   void handle(ClientRequest::CompletionEvent&,
               const Operation&) override {}
+
 };
 
 struct HistoricBackend
@@ -197,6 +204,7 @@ struct HistoricBackend
     ClientRequest::PGPipeline::WaitRepop::BlockingEvent::Backend,
     ClientRequest::PGPipeline::WaitRepop::BlockingEvent::ExitBarrierEvent::Backend,
     ClientRequest::PGPipeline::SendReply::BlockingEvent::Backend,
+    ClientRequest::PGPipeline::WaitPGReady::BlockingEvent::Backend,
     ClientRequest::CompletionEvent::Backend,
     CommonOBCPipeline::Process::BlockingEvent::Backend,
     CommonOBCPipeline::WaitRepop::BlockingEvent::Backend,
@@ -301,6 +309,11 @@ struct HistoricBackend
   void handle(ClientRequest::PGPipeline::SendReply::BlockingEvent& ev,
               const Operation& op,
               const ClientRequest::PGPipeline::SendReply& blocker) override {
+  }
+
+  void handle(ClientRequest::PGPipeline::WaitPGReady::BlockingEvent& ev,
+              const Operation& op,
+              const ClientRequest::PGPipeline::WaitPGReady& blocker) override {
   }
 
   static const ClientRequest& to_client_request(const Operation& op) {
