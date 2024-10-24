@@ -68,6 +68,16 @@ struct CommonPGPipeline {
   struct WaitRepop : OrderedConcurrentPhaseT<WaitRepop> {
     static constexpr auto type_name = "ClientRequest::PGPipeline::wait_repop";
   } wait_repop;
+struct CommonOBCPipeline {
+  struct Process : OrderedExclusivePhaseT<Process> {
+    static constexpr auto type_name = "CommonOBCPipeline::process";
+  } process;
+  struct WaitRepop : OrderedConcurrentPhaseT<WaitRepop> {
+    static constexpr auto type_name = "CommonOBCPipeline::wait_repop";
+  } wait_repop;
+  struct SendReply : OrderedExclusivePhaseT<SendReply> {
+    static constexpr auto type_name = "CommonOBCPipeline::send_reply";
+  } send_reply;
 };
 
 
