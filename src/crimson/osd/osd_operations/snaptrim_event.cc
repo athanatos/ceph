@@ -413,19 +413,29 @@ SnapTrimObjSubEvent::start()
 
   logger().debug("{}: got obc={}", *this, obc_manager.get_obc()->get_oid());
 
+  auto submitted = interruptor::now();
+  auto all_completed = interruptor::now();
+  {
+    // as with PG::submit_executer, we need to build the pg log entries
+    // and submit the transaction atomically
+    co_await interruptor::make_interruptible(pg->submit_lock.lock());
+    auto unlocker = seastar::defer([this] {
+      pg->submit_lock.unlock();
+    });
   co_await enter_stage<interruptor>(client_pp().process);
 
   logger().debug("{}: processing obc={}", *this, obc_manager.get_obc()->get_oid());
 
-  auto txn = co_await remove_or_update(
-    obc_manager.get_obc(), obc_manager.get_head_obc());
+    auto txn = co_await remove_or_update(
+      obc_manager->get_obc(), obc_manager->get_head_obc());
 
-  auto [submitted, all_completed] = co_await pg->submit_transaction(
-    ObjectContextRef(obc_manager.get_obc()),
-    std::move(txn),
-    std::move(osd_op_p),
-    std::move(log_entries)
-  );
+    std::tie(submitted, all_completed) = co_await pg->submit_transaction(
+      ObjectContextRef(obc_manager->get_obc()),
+      std::move(txn),
+      std::move(osd_op_p),
+      std::move(log_entries)
+    );
+  }
 
   co_await std::move(submitted);
 

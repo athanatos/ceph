@@ -1132,8 +1132,15 @@ PG::submit_executer_fut PG::submit_executer(
   OpsExecuter &&ox,
   const std::vector<OSDOp>& ops) {
   LOG_PREFIX(PG::submit_executer);
-  // transaction must commit at this point
-  return std::move(
+
+  // we need to build the pg log entries and submit the transaction
+  // atomically to ensure log ordering
+  co_await interruptor::make_interruptible(submit_lock.lock());
+  auto unlocker = seastar::defer([this] {
+    submit_lock.unlock();
+  });
+
+  auto [submitted, completed] = co_await std::move(
     ox
   ).flush_changes_n_do_ops_effects(
     ops,
@@ -1151,6 +1158,10 @@ PG::submit_executer_fut PG::submit_executer(
 	std::move(osd_op_p),
 	std::move(log_entries));
     });
+
+  co_return std::make_tuple(
+    std::move(submitted).then_interruptible([unlocker=std::move(unlocker)] {}),
+    std::move(completed));
 }
 
 PG::interruptible_future<MURef<MOSDOpReply>> PG::do_pg_ops(Ref<MOSDOp> m)
