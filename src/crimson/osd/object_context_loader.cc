@@ -18,18 +18,19 @@ ObjectContextLoader::load_and_lock(Manager &manager, RWState::State lock_type)
       !manager.target.is_head() &&
       (!manager.options.clone_only ||
        manager.options.resolve_clone)) {
-    auto [obc, existed] = obc_registry.get_cached_obc(manager.target.get_head());
-    manager.head_state.obc = obc;
+    std::tie(manager.head_state.obc, std::ignore) = obc_registry.get_cached_obc(
+      manager.target.get_head());
     manager.head_state.obc->append_to(obc_set_accessing);
 
-    if (!existed) {
-      bool locked = obc->lock.try_lock_for_excl();
+    if (!manager.head_state.obc->loading) {
+      manager.head_state.obc->loading = true;
+      bool locked = manager.head_state.obc->lock.try_lock_for_excl();
       ceph_assert(locked);
       manager.head_state.state = RWState::RWEXCL;
       
-      co_await load_obc(obc);
+      co_await load_obc(manager.head_state.obc);
 
-      obc->lock.demote_to_read();
+      manager.head_state.obc->lock.demote_to_read();
       manager.head_state.state = RWState::RWREAD;
     } else {
       co_await interruptor::make_interruptible(
@@ -52,28 +53,29 @@ ObjectContextLoader::load_and_lock(Manager &manager, RWState::State lock_type)
     manager.target = *resolved_oid;
   }
 
-  auto [obc, existed] = obc_registry.get_cached_obc(manager.target);
-  manager.target_state.obc = obc;
+  std::tie(manager.target_state.obc, std::ignore) = obc_registry.get_cached_obc(
+    manager.target);
   manager.target_state.obc->append_to(obc_set_accessing);
 
-  if (!existed) {
-    bool locked = obc->lock.try_lock_for_excl();
+  if (!manager.target_state.obc->loading) {
+    manager.target_state.obc->loading = true;
+    bool locked = manager.target_state.obc->lock.try_lock_for_excl();
     ceph_assert(locked);
     manager.target_state.state = RWState::RWEXCL;
 
-    co_await load_obc(obc);
+    co_await load_obc(manager.target_state.obc);
 
     switch (lock_type) {
     case RWState::RWWRITE:
-      obc->lock.demote_to_write();
+      manager.target_state.obc->lock.demote_to_write();
       manager.target_state.state = RWState::RWWRITE;
       break;
     case RWState::RWREAD:
-      obc->lock.demote_to_read();
+      manager.target_state.obc->lock.demote_to_read();
       manager.target_state.state = RWState::RWREAD;
       break;
     case RWState::RWNONE:
-      obc->lock.unlock_for_excl();
+      manager.target_state.obc->lock.unlock_for_excl();
       manager.target_state.state = RWState::RWNONE;
       break;
     case RWState::RWEXCL:

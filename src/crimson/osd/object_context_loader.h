@@ -5,6 +5,7 @@
 #include "crimson/common/errorator.h"
 #include "crimson/common/log.h"
 #include "crimson/osd/object_context.h"
+#include "crimson/osd/osd_operation.h"
 #include "crimson/osd/pg_backend.h"
 #include "osd/object_state_fmt.h"
 
@@ -53,6 +54,8 @@ public:
       ObjectContextRef obc;
       bool is_empty() const { return !obc; }
     };
+
+    ObjectContextRef orderer_obc;
     state_t head_state;
     state_t target_state;
 
@@ -101,15 +104,18 @@ public:
 
     ObjectContextRef &get_obc() {
       ceph_assert(!target_state.is_empty());
+      ceph_assert(!target_state.obc->is_loaded());
       return target_state.obc;
     }
 
     ObjectContextRef &get_head_obc() {
       ceph_assert(!head_state.is_empty());
+      ceph_assert(!head_state.obc->is_loaded());
       return head_state.obc;
     }
 
     void release() {
+      orderer_obc = ObjectContextRef{};
       release_state(head_state);
       release_state(target_state);
     }
@@ -120,6 +126,10 @@ public:
       });
     }
 
+    CommonOBCPipeline &obc_pp() {
+      return orderer_obc->obc_pipeline;
+    }
+
     ~Manager() {
       release();
     }
@@ -127,6 +137,7 @@ public:
   Manager get_obc_manager(hobject_t oid, bool resolve_clone = true) {
     Manager ret(*this, oid);
     ret.options.resolve_clone = resolve_clone;
+    std::tie(ret.orderer_obc, std::ignore) = obc_registry.get_cached_obc(oid.get_head());
     return ret;
   }
 

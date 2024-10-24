@@ -73,6 +73,8 @@ public:
   using watch_key_t = std::pair<uint64_t, entity_name_t>;
   std::map<watch_key_t, seastar::shared_ptr<crimson::osd::Watch>> watchers;
 
+  CommonOBCPipeline obc_pipeline;
+
   ObjectContext(hobject_t hoid) : lock(hoid),
                                   obs(std::move(hoid)) {}
 
@@ -150,6 +152,7 @@ private:
 
   boost::intrusive::list_member_hook<> obc_accessing_hook;
   uint64_t list_link_cnt = 0;
+  bool loading = false;
   bool fully_loaded = false;
   bool invalidated_by_interval_change = false;
 
