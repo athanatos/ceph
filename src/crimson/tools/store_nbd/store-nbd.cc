@@ -50,6 +50,7 @@
 
 #include "block_driver.h"
 #include "nbd_handler.h"
+#include "nvmeof_handler.h"
 
 namespace po = boost::program_options;
 
@@ -128,6 +129,14 @@ int main(int argc, char** argv)
         crimson::common::sharded_conf().stop().get();
       });
 
+      NVMEOFHandler nvmeof_handler;
+      nvmeof_handler.run().get0();
+      auto stop_nvmeof_handler = seastar::defer([&] {
+        nvmeof_handler.stop().get0();
+      });
+
+// TODOSAM: lazy way to get nvmeof handler building and crashing, fix later
+#if 0
       auto backend = get_backend(backend_config);
       NBDHandler nbd(*backend, nbd_config);
       backend->mount().get();
@@ -140,6 +149,7 @@ int main(int argc, char** argv)
       auto stop_nbd = seastar::defer([&] {
         nbd.stop().get();
       });
+#endif
       should_stop.wait().get();
       return 0;
     });
