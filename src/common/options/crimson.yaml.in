@@ -2,6 +2,11 @@
 ---
 
 options:
+- name: crimson_osd_min_pg_core
+  type: uint
+  level: advanced
+  desc: minimum reactor to which to map pgs
+  default: 0
 - name: crimson_osd_objectstore
   type: str
   level: advanced
