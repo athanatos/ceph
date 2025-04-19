@@ -1203,8 +1203,8 @@ do_balance_cpu() {
     local osd=$1
 
     if [ "${crimson_balance_cpu}" == "none" ]; then
-        echo "$CEPH_BIN/ceph -c $conf_fn config set osd.$osd crimson_seastore_num_threads $crimson_smp"
-        $CEPH_BIN/ceph -c $conf_fn config set osd.$osd crimson_seastore_num_threads $crimson_smp
+        echo "$CEPH_BIN/ceph -c $conf_fn config set osd.$osd crimson_seastar_num_threads $crimson_smp"
+        $CEPH_BIN/ceph -c $conf_fn config set osd.$osd crimson_seastar_num_threads $crimson_smp
         return
     fi
 
