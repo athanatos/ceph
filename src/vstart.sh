@@ -357,6 +357,10 @@ prep_balance_cpu() {
     local log_file_name="/tmp/numa_bal_${balance_strategy}.log"
     local cmd
 
+    if [ "${balance_cpu}" -eq "none"]; then
+        return
+    fi
+
     # Check the table is empty
     if [ "${#cpu_table[@]}" -eq 0 ]; then
         # Ensure the file with the CPU mappings exist
@@ -1197,6 +1201,10 @@ start_cephexporter() {
 
 do_balance_cpu() {
     local osd=$1
+
+    if [ "${balance_cpu}" -eq "none"]; then
+        return
+    fi
 
     interval=${cpu_table[${osd}]}
     echo "$CEPH_BIN/ceph -c $conf_fn config set osd.$osd crimson_seastar_cpu_cores $interval"
