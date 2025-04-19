@@ -357,7 +357,7 @@ prep_balance_cpu() {
     local log_file_name="/tmp/numa_bal_${balance_strategy}.log"
     local cmd
 
-    if [ "${balance_cpu}" -eq "none"]; then
+    if [ "${balance_cpu}" -eq "none" ]; then
         return
     fi
 
