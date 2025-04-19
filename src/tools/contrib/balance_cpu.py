@@ -441,11 +441,14 @@ class CpuCoreAllocator(object):
         control = []
         # Each OSD uses num reactor cores from the same NUMA socket
         num_sockets = self.lscpu.get_num_sockets()
+        logger.error(f"num_sockets {num_sockets}")
         step = self.num_react
 
         # Copy the original physical ranges to the control dict
         for socket in self.lscpu.get_sockets():
             control.append(socket)
+
+        logger.error(f"len(control) {len(control)}")
 
         # This byte array will be transformed for each OSD
         cpu_avail_ba = bytearray(self.bytes_avail_cpus)
@@ -458,6 +461,7 @@ class CpuCoreAllocator(object):
         for osd in range(self.num_osd):
             #osds = []  # List of ranges as string
             _so_id = osd % num_sockets
+            logger.error(f"_so_id {_so_id}")
             socket = control[_so_id]
             _start = socket["physical_start"]
             _end = socket["physical_start"] + step
