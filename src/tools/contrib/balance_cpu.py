@@ -627,8 +627,7 @@ def main(argv):
     else:
         logLevel = logging.INFO
 
-    with tempfile.NamedTemporaryFile(dir="/tmp", delete=False) as tmpfile:
-        logging.basicConfig(filename=tmpfile.name, encoding="utf-8", level=logLevel)
+    logging.basicConfig(level=logLevel, stream=sys.stderr)
 
     logger.debug(f"Got options: {options}")
     os.chdir(options.directory)
