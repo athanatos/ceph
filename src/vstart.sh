@@ -1202,7 +1202,7 @@ start_cephexporter() {
 do_balance_cpu() {
     local osd=$1
 
-    if [ "${balance_cpu}" -eq "none"]; then
+    if [ "${balance_cpu}" -eq "none" ]; then
         echo "$CEPH_BIN/ceph -c $conf_fn config set osd.$osd crimson_seastore_num_threads $crimson_smp"
         $CEPH_BIN/ceph -c $conf_fn config set osd.$osd crimson_seastore_num_threads $crimson_smp
         return
