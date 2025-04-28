@@ -2,6 +2,11 @@
 ---
 
 options:
+- name: crimson_osd_min_pg_core
+  type: uint
+  level: advanced
+  desc: minimum reactor to which to map pgs
+  default: 0
 - name: crimson_osd_objectstore
   type: str
   level: advanced
@@ -150,8 +155,8 @@ options:
 - name: seastore_cache_lru_size
   type: size
   level: advanced
-  desc: Size in bytes of extents to keep in cache.
-  default: 64_M
+  desc: Size in bytes of extents to keep in cache (per reactor).
+  default: 2_G
 - name: seastore_obj_data_write_amplification
   type: float
   level: advanced
@@ -162,8 +167,8 @@ options:
 - name: seastore_max_concurrent_transactions
   type: uint
   level: advanced
-  desc: maximum concurrent transactions that seastore allows
-  default: 8
+  desc: maximum concurrent transactions that seastore allows (per reactor)
+  default: 128
 - name: seastore_main_device_type
   type: str
   level: dev
