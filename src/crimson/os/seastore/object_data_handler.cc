@@ -1300,7 +1300,8 @@ ObjectDataHandler::write_ret ObjectDataHandler::overwrite(
   if (bl.has_value()) {
     assert(bl->length() == len);
   }
-  overwrite_plan_t overwrite_plan(data_base, offset, len, _pins, ctx.tm.get_block_size());
+  overwrite_plan_t overwrite_plan(
+    data_base, offset, len, _pins, ctx.tm.get_block_size());
   return seastar::do_with(
     std::move(_pins),
     extent_to_write_list_t(),
