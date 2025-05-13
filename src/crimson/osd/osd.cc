@@ -452,7 +452,9 @@ seastar::future<> OSD::start()
   startup_time = ceph::mono_clock::now();
   ceph_assert(seastar::this_shard_id() == PRIMARY_CORE);
   return store.start().then([this] {
-    return pg_to_shard_mappings.start(0, seastar::smp::count
+    return pg_to_shard_mappings.start(
+      local_conf().get_val<uint64_t>("crimson_osd_min_pg_core"),
+      seastar::smp::count
     ).then([this] {
       return osd_singleton_state.start_single(
         whoami, std::ref(*cluster_msgr), std::ref(*public_msgr),
