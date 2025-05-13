@@ -5,6 +5,7 @@
 #include <functional>
 
 #include "crimson/common/log.h"
+#include "crimson/common/coroutine.h"
 
 #include "crimson/os/seastore/object_data_handler.h"
 #include "crimson/os/seastore/laddr_interval_set.h"
@@ -1289,100 +1290,84 @@ ObjectDataHandler::write_ret ObjectDataHandler::overwrite(
   laddr_t data_base,
   objaddr_t offset,
   extent_len_t len,
-  std::optional<bufferlist> &&bl,
-  lba_pin_list_t &&_pins)
+  std::optional<bufferlist> bl,
+  lba_pin_list_t pins)
 {
+  LOG_PREFIX(ObjectDataHandler::overwrite);
   if (bl.has_value()) {
     assert(bl->length() == len);
   }
   overwrite_plan_t overwrite_plan(
-    data_base, offset, len, _pins, ctx.tm.get_block_size());
-  return seastar::do_with(
-    std::move(_pins),
-    extent_to_write_list_t(),
-    [ctx, data_base, len, offset, overwrite_plan, bl=std::move(bl), this]
-    (auto &pins, auto &to_write) mutable
-  {
-    LOG_PREFIX(ObjectDataHandler::overwrite);
-    DEBUGT("overwrite: 0x{:x}~0x{:x}",
-           ctx.t,
-           offset,
-           len);
-    ceph_assert(pins.size() >= 1);
-    DEBUGT("overwrite: split overwrite_plan {}", ctx.t, overwrite_plan);
+    data_base, offset, len, pins, ctx.tm.get_block_size());
+  extent_to_write_list_t to_write;
 
-    return operate_left(
-      ctx,
-      pins.front(),
-      overwrite_plan
-    ).si_then([ctx, data_base, len, offset, overwrite_plan, bl=std::move(bl),
-               &to_write, &pins, this](auto p) mutable {
-      auto &[left_extent, headbl] = p;
-      if (left_extent) {
-        ceph_assert(left_extent->addr == overwrite_plan.pin_begin);
-        append_extent_to_write(to_write, std::move(*left_extent));
-      }
-      if (headbl) {
-        assert(headbl->length() > 0);
-      }
-      return operate_right(
-        ctx,
-        pins.back(),
-        overwrite_plan
-      ).si_then([ctx, data_base, len, offset,
-                 pin_begin=overwrite_plan.pin_begin,
-                 pin_end=overwrite_plan.pin_end,
-                 bl=std::move(bl), headbl=std::move(headbl),
-                 &to_write, &pins, this](auto p) mutable {
-        auto &[right_extent, tailbl] = p;
-        if (bl.has_value()) {
-          auto write_offset = offset;
-          bufferlist write_bl;
-          if (headbl) {
-            write_bl.append(*headbl);
-            write_offset = write_offset - headbl->length();
-          }
-          write_bl.claim_append(*bl);
-          if (tailbl) {
-            write_bl.append(*tailbl);
-            assert_aligned(write_bl.length());
-          }
-          splice_extent_to_write(
-            to_write,
-            get_to_writes((data_base + write_offset).checked_to_laddr(), write_bl));
-        } else {
-          splice_extent_to_write(
-            to_write,
-            get_to_writes_with_zero_buffer(
-	      data_base,
-              ctx.tm.get_block_size(),
-              offset,
-              len,
-              std::move(headbl),
-              std::move(tailbl)));
-        }
-        if (right_extent) {
-          ceph_assert(right_extent->get_end_addr() == pin_end);
-          append_extent_to_write(to_write, std::move(*right_extent));
-        }
-        assert(to_write.size());
-        assert(pin_begin == to_write.front().addr);
-        assert(pin_end == to_write.back().get_end_addr());
+  DEBUGT("overwrite: 0x{:x}~0x{:x}",
+	 ctx.t,
+	 offset,
+	 len);
+  ceph_assert(pins.size() >= 1);
+  DEBUGT("overwrite: split overwrite_plan {}", ctx.t, overwrite_plan);
 
-        return seastar::do_with(
-          prepare_ops_list(pins, to_write,
-	    delta_based_overwrite_max_extent_size),
-          [ctx](auto &ops) {
-            return do_remappings(ctx, ops.to_remap
-            ).si_then([ctx, &ops] {
-              return do_removals(ctx, ops.to_remove);
-            }).si_then([ctx, &ops] {
-              return do_insertions(ctx, ops.to_insert);
-            });
-        });
-      });
-    });
-  });
+  auto [left_extent, headbl] = co_await operate_left(
+    ctx,
+    pins.front(),
+    overwrite_plan
+  );
+
+  if (left_extent) {
+    ceph_assert(left_extent->addr == overwrite_plan.pin_begin);
+    append_extent_to_write(to_write, std::move(*left_extent));
+  }
+  if (headbl) {
+    assert(headbl->length() > 0);
+  }
+
+  auto [right_extent, tailbl] = co_await operate_right(
+    ctx,
+    pins.back(),
+    overwrite_plan
+  );
+
+  auto pin_begin=overwrite_plan.pin_begin;
+  auto pin_end=overwrite_plan.pin_end;
+  if (bl.has_value()) {
+    auto write_offset = offset;
+    bufferlist write_bl;
+    if (headbl) {
+      write_bl.append(*headbl);
+      write_offset = write_offset - headbl->length();
+    }
+    write_bl.claim_append(*bl);
+    if (tailbl) {
+      write_bl.append(*tailbl);
+      assert_aligned(write_bl.length());
+    }
+    splice_extent_to_write(
+      to_write,
+      get_to_writes((data_base + write_offset).checked_to_laddr(), write_bl));
+  } else {
+    splice_extent_to_write(
+      to_write,
+      get_to_writes_with_zero_buffer(
+	data_base,
+	ctx.tm.get_block_size(),
+	offset,
+	len,
+	std::move(headbl),
+	std::move(tailbl)));
+  }
+  if (right_extent) {
+    ceph_assert(right_extent->get_end_addr() == pin_end);
+    append_extent_to_write(to_write, std::move(*right_extent));
+  }
+  assert(to_write.size());
+  assert(pin_begin == to_write.front().addr);
+  assert(pin_end == to_write.back().get_end_addr());
+
+  auto ops = prepare_ops_list(pins, to_write, delta_based_overwrite_max_extent_size);
+  co_await do_remappings(ctx, ops.to_remap);
+  co_await do_removals(ctx, ops.to_remove);
+  co_await do_insertions(ctx, ops.to_insert);
 }
 
 ObjectDataHandler::zero_ret ObjectDataHandler::zero(
