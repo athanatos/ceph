@@ -233,8 +233,8 @@ private:
     laddr_t data_base,    ///< [in] data base laddr
     objaddr_t offset,     ///< [in] write offset
     extent_len_t len,     ///< [in] len to write, len == bl->length() if bl
-    std::optional<bufferlist> &&bl, ///< [in] buffer to write, empty for zeros
-    lba_pin_list_t &&pins ///< [in] set of pins overlapping above region
+    std::optional<bufferlist> bl, ///< [in] buffer to write, empty for zeros
+    lba_pin_list_t pins ///< [in] set of pins overlapping above region
   );
 
   /// Ensures object_data reserved region is prepared
