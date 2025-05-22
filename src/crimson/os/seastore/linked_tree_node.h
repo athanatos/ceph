@@ -705,7 +705,7 @@ protected:
       push_copy_sources(t, replacement_right, right);
     }
   }
-#ifndef NDEBUG
+
   bool is_children_empty() const {
     for (auto it = children.begin();
 	it != children.begin() + down_cast().get_size();
@@ -716,7 +716,6 @@ protected:
     }
     return true;
   }
-#endif
 
   void set_children_from_prior_instance() {
     auto &me = down_cast();
@@ -834,7 +833,6 @@ protected:
     }
   }
 
-#ifndef NDEBUG
   bool validate_stable_children() {
     LOG_PREFIX(FixedKVInternalNode::validate_stable_children);
     auto &me = down_cast();
@@ -855,7 +853,6 @@ protected:
     }
     return true;
   }
-#endif
 
   void on_replace_prior() {
     auto &me = down_cast();
