@@ -91,6 +91,10 @@ enum osd_counter_idx_t {
   l_osd_map,
   l_osd_mape,
   l_osd_mape_dup,
+  //adding full map counter definition 
+  l_osd_map_full,
+  //adding inc map counter 
+  l_osd_map_inc,
 
   l_osd_waiting_for_map,
 

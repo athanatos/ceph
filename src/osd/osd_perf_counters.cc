@@ -246,6 +246,10 @@ PerfCounters *build_osd_logger(CephContext *cct) {
   osd_plb.add_u64(
     l_osd_hb_to, "heartbeat_to_peers", "Heartbeat (ping) peers we send to");
   osd_plb.add_u64_counter(l_osd_map, "map_messages", "OSD map messages");
+  // full map definition 
+  osd_plb.add_u64_counter(l_osd_map_full, "full_map", "number of full map recieved");
+  // inc map definition 
+  osd_plb.add_u64_counter(l_osd_map_inc, "inc_map", "number of incremental map recieved");
   osd_plb.add_u64_counter(l_osd_mape, "map_message_epochs", "OSD map epochs");
   osd_plb.add_u64_counter(
     l_osd_mape_dup, "map_message_epoch_dups", "OSD map duplicates");

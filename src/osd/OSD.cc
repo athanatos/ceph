@@ -8262,6 +8262,19 @@ void OSD::handle_osd_map(MOSDMap *m)
 	  << dendl;
 
   logger->inc(l_osd_map);
+  // since the map received counter is being incremented we know that the osd has recieved a map
+  // first check if it contains a full map in which case increase that logger count by 1 
+  if(!m->maps.empty()){
+     logger ->inc(l_osd_map_full,m->maps.size());
+     //question: will an osd ever actually recieve more than 1 full map? 
+     dout(10)<<"count of full maps incremented by "<< maps.size();
+  }
+  //here check for incremental maps and increase the count by the size of the incrementals array 
+  if (!m->incremental_maps.empty()){
+    logger ->inc(l_osd_map_inc,m->incremental_maps.size());
+    dout(10)<<"count of inc maps went up by"<<m->incremental_maps.size()<<dendl;
+  } 
+
   logger->inc(l_osd_mape, last - first + 1);
   if (first <= superblock.get_newest_map())
     logger->inc(l_osd_mape_dup, superblock.get_newest_map() - first + 1);
