@@ -1463,7 +1463,7 @@ private:
 	extent.set_seen_by_users();
       }
     ).si_then([FNAME, &t, pin=pin, this](auto ref) mutable -> ret {
-      if (ref->is_fully_loaded()) {
+      if (ref->is_fully_loaded() && pin.get_checksum() != 0 /* TODOSAM: hacky */) {
         auto crc = ref->calc_crc32c();
         SUBTRACET(
 	  seastore_tm,
