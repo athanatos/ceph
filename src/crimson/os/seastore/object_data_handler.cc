@@ -230,8 +230,7 @@ do_mappings_ret maybe_delta_based_overwrite(
   if (mapping.is_indirect() ||
       params.len > delta_based_overwrite_max_extent_size ||
       mapping.get_val().is_zero()) {
-    return ObjectDataHandler::write_iertr::make_ready_future<
-      LBAMapping>(std::move(mapping));
+    co_return mapping;
   }
 
   laddr_interval_set_t range;
@@ -241,12 +240,11 @@ do_mappings_ret maybe_delta_based_overwrite(
     params.data_end.template get_byte_distance<
       extent_len_t>(params.data_begin));
   if (!in_range) {
-    return ObjectDataHandler::write_iertr::make_ready_future<
-      LBAMapping>(std::move(mapping));
+    co_return mapping;
   }
 
   // delta based overwrite
-  return ctx.tm.read_pin<ObjectDataBlock>(
+  auto maybe_indirect_extent = co_await ctx.tm.read_pin<ObjectDataBlock>(
     ctx.t,
     std::move(mapping)
   ).handle_error_interruptible(
@@ -254,24 +252,25 @@ do_mappings_ret maybe_delta_based_overwrite(
     crimson::ct_error::assert_all{
       "ObjectDataHandler::do_remapping hit invalid error"
     }
-  ).si_then([ctx](auto maybe_indirect_extent) {
-    assert(!maybe_indirect_extent.is_indirect());
-    return ctx.tm.get_mutable_extent(ctx.t, maybe_indirect_extent.extent);
-  }).si_then([&params, &data](auto extent) {
-    bufferlist bl;
-    if (data.bl) {
-      bl.append(*data.bl);
-    } else {
-      bl.append_zero(params.len);
-    }
-    auto odblock = extent->template cast<ObjectDataBlock>();
-    odblock->overwrite(
-      params.first_key.template get_byte_distance<
-	extent_len_t>(params.raw_begin),
-      std::move(bl));
-    return ObjectDataHandler::write_iertr::make_ready_future<
-      LBAMapping>();
-  });
+  );
+
+  assert(!maybe_indirect_extent.is_indirect());
+  auto extent = ctx.tm.get_mutable_extent(
+    ctx.t, maybe_indirect_extent.extent);
+
+  bufferlist bl;
+  if (data.bl) {
+    bl.append(*data.bl);
+  } else {
+    bl.append_zero(params.len);
+  }
+  auto odblock = extent->template cast<ObjectDataBlock>();
+  odblock->overwrite(
+    params.first_key.template get_byte_distance<
+    extent_len_t>(params.raw_begin),
+    std::move(bl));
+  co_return LBAMapping();
+
 }
 
 // if the first mapping is absolute and spans data_begin, remap it.
