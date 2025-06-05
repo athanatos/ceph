@@ -242,7 +242,7 @@ private:
     laddr_t data_base,
     objaddr_t offset,
     extent_len_t len,
-    std::optional<bufferlist> &&bl,
+    std::optional<bufferlist> bl,
     LBAMapping first_mapping);
 
   /// Ensures object_data reserved region is prepared

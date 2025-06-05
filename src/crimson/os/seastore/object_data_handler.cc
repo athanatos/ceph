@@ -5,6 +5,7 @@
 #include <functional>
 
 #include "crimson/common/log.h"
+#include "crimson/common/coroutine.h"
 
 #include "crimson/os/seastore/object_data_handler.h"
 #include "crimson/os/seastore/laddr_interval_set.h"
@@ -625,7 +626,7 @@ ObjectDataHandler::write_ret ObjectDataHandler::overwrite(
   laddr_t data_base,
   objaddr_t offset,
   extent_len_t len,
-  std::optional<bufferlist> &&bl,
+  std::optional<bufferlist> bl,
   LBAMapping first_mapping)
 {
   LOG_PREFIX(ObjectDataHandler::overwrite);
@@ -640,59 +641,61 @@ ObjectDataHandler::write_ret ObjectDataHandler::overwrite(
     "{}, data_begin={}, data_end={}",
     ctx.t, data_base, offset, len, first_mapping,
     raw_begin.get_aligned_laddr(), raw_end.get_roundup_laddr());
-  return seastar::do_with(
-    data_t{std::nullopt, std::move(bl), std::nullopt},
-    overwrite_params_t{
-      offset,
-      len,
-      first_key,
-      first_len,
-      raw_begin,
-      raw_begin.get_aligned_laddr(),
-      raw_end,
-      raw_end.get_roundup_laddr()},
-    [this, ctx, first_mapping=std::move(first_mapping)]
-    (auto &data, auto &params) mutable {
-    return maybe_delta_based_overwrite(
-      ctx, params, std::move(first_mapping), data,
-      delta_based_overwrite_max_extent_size
-    ).si_then([ctx, &params, &data](auto mapping) {
-      if (mapping.is_null()) {
-	// the modified range is within the first mapping
-	// and can be applied through delta based overwrite
-	return write_iertr::now();
-      }
-      return punch_hole(ctx, params, std::move(mapping), data
-      ).si_then([ctx, &params, &data](auto mapping) {
-	if (params.data_begin.template get_byte_distance<
-	      extent_len_t>(params.data_end) == ctx.tm.get_block_size()
-	    && (data.headbl || data.tailbl)) {
-	  // the range to zero is within a block
-	  bufferlist bl;
-	  if (data.headbl) {
-	    bl.append(*data.headbl);
-	  }
-	  if (!data.bl) {
-	    bl.append_zero(params.len);
-	  } else {
-	    bl.append(*data.bl);
-	  }
-	  if (data.tailbl) {
-	    bl.append(*data.tailbl);
-	  }
-	  data.headbl.reset();
-	  data.tailbl.reset();
-	  data.bl = std::move(bl);
-	}
-	if (data.bl) {
-	  return do_write(ctx, std::move(mapping), params, data);
-	} else {
-	  return do_zero(ctx, std::move(mapping), params, data);
-	}
-      });
-    });
-  });
-}
+
+  data_t data{
+    std::nullopt, std::move(bl), std::nullopt
+  };
+  overwrite_params_t params{
+    offset,
+    len,
+    first_key,
+    first_len,
+    raw_begin,
+    raw_begin.get_aligned_laddr(),
+    raw_end,
+    raw_end.get_roundup_laddr()
+  };
+
+  auto mapping = co_await maybe_delta_based_overwrite(
+    ctx, params, std::move(first_mapping), data,
+    delta_based_overwrite_max_extent_size
+  );
+
+  if (mapping.is_null()) {
+    // the modified range is within the first mapping
+    // and can be applied through delta based overwrite
+    co_return;
+  }
+
+  mapping = co_await punch_hole(ctx, params, std::move(mapping), data);
+
+  if (params.data_begin.template get_byte_distance<
+      extent_len_t>(params.data_end) == ctx.tm.get_block_size()
+      && (data.headbl || data.tailbl)) {
+    // the range to zero is within a block
+    bufferlist bl;
+    if (data.headbl) {
+      bl.append(*data.headbl);
+    }
+    if (!data.bl) {
+      bl.append_zero(params.len);
+    } else {
+      bl.append(*data.bl);
+    }
+    if (data.tailbl) {
+      bl.append(*data.tailbl);
+    }
+    data.headbl.reset();
+    data.tailbl.reset();
+    data.bl = std::move(bl);
+  }
+  if (data.bl) {
+    co_await do_write(ctx, std::move(mapping), params, data);
+  } else {
+    co_await do_zero(ctx, std::move(mapping), params, data);
+  }
+  co_return;
+};
 
 ObjectDataHandler::zero_ret ObjectDataHandler::zero(
   context_t ctx,
