@@ -1074,7 +1074,7 @@ ObjectDataHandler::clone_ret clone_mappings(
   return seastar::do_with(
     std::move(pos),
     std::move(mapping),
-    0,
+    0u,
     [ctx, updateref, base, len](auto &pos, auto &mapping, auto &offset) {
     return trans_intr::repeat(
       [ctx, &pos, &mapping, &offset, updateref, base, len]()
