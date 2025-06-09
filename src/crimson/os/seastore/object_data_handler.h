@@ -107,6 +107,10 @@ struct ObjectDataBlock : crimson::os::seastore::LogicalChildNode {
   void overwrite(extent_len_t offset, bufferlist bl) {
     block_delta_t b {offset, bl.length(), bl};
     cached_overwrites.add(b);
+    if (crimson::common::get_conf<bool>(
+	  "seastore_data_delta_skip_bl_debug")) {
+      b.bl = bufferlist();
+    }
     delta.push_back(b);
     modified_region.union_insert(offset, bl.length());
   }

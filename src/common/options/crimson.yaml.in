@@ -111,6 +111,15 @@ options:
              environment.  Setting this to true breaks the entiure RADOS 
              cluster irreperably.  Once more, NEVER SET THIS ON A REAL CLUSTER
   default: false
+- name: seastore_data_delta_skip_bl_debug
+  type: bool
+  level: dev
+  desc: Disable log write
+  long_desc: NEVER SET THIS ON A REAL CLUSTER!
+             Setting this value to true breaks data block deltas. The intent
+             is to test delta overhead, but this *entirely breaks crash
+             safety* and should only be used by a developer for testing.
+  default: false
 - name: seastore_segment_size
   type: size
   desc: Segment size to use for SegmentManager
