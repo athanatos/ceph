@@ -845,8 +845,12 @@ private:
       // touch_extent() should be included in on_cache,
       // required by add_extent()
       on_cache(*ret);
-      return read_extent<T>(
-	std::move(ret), partial_off, partial_len, p_src);
+      if (partial_len > 0) {
+	return read_extent<T>(
+	  std::move(ret), partial_off, partial_len, p_src);
+      } else {
+        return seastar::make_ready_future<TCachedExtentRef<T>>(ret);
+      }
     }
 
     // extent PRESENT in cache
@@ -872,13 +876,17 @@ private:
       }
 
       cached->state = CachedExtent::extent_state_t::INVALID;
-      return read_extent<T>(
-	std::move(ret), partial_off, partial_len, p_src);
+      if (partial_len > 0) {
+	return read_extent<T>(
+	  std::move(ret), partial_off, partial_len, p_src);
+      } else {
+        return seastar::make_ready_future<TCachedExtentRef<T>>(ret);
+      }
     }
 
     auto ret = TCachedExtentRef<T>(static_cast<T*>(cached.get()));
     on_cache(*ret);
-    if (ret->is_range_loaded(partial_off, partial_len)) {
+    if (partial_len > 0 || ret->is_range_loaded(partial_off, partial_len)) {
       SUBTRACE(seastore_cache,
           "{} {}~0x{:x} is present with range 0x{:x}~0x{:x} ... -- {}",
           T::TYPE, offset, length, partial_off, partial_len, *ret);
