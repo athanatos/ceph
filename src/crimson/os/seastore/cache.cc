@@ -756,9 +756,10 @@ void Cache::add_to_dirty(
   assert(ref->is_dirty());
   assert(!ref->primary_ref_list_hook.is_linked());
   ceph_assert(ref->get_modify_time() != NULL_TIME);
-  assert(ref->is_fully_loaded());
   assert(ref->get_paddr().is_absolute() ||
          ref->get_paddr().is_root());
+
+  // TODOSAM: stats are probably wrong
 
   // Note: next might not be at extent_state_t::DIRTY,
   // also see CachedExtent::is_stable_writting()
@@ -787,9 +788,10 @@ void Cache::remove_from_dirty(
 {
   assert(ref->is_dirty());
   ceph_assert(ref->primary_ref_list_hook.is_linked());
-  assert(ref->is_fully_loaded());
   assert(ref->get_paddr().is_absolute() ||
          ref->get_paddr().is_root());
+
+  // TODOSAM: stats are probably wrong
 
   auto extent_length = ref->get_length();
   stats.dirty_bytes -= extent_length;
@@ -819,14 +821,14 @@ void Cache::replace_dirty(
 {
   assert(prev->is_dirty());
   ceph_assert(prev->primary_ref_list_hook.is_linked());
-  assert(prev->is_fully_loaded());
+
+  // TODOSAM: stats are probably wrong
 
   // Note: next might not be at extent_state_t::DIRTY,
   // also see CachedExtent::is_stable_writting()
   assert(next->is_dirty());
   assert(!next->primary_ref_list_hook.is_linked());
   ceph_assert(next->get_modify_time() != NULL_TIME);
-  assert(next->is_fully_loaded());
 
   assert(prev->get_dirty_from() == next->get_dirty_from());
   assert(prev->get_length() == next->get_length());
@@ -851,7 +853,8 @@ void Cache::clear_dirty()
     auto ptr = &*i;
     assert(ptr->is_dirty());
     ceph_assert(ptr->primary_ref_list_hook.is_linked());
-    assert(ptr->is_fully_loaded());
+    
+    // TODOSAM: stats are probably wrong
 
     auto extent_length = ptr->get_length();
     stats.dirty_bytes -= extent_length;
@@ -1162,7 +1165,6 @@ CachedExtentRef Cache::duplicate_for_write(
   Transaction &t,
   CachedExtentRef i) {
   LOG_PREFIX(Cache::duplicate_for_write);
-  assert(i->is_fully_loaded());
 
 #ifndef NDEBUG
   if (i->is_logical()) {
@@ -2144,7 +2146,6 @@ Cache::get_next_dirty_extents_ret Cache::get_next_dirty_extents(
        ++i) {
     auto dirty_from = i->get_dirty_from();
     //dirty extents must be fully loaded
-    assert(i->is_fully_loaded());
     if (unlikely(dirty_from == JOURNAL_SEQ_NULL)) {
       ERRORT("got dirty extent with JOURNAL_SEQ_NULL -- {}", t, *i);
       ceph_abort();
