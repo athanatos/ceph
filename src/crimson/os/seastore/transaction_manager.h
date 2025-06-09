@@ -317,8 +317,12 @@ public:
     TCachedExtentRef<T> extent;
     if (ret.index() == 1) {
       extent = co_await std::move(std::get<1>(ret));
-      extent = co_await cache->read_extent_maybe_partial(
-	t, std::move(extent), direct_partial_off, partial_len);
+      if (partial_len > 0) {
+	extent = co_await cache->read_extent_maybe_partial(
+	  t, std::move(extent), direct_partial_off, partial_len);
+      } else if (extent->is_pending_io()) {
+	co_await base_iertr::make_interruptible(extent->wait_io());
+      }
       if (!extent->is_seen_by_users()) {
 	maybe_init(*extent);
 	extent->set_seen_by_users();
