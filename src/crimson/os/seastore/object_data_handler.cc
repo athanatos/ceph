@@ -246,7 +246,8 @@ do_mappings_ret maybe_delta_based_overwrite(
   // delta based overwrite
   auto maybe_indirect_extent = co_await ctx.tm.read_pin<ObjectDataBlock>(
     ctx.t,
-    std::move(mapping)
+    std::move(mapping),
+    0, 0
   ).handle_error_interruptible(
     TransactionManager::base_iertr::pass_further{},
     crimson::ct_error::assert_all{
