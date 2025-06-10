@@ -399,6 +399,12 @@ void PaxosService::maybe_trim()
 
   version_t to_remove = trim_to - first_committed;
   const version_t trim_min = g_conf().get_val<version_t>("paxos_service_trim_min");
+  // the reason for this one instead of an if for the paxos_service_trim_min directly is that even if the min =0, we might still need to trim if there is something to trim
+  //aka we want to call trim if there is something to trim, we essentailly want to wait for "0" maps and trim if we can
+  if (to_remove==0){
+    dout(10)<<"there is nothing to trim so just return"<<dendl;
+    return;
+  }
   if (trim_min > 0 &&
       to_remove < trim_min) {
     dout(10) << __func__ << " trim_to " << trim_to << " would only trim " << to_remove

@@ -8267,7 +8267,7 @@ void OSD::handle_osd_map(MOSDMap *m)
   if(!m->maps.empty()){
      logger ->inc(l_osd_map_full,m->maps.size());
      //question: will an osd ever actually recieve more than 1 full map? 
-     dout(10)<<"count of full maps incremented by "<< maps.size();
+     dout(10)<<"count of full maps incremented by "<< m->maps.size()<<dendl;
   }
   //here check for incremental maps and increase the count by the size of the incrementals array 
   if (!m->incremental_maps.empty()){
