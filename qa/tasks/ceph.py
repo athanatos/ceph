@@ -1600,6 +1600,19 @@ def created_pool(ctx, config):
                 new_pool, 'pg_num')
 
 
+def perf_counter_check(ctx, config):
+    """
+    check threshold for map counters.
+    """
+    ceph_manager=ctx.managers['ceph']
+    for osd_id in ceph_manager.get_osd_status()['live']:
+        full,inc=ceph_manager.do_dump_perf_counter(osd_id)
+        if full==None and inc==None:
+            ceph_manager.log("could not get map data for this osd, look at the log files for do_dump_perf_counter, maybe osd is down")
+            continue 
+        ceph_manager.log(f"shreya output full map {full}")
+        ceph_manager.log(f"shreya output inc map {inc}")
+
 @contextlib.contextmanager
 def suppress_mon_health_to_clog(ctx, config):
     """

@@ -2651,6 +2651,22 @@ class CephManager:
         :returns: all osds
         """
         return self.get_osd_dump_json()['osds']
+        
+    def do_dump_perf_counter(self, osd_id):
+        """
+        dumps perf counter for full and inc maps for osd with osd id 
+        """
+        try: 
+            proc = self.osd_admin_socket(osd_id, ['perf', 'dump'],stdout=StringIO())
+            py_dic_output=json.loads(proc.stdout.getvalue())
+            full_map_count=py_dic_output['osd']['full_map_received']
+            inc_map_count=py_dic_output['osd']['inc_map_received']
+            res = f"For the osd : {osd_id} full maps = {full_map_count} inc maps = {inc_map_count}"
+            self.log(res)
+            return full_map_count,inc_map_count
+        except Exception as e:
+            output = f"failed to get counters because of {e}"
+            self.log(output)
 
     def get_osd_metadata(self):
         """
