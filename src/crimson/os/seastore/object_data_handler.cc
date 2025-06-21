@@ -627,19 +627,19 @@ ObjectDataHandler::write_ret ObjectDataHandler::overwrite(
   objaddr_t offset,
   extent_len_t len,
   std::optional<bufferlist> bl,
-  LBAMapping first_mapping)
+  LBAMapping mapping)
 {
   LOG_PREFIX(ObjectDataHandler::overwrite);
   assert(!bl.has_value() || bl->length() == len);
   auto raw_begin = data_base + offset;
   auto raw_end = data_base + offset + len;
-  auto first_key = first_mapping.get_key();
-  auto first_len = first_mapping.get_length();
-  assert(first_mapping.get_key() <= raw_begin.get_aligned_laddr());
+  auto first_key = mapping.get_key();
+  auto first_len = mapping.get_length();
+  assert(mapping.get_key() <= raw_begin.get_aligned_laddr());
   DEBUGT(
     "data_base={}, offset=0x{:x}, len=0x{:x}, "
     "{}, data_begin={}, data_end={}",
-    ctx.t, data_base, offset, len, first_mapping,
+    ctx.t, data_base, offset, len, mapping,
     raw_begin.get_aligned_laddr(), raw_end.get_roundup_laddr());
 
   data_t data{
@@ -656,8 +656,8 @@ ObjectDataHandler::write_ret ObjectDataHandler::overwrite(
     raw_end.get_roundup_laddr()
   };
 
-  auto mapping = co_await maybe_delta_based_overwrite(
-    ctx, params, std::move(first_mapping), data,
+  mapping = co_await maybe_delta_based_overwrite(
+    ctx, params, std::move(mapping), data,
     delta_based_overwrite_max_extent_size
   );
 
