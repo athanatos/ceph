@@ -156,12 +156,7 @@ struct ObjectDataBlock : crimson::os::seastore::LogicalChildNode {
     return TYPE;
   }
 
-  void apply_unstable_deltas_if_necessary() const {
-    ceph_assert(is_fully_loaded());
-    if (!is_buffer_shared()) {
-      return;
-    }
-    unshare_buffer();
+  void apply_unstable_deltas() const {
     auto &buf = const_cast<ObjectDataBlock*>(this)->CachedExtent::get_bptr();
     for (const auto &d: delta) {
       auto iter = d.bl.cbegin();
@@ -198,7 +193,8 @@ struct ObjectDataBlock : crimson::os::seastore::LogicalChildNode {
 
   void prepare_commit() final {
     revoke_prior_instance_buffer();
-    apply_unstable_deltas_if_necessary();
+    ceph_assert(!is_buffer_shared());
+    apply_unstable_deltas();
   }
 
   void logical_on_delta_write() final {
@@ -206,12 +202,18 @@ struct ObjectDataBlock : crimson::os::seastore::LogicalChildNode {
   }
 
   bufferptr &get_bptr() override {
-    apply_unstable_deltas_if_necessary();
+    if (is_buffer_shared()) {
+      unshare_buffer();
+      apply_unstable_deltas();
+    }
     return CachedExtent::get_bptr();
   }
 
   const bufferptr &get_bptr() const override {
-    apply_unstable_deltas_if_necessary();
+    if (is_buffer_shared()) {
+      unshare_buffer();
+      apply_unstable_deltas();
+    }
     return CachedExtent::get_bptr();
   }
 };

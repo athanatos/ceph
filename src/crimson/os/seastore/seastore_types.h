@@ -97,6 +97,9 @@ struct seastore_meta_t {
 std::ostream& operator<<(std::ostream& out, const seastore_meta_t& meta);
 
 bool is_aligned(uint64_t offset, uint64_t alignment);
+inline bool is_page_aligned(uint64_t offset) {
+  return is_aligned(offset, CEPH_PAGE_SIZE);
+}
 
 // identifies a specific physical device within seastore
 using device_id_t = uint8_t;
