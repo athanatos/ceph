@@ -4,6 +4,7 @@
 #pragma once
 
 #include <iostream>
+#include <variant>
 
 #include <boost/intrusive/list.hpp>
 #include <boost/intrusive/set.hpp>
@@ -213,10 +214,53 @@ struct load_ranges_t {
 };
 
 /// manage small chunks of extent
-class BufferSpace {
+class BufferSpace : public boost::intrusive_ref_counter<
+  BufferSpace, boost::thread_unsafe_counter> {
   using map_t = std::map<extent_len_t, ceph::bufferlist>;
 public:
-  BufferSpace() = default;
+  using Ref = boost::intrusive_ptr<BufferSpace>;
+
+  BufferSpace() : extent_length(0), buffer(map_t{}) {}
+  BufferSpace(extent_len_t length) : extent_length(length), buffer(map_t{}) {
+    assert(extent_length > 0);
+    assert(is_aligned(extent_length, CEPH_PAGE_SIZE));
+  }
+  BufferSpace(bufferptr buf)
+    : extent_length(buf.length()), buffer(std::move(buf)) {
+    assert(extent_length == 0 ||
+	   std::get<bufferptr>(buffer).is_page_aligned());
+    assert(is_aligned(extent_length, CEPH_PAGE_SIZE));
+  }
+  BufferSpace(const BufferSpace &other)
+    : extent_length(other.extent_length),
+      loaded_length(other.loaded_length) {
+    assert(is_aligned(extent_length, CEPH_PAGE_SIZE));
+    if (extent_length == 0) {
+      // root
+      buffer = bufferptr(0);
+    } else if (auto ptr = std::get_if<bufferptr>(&other.buffer)) {
+      auto buf = create_extent_ptr_rand(extent_length);
+      ptr->copy_out(0, extent_length, buf.c_str());
+      buffer = buf;
+    } else {
+      const auto &other_bmap = std::get<map_t>(other.buffer);
+      buffer = map_t{};
+      auto &bmap = std::get<map_t>(buffer);
+      for (const auto &[o, bl] : other_bmap) {
+	auto bp = create_extent_ptr_rand(bl.length());
+	auto iter = bl.cbegin();
+	iter.copy(bl.length(), bp.c_str());
+	bufferlist copied_bl;
+	copied_bl.append(bp);
+	bmap.emplace(o, copied_bl);
+      }
+    }
+  }
+
+  template <typename... Args>
+  static Ref make_ref(Args&&... args) {
+    return new BufferSpace(std::forward<Args>(args)...);
+  }
 
   /// Returns true if offset~length is fully loaded
   bool is_range_loaded(extent_len_t offset, extent_len_t length) const;
@@ -228,7 +272,26 @@ public:
   load_ranges_t load_ranges(extent_len_t offset, extent_len_t length);
 
   /// Converts to ptr when fully loaded
-  ceph::bufferptr to_full_ptr(extent_len_t length);
+  ceph::bufferptr to_full_ptr();
+
+  /// Gets full ptr, must be fully loaded
+  ceph::bufferptr &get_full_ptr() {
+    auto *ptr = std::get_if<ceph::bufferptr>(&buffer);
+    ceph_assert(ptr);
+    return *ptr;
+  }
+  const ceph::bufferptr &get_full_ptr() const {
+    auto *ptr = std::get_if<ceph::bufferptr>(&buffer);
+    ceph_assert(ptr);
+    return *ptr;
+  }
+
+  bool is_fully_loaded() const {
+    return std::get_if<bufferptr>(&buffer);
+  }
+
+  auto get_length() const { return extent_length; }
+  auto get_loaded_length() const { return loaded_length; }
 
 private:
   // create and append the read-hole to
@@ -246,7 +309,8 @@ private:
   // create and insert the read-hole to buffer_map,
   // and append to load_ranges_t
   // returns the iterator containing the inserted read-hole
-  auto create_hole_insert_map(
+  static auto create_hole_insert_map(
+    map_t& buffer_map,
     load_ranges_t& ret,
     extent_len_t hole_offset,
     extent_len_t hole_length,
@@ -260,8 +324,9 @@ private:
     return it;
   }
 
-  /// extent offset -> buffer, won't overlap nor contiguous
-  map_t buffer_map;
+  const extent_len_t extent_length;
+  extent_len_t loaded_length = 0;
+  std::variant<map_t, bufferptr> buffer;
 };
 
 class ExtentIndex;
@@ -654,24 +719,13 @@ public:
   /// Return true if extent is fully loaded or is about to be fully loaded (call 
   /// wait_io() in this case)
   bool is_fully_loaded() const {
-    if (ptr.has_value()) {
-      // length == 0 iff root
-      assert(length == loaded_length);
-      assert(!buffer_space.has_value());
-      return true;
-    } else { // ptr is std::nullopt
-      assert(length > loaded_length);
-      assert(buffer_space.has_value());
-      return false;
-    }
+    return buffer_space->is_fully_loaded();
   }
 
   /// Return true if range offset~_length is loaded
   bool is_range_loaded(extent_len_t offset, extent_len_t _length) {
     assert(is_aligned(offset, CEPH_PAGE_SIZE));
     assert(is_aligned(_length, CEPH_PAGE_SIZE));
-    assert(_length > 0);
-    assert(offset + _length <= length);
     if (is_fully_loaded()) {
       return true;
     }
@@ -682,11 +736,7 @@ public:
   ceph::bufferlist get_range(extent_len_t offset, extent_len_t _length) {
     assert(is_range_loaded(offset, _length));
     ceph::bufferlist res;
-    if (is_fully_loaded()) {
-      res.append(ceph::bufferptr(get_bptr(), offset, _length));
-    } else {
-      res = buffer_space->get_buffer(offset, _length);
-    }
+    res.append(buffer_space->get_buffer(offset, _length));
     return res;
   }
 
@@ -705,7 +755,7 @@ public:
 
   /// Returns length of partially loaded extent data in cache
   extent_len_t get_loaded_length() const {
-    return loaded_length;
+    return buffer_space->get_loaded_length();
   }
 
   /// Returns version, get_version() == 0
@@ -722,25 +772,24 @@ public:
       get_length());
   }
 
-  /// Get ref to raw buffer
+  /// Get ref to raw buffer, must be fully loaded
   virtual bufferptr &get_bptr() {
-    assert(ptr.has_value());
-    return *ptr;
+    return buffer_space->get_full_ptr();
   }
+
   virtual const bufferptr &get_bptr() const {
-    assert(ptr.has_value());
-    return *ptr;
+    return buffer_space->get_full_ptr();
   }
 
   bool is_buffer_shared() const {
-    assert(ptr.has_value());
-    return ptr->raw_nref() > 1;
+    assert(buffer_space);
+    return buffer_space->use_count() > 1;
   }
 
   void unshare_buffer() const {
-    assert(ptr.has_value());
+    assert(buffer_space);
     if (is_buffer_shared()) {
-      *ptr = bufferptr(ceph::buffer::copy(ptr->c_str(), ptr->length()));
+      buffer_space = BufferSpace::make_ref(*buffer_space);
     }
   }
 
@@ -875,18 +924,12 @@ private:
    */
   journal_seq_t dirty_from;
 
-  /// cache data contents, std::nullopt iff partially loaded
-  mutable std::optional<ceph::bufferptr> ptr;
-
   /// disk data length, 0 iff root
   extent_len_t length;
 
-  /// loaded data length, <length iff partially loaded
-  extent_len_t loaded_length;
-
   /// manager of buffer pieces for ObjectDataBLock
   /// valid iff partially loaded
-  std::optional<BufferSpace> buffer_space;
+  mutable BufferSpace::Ref buffer_space;
 
   /// number of deltas since initial write
   extent_version_t version = 0;
@@ -944,11 +987,7 @@ protected:
   /// construct a fully loaded CachedExtent
   explicit CachedExtent(ceph::bufferptr &&_ptr)
     : length(_ptr.length()),
-      loaded_length(_ptr.length()) {
-    ptr = std::move(_ptr);
-
-    assert(ptr->is_page_aligned());
-    assert(length > 0);
+      buffer_space(BufferSpace::make_ref(std::move(_ptr))) {
     assert(is_fully_loaded());
     // must call init() to fully initialize
   }
@@ -957,10 +996,7 @@ protected:
   /// must be identical with CachedExtent(ptr) after on_fully_loaded()
   explicit CachedExtent(extent_len_t _length)
     : length(_length),
-      loaded_length(0),
-      buffer_space(std::in_place) {
-    assert(is_aligned(length, CEPH_PAGE_SIZE));
-    assert(length > 0);
+      buffer_space(BufferSpace::make_ref(_length)) {
     assert(!is_fully_loaded());
     // must call init() to fully initialize
   }
@@ -970,19 +1006,9 @@ protected:
     : state(other.state),
       dirty_from(other.dirty_from),
       length(other.get_length()),
-      loaded_length(other.get_loaded_length()),
+      buffer_space(BufferSpace::make_ref(*other.buffer_space)),
       version(other.version),
       poffset(other.poffset) {
-    // the extent must be fully loaded before CoW
-    assert(other.is_fully_loaded());
-    assert(is_aligned(length, CEPH_PAGE_SIZE));
-    if (length > 0) {
-      ptr = create_extent_ptr_rand(length);
-      other.ptr->copy_out(0, length, ptr->c_str());
-    } else { // length == 0, must be root
-      ptr = ceph::bufferptr(0);
-    }
-
     assert(is_fully_loaded());
   }
 
@@ -991,24 +1017,17 @@ protected:
   CachedExtent(const CachedExtent &other, share_buffer_t)
     : state(other.state),
       dirty_from(other.dirty_from),
-      ptr(other.ptr),
       length(other.get_length()),
-      loaded_length(other.get_loaded_length()),
+      buffer_space(other.buffer_space),
       version(other.version),
       poffset(other.poffset) {
-    // the extent must be fully loaded before CoW
-    assert(other.is_fully_loaded());
-    assert(is_aligned(length, CEPH_PAGE_SIZE));
-    assert(length > 0);
-    assert(is_fully_loaded());
   }
 
   // 0 length is only possible for the RootBlock
   struct root_construct_t {};
   CachedExtent(root_construct_t)
-    : ptr(ceph::bufferptr(0)),
-      length(0),
-      loaded_length(0) {
+    : length(0),
+      buffer_space(BufferSpace::make_ref(ceph::bufferptr(0))) {
     assert(is_fully_loaded());
     // must call init() to fully initialize
   }
@@ -1017,10 +1036,8 @@ protected:
   CachedExtent(retired_placeholder_construct_t, extent_len_t _length)
     : state(extent_state_t::CLEAN),
       length(_length),
-      loaded_length(0),
-      buffer_space(std::in_place) {
+      buffer_space(BufferSpace::make_ref(_length)) {
     assert(!is_fully_loaded());
-    assert(is_aligned(length, CEPH_PAGE_SIZE));
     // must call init() to fully initialize
   }
 
@@ -1071,7 +1088,7 @@ protected:
 
   /// set bufferptr
   void set_bptr(ceph::bufferptr &&nptr) {
-    ptr = nptr;
+    buffer_space = BufferSpace::make_ref(std::move(nptr));
   }
 
   /**
@@ -1109,33 +1126,9 @@ protected:
     assert(offset + _length <= length);
     assert(!is_fully_loaded());
 
-    if (loaded_length == 0 && _length == length) {
-      assert(offset == 0);
-      // skip rebuilding the buffer from buffer_space
-      ptr = create_extent_ptr_rand(length);
-      loaded_length = _length;
-      buffer_space.reset();
-      assert(is_fully_loaded());
-      on_fully_loaded();
-      load_ranges_t ret;
-      ret.push_back(offset, *ptr);
-      return ret;
-    }
-
     load_ranges_t ret = buffer_space->load_ranges(offset, _length);
-    loaded_length += ret.length;
-    assert(length >= loaded_length);
-    if (length == loaded_length) {
-      // convert to fully loaded
-      ptr = buffer_space->to_full_ptr(length);
-      buffer_space.reset();
-      assert(is_fully_loaded());
+    if (buffer_space->is_fully_loaded()) {
       on_fully_loaded();
-      // adjust ret since the ptr has been rebuild
-      for (load_range_t& range : ret.ranges) {
-        auto range_length = range.ptr.length();
-        range.ptr = ceph::bufferptr(*ptr, range.offset, range_length);
-      }
     }
     return ret;
   }

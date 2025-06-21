@@ -156,6 +156,14 @@ std::ostream &operator<<(
 bool BufferSpace::is_range_loaded(extent_len_t offset, extent_len_t length) const
 {
   assert(length > 0);
+  assert(offset + length <= extent_length);
+
+  if (is_fully_loaded()) {
+    return true;
+  }
+
+  auto &buffer_map = *std::get_if<map_t>(&buffer);
+
   auto i = buffer_map.upper_bound(offset);
   if (i == buffer_map.begin()) {
     return false;
@@ -174,22 +182,51 @@ bool BufferSpace::is_range_loaded(extent_len_t offset, extent_len_t length) cons
 ceph::bufferlist BufferSpace::get_buffer(extent_len_t offset, extent_len_t length) const
 {
   assert(length > 0);
-  auto i = buffer_map.upper_bound(offset);
-  assert(i != buffer_map.begin());
-  --i;
-  auto& [i_offset, i_bl] = *i;
-  assert(offset >= i_offset);
-  assert(i_bl.length() > 0);
-  assert(offset + length <= i_offset + i_bl.length());
-  ceph::bufferlist res;
-  res.substr_of(i_bl, offset - i_offset, length);
-  return res;
+  assert(offset + length <= extent_length);
+  struct {
+    extent_len_t offset;
+    extent_len_t length;
+    ceph::bufferlist operator()(const ceph::bufferptr &ptr) {
+      ceph::bufferlist bl;
+      bl.append(ceph::bufferptr(ptr, offset, length));
+      return bl;
+    }
+    ceph::bufferlist operator()(const map_t &buffer_map) {
+      assert(length > 0);
+      auto i = buffer_map.upper_bound(offset);
+      assert(i != buffer_map.begin());
+      --i;
+      auto& [i_offset, i_bl] = *i;
+      assert(offset >= i_offset);
+      assert(i_bl.length() > 0);
+      assert(offset + length <= i_offset + i_bl.length());
+      ceph::bufferlist res;
+      res.substr_of(i_bl, offset - i_offset, length);
+      return res;
+    }
+  } visitor{offset, length};
+  return std::visit(visitor, buffer);
 }
 
 load_ranges_t BufferSpace::load_ranges(extent_len_t offset, extent_len_t length)
 {
   assert(length > 0);
+  assert(offset + length <= extent_length);
+
   load_ranges_t ret;
+  if (is_fully_loaded()) {
+    return ret;
+  }
+
+  if (loaded_length == 0 && length == extent_length) {
+    auto ptr = bufferptr(length);
+    buffer = ptr;
+    ret.push_back(0, ptr);
+    loaded_length = length;
+    return ret;
+  }
+
+  auto &buffer_map = *std::get_if<map_t>(&buffer);
   auto next = buffer_map.upper_bound(offset);
 
   // must be assigned for the main-loop
@@ -198,11 +235,12 @@ load_ranges_t BufferSpace::load_ranges(extent_len_t offset, extent_len_t length)
   extent_len_t range_length;
 
   // returns whether to proceed main-loop or not
-  auto f_merge_next_check_hole = [this, &next, &range_offset, &range_length](
-      ceph::bufferlist& previous_bl,
-      extent_len_t hole_length,
-      extent_len_t next_offset,
-      const ceph::bufferlist& next_bl) {
+  auto f_merge_next_check_hole = [
+    this, &buffer_map, &next, &range_offset, &range_length
+  ](ceph::bufferlist& previous_bl,
+    extent_len_t hole_length,
+    extent_len_t next_offset,
+    const ceph::bufferlist& next_bl) {
     range_length -= hole_length;
     previous_bl.append(next_bl);
     if (range_length <= next_bl.length()) {
@@ -221,12 +259,12 @@ load_ranges_t BufferSpace::load_ranges(extent_len_t offset, extent_len_t length)
   // returns whether to proceed main-loop or not
   auto f_prepare_without_merge_previous = [
       this, offset, length,
-      &ret, &previous, &next, &range_length,
+      &buffer_map, &ret, &previous, &next, &range_length,
       &f_merge_next_check_hole]() {
     if (next == buffer_map.end()) {
       // "next" reaches end,
       // range has no "next" to merge
-      create_hole_insert_map(ret, offset, length, next);
+      create_hole_insert_map(buffer_map, ret, offset, length, next);
       return false;
     }
     // "next" is valid
@@ -237,12 +275,12 @@ load_ranges_t BufferSpace::load_ranges(extent_len_t offset, extent_len_t length)
     if (length < hole_length) {
       // "next" is beyond the range end,
       // range has no "next" to merge
-      create_hole_insert_map(ret, offset, length, next);
+      create_hole_insert_map(buffer_map, ret, offset, length, next);
       return false;
     }
     // length >= hole_length
     // insert hole as "previous"
-    previous = create_hole_insert_map(ret, offset, hole_length, next);
+    previous = create_hole_insert_map(buffer_map, ret, offset, hole_length, next);
     auto& p_bl = previous->second;
     range_length = length;
     return f_merge_next_check_hole(p_bl, hole_length, n_offset, n_bl);
@@ -310,12 +348,29 @@ load_ranges_t BufferSpace::load_ranges(extent_len_t offset, extent_len_t length)
   // 1. "next" reaches end
   // 2. "next" offset is beyond the range end
   create_hole_append_bl(ret, p_bl, range_offset, range_length);
+
+  if (extent_length == loaded_length) {
+    auto ptr = to_full_ptr();
+    // adjust ret since the ptr has been rebuilt
+    for (load_range_t &range : ret.ranges) {
+      auto range_length = range.ptr.length();
+      range.ptr = ceph::bufferptr(ptr, range.offset, range_length);
+    }
+  }
+  
+  loaded_length += ret.length;
   return ret;
 }
 
-ceph::bufferptr BufferSpace::to_full_ptr(extent_len_t length)
+ceph::bufferptr BufferSpace::to_full_ptr()
 {
-  assert(length > 0);
+  if (auto ptr = std::get_if<bufferptr>(&buffer)) {
+    return *ptr;
+  }
+
+  auto &buffer_map = *std::get_if<map_t>(&buffer);
+
+  assert(extent_length > 0);
   assert(buffer_map.size() == 1);
   auto it = buffer_map.begin();
   auto& [i_off, i_buf] = *it;
@@ -327,8 +382,8 @@ ceph::bufferptr BufferSpace::to_full_ptr(extent_len_t length)
   assert(i_buf.get_num_buffers() == 1);
   ceph::bufferptr ptr(i_buf.front());
   assert(ptr.is_page_aligned());
-  assert(ptr.length() == length);
-  buffer_map.clear();
+  assert(ptr.length() == extent_length);
+  buffer = ptr;
   return ptr;
 }
 
