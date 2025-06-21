@@ -1125,6 +1125,10 @@ public:
       assert(offset < laddr_t::UNIT_SIZE);
     }
 
+    bool is_unit_aligned() const {
+      return offset == 0;
+    }
+
     laddr_t get_roundup_laddr() const {
       if (offset == 0) {
 	return laddr_t(base);

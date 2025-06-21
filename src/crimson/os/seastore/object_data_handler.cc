@@ -210,6 +210,10 @@ struct overwrite_params_t {
   laddr_t data_begin = L_ADDR_NULL;
   laddr_offset_t raw_end;
   laddr_t data_end = L_ADDR_NULL;
+
+  bool is_write_unit_aligned() const {
+    return raw_begin.is_unit_aligned() && raw_end.is_unit_aligned();
+  }
 };
 
 struct data_t {
@@ -656,10 +660,12 @@ ObjectDataHandler::write_ret ObjectDataHandler::overwrite(
     raw_end.get_roundup_laddr()
   };
 
-  mapping = co_await maybe_delta_based_overwrite(
-    ctx, params, std::move(mapping), data,
-    delta_based_overwrite_max_extent_size
-  );
+  if (params.is_write_unit_aligned()) {
+    mapping = co_await maybe_delta_based_overwrite(
+      ctx, params, std::move(mapping), data,
+      delta_based_overwrite_max_extent_size
+    );
+  }
 
   if (mapping.is_null()) {
     // the modified range is within the first mapping
