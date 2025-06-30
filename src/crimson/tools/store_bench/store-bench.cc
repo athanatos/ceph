@@ -26,8 +26,50 @@
  *   ./bin/crimson-store-bench --store-path store_bench_dir $@
  * }
  */
+ /* Writes to FuturizedStore instances are performed via
+   * the ceph::os::Transaction class.  All operations within
+   * the transaction will be applied atomically -- after a
+   * failure either the whole transaction will have happened
+   * or none of it will.
+   *
+   * ceph::os::Transaction is shared with classic because it
+   * is part of the primary->replica replication protocol.
+   * See os/Transaction.h for details.
+   
+  //lets start with assuming i have log size and number of logs frm CL
+  std::vector<double>latencies;
+  int num_operations=0;
+  for (int i=0;i<num_logs;++i){
+    auto obj_i = create_hobj(i);
+    std::string key(std::to_string(i));
+    bufferlist bl_new;
+    bl_new.append_zero(log_entry_size);
+  {
+    ceph::os::Transaction t;
+    t.create(cid, obj_i);
+    std::map<std::string, bufferlist> attrs;
+    attrs[key] = bl;
+    t.omap_setkeys(
+      cid,
+      obj_i,
+      attrs);
+    // actually submit the transaction and await commit
+    //we wrap this in a time block to see how long it takes this is our latency for this trasaction which just writes an object 
+    auto start=seastar::lowres_clock::now();
+    co_await local_store.do_transaction(
+      coll_ref,
+      std::move(t));
+    ERROR("created object {} in collection {} with omap {}->{}",
+          obj_i, cid, key, bl_new);
+    auto end=seastar::lowres_clock::now();
+    auto time_micro_sec=std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+    latencies.push_back(time_micro_sec);
+    num_operations++;
+  }
+}*/
 
 #include <random>
+#include <vector>
 
 #include <boost/program_options/variables_map.hpp>
 #include <boost/program_options/parsers.hpp>
@@ -56,6 +98,18 @@ using namespace ceph;
 
 SET_SUBSYS(osd);
 
+/* ceph buffers are represented using bufferlist.
+   * See include/buffer.h
+   */
+  auto make_bl = [](std::string_view sv) {
+    bufferlist bl;
+    bl.append(bufferptr(sv.data(), sv.size()));
+    return bl;
+  };
+  auto bl_to_str = [](bufferlist bl) {
+    return std::string(bl.c_str(), bl.length());
+  };
+
 /**
  * example_io
  *
@@ -63,7 +117,7 @@ SET_SUBSYS(osd);
  * The FuturizedStore interface can be found at
  * crimson/os/futurized_store.h
  */
-seastar::future<> example_io(crimson::os::FuturizedStore &global_store)
+seastar::future<> example_io(crimson::os::FuturizedStore &global_store,int num_logs,int num_concurrent_io,int duration,int log_size,int log_length)
 {
   LOG_PREFIX(example_io);
   /* crimson-osd's architecture partitions most resources per seastar
@@ -102,71 +156,104 @@ seastar::future<> example_io(crimson::os::FuturizedStore &global_store)
       0,  // snapshot
       ghobject_t::NO_GEN);
   };
-
-  /* ceph buffers are represented using bufferlist.
-   * See include/buffer.h
-   */
-  auto make_bl = [](std::string_view sv) {
-    bufferlist bl;
-    bl.append(bufferptr(sv.data(), sv.size()));
-    return bl;
+  struct results{
+    int num_operations;
+    std::vector<double> latencies;
+    int tot_latency_per_io;
   };
-  auto bl_to_str = [](bufferlist bl) {
-    return std::string(bl.c_str(), bl.length());
-  };
-
-  /* Writes to FuturizedStore instances are performed via
-   * the ceph::os::Transaction class.  All operations within
-   * the transaction will be applied atomically -- after a
-   * failure either the whole transaction will have happened
-   * or none of it will.
-   *
-   * ceph::os::Transaction is shared with classic because it
-   * is part of the primary->replica replication protocol.
-   * See os/Transaction.h for details.
-   */
-  auto obj0 = create_hobj(0);
-  std::string key("foo");
-  std::string val("bar");
-  {
-    ceph::os::Transaction t;
-    // create object
-    t.create(cid, obj0);
-    // set omap key "foo" to "bar"
-    std::map<std::string, bufferlist> attrs;
-    attrs[key] = make_bl(val);
-    t.omap_setkeys(
-      cid,
-      obj0,
-      attrs);
-    // actually submit the transaction and await commit
-    co_await local_store.do_transaction(
-      coll_ref,
-      std::move(t));
-    ERROR("created object {} in collection {} with omap {}->{}",
-          obj0, cid, key, val);
-  }
-
-  {
-    std::set<std::string> keys;
-    keys.insert(key);
-    auto result = co_await local_store.omap_get_values(
-      coll_ref,
-      obj0,
-      keys
-    ).handle_error(
-      crimson::ct_error::assert_all("error reading object")
-    );
-    auto iter = result.find(key);
-    if (iter == result.end()) {
-      ERROR("Failed to find key {} on obj {}", key, obj0);
-    } else if (bl_to_str(iter->second) != val) {
-      ERROR("key {} on obj {} does not match", key, obj0);
-    } else {
-      ERROR("read key {} on obj {}, matches", key, obj0);
+  //each object is a log each log can have multiple entries
+  //ok so this method is suppossed to prefill Nlogs with M different entries each of size K 
+  // calling it this way so that i can capture all variables outside without having to pass everything in 
+  auto pre_fill_logs = [&]() -> seastar::future<>{
+    for (int i = 0; i < num_logs; ++i) {
+      auto obj_i = create_hobj(i);
+      std::map<std::string, bufferlist> data;
+      for (int j = 0; j < log_length; ++j) {
+        std::string key = std::to_string(j);
+        bufferlist bl_value;
+        bl_value.append_zero(log_size);
+        data[key] = bl_value;
     }
+    ceph::os::Transaction txn;
+    txn.create(cid, obj_i);
+    txn.omap_setkeys(cid, obj_i, data);
+    co_await local_store.do_transaction(coll_ref, std::move(txn));
   }
+  co_return;
+  }; 
+  std::vector<int> last_key_per_log(num_logs,log_length);
+  
+  // This is pre-testing
+  // Now the next step is to do the actual testing so in duration amount of time
+  //I want to keep randomly choosing logs and writing to them 
+  //every time i do a write i want the number of operations to increase by 1
+  auto actual_test=[&]()-> seastar::future<results>{
+    auto start=seastar::lowres_clock::now();
+    int num_ops=0;
+    int tot_latency=0;
+    std::vector<double> latency;
+    ERROR("entering the loop milli to sec possible mismatch");
+    while(seastar::lowres_clock::now()-start<= std::chrono::milliseconds(duration)){
+      int obj_num=std::rand()%num_logs; //which object log to write to 
+      auto obj_id=create_hobj(obj_num); // writable thing
+      std::string k=std::to_string(last_key_per_log[obj_num]); // 0 indexed
+      last_key_per_log[obj_num]+=1;
+      bufferlist val;
+      val.append_zero(log_size);
+      std::map<std::string, bufferlist> key_val;
+      key_val[k]=val;
+      ceph::os::Transaction one_write;
+      one_write.omap_setkeys(cid,obj_id,key_val);
+      auto latency_start=seastar::lowres_clock::now();
+      co_await local_store.do_transaction(coll_ref,std::move(one_write));
+      auto latency_end=seastar::lowres_clock::now();
+      auto time_sec=std::chrono::duration_cast<std::chrono::milliseconds>(latency_end-latency_start).count();
+      latency.push_back(time_sec);
+      num_ops++;
+    }
+    for (auto val : latency){
+      tot_latency+=val;
+    }
+    co_return results{num_ops,latency,tot_latency};
+  };
+  auto run_concurrent_ios=[&]() -> seastar::future<> {
+    std::vector <int> container_io; // to make the num of concurrent operations a container like a vector otherwise cant use parallel loop 
+    std::vector <results> all_io_res;
+    for (int i=0;i<num_concurrent_io;++i){
+      container_io.push_back(i);
+    }
+  co_await seastar::parallel_for_each(container_io,([&](int) -> seastar::future<> {
+    auto res = co_await actual_test();   
+    all_io_res.push_back(std::move(res));
+    co_return;
+  })
+);
+
+    int tot_ops_all_io=0;
+    int tot_latency_all_io=0;
+    for(auto it=all_io_res.begin();it!=all_io_res.end();++it){
+      tot_ops_all_io+=it->num_operations;
+      tot_latency_all_io+=it->tot_latency_per_io;
+    }
+    ERROR ("Total number of operations performed across ios is {}", tot_ops_all_io);
+    ERROR("Total latency aka time per operation, across ios is {}", tot_latency_all_io);
+    ERROR("throughput is {}", static_cast<double>(tot_ops_all_io)/duration);
+    ERROR("average latency across ios is {}", tot_latency_all_io/tot_ops_all_io);
+    co_return;
+  
+  };
+  co_await pre_fill_logs();
+  co_await run_concurrent_ios();
+  co_return;
 }
+
+ //next step add how to parse from the CL and make sure to set log as the only applicapble option not index yet 
+ //also check if shaman built --not yet ask junior also clarify doubt on fix and submit pr 
+ // run the teuthology suite 
+
+  
+
+  
 
 int main(int argc, char** argv)
 {
@@ -176,6 +263,11 @@ int main(int argc, char** argv)
   std::string store_type;
   std::string store_path;
   std::string io_pattern;
+  int num_logs=0;
+  int log_length=0;
+  int log_size=0;
+  int num_concurrent_io=0;
+  int duration=0; //duration in millisec
 
   desc.add_options()
     ("help,h", "show help message")
@@ -194,6 +286,8 @@ int main(int argc, char** argv)
     ("debug", po::value<bool>(&debug)->default_value(false),
      "enable debugging");
 
+
+
   po::variables_map vm;
   std::vector<std::string> unrecognized_options;
   try {
@@ -206,6 +300,7 @@ int main(int argc, char** argv)
       std::cout << desc << std::endl;
       return 0;
     }
+    
 
     po::notify(vm);
     unrecognized_options =
@@ -228,6 +323,15 @@ int main(int argc, char** argv)
     [](auto& s) {
       return const_cast<char*>(s.c_str());
     });
+  app.add_options()
+  ("num_logs",po::value<int>(&num_logs),"log writes stimulated by cretaing and writing objects")
+  ("log_size", po::value<int>(&log_size),"number of bytes in the bufferlist stored in omap")
+  ("log_length", po::value<int>(&log_length),"number of objects aka logs")
+  ("num_concurrent_io", po::value<int>(&num_concurrent_io),"number of io's happening simulataneously")
+  ("duration", po::value<int>(&duration),"how long in milliseconds does the actual testing loop run for");
+
+  
+
   return app.run(
     av.size(), av.data(),
     /* crimson-osd uses seastar as its scheduler.  We use
@@ -325,9 +429,9 @@ int main(int argc, char** argv)
       co_await seastar::smp::submit_to(
         i,
         seastar::coroutine::lambda(
-          [FNAME, &store_ref=*store]() -> seastar::future<> {
+          [&, &store_ref=*store]() -> seastar::future<> { //capture everything, i think this fixed it ? 
             ERROR("running example_io on reactor {}", seastar::this_shard_id());
-            co_await example_io(store_ref);
+            co_await example_io(store_ref,num_logs,log_length,log_size,num_concurrent_io,duration);
           })
       );
     }
