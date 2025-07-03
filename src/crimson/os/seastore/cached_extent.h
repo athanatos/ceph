@@ -732,6 +732,18 @@ public:
     return *ptr;
   }
 
+  bool is_buffer_shared() const {
+    assert(ptr.has_value());
+    return ptr->raw_nref() > 1;
+  }
+
+  void unshare_buffer() const {
+    assert(ptr.has_value());
+    if (is_buffer_shared()) {
+      *ptr = bufferptr(ceph::buffer::copy(ptr->c_str(), ptr->length()));
+    }
+  }
+
   /// Compare by paddr
   friend bool operator< (const CachedExtent &a, const CachedExtent &b) {
     return a.poffset < b.poffset;
@@ -864,7 +876,7 @@ private:
   journal_seq_t dirty_from;
 
   /// cache data contents, std::nullopt iff partially loaded
-  std::optional<ceph::bufferptr> ptr;
+  mutable std::optional<ceph::bufferptr> ptr;
 
   /// disk data length, 0 iff root
   extent_len_t length;
@@ -1022,6 +1034,10 @@ protected:
   template <typename T>
   static TCachedExtentRef<T> make_cached_extent_ref() {
     return new T();
+  }
+
+  void revoke_buffer_space() {
+    buffer_space.reset();
   }
 
   void reset_prior_instance() {

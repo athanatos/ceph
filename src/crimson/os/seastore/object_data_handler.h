@@ -31,62 +31,12 @@ struct block_delta_t {
   }
 };
 
-class overwrite_buf_t {
-public:
-  overwrite_buf_t() = default;
-  bool is_empty() const {
-    return changes.empty() && !has_cached_bptr();
-  }
-  bool has_cached_bptr() const {
-    return ptr.has_value();
-  }
-  void add(const block_delta_t &b) {
-    changes.push_back(b);
-  }
-  void apply_changes_to(bufferptr &b) const {
-    assert(!changes.empty());
-    for (auto p : changes) {
-      auto iter = p.bl.cbegin();
-      iter.copy(p.bl.length(), b.c_str() + p.offset);
-    }
-    changes.clear();
-  }
-  const bufferptr &get_cached_bptr(const bufferptr &_ptr) const {
-    apply_changes_to_cache(_ptr);
-    return *ptr;
-  }
-  bufferptr &get_cached_bptr(const bufferptr &_ptr) {
-    apply_changes_to_cache(_ptr);
-    return *ptr;
-  }
-  bufferptr &&move_cached_bptr() {
-    assert(has_cached_bptr());
-    apply_changes_to(*ptr);
-    return std::move(*ptr);
-  }
-private:
-  void apply_changes_to_cache(const bufferptr &_ptr) const {
-    assert(!is_empty());
-    if (!has_cached_bptr()) {
-      ptr = ceph::buffer::copy(_ptr.c_str(), _ptr.length());
-    }
-    if (!changes.empty()) {
-      apply_changes_to(*ptr);
-    }
-  }
-  mutable std::vector<block_delta_t> changes = {};
-  mutable std::optional<ceph::bufferptr> ptr = std::nullopt;
-};
-
 struct ObjectDataBlock : crimson::os::seastore::LogicalChildNode {
   using Ref = TCachedExtentRef<ObjectDataBlock>;
 
   std::vector<block_delta_t> delta = {};
 
   interval_set<extent_len_t> modified_region;
-
-  // to provide the local modified view during transaction
-  overwrite_buf_t cached_overwrites;
 
   explicit ObjectDataBlock(ceph::bufferptr &&ptr)
     : LogicalChildNode(std::move(ptr)) {}
@@ -104,11 +54,27 @@ struct ObjectDataBlock : crimson::os::seastore::LogicalChildNode {
     return TYPE;
   }
 
+  void apply_unstable_deltas_if_necessary() const {
+    ceph_assert(is_fully_loaded());
+    if (!is_buffer_shared()) {
+      return;
+    }
+    unshare_buffer();
+    auto &buf = const_cast<ObjectDataBlock*>(this)->CachedExtent::get_bptr();
+    for (const auto &d: delta) {
+      auto iter = d.bl.cbegin();
+      iter.copy(d.bl.length(), buf.c_str() + d.offset);
+    }
+  }
+
   void overwrite(extent_len_t offset, bufferlist bl) {
     block_delta_t b {offset, bl.length(), bl};
-    cached_overwrites.add(b);
     delta.push_back(b);
     modified_region.union_insert(offset, bl.length());
+    if (!is_buffer_shared()) {
+      auto iter = bl.cbegin();
+      iter.copy(bl.length(), CachedExtent::get_bptr().c_str() + offset);
+    }
   }
 
   ceph::bufferlist get_delta() final;
@@ -128,17 +94,11 @@ struct ObjectDataBlock : crimson::os::seastore::LogicalChildNode {
   }
 
   void prepare_commit() final {
-    if (has_mutation()) {
-      ceph_assert(!cached_overwrites.is_empty());
-      if (cached_overwrites.has_cached_bptr()) {
-        set_bptr(cached_overwrites.move_cached_bptr());
-      } else {
-        // The optimized path to minimize data copy
-        cached_overwrites.apply_changes_to(CachedExtent::get_bptr());
-      }
-    } else {
-      assert(cached_overwrites.is_empty());
-    }
+    apply_unstable_deltas_if_necessary();
+  }
+
+  void on_invalidated(Transaction &t) final {
+    revoke_buffer_space();
   }
 
   void logical_on_delta_write() final {
@@ -146,19 +106,13 @@ struct ObjectDataBlock : crimson::os::seastore::LogicalChildNode {
   }
 
   bufferptr &get_bptr() override {
-    if (cached_overwrites.is_empty()) {
-      return CachedExtent::get_bptr();
-    } else {
-      return cached_overwrites.get_cached_bptr(CachedExtent::get_bptr());
-    }
+    apply_unstable_deltas_if_necessary();
+    return CachedExtent::get_bptr();
   }
 
   const bufferptr &get_bptr() const override {
-    if (cached_overwrites.is_empty()) {
-      return CachedExtent::get_bptr();
-    } else {
-      return cached_overwrites.get_cached_bptr(CachedExtent::get_bptr());
-    }
+    apply_unstable_deltas_if_necessary();
+    return CachedExtent::get_bptr();
   }
 };
 using ObjectDataBlockRef = TCachedExtentRef<ObjectDataBlock>;
