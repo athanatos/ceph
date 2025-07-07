@@ -324,9 +324,9 @@ int main(int argc, char** argv)
       return const_cast<char*>(s.c_str());
     });
   app.add_options()
-  ("num_logs",po::value<int>(&num_logs),"log writes stimulated by cretaing and writing objects")
+  ("num_logs",po::value<int>(&num_logs),"how many different logs's we create, aka we create a log for every object so how many objects we create ")
   ("log_size", po::value<int>(&log_size),"number of bytes in the bufferlist stored in omap")
-  ("log_length", po::value<int>(&log_length),"number of objects aka logs")
+  ("log_length", po::value<int>(&log_length),"number of entries per log")
   ("num_concurrent_io", po::value<int>(&num_concurrent_io),"number of io's happening simulataneously")
   ("duration", po::value<int>(&duration),"how long in milliseconds does the actual testing loop run for");
 
