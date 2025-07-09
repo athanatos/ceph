@@ -98,54 +98,17 @@ using namespace ceph;
 
 SET_SUBSYS(osd);
 
-/* ceph buffers are represented using bufferlist.
-   * See include/buffer.h
-   */
-  auto make_bl = [](std::string_view sv) {
-    bufferlist bl;
-    bl.append(bufferptr(sv.data(), sv.size()));
-    return bl;
-  };
-  auto bl_to_str = [](bufferlist bl) {
-    return std::string(bl.c_str(), bl.length());
-  };
 
-/**
- * example_io
- *
- * Performs some simple operations against store.
- * The FuturizedStore interface can be found at
- * crimson/os/futurized_store.h
- */
-seastar::future<> example_io(crimson::os::FuturizedStore &global_store,int num_logs,int num_concurrent_io,int duration,int log_size,int log_length)
+seastar::future<> pg_log_workload(crimson::os::FuturizedStore &global_store,int num_logs,int num_concurrent_io,int duration,int log_size,int log_length)
 {
-  LOG_PREFIX(example_io);
-  /* crimson-osd's architecture partitions most resources per seastar
-   * reactor.  This allows us to (mostly) avoid locking and other forms
-   * of contention.  This call gets us the FuturizedStore::Shard
-   * local to the reactor we are executing on. */
+  LOG_PREFIX(pg_log_workload);
   auto &local_store = global_store.get_sharded_store();
 
-  /* Objects in FuturizedStore instances are stored in collections.
-   * crimson-osd (and ceph-osd) use one collection per pg, so
-   * collections are designated by spg_t via coll_t
-   * (see osd/osd_types.h).
-   */
-  coll_t cid(
-    spg_t(
-      // Map shard to pool for this test
-      pg_t(seastar::this_shard_id(), 0)
-    )
-  );
-  auto coll_ref = co_await local_store.create_new_collection(cid);
+  // since i need each object to have its own pg, each object has a different cid 
+  auto make_cid=[](int obj_id){
+    return coll_t (spg_t(pg_t(seastar::this_shard_id(), 0)));
+  };
 
-  /* Objects in FuturizedStore are named by ghobject_t --
-   * see common/hobject.h.  Let's create a convenience function
-   * to generate instances which differ by one paramater.
-   *
-   * Note that objects must have globally unique names(ghobject_t), even if
-   * in different collections.
-   */
   auto create_hobj = [](unsigned id) {
     return ghobject_t(
       shard_id_t::NO_SHARD,
@@ -156,17 +119,30 @@ seastar::future<> example_io(crimson::os::FuturizedStore &global_store,int num_l
       0,  // snapshot
       ghobject_t::NO_GEN);
   };
+
+  //creates a unique object 
+  
+
+  //a way for me to access both the num_operations and the latency_per_io
+  //returned when i run the actual test 
   struct results{
     int num_operations;
-    std::vector<double> latencies;
     int tot_latency_per_io;
   };
-  //each object is a log each log can have multiple entries
-  //ok so this method is suppossed to prefill Nlogs with M different entries each of size K 
-  // calling it this way so that i can capture all variables outside without having to pass everything in 
+
+  // stores the collection_id of each object so i can reference them later when i need to create a ref for an object that already exists 
+  //here i'm assuming that creating a ref on the same coll id in multiple places gives the same result 
+
+  std::map<int,coll_t>collection_id;
+  
+  //this method is suppossed to prefill N logs with M different entries each of size K 
+
   auto pre_fill_logs = [&]() -> seastar::future<>{
     for (int i = 0; i < num_logs; ++i) {
       auto obj_i = create_hobj(i);
+      auto coll_id= make_cid(i);
+      collection_id[i]=coll_id;
+      auto coll_ref=co_await local_store.create_new_collection(coll_id);
       std::map<std::string, bufferlist> data;
       for (int j = 0; j < log_length; ++j) {
         std::string key = std::to_string(j);
@@ -175,46 +151,56 @@ seastar::future<> example_io(crimson::os::FuturizedStore &global_store,int num_l
         data[key] = bl_value;
     }
     ceph::os::Transaction txn;
-    txn.create(cid, obj_i);
-    txn.omap_setkeys(cid, obj_i, data);
+    txn.create(coll_id, obj_i);
+    txn.omap_setkeys(coll_id, obj_i, data);
     co_await local_store.do_transaction(coll_ref, std::move(txn));
   }
   co_return;
   }; 
+
+  //Create two vectores to keep track of the last added key and the first added key
+  std::vector<int>first_key_per_log(num_logs,0);
   std::vector<int> last_key_per_log(num_logs,log_length);
   
-  // This is pre-testing
-  // Now the next step is to do the actual testing so in duration amount of time
-  //I want to keep randomly choosing logs and writing to them 
-  //every time i do a write i want the number of operations to increase by 1
+  //after the logs have been prefilled we do time constrained testing 
+  // in duration amount of time how many adds and deletes can i do 
+  // adds happen in the ned , deletes happend from the beginning
+  
   auto actual_test=[&]()-> seastar::future<results>{
-    auto start=seastar::lowres_clock::now();
     int num_ops=0;
     int tot_latency=0;
-    std::vector<double> latency;
-    ERROR("entering the loop milli to sec possible mismatch");
+    auto start=seastar::lowres_clock::now();
+
     while(seastar::lowres_clock::now()-start<= std::chrono::milliseconds(duration)){
-      int obj_num=std::rand()%num_logs; //which object log to write to 
-      auto obj_id=create_hobj(obj_num); // writable thing
-      std::string k=std::to_string(last_key_per_log[obj_num]); // 0 indexed
+      int obj_num=std::rand()%num_logs; 
+      auto object=create_hobj(obj_num);
+      auto coll_id=collection_id[obj_num];
+      auto coll_ref=co_await local_store.create_new_collection(coll_id);
+
+      std::string key_to_write=std::to_string(last_key_per_log[obj_num]); 
       last_key_per_log[obj_num]+=1;
+
+      std::string key_to_remove=std::to_string(first_key_per_log[obj_num]);
+      first_key_per_log[obj_num]+=1;
+
       bufferlist val;
       val.append_zero(log_size);
       std::map<std::string, bufferlist> key_val;
-      key_val[k]=val;
-      ceph::os::Transaction one_write;
-      one_write.omap_setkeys(cid,obj_id,key_val);
+      key_val[key_to_write]=val;
+
+      ceph::os::Transaction one_write_delete;
+      one_write_delete.omap_setkeys(coll_id,object,key_val);
+      one_write_delete.omap_rmkey(coll_id,object,key_to_remove);
+  
       auto latency_start=seastar::lowres_clock::now();
-      co_await local_store.do_transaction(coll_ref,std::move(one_write));
+      co_await local_store.do_transaction(coll_ref,std::move(one_write_delete));
       auto latency_end=seastar::lowres_clock::now();
-      auto time_sec=std::chrono::duration_cast<std::chrono::milliseconds>(latency_end-latency_start).count();
-      latency.push_back(time_sec);
+      auto time_millisec=std::chrono::duration_cast<std::chrono::milliseconds>(latency_end-latency_start).count();
+      tot_latency+=time_millisec;
       num_ops++;
+
     }
-    for (auto val : latency){
-      tot_latency+=val;
-    }
-    co_return results{num_ops,latency,tot_latency};
+    co_return results{num_ops,tot_latency};
   };
   auto run_concurrent_ios=[&]() -> seastar::future<> {
     std::vector <int> container_io; // to make the num of concurrent operations a container like a vector otherwise cant use parallel loop 
@@ -246,12 +232,6 @@ seastar::future<> example_io(crimson::os::FuturizedStore &global_store,int num_l
   co_await run_concurrent_ios();
   co_return;
 }
-
- //next step add how to parse from the CL and make sure to set log as the only applicapble option not index yet 
- //also check if shaman built --not yet ask junior also clarify doubt on fix and submit pr 
- // run the teuthology suite 
-
-  
 
   
 
@@ -424,17 +404,22 @@ int main(int argc, char** argv)
           "error mounting object store type {} in {}",
           store_type,
           store_path).c_str()));
-
+    std::vector<seastar::future<>>per_shard_futures;
     for (unsigned i = 0; i < seastar::smp::count; ++i) {
-      co_await seastar::smp::submit_to(
+      per_shard_futures.push_back(
+        seastar::smp::submit_to(
         i,
         seastar::coroutine::lambda(
-          [&, &store_ref=*store]() -> seastar::future<> { //capture everything, i think this fixed it ? 
+          [&, &store_ref=*store]() -> seastar::future<> {  
             ERROR("running example_io on reactor {}", seastar::this_shard_id());
-            co_await example_io(store_ref,num_logs,log_length,log_size,num_concurrent_io,duration);
+            co_await pg_log_workload(store_ref,num_logs,log_length,log_size,num_concurrent_io,duration);
           })
+      )
+
       );
+     
     }
+    co_await seastar::when_all(per_shard_futures.begin(),per_shard_futures.end());
 
     co_await store->umount();
     co_await store->stop();
