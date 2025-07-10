@@ -217,8 +217,8 @@ struct load_ranges_t {
 /// manage small chunks of extent
 class BufferSpace : public boost::intrusive_ref_counter<
   BufferSpace, boost::thread_unsafe_counter> {
-  using map_t = std::map<extent_len_t, ceph::bufferlist>;
 public:
+  using map_t = std::map<extent_len_t, ceph::bufferlist>;
   using Ref = boost::intrusive_ptr<BufferSpace>;
 
   BufferSpace() : extent_length(0), buffer(map_t{}) {}
@@ -296,36 +296,6 @@ public:
   auto get_loaded_length() const { return loaded_length; }
 
 private:
-  // create and append the read-hole to
-  // load_ranges_t and bl
-  static void create_hole_append_bl(
-    load_ranges_t& ret,
-    ceph::bufferlist& bl,
-    extent_len_t hole_offset,
-    extent_len_t hole_length) {
-    ceph::bufferptr hole_ptr = create_extent_ptr_rand(hole_length);
-    bl.append(hole_ptr);
-    ret.push_back(hole_offset, std::move(hole_ptr));
-  }
-
-  // create and insert the read-hole to buffer_map,
-  // and append to load_ranges_t
-  // returns the iterator containing the inserted read-hole
-  static auto create_hole_insert_map(
-    map_t& buffer_map,
-    load_ranges_t& ret,
-    extent_len_t hole_offset,
-    extent_len_t hole_length,
-    const map_t::const_iterator& next_it) {
-    assert(!buffer_map.contains(hole_offset));
-    ceph::bufferlist bl;
-    create_hole_append_bl(ret, bl, hole_offset, hole_length);
-    auto it = buffer_map.insert(
-        next_it, std::pair{hole_offset, std::move(bl)});
-    assert(next_it == std::next(it));
-    return it;
-  }
-
   const extent_len_t extent_length;
   extent_len_t loaded_length = 0;
   std::variant<map_t, bufferptr> buffer;
