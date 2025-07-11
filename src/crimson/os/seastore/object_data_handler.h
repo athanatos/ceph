@@ -157,10 +157,9 @@ struct ObjectDataBlock : crimson::os::seastore::LogicalChildNode {
   }
 
   void apply_unstable_deltas() const {
-    auto &buf = const_cast<ObjectDataBlock*>(this)->CachedExtent::get_bptr();
     for (const auto &d: delta) {
-      auto iter = d.bl.cbegin();
-      iter.copy(d.bl.length(), buf.c_str() + d.offset);
+      const_cast<ObjectDataBlock*>(this)->CachedExtent::overwrite(
+	d.offset, d.bl);
     }
   }
 
@@ -170,8 +169,7 @@ struct ObjectDataBlock : crimson::os::seastore::LogicalChildNode {
     delta.push_back(b);
     modified_region.union_insert(offset, bl.length());
     if (!is_buffer_shared()) {
-      auto iter = bl.cbegin();
-      iter.copy(bl.length(), CachedExtent::get_bptr().c_str() + offset);
+      CachedExtent::overwrite(offset, std::move(bl));
     }
   }
 
