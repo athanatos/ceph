@@ -225,27 +225,53 @@ extent_len_t iter_to_end(
 }
 
 
+/**
+ * get_adjacent_range
+ *
+ * Return [b, e] such that:
+ * - b is the min iterator such that iter_to_end(b) >= offset
+ * - e is the min iterator such that iter_to_start(e) > offset + length
+ *
+ * If b == e, no entries are adjacent to or overlap offset ~ length.
+ * If b != e all entries in [b, e) are adjacent to or overlap offset ~ length
+ */
 std::pair<BufferSpace::map_t::iterator, BufferSpace::map_t::iterator>
 get_adjacent_range(
   BufferSpace::map_t &buffer_map,
   extent_len_t offset, extent_len_t length)
 {
-  // Find first entry adjacent to [offset, offset + length)
-  auto from_iter = buffer_map.lower_bound(offset);
+  // Find first entry with end >= offset
+  auto from_iter = buffer_map.upper_bound(offset);
   if (from_iter != buffer_map.begin()) {
     --from_iter;
-    if (iter_to_end(buffer_map, from_iter) + 1 < offset) {
+    if (iter_to_end(buffer_map, from_iter) < offset) {
       ++from_iter;
     }
   }
 
   // Find one past last entry adjacent to [offset, offset + length)
   auto to_iter = buffer_map.upper_bound(offset + length);
-  if (to_iter != buffer_map.end() &&
-      ((offset + length + 1) >= iter_to_start(buffer_map, to_iter))) {
-    ++to_iter;
-  }
   return {from_iter, to_iter};
+}
+
+void insert_and_validate(auto &buffer_map, extent_len_t offset, bufferlist bl)
+{
+  auto [iter, inserted] = buffer_map.emplace(offset, std::move(bl));
+  std::ignore = iter;
+  std::ignore = inserted;
+#ifdef NDEBUG
+  assert(inserted);
+  if (iter != buffer_map.begin()) {
+    auto prev = iter;
+    --prev;
+    assert(iter_to_end(buffer_map, prev) < iter_to_start(buffer_map, iter));
+  }
+  auto next = iter;
+  ++next;
+  if (next != buffer_map.end()) {
+    assert(iter_to_start(buffer_map, next) > iter_to_end(buffer_map, iter));
+  }
+#endif
 }
 
 load_ranges_t BufferSpace::load_ranges(extent_len_t offset, extent_len_t length)
@@ -271,8 +297,7 @@ load_ranges_t BufferSpace::load_ranges(extent_len_t offset, extent_len_t length)
   auto &buffer_map = *std::get_if<map_t>(&buffer);
   const auto [from_iter, to_iter] = get_adjacent_range(
     buffer_map, offset, length);
-  const auto from_offset = iter_to_start(buffer_map, from_iter);
-  auto next_iter = to_iter;
+  auto next_iter = from_iter;
 
   bufferlist bl;
   if (auto next_iter_offset = iter_to_start(buffer_map, next_iter);
@@ -297,7 +322,10 @@ load_ranges_t BufferSpace::load_ranges(extent_len_t offset, extent_len_t length)
     }
   }
   buffer_map.erase(from_iter, to_iter);
-  buffer_map.emplace(from_offset, bl);
+  insert_and_validate(
+    buffer_map,
+    std::min(offset, iter_to_start(buffer_map, from_iter)),
+    bl);
   loaded_length += ret.length;
 
   if (extent_length == loaded_length) {
@@ -315,6 +343,77 @@ load_ranges_t BufferSpace::load_ranges(extent_len_t offset, extent_len_t length)
   return ret;
 }
 
+void BufferSpace::overwrite(extent_len_t offset, bufferlist in_bl)
+{
+  assert(is_page_aligned(offset));
+  assert(is_page_aligned(in_bl.length()));
+  assert(offset + in_bl.length() <= extent_length);
+  if (auto *bp = std::get_if<bufferptr>(&buffer)) {
+    auto iter = in_bl.cbegin();
+    iter.copy(in_bl.length(), bp->c_str() + offset);
+    return;
+  }
+
+  auto &buffer_map = std::get<map_t>(buffer);
+  const auto [from_iter, to_iter] = get_adjacent_range(
+    buffer_map, offset, in_bl.length());
+
+  if (from_iter == to_iter) {
+    buffer_map.emplace(offset, in_bl);
+    loaded_length += in_bl.length();
+    assert(loaded_length <= extent_length);
+    if (loaded_length == extent_length) {
+      to_full_ptr();
+    }
+    return;
+  }
+  
+  bufferlist new_bl;
+  const auto iter_start = iter_to_start(buffer_map, from_iter);
+  if (iter_start < offset) {
+    assert((offset - iter_start) <= from_iter->second.length());
+    new_bl.substr_of(from_iter->second, 0, offset - iter_start);
+  }
+  new_bl.append(in_bl);
+
+  auto last_iter = to_iter;
+  assert(last_iter != buffer_map.begin());
+  --last_iter;
+  const auto iter_end = iter_to_end(buffer_map, last_iter);
+  const auto overwrite_end = offset + in_bl.length();
+  if (iter_end > overwrite_end) {
+    assert(overwrite_end >= last_iter->first);
+    bufferlist bl;
+    const auto tail_offset = overwrite_end - last_iter->first;
+    assert(tail_offset <= last_iter->second.length());
+    assert(
+      (last_iter->second.length() - tail_offset) ==
+      (iter_end - overwrite_end));
+    bl.substr_of(
+      last_iter->second, tail_offset,
+      last_iter->second.length() - tail_offset);
+    new_bl.append(bl);
+  }
+
+  extent_len_t removing = 0;
+  for (auto iter = from_iter; iter != to_iter; ++iter) {
+    removing += iter->second.length();
+  }
+  assert(new_bl.length() >= removing);
+  loaded_length += new_bl.length() - removing;
+
+  new_bl.rebuild_page_aligned();
+  buffer_map.erase(from_iter, to_iter);
+  insert_and_validate(
+    buffer_map,
+    std::min(offset, iter_start),
+    new_bl);
+  
+  if (loaded_length == extent_length) {
+    to_full_ptr();
+  }
+}
+
 ceph::bufferptr BufferSpace::to_full_ptr()
 {
   if (auto ptr = std::get_if<bufferptr>(&buffer)) {
@@ -328,9 +427,11 @@ ceph::bufferptr BufferSpace::to_full_ptr()
   auto it = buffer_map.begin();
   auto& [i_off, i_buf] = *it;
   assert(i_off == 0);
+  assert(is_page_aligned(i_buf.length()));
   if (!i_buf.is_contiguous()) {
-    // Allocate page aligned ptr, also see create_extent_ptr_*()
-    i_buf.rebuild_page_aligned();
+    // Allocates page aligned ptr as long as length is aligned,
+    // also see create_extent_ptr_*()
+    i_buf.rebuild();
   }
   assert(i_buf.get_num_buffers() == 1);
   ceph::bufferptr ptr(i_buf.front());
