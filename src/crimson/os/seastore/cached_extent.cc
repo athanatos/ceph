@@ -273,7 +273,6 @@ load_ranges_t BufferSpace::load_ranges(extent_len_t offset, extent_len_t length)
   auto &buffer_map = *std::get_if<map_t>(&buffer);
   const auto [from_iter, to_iter] = get_adjacent_range(
     buffer_map, offset, length);
-  const auto from_offset = iter_to_start(buffer_map, from_iter);
   auto next_iter = to_iter;
 
   bufferlist bl;
@@ -299,7 +298,9 @@ load_ranges_t BufferSpace::load_ranges(extent_len_t offset, extent_len_t length)
     }
   }
   buffer_map.erase(from_iter, to_iter);
-  buffer_map.emplace(from_offset, bl);
+  buffer_map.emplace(
+    std::min(offset, iter_to_start(buffer_map, from_iter)),
+    bl);
   loaded_length += ret.length;
 
   if (extent_length == loaded_length) {
@@ -312,6 +313,55 @@ load_ranges_t BufferSpace::load_ranges(extent_len_t offset, extent_len_t length)
   }
   
   return ret;
+}
+
+void BufferSpace::overwrite(extent_len_t offset, bufferlist in_bl)
+{
+  assert(offset + in_bl.length() <= extent_length);
+  if (auto *bp = std::get_if<bufferptr>(&buffer)) {
+    auto iter = in_bl.cbegin();
+    iter.copy(in_bl.length(), bp->c_str() + offset);
+    return;
+  }
+
+  auto &buffer_map = std::get<map_t>(buffer);
+  const auto [from_iter, to_iter] = get_adjacent_range(
+    buffer_map, offset, in_bl.length());
+  bufferlist new_bl;
+  const auto iter_start = iter_to_start(buffer_map, from_iter);
+  if (iter_start < offset) {
+    new_bl.substr_of(from_iter->second, 0, iter_start - offset);
+  }
+  new_bl.append(in_bl);
+
+  if (from_iter != to_iter) {
+    auto last_iter = to_iter;
+    --last_iter;
+    const auto iter_end = iter_to_end(buffer_map, last_iter);
+    const auto overwrite_end = offset + in_bl.length();
+    if (iter_end > overwrite_end) {
+      bufferlist bl;
+      const auto tail_offset = iter_end - overwrite_end;
+      bl.substr_of(last_iter->second, tail_offset, iter_end - tail_offset);
+      new_bl.append(bl);
+    }
+  }
+
+  extent_len_t removing = 0;
+  for (auto iter = from_iter; iter != to_iter; ++iter) {
+    removing += iter->second.length();
+  }
+  assert(new_bl.length() > removing);
+  loaded_length += new_bl.length() - removing;
+
+  buffer_map.erase(from_iter, to_iter);
+  buffer_map.emplace(
+    std::min(offset, iter_start),
+    new_bl);
+  
+  if (loaded_length == extent_length) {
+    to_full_ptr();
+  }
 }
 
 ceph::bufferptr BufferSpace::to_full_ptr()

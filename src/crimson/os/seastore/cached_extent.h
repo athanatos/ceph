@@ -271,6 +271,9 @@ public:
   /// Returns the ranges to load, merge the buffer_map if possible
   load_ranges_t load_ranges(extent_len_t offset, extent_len_t length);
 
+  /// updates [offset, bl.length) with the contents of bl
+  void overwrite(extent_len_t offset, bufferlist bl);
+
   /// Converts to ptr when fully loaded
   ceph::bufferptr to_full_ptr();
 
@@ -740,6 +743,11 @@ public:
       1,
       reinterpret_cast<const unsigned char *>(get_bptr().c_str()),
       get_length());
+  }
+
+  virtual void overwrite(extent_len_t offset, bufferlist bl) {
+    assert(!is_buffer_shared());
+    buffer_space->overwrite(offset, std::move(bl));
   }
 
   /// Get ref to raw buffer, must be fully loaded
