@@ -445,15 +445,17 @@ public:
   get_mutable_extent_by_laddr(
       Transaction &t,
       laddr_t laddr,
-      extent_len_t len) {
+      extent_len_t len,
+      extent_len_t partial_off,
+      extent_len_t partial_len) {
     LOG_PREFIX(TransactionManager::get_mutable_extent_by_laddr);
     SUBDEBUGT(seastore_tm, "{}~0x{:x} ...", t, laddr, len);
     return get_pin(t, laddr
-    ).si_then([this, &t, len](auto pin) {
+    ).si_then([this, &t, len, partial_off, partial_len](auto pin) {
       ceph_assert(pin.is_data_stable() && !pin.is_zero_reserved());
       ceph_assert(!pin.is_clone());
       ceph_assert(pin.get_length() == len);
-      return this->read_pin<T>(t, std::move(pin));
+      return this->read_pin<T>(t, std::move(pin), partial_off, partial_len);
     }).si_then([this, &t, FNAME](auto maybe_indirect_extent) {
       assert(!maybe_indirect_extent.is_indirect());
       assert(!maybe_indirect_extent.is_clone);
@@ -463,6 +465,15 @@ public:
       return read_extent_iertr::make_ready_future<TCachedExtentRef<T>>(
 	std::move(ext));
     });
+  }
+
+  template <typename T>
+  get_pin_iertr::future<TCachedExtentRef<T>>
+  get_mutable_extent_by_laddr(
+      Transaction &t,
+      laddr_t laddr,
+      extent_len_t len) {
+    return get_mutable_extent_by_laddr<T>(t, laddr, len, 0, len);
   }
 
   /**

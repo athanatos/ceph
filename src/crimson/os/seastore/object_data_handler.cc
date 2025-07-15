@@ -460,7 +460,8 @@ ObjectDataHandler::write_ret do_remappings(
 	return ctx.tm.get_mutable_extent_by_laddr<ObjectDataBlock>(
 	  ctx.t,
 	  region.laddr_start,
-	  region.length
+	  region.length,
+	  0, 0
 	).handle_error_interruptible(
 	  TransactionManager::base_iertr::pass_further{},
 	  crimson::ct_error::assert_all{
