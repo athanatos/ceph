@@ -62,6 +62,27 @@ SET_SUBSYS(osd);
       ghobject_t::NO_GEN);
   };
 
+  /**
+   * This function creates a collection with pool id as obj_id
+   * The function is called when we create an object
+   * the goal is to have each object belong to a separate collection
+   */
+  coll_t make_cid (int obj_id) { 
+    return coll_t(spg_t(pg_t(obj_id, 0))); 
+  };
+
+  /**
+   * The struct stores the results for a single io
+   * The number of operations is incrmented by 1 for write+remove
+   * latency per_io is the sum of times it takes per opertaion
+   */
+  struct results_t {
+    int num_operations;
+    int tot_latency_per_io;
+  };
+
+  
+
 /**
  * This function adds and removes log entries to a log object
  * It returns throughput(number of operations/milli sec)
@@ -76,23 +97,6 @@ seastar::future<> pg_log_workload(crimson::os::FuturizedStore &global_store,
                                   int duration, int log_size, int log_length) {
   LOG_PREFIX(pg_log_workload);
   auto &local_store = global_store.get_sharded_store();
-
-  /**
-   * This function creates a collection with pool id as obj_id
-   * The function is called when we create an object
-   * the goal is to have each object belong to a separate collection
-   */
-  auto make_cid = [](int obj_id) { return coll_t(spg_t(pg_t(obj_id, 0))); };
-  
-  /**
-   * The struct stores the results for a single io
-   * The number of operations is incrmented by 1 for write+remove
-   * latency per_io is the sum of times it takes per opertaion
-   */
-  struct results_t {
-    int num_operations;
-    int tot_latency_per_io;
-  };
 
   std::map<int, coll_t> collection_id;
 
@@ -219,6 +223,198 @@ seastar::future<> pg_log_workload(crimson::os::FuturizedStore &global_store,
   co_await run_concurrent_ios();
   co_return;
 }
+
+std::string generate_random_string(int key_size){
+  std::string res="";
+  for (int i = 0;i<key_size;++i){
+    char letter=char(std::rand()%26 +97);
+    res+=letter;
+  }
+  return res;
+}
+
+seastar::future<> rgw_index_workload(crimson::os::FuturizedStore &global_store,
+                                  int num_indices, int num_concurrent_io,
+                                  int duration, int key_size,
+                                  int value_size,int target_keys_per_bucket,
+                                  int tolerance_range) {
+
+  LOG_PREFIX(rgw_index_workload);
+  auto &local_store = global_store.get_sharded_store();
+  std::map<int, coll_t> collection_id_for_rgw;
+  std::vector<std::set<std::string>> keys_per_bucket;
+
+  auto pre_fill_buckets=[&]()->seastar::future<>{
+    for (int i=0;i<num_indices;++i){
+      auto bucket_i = create_hobj(i);
+      auto coll_id = make_cid(i);
+      collection_id_for_rgw[i] = coll_id;
+      auto coll_ref = co_await local_store.create_new_collection(coll_id);
+
+      std::map<std::string, bufferlist> omap_for_this_bucket;
+      std::set<std::string> keys_in_this_bucket;
+
+      for (int j = 0; j < target_keys_per_bucket; ++j) {
+        std::string possible_key = generate_random_string(key_size);
+        while (keys_in_this_bucket.count(possible_key)>0){
+          possible_key=generate_random_string(key_size);
+        }
+        keys_in_this_bucket.insert(possible_key);
+        bufferlist val_for_poss_key;
+        val_for_poss_key.append_zero(value_size);
+        omap_for_this_bucket[possible_key] = val_for_poss_key;
+      }
+      keys_per_bucket[i]=keys_in_this_bucket;
+      ceph::os::Transaction txn_write_omap_for_bucket;
+      txn_write_omap_for_bucket.create(coll_id, bucket_i);
+      txn_write_omap_for_bucket.omap_setkeys(coll_id, bucket_i, omap_for_this_bucket);
+      co_await local_store.do_transaction(coll_ref, std::move(txn_write_omap_for_bucket));
+    }
+    co_return;
+  };
+
+  std::vector<int>size_per_bucket(num_indices,target_keys_per_bucket);
+
+  int min_size=std::floor(target_keys_per_bucket*(1-tolerance_range/100));
+  int max_size=std::ceil(target_keys_per_bucket*(1+tolerance_range/100));
+
+  auto rgw_actual_test=[&]()->seastar::future<results_t>{
+    int num_ops = 0;
+    int tot_latency = 0;
+    auto start = seastar::lowres_clock::now();
+
+    while (seastar::lowres_clock::now() - start <=
+           std::chrono::milliseconds(duration)) {
+
+      int bucket_num_we_choose = std::rand() % num_indices;
+      auto bucket = create_hobj(bucket_num_we_choose);
+      auto coll_id = collection_id_for_rgw[bucket_num_we_choose];
+      auto coll_ref = co_await local_store.create_new_collection(coll_id);
+
+      int size_bucket_we_choose=size_per_bucket[bucket_num_we_choose];
+      auto keys_in_that_bucket=keys_per_bucket[bucket_num_we_choose];
+
+      while (min_size < size_bucket_we_choose && size_bucket_we_choose < max_size){
+        int choice=std::rand()%2;
+        //choice 0 is write, choice 1 is delete 
+        if (choice==0){
+          std::string new_key=generate_random_string(key_size);
+          while (keys_in_that_bucket.count(new_key)>0){
+            new_key=generate_random_string(key_size);
+          }
+          keys_in_that_bucket.insert(new_key);
+          size_per_bucket[bucket_num_we_choose]++;
+
+          bufferlist value;
+          value.append_zero(value_size);
+
+          std::map<std::string, bufferlist> data_entry;
+          data_entry[new_key] = value;
+
+          ceph::os::Transaction one_write;
+          one_write.omap_setkeys(coll_id, bucket, data_entry);
+          auto latency_start = seastar::lowres_clock::now();
+          co_await local_store.do_transaction(coll_ref,
+                                          std::move(one_write));
+          auto latency_end = seastar::lowres_clock::now();
+          auto time_per_write =
+          std::chrono::duration_cast<std::chrono::milliseconds>(latency_end -
+                                                                latency_start)
+              .count();
+          tot_latency += time_per_write;
+          num_ops++;
+        }
+        else{
+          int index_key_to_delete=std::rand()%keys_in_that_bucket.size();
+          auto it=keys_in_that_bucket.begin();
+          std::advance(it,index_key_to_delete);
+          keys_in_that_bucket.erase(it);
+          size_per_bucket[bucket_num_we_choose]--; 
+
+
+          ceph::os::Transaction one_delete;
+          one_delete.omap_rmkey(coll_id, bucket, *it);
+
+          auto latency_start = seastar::lowres_clock::now();
+          co_await local_store.do_transaction(coll_ref,
+                                            std::move(one_delete));
+          auto latency_end = seastar::lowres_clock::now();
+          auto time_per_delete =
+            std::chrono::duration_cast<std::chrono::milliseconds>(latency_end -
+                                                                  latency_start)
+                .count();
+            tot_latency += time_per_delete;
+            num_ops++;
+        }
+
+
+      };
+      if (size_bucket_we_choose<min_size){
+        while (size_bucket_we_choose<=min_size){
+          std::string new_key=generate_random_string(key_size);
+          while (keys_in_that_bucket.count(new_key)>0){
+            new_key=generate_random_string(key_size);
+          }
+          keys_in_that_bucket.insert(new_key);
+          size_per_bucket[bucket_num_we_choose]++;
+
+          bufferlist value;
+          value.append_zero(value_size);
+
+          std::map<std::string, bufferlist> data_entry;
+          data_entry[new_key] = value;
+
+          ceph::os::Transaction one_write;
+          one_write.omap_setkeys(coll_id, bucket, data_entry);
+          auto latency_start = seastar::lowres_clock::now();
+          co_await local_store.do_transaction(coll_ref,
+                                          std::move(one_write));
+          auto latency_end = seastar::lowres_clock::now();
+          auto time_per_write =
+          std::chrono::duration_cast<std::chrono::milliseconds>(latency_end -
+                                                                latency_start)
+              .count();
+          tot_latency += time_per_write;
+          num_ops++;
+
+        }
+      }
+      else{
+        int index_key_to_delete=std::rand()%keys_in_that_bucket.size();
+        auto it=keys_in_that_bucket.begin();
+        std::advance(it,index_key_to_delete);
+        keys_in_that_bucket.erase(it);
+        size_per_bucket[bucket_num_we_choose]--; 
+
+
+        ceph::os::Transaction one_delete;
+        one_delete.omap_rmkey(coll_id, bucket, *it);
+
+        auto latency_start = seastar::lowres_clock::now();
+        co_await local_store.do_transaction(coll_ref,
+                                            std::move(one_delete));
+        auto latency_end = seastar::lowres_clock::now();
+        auto time_per_delete =
+        std::chrono::duration_cast<std::chrono::milliseconds>(latency_end -
+                                                                  latency_start)
+                .count();
+        tot_latency += time_per_delete;
+        num_ops++;
+
+      }
+
+      }
+    co_return results_t{num_ops,tot_latency};
+    
+    
+  };
+
+
+
+  };
+                                
+
+
 
 int main(int argc, char **argv) {
   LOG_PREFIX(main);
