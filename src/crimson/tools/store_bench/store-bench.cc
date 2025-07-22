@@ -38,6 +38,7 @@
 #include <seastar/core/byteorder.hh>
 #include <seastar/core/future-util.hh>
 #include <seastar/core/gate.hh>
+#include <seastar/core/scollectd_api.hh>
 #include <seastar/core/reactor.hh>
 #include <seastar/core/rwlock.hh>
 #include <seastar/core/thread.hh>
@@ -103,7 +104,7 @@ seastar::future<> random_write(crimson::os::FuturizedStore &global_store)
 
   static constexpr uint64_t PREFILL_SIZE = 128<<10;
   static constexpr uint64_t IO_SIZE = 4<<10;
-  static constexpr uint64_t SIZE_PER_SHARD = 1<<30;
+  static constexpr uint64_t SIZE_PER_SHARD = 64<<20;
   static constexpr uint64_t SIZE_PER_OBJ = 4<<20;
   static constexpr uint64_t COLLS_PER_SHARD = 16;
   static constexpr uint64_t OBJ_PER_SHARD = SIZE_PER_SHARD / SIZE_PER_OBJ;
@@ -168,10 +169,14 @@ seastar::future<> random_write(crimson::os::FuturizedStore &global_store)
       t.write(coll_id, hobj, off, PREFILL_SIZE, get_random_buffer(PREFILL_SIZE));
       co_await submit_transaction(coll_ref, std::move(t));
     }
+    INFO("wrote obj {} of {}", obj_id, OBJ_PER_SHARD);
   }
+
+  INFO("finished populating");
 
   static constexpr auto TIME = 30s;
   auto start = ceph::mono_clock::now();
+  uint64_t writes_started = 0;
   while (ceph::mono_clock::now() - start < TIME) {
     auto obj_id = std::experimental::randint<uint64_t>(0, OBJ_PER_SHARD - 1);
     auto hobj = create_hobj(obj_id);
@@ -190,6 +195,18 @@ seastar::future<> random_write(crimson::os::FuturizedStore &global_store)
       IO_SIZE,
       get_random_buffer(IO_SIZE));
     co_await submit_transaction(coll_ref, std::move(t));
+    ++writes_started;
+  }
+
+  INFO("writes_started {}", writes_started);
+  for (auto &[id, ref]: coll_refs) {
+    INFO("flushing {}", id);
+    co_await local_store.flush(ref);
+  }
+
+  auto metric_value_map = seastar::scollectd::get_value_map();
+  for (const auto& [full_name, metric_family]: metric_value_map) {
+    INFO("full_name {}", full_name);
   }
 }
 
@@ -201,6 +218,7 @@ int main(int argc, char** argv)
   std::string store_type;
   std::string store_path;
   std::string io_pattern;
+  int smp;
 
   desc.add_options()
     ("help,h", "show help message")
@@ -217,7 +235,9 @@ int main(int argc, char** argv)
      "path to store, <store-path>/block should "
      "be a symlink to the target device for bluestore or seastore")
     ("debug", po::value<bool>(&debug)->default_value(false),
-     "enable debugging");
+     "enable debugging")
+    ("smp", po::value<int>(&smp)->default_value(4),
+     "number of reactors");
 
   po::variables_map vm;
   std::vector<std::string> unrecognized_options;
@@ -239,22 +259,17 @@ int main(int argc, char** argv)
     std::cerr << "error: " << e.what() << std::endl;
     return 1;
   }
+  std::cerr << "here" << std::endl;
 
   seastar::app_template::config app_cfg;
   app_cfg.name = "crimson-store-bench";
   app_cfg.auto_handle_sigint_sigterm = false;
   seastar::app_template app(std::move(app_cfg));
 
-  std::vector<char*> av{argv[0]};
-  std::transform(
-    std::begin(unrecognized_options),
-    std::end(unrecognized_options),
-    std::back_inserter(av),
-    [](auto& s) {
-      return const_cast<char*>(s.c_str());
-    });
+  auto smp_str = std::to_string(smp);
+  const char *av[] = { argv[0], "--smp", smp_str.c_str() };
   return app.run(
-    av.size(), av.data(),
+    sizeof(av) / sizeof(av[0]), const_cast<char **>(av),
     /* crimson-osd uses seastar as its scheduler.  We use
      * sesastar::app_template::run to start the base task for the
      * application -- this lambda.  The -> seastar::future<int> here
@@ -290,7 +305,7 @@ int main(int argc, char** argv)
       );
     } else {
       seastar::global_logger_registry().set_all_loggers_level(
-        seastar::log_level::error
+        seastar::log_level::info
       );
     }
 
@@ -348,12 +363,10 @@ int main(int argc, char** argv)
     for (unsigned i = 0; i < seastar::smp::count; ++i) {
       completions.emplace_back(seastar::smp::submit_to(
         i,
-        seastar::coroutine::lambda(
-          [FNAME, &store_ref=*store]() -> seastar::future<> {
-            ERROR("running random_write on reactor {}", seastar::this_shard_id());
-            co_await random_write(store_ref);
-          })
-      ));
+        [FNAME, &store_ref=*store]() -> seastar::future<> {
+          INFO("running random_write on reactor {}", seastar::this_shard_id());
+          return random_write(store_ref);
+        }));
     }
     for (auto &&i : completions) { co_await std::move(i); }
 
