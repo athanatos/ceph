@@ -439,11 +439,12 @@ void ObjectDataBlock::apply_delta(const ceph::bufferlist &bl) {
 /// Creates remap extents in to_remap
 ObjectDataHandler::write_ret do_remappings(
   context_t ctx,
-  extent_to_remap_list_t &to_remap)
+  extent_to_remap_list_t &to_remap,
+  ObjectDataHandler::counters_t &counters)
 {
   return trans_intr::do_for_each(
     to_remap,
-    [ctx](auto &region) {
+    [FNAME, ctx, &counters](auto &region) {
       if (region.is_remap1()) {
         return ctx.tm.remap_pin<ObjectDataBlock, 1>(
           ctx.t,
@@ -457,6 +458,7 @@ ObjectDataHandler::write_ret do_remappings(
           return ObjectDataHandler::write_iertr::now();
         });
       } else if (region.is_overwrite()) {
+	counters.delta_overwrite_bytes += region.length;
 	return ctx.tm.get_mutable_extent_by_laddr<ObjectDataBlock>(
 	  ctx.t,
 	  region.laddr_start,
@@ -1178,8 +1180,8 @@ ObjectDataHandler::clear_ret ObjectDataHandler::trim_data_reservation(
         return seastar::do_with(
           prepare_ops_list(pins, to_write,
 	    delta_based_overwrite_max_extent_size),
-          [ctx, size, &object_data](auto &ops) {
-            return do_remappings(ctx, ops.to_remap
+          [ctx, size, &object_data, this](auto &ops) {
+            return do_remappings(ctx, ops.to_remap, counters
             ).si_then([ctx, &ops] {
               return do_removals(ctx, ops.to_remove);
             }).si_then([ctx, &ops] {
@@ -1377,8 +1379,8 @@ ObjectDataHandler::write_ret ObjectDataHandler::overwrite(
         return seastar::do_with(
           prepare_ops_list(pins, to_write,
 	    delta_based_overwrite_max_extent_size),
-          [ctx](auto &ops) {
-            return do_remappings(ctx, ops.to_remap
+          [this, ctx](auto &ops) {
+            return do_remappings(ctx, ops.to_remap, counters
             ).si_then([ctx, &ops] {
               return do_removals(ctx, ops.to_remove);
             }).si_then([ctx, &ops] {

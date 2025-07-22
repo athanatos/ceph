@@ -6,6 +6,8 @@
 #include <iostream>
 #include <limits>
 
+#include <seastar/core/metrics_types.hh>
+
 #include "include/buffer.h"
 
 #include "test/crimson/seastore/test_block.h" // TODO
@@ -117,11 +119,34 @@ using ObjectDataBlockRef = TCachedExtentRef<ObjectDataBlock>;
 
 class ObjectDataHandler {
 public:
+  struct counters_t {
+    uint64_t delta_overwrite_bytes = 0;
+  };
+
+private:
+  counters_t counters;
+
+  seastar::metrics::metric_group metrics;
+  void register_metrics() {
+    namespace sm = seastar::metrics;
+    metrics.add_group(
+      "object_data_handler",
+      {
+	sm::make_counter("delta_overwrite_bytes",
+			 [this] { return counters.delta_overwrite_bytes; },
+			 sm::description("bytes written via delta overwrite"))
+      }
+    );
+  }
+public:
+
   using base_iertr = TransactionManager::base_iertr;
 
   ObjectDataHandler(uint32_t mos) : max_object_size(mos),
     delta_based_overwrite_max_extent_size(
-      crimson::common::get_conf<Option::size_t>("seastore_data_delta_based_overwrite")) {}
+      crimson::common::get_conf<Option::size_t>("seastore_data_delta_based_overwrite")) {
+    register_metrics();
+  }
 
   struct context_t {
     TransactionManager &tm;
