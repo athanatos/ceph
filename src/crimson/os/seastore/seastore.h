@@ -559,6 +559,7 @@ public:
     TransactionManagerRef transaction_manager;
     CollectionManagerRef collection_manager;
     OnodeManagerRef onode_manager;
+    mutable ObjectDataHandler object_data_handler;
 
     common::Throttle throttler;
 
