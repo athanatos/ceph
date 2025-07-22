@@ -134,8 +134,9 @@ SeaStore::Shard::Shard(
    max_object_size(
      get_conf<uint64_t>("seastore_default_max_object_size")),
    is_test(is_test),
+   object_data_handler(max_object_size),
    throttler(
-      get_conf<uint64_t>("seastore_max_concurrent_transactions"))
+     get_conf<uint64_t>("seastore_max_concurrent_transactions"))
 {
   device = &(dev->get_sharded_device());
   register_metrics();
@@ -1124,7 +1125,7 @@ SeaStore::Shard::_read(
     size - offset :
     std::min(size - offset, len);
 
-  return ObjectDataHandler(max_object_size).read(
+  return object_data_handler.read(
     ObjectDataHandler::context_t{
       *transaction_manager,
       t,
@@ -1478,18 +1479,15 @@ SeaStore::Shard::_fiemap(
   size_t adjust_len = (len == 0) ?
     size - off:
     std::min(size - off, len);
-  return seastar::do_with(
-    ObjectDataHandler(max_object_size),
-    [this, off, adjust_len, &t, &onode](auto &objhandler) {
-    return objhandler.fiemap(
-      ObjectDataHandler::context_t{
-        *transaction_manager,
-        t,
-        onode,
-      },
-      off,
-      adjust_len);
-  }).si_then([FNAME, &t](auto ret) {
+  return object_data_handler.fiemap(
+    ObjectDataHandler::context_t{
+      *transaction_manager,
+      t,
+      onode,
+    },
+    off,
+    adjust_len
+  ).si_then([FNAME, &t](auto ret) {
     DEBUGT("got {} intervals", t, ret.size());
     return ret;
   });
@@ -1963,17 +1961,12 @@ SeaStore::Shard::_remove(
       *ctx.transaction,
       get_omap_root(omap_type_t::LOG, *onode));
   }).si_then([this, &ctx, &onode] {
-    return seastar::do_with(
-      ObjectDataHandler(max_object_size),
-      [&onode, this, &ctx](auto &objhandler)
-    {
-      return objhandler.clear(
+    return object_data_handler.clear(
         ObjectDataHandler::context_t{
           *transaction_manager,
           *ctx.transaction,
           *onode,
-        });
-    });
+	});
   }).si_then([this, &ctx, &onode] {
     return onode_manager->erase_onode(*ctx.transaction, onode);
   }).handle_error_interruptible(
@@ -2008,9 +2001,8 @@ SeaStore::Shard::_write(
   }
   return seastar::do_with(
     std::move(_bl),
-    ObjectDataHandler(max_object_size),
-    [=, this, &ctx, &onode](auto &bl, auto &objhandler) {
-      return objhandler.write(
+    [=, this, &ctx, &onode](auto &bl) {
+      return object_data_handler.write(
         ObjectDataHandler::context_t{
           *transaction_manager,
           *ctx.transaction,
@@ -2027,19 +2019,15 @@ SeaStore::Shard::_clone(
   Onode &onode,
   Onode &d_onode)
 {
-  return seastar::do_with(
-    ObjectDataHandler(max_object_size),
-    [this, &ctx, &onode, &d_onode](auto &objHandler)
-  {
-    auto &object_size = onode.get_layout().size;
-    d_onode.update_onode_size(*ctx.transaction, object_size);
-    return objHandler.clone(
-      ObjectDataHandler::context_t{
-	*transaction_manager,
-	*ctx.transaction,
-	onode,
-	&d_onode});
-  }).si_then([&ctx, &onode, &d_onode, this] {
+  auto &object_size = onode.get_layout().size;
+  d_onode.update_onode_size(*ctx.transaction, object_size);
+  return object_data_handler.clone(
+    ObjectDataHandler::context_t{
+      *transaction_manager,
+      *ctx.transaction,
+      onode,
+      &d_onode}
+  ).si_then([&ctx, &onode, &d_onode, this] {
     return omaptree_clone(
       *ctx.transaction, omap_type_t::XATTR, onode, d_onode);
   }).si_then([&ctx, &onode, &d_onode, this] {
@@ -2068,18 +2056,14 @@ SeaStore::Shard::_zero(
   onode.update_onode_size(
     *ctx.transaction,
     std::max<uint64_t>(offset + len, object_size));
-  return seastar::do_with(
-    ObjectDataHandler(max_object_size),
-    [=, this, &ctx, &onode](auto &objhandler) {
-      return objhandler.zero(
-        ObjectDataHandler::context_t{
-          *transaction_manager,
-          *ctx.transaction,
-          onode,
-        },
-        offset,
-        len);
-  });
+  return object_data_handler.zero(
+    ObjectDataHandler::context_t{
+      *transaction_manager,
+      *ctx.transaction,
+      onode,
+    },
+    offset,
+    len);
 }
 
 SeaStore::Shard::tm_ret
@@ -2124,17 +2108,13 @@ SeaStore::Shard::_truncate(
   uint64_t size)
 {
   onode.update_onode_size(*ctx.transaction, size);
-  return seastar::do_with(
-    ObjectDataHandler(max_object_size),
-    [=, this, &ctx, &onode](auto &objhandler) {
-    return objhandler.truncate(
-      ObjectDataHandler::context_t{
-        *transaction_manager,
-        *ctx.transaction,
-        onode
-      },
-      size);
-  });
+  return object_data_handler.truncate(
+    ObjectDataHandler::context_t{
+      *transaction_manager,
+      *ctx.transaction,
+      onode
+    },
+    size);
 }
 
 SeaStore::Shard::tm_ret
