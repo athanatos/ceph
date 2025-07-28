@@ -250,6 +250,8 @@ overwrite_ops_t prepare_ops_list(
   lba_mapping_list_t &pins_to_remove,
   extent_to_write_list_t &to_write,
   size_t delta_based_overwrite_max_extent_size) {
+  LOG_PREFIX(prepare_ops_list);
+  DEBUG("delta_based_overwrite_max_extent_size: {}", delta_based_overwrite_max_extent_size);
   assert(pins_to_remove.size() != 0);
   overwrite_ops_t ops;
   ops.to_remove.swap(pins_to_remove);
@@ -321,17 +323,20 @@ overwrite_ops_t prepare_ops_list(
   extent_to_remap_list_t to_remap;
   for (auto &region : to_write) {
     if (region.is_data()) {
+      DEBUG("region: {}~{}", region.addr, region.len);
       visitted++;
       assert(region.to_write.has_value());
       int erased_num = 0;
       if (pre_alloc_addr_removed.contains(region.addr, region.len) &&
 	  region.len <= delta_based_overwrite_max_extent_size) {
+	DEBUG("region: {}~{} trying overwrite", region.addr, region.len);
 	erased_num = std::erase_if(
 	  ops.to_remove,
-	  [&region, &to_remap](auto &r) {
+	  [FNAME, &region, &to_remap](auto &r) {
 	    laddr_interval_set_t range;
 	    range.insert(r.get_key(), r.get_length());
 	    if (range.contains(region.addr, region.len) && !r.is_clone()) {
+	      DEBUG("region: {}~{} overwrite found", region.addr, region.len);
 	      to_remap.push_back(extent_to_remap_t::create_overwrite(
 		0, region.len, std::move(r), *region.to_write));
 	      return true;
@@ -442,6 +447,7 @@ ObjectDataHandler::write_ret do_remappings(
   extent_to_remap_list_t &to_remap,
   ObjectDataHandler::counters_t &counters)
 {
+  LOG_PREFIX(ObjectDataHandler::do_remappings);
   return trans_intr::do_for_each(
     to_remap,
     [FNAME, ctx, &counters](auto &region) {
@@ -458,6 +464,7 @@ ObjectDataHandler::write_ret do_remappings(
           return ObjectDataHandler::write_iertr::now();
         });
       } else if (region.is_overwrite()) {
+	DEBUG("overwrite {}~{}", region.laddr_start, region.length);
 	counters.delta_overwrite_bytes += region.length;
 	return ctx.tm.get_mutable_extent_by_laddr<ObjectDataBlock>(
 	  ctx.t,
@@ -761,6 +768,7 @@ private:
    * delta-based overwrite is introduced
    */
   void evaluate_operations() {
+    LOG_PREFIX(evaluate_operations);
     auto actual_write_size = get_pins_size();
     auto aligned_data_size = get_aligned_data_size();
     auto left_ext_size = get_left_extent_size();
@@ -788,6 +796,8 @@ private:
 
     while (left_operation == overwrite_operation_t::UNKNOWN ||
            right_operation == overwrite_operation_t::UNKNOWN) {
+      DEBUG("seastore_obj_data_write_amplification: {}",
+	    crimson::common::get_conf<double>("seastore_obj_data_write_amplification"));
       if (((double)actual_write_size / (double)aligned_data_size) <=
           crimson::common::get_conf<double>("seastore_obj_data_write_amplification")) {
         break;
