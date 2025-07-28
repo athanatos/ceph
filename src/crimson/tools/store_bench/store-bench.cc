@@ -27,6 +27,7 @@
  * }
  */
 
+#include <iostream>
 #include <random>
 #include <experimental/random>
 
@@ -46,10 +47,10 @@
 
 #include "common/ceph_time.h"
 
+#include "crimson/common/config_proxy.h"
 #include "crimson/common/coroutine.h"
 #include "crimson/common/log.h"
-#include "crimson/common/config_proxy.h"
-#include "crimson/common/log.h"
+#include "crimson/common/metrics_helpers.h"
 
 #include "crimson/os/futurized_collection.h"
 #include "crimson/os/futurized_store.h"
@@ -139,16 +140,24 @@ seastar::future<> random_write(crimson::os::FuturizedStore &global_store)
     return coll_refs[obj_id % OBJ_PER_COLL].second;
   };
 
+  unsigned running = 0;
+  std::optional<seastar::promise<>> complete;
+
   static constexpr unsigned IO_CONCURRENCY_PER_SHARD = 16;
   seastar::semaphore sem{IO_CONCURRENCY_PER_SHARD};
-  auto submit_transaction = [&sem, &local_store](
+  auto submit_transaction = [&](
     crimson::os::CollectionRef &col_ref,
     ceph::os::Transaction &&t) -> seastar::future<> {
+    ++running;
     co_await sem.wait(1);
     std::ignore = local_store.do_transaction(
       col_ref,
       std::move(t)
-    ).finally([&sem] {
+    ).finally([&] {
+      --running;
+      if (running == 0 && complete) {
+        complete->set_value();
+      }
       sem.signal(1);
     });
   };
@@ -174,7 +183,7 @@ seastar::future<> random_write(crimson::os::FuturizedStore &global_store)
 
   INFO("finished populating");
 
-  static constexpr auto TIME = 30s;
+  static constexpr auto TIME = 180s;
   auto start = ceph::mono_clock::now();
   uint64_t writes_started = 0;
   while (ceph::mono_clock::now() - start < TIME) {
@@ -204,9 +213,9 @@ seastar::future<> random_write(crimson::os::FuturizedStore &global_store)
     co_await local_store.flush(ref);
   }
 
-  auto metric_value_map = seastar::scollectd::get_value_map();
-  for (const auto& [full_name, metric_family]: metric_value_map) {
-    INFO("full_name {}", full_name);
+  if (running > 0) {
+    complete = seastar::promise<>();
+    co_await complete->get_future();
   }
 }
 
@@ -369,6 +378,15 @@ int main(int argc, char** argv)
         }));
     }
     for (auto &&i : completions) { co_await std::move(i); }
+
+    JSONFormatter f(true /* pretty */);
+    f.open_array_section("metrics_values");
+    crimson::metrics::dump_metric_value_map(
+      seastar::scollectd::get_value_map(),
+      &f,
+      [](const auto &) { return true; });
+    f.close_section();
+    f.flush(std::cout);
 
     co_await store->umount();
     co_await store->stop();
