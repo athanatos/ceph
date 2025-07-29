@@ -94,11 +94,8 @@ struct ObjectDataBlock : crimson::os::seastore::LogicalChildNode {
   }
 
   void prepare_commit() final {
+    revoke_prior_instance_buffer();
     apply_unstable_deltas_if_necessary();
-  }
-
-  void on_invalidated(Transaction &t) final {
-    revoke_buffer_space();
   }
 
   void logical_on_delta_write() final {

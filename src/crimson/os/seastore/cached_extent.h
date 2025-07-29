@@ -1031,8 +1031,10 @@ protected:
     return new T();
   }
 
-  void revoke_buffer_space() {
-    buffer_space.reset();
+  void revoke_prior_instance_buffer() {
+    if (prior_instance) {
+      prior_instance->buffer_space.reset();
+    }
   }
 
   void reset_prior_instance() {
