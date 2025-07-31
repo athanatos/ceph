@@ -692,7 +692,7 @@ public:
   /// Return true if extent is fully loaded or is about to be fully loaded (call 
   /// wait_io() in this case)
   bool is_fully_loaded() const {
-    return buffer_space->is_fully_loaded();
+    return length == loaded_length;
   }
 
   /// Return true if range offset~_length is loaded
@@ -728,7 +728,7 @@ public:
 
   /// Returns length of partially loaded extent data in cache
   extent_len_t get_loaded_length() const {
-    return buffer_space->get_loaded_length();
+    return loaded_length;
   }
 
   /// Returns version, get_version() == 0
@@ -748,6 +748,7 @@ public:
   virtual void overwrite(extent_len_t offset, bufferlist bl) {
     assert(!is_buffer_shared());
     buffer_space->overwrite(offset, std::move(bl));
+    loaded_length = buffer_space->get_loaded_length();
   }
 
   /// Get ref to raw buffer, must be fully loaded
@@ -905,6 +906,9 @@ private:
   /// disk data length, 0 iff root
   extent_len_t length;
 
+  /// loaded data length, duplicates information in buffer_space
+  extent_len_t loaded_length;
+
   /// manager of buffer pieces for ObjectDataBLock
   /// valid iff partially loaded
   mutable BufferSpace::Ref buffer_space;
@@ -965,6 +969,7 @@ protected:
   /// construct a fully loaded CachedExtent
   explicit CachedExtent(ceph::bufferptr &&_ptr)
     : length(_ptr.length()),
+      loaded_length(_ptr.length()),
       buffer_space(BufferSpace::make_ref(std::move(_ptr))) {
     assert(is_fully_loaded());
     // must call init() to fully initialize
@@ -974,6 +979,7 @@ protected:
   /// must be identical with CachedExtent(ptr) after on_fully_loaded()
   explicit CachedExtent(extent_len_t _length)
     : length(_length),
+      loaded_length(0),
       buffer_space(BufferSpace::make_ref(_length)) {
     assert(!is_fully_loaded());
     // must call init() to fully initialize
@@ -984,6 +990,7 @@ protected:
     : state(other.state),
       dirty_from(other.dirty_from),
       length(other.get_length()),
+      loaded_length(other.get_loaded_length()),
       buffer_space(BufferSpace::make_ref(*other.buffer_space)),
       version(other.version),
       poffset(other.poffset) {
@@ -996,6 +1003,7 @@ protected:
     : state(other.state),
       dirty_from(other.dirty_from),
       length(other.get_length()),
+      loaded_length(other.get_loaded_length()),
       buffer_space(other.buffer_space),
       version(other.version),
       poffset(other.poffset) {
@@ -1005,6 +1013,7 @@ protected:
   struct root_construct_t {};
   CachedExtent(root_construct_t)
     : length(0),
+      loaded_length(0),
       buffer_space(BufferSpace::make_ref(ceph::bufferptr(0))) {
     assert(is_fully_loaded());
     // must call init() to fully initialize
@@ -1014,6 +1023,7 @@ protected:
   CachedExtent(retired_placeholder_construct_t, extent_len_t _length)
     : state(extent_state_t::CLEAN),
       length(_length),
+      loaded_length(0),
       buffer_space(BufferSpace::make_ref(_length)) {
     assert(!is_fully_loaded());
     // must call init() to fully initialize
@@ -1110,6 +1120,7 @@ protected:
     if (buffer_space->is_fully_loaded()) {
       on_fully_loaded();
     }
+    loaded_length = buffer_space->get_loaded_length();
     return ret;
   }
 
