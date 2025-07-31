@@ -183,7 +183,7 @@ seastar::future<> random_write(crimson::os::FuturizedStore &global_store)
 
   INFO("finished populating");
 
-  static constexpr auto TIME = 180s;
+  static constexpr auto TIME = 2000s;
   auto start = ceph::mono_clock::now();
   uint64_t writes_started = 0;
   while (ceph::mono_clock::now() - start < TIME) {
