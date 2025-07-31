@@ -254,6 +254,8 @@ get_adjacent_range(
 
 load_ranges_t BufferSpace::load_ranges(extent_len_t offset, extent_len_t length)
 {
+  assert(is_page_aligned(offset));
+  assert(is_page_aligned(length));
   assert(length > 0);
   assert(offset + length <= extent_length);
 
@@ -263,7 +265,7 @@ load_ranges_t BufferSpace::load_ranges(extent_len_t offset, extent_len_t length)
   }
 
   if (loaded_length == 0 && length == extent_length) {
-    auto ptr = bufferptr(length);
+    bufferptr ptr(ceph::buffer::create_page_aligned(length));
     buffer = ptr;
     ret.push_back(0, ptr);
     loaded_length = length;
@@ -308,7 +310,10 @@ load_ranges_t BufferSpace::load_ranges(extent_len_t offset, extent_len_t length)
     // adjust ret since the ptr has been rebuilt
     for (load_range_t &range : ret.ranges) {
       auto range_length = range.ptr.length();
+      assert(is_page_aligned(range.offset));
+      assert(is_page_aligned(range_length));
       range.ptr = ceph::bufferptr(ptr, range.offset, range_length);
+      assert(range.ptr.is_page_aligned());
     }
   }
   
@@ -317,6 +322,8 @@ load_ranges_t BufferSpace::load_ranges(extent_len_t offset, extent_len_t length)
 
 void BufferSpace::overwrite(extent_len_t offset, bufferlist in_bl)
 {
+  assert(is_page_aligned(offset));
+  assert(is_page_aligned(in_bl.length()));
   assert(offset + in_bl.length() <= extent_length);
   if (auto *bp = std::get_if<bufferptr>(&buffer)) {
     auto iter = in_bl.cbegin();
@@ -354,6 +361,7 @@ void BufferSpace::overwrite(extent_len_t offset, bufferlist in_bl)
   assert(new_bl.length() > removing);
   loaded_length += new_bl.length() - removing;
 
+  new_bl.rebuild_page_aligned();
   buffer_map.erase(from_iter, to_iter);
   buffer_map.emplace(
     std::min(offset, iter_start),
@@ -379,7 +387,7 @@ ceph::bufferptr BufferSpace::to_full_ptr()
   assert(i_off == 0);
   if (!i_buf.is_contiguous()) {
     // Allocate page aligned ptr, also see create_extent_ptr_*()
-    i_buf.rebuild();
+    i_buf.rebuild_page_aligned();
   }
   assert(i_buf.get_num_buffers() == 1);
   ceph::bufferptr ptr(i_buf.front());
