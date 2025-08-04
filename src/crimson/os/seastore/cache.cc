@@ -1311,7 +1311,7 @@ record_t Cache::prepare_record(
       // - it doesn't have prior_instance to replace
 
     assert(i->get_version() > 0);
-    auto final_crc = i->calc_crc32c();
+    auto final_crc = i->is_fully_loaded() ? i->calc_crc32c() : 0;
     if (is_root_type(i->get_type())) {
       SUBTRACET(seastore_t, "writing out root delta {}B -- {}",
                 t, delta_length, *i);
