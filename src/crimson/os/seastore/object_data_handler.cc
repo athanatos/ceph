@@ -197,7 +197,8 @@ ObjectDataHandler::delta_based_overwrite(
   // delta based overwrite
   return ctx.tm.read_pin<ObjectDataBlock>(
     ctx.t,
-    overwrite_mapping
+    overwrite_mapping,
+    0, 0
   ).handle_error_interruptible(
     base_iertr::pass_further{},
     crimson::ct_error::assert_all{
