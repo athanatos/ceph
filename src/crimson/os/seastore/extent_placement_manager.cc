@@ -1019,45 +1019,11 @@ RandomBlockOolWriter::do_write(
   DEBUGT("start with {} allocated extents",
          t, extents.size());
   std::vector<write_info_t> writes;
-  for (auto& ex : extents) {
-    auto paddr = ex->get_paddr();
-    assert(paddr.is_absolute());
-    RandomBlockManager * rbm = rb_cleaner->get_rbm(paddr); 
-    assert(rbm);
-    TRACE("write extent {}, paddr {} ...",
-          fmt::ptr(ex.get()), paddr);
-    auto& stats = t.get_ool_write_stats();
-    stats.extents.num += 1;
-    stats.extents.bytes += ex->get_length();
-    ex->prepare_write();
-
-    bufferptr bp;
-    if (can_inplace_rewrite(t, ex)) {
-      assert(ex->is_logical());
-      auto r = ex->template cast<LogicalCachedExtent>()->get_modified_region();
-      ceph_assert(r.has_value());
-      extent_len_t offset = p2align(r->offset, rbm->get_block_size());
-      extent_len_t len =
-	p2roundup(r->offset + r->len, rbm->get_block_size()) - offset;
-      bp = ceph::bufferptr(ex->get_bptr(), offset, len);
-      paddr = ex->get_paddr() + offset;
-    } else {
-      bp = ex->get_bptr();
-      auto& trans_stats = get_by_src(w_stats.stats_by_src, t.get_src());
-      trans_stats.data_bytes += ex->get_length();
-      w_stats.data_bytes += ex->get_length();
-    }
-
-    if (ex->is_initial_pending()) {
-      t.mark_allocated_extent_ool(ex);
-    } else if (can_inplace_rewrite(t, ex)) {
-      assert(ex->is_logical());
-      t.mark_inplace_rewrite_extent_ool(
-        ex->template cast<LogicalCachedExtent>());
-    } else {
-      ceph_assert("impossible");
-    }
-
+  auto add_write = [FNAME, &writes](
+    RandomBlockManager *rbm,
+    CachedExtentRef &ex,
+    paddr_t &paddr,
+    bufferptr bp) {
     // TODO : allocate a consecutive address based on a transaction
     if (writes.size() != 0 &&
         writes.back().offset + writes.back().bp.length() == paddr) {
@@ -1075,9 +1041,51 @@ RandomBlockOolWriter::do_write(
       w_info.bp = bp;
       writes.push_back(w_info);
     }
+
     TRACE("current extent: {}~0x{:x},\
       maybe-merged current extent: {}~0x{:x}",
       paddr, ex->get_length(), writes.back().offset, writes.back().bp.length());
+  };
+  
+  for (auto& ex : extents) {
+    auto paddr = ex->get_paddr();
+    assert(paddr.is_absolute());
+    RandomBlockManager * rbm = rb_cleaner->get_rbm(paddr); 
+    assert(rbm);
+    TRACE("write extent {}, paddr {} ...",
+          fmt::ptr(ex.get()), paddr);
+    auto& stats = t.get_ool_write_stats();
+    stats.extents.num += 1;
+    stats.extents.bytes += ex->get_length();
+    ex->prepare_write();
+
+    if (ex->is_initial_pending()) {
+      t.mark_allocated_extent_ool(ex);
+    } else if (can_inplace_rewrite(t, ex)) {
+      assert(ex->is_logical());
+      t.mark_inplace_rewrite_extent_ool(
+        ex->template cast<LogicalCachedExtent>());
+    } else {
+      ceph_assert("impossible");
+    }
+
+    if (can_inplace_rewrite(t, ex)) {
+      assert(ex->is_logical());
+      auto r = ex->template cast<LogicalCachedExtent>()->get_modified_region();
+      ceph_assert(r.has_value());
+      extent_len_t offset = p2align(r->offset, rbm->get_block_size());
+      extent_len_t len =
+	p2roundup(r->offset + r->len, rbm->get_block_size()) - offset;
+      bufferptr bp = ceph::bufferptr(ex->get_bptr(), offset, len);
+      paddr = ex->get_paddr() + offset;
+      add_write(rbm, ex, paddr, std::move(bp));
+    } else {
+      bufferptr bp = ex->get_bptr();
+      auto& trans_stats = get_by_src(w_stats.stats_by_src, t.get_src());
+      trans_stats.data_bytes += ex->get_length();
+      w_stats.data_bytes += ex->get_length();
+      add_write(rbm, ex, paddr, std::move(bp));
+    }
   }
 
   for (auto &w : writes) {
