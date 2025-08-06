@@ -93,11 +93,15 @@ seastar::future<> random_write(crimson::os::FuturizedStore &global_store)
 
   auto random_buffer = co_await generate_random_bp(16<<20);
   auto get_random_buffer = [&random_buffer](uint64_t size) {
+    assert((size % CEPH_PAGE_SIZE) == 0);
     bufferptr bp(
       random_buffer,
       std::experimental::randint<uint64_t>(
-        0, (random_buffer.length() / size) - 1),
+        0,
+        (random_buffer.length() - size) / CEPH_PAGE_SIZE) *
+      CEPH_PAGE_SIZE,
       size);
+    assert(bp.is_page_aligned());
     bufferlist bl;
     bl.append(bp);
     return bl;
