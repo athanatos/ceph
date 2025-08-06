@@ -1493,11 +1493,11 @@ public:
 
   struct modified_region_t {
     extent_len_t offset;
-    extent_len_t len;
+    bufferlist bl;
   };
-  virtual std::optional<modified_region_t> get_modified_region() {
+  virtual std::vector<modified_region_t> get_modified_region() {
     ceph_abort_msg("Unsupported");
-    return std::nullopt;
+    return std::vector<modified_region_t>();
   }
 
   virtual void clear_modified_region() {
