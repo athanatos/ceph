@@ -716,8 +716,10 @@ public:
   /// Get buffer by given offset and _length.
   ceph::bufferlist get_range(extent_len_t offset, extent_len_t _length) {
     assert(is_range_loaded(offset, _length));
-    ceph::bufferlist res;
-    res.append(buffer_space->get_buffer(offset, _length));
+    ceph::bufferlist res = buffer_space->get_buffer(offset, _length);
+#ifdef NDEBUG
+    assert(res.is_page_aligned());
+#endif
     return res;
   }
 
