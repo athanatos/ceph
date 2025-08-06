@@ -192,6 +192,8 @@ bool BufferSpace::is_range_loaded(extent_len_t offset, extent_len_t length) cons
 
 ceph::bufferlist BufferSpace::get_buffer(extent_len_t offset, extent_len_t length) const
 {
+  assert(is_page_aligned(offset));
+  assert(is_page_aligned(length));
   assert(length > 0);
   assert(offset + length <= extent_length);
   struct {
@@ -271,6 +273,7 @@ get_adjacent_range(
 
 void insert_and_validate(auto &buffer_map, extent_len_t offset, bufferlist bl)
 {
+  bl.rebuild_page_aligned();
   auto [iter, inserted] = buffer_map.emplace(offset, std::move(bl));
   std::ignore = iter;
   std::ignore = inserted;
@@ -374,7 +377,7 @@ void BufferSpace::overwrite(extent_len_t offset, bufferlist in_bl)
     buffer_map, offset, in_bl.length());
 
   if (from_iter == to_iter) {
-    buffer_map.emplace(offset, in_bl);
+    insert_and_validate(buffer_map, offset, in_bl);
     loaded_length += in_bl.length();
     assert(loaded_length <= extent_length);
     if (loaded_length == extent_length) {
