@@ -88,12 +88,16 @@ struct TestBlock : crimson::os::seastore::LogicalChildNode {
 
   void apply_delta(const ceph::bufferlist &bl) final;
 
-  std::optional<modified_region_t> get_modified_region() final {
-    if (modified_region.empty()) {
-      return std::nullopt;
+  std::vector<modified_region_t> get_modified_region() final {
+    std::vector<modified_region_t> ret;
+    for (auto &ext: modified_region) {
+      bufferlist bl;
+      bl.append(bufferptr(get_bptr(), ext.first, ext.second));
+      ret.emplace_back(
+	ext.first,
+	std::move(bl));
     }
-    return modified_region_t{modified_region.range_start(),
-      modified_region.range_end() - modified_region.range_start()};
+    return ret;
   }
 
   void clear_modified_region() final {
