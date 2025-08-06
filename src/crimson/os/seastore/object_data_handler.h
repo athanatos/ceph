@@ -177,12 +177,18 @@ struct ObjectDataBlock : crimson::os::seastore::LogicalChildNode {
 
   void apply_delta(const ceph::bufferlist &bl) final;
 
-  std::optional<modified_region_t> get_modified_region() final {
-    if (modified_region.empty()) {
-      return std::nullopt;
+  std::vector<modified_region_t> get_modified_region() final {
+    std::vector<modified_region_t> ret;
+    for (auto &ext : modified_region) {
+      assert(is_page_aligned(ext.first));
+      assert(is_page_aligned(ext.second));
+      auto bl = get_range(ext.first, ext.second);
+      assert(bl.is_page_aligned());
+      ret.emplace_back(
+	ext.first,
+	std::move(bl));
     }
-    return modified_region_t{modified_region.range_start(),
-      modified_region.range_end() - modified_region.range_start()};
+    return ret;
   }
 
   void clear_modified_region() final {

@@ -1022,9 +1022,10 @@ RandomBlockOolWriter::do_write(
   auto add_write = [FNAME, &writes](
     RandomBlockManager *rbm,
     CachedExtentRef &ex,
-    paddr_t &paddr,
+    const paddr_t &paddr,
     bufferptr bp) {
     // TODO : allocate a consecutive address based on a transaction
+    assert(bp.is_page_aligned());
     if (writes.size() != 0 &&
         writes.back().offset + writes.back().bp.length() == paddr) {
       // We can write both the currrent extent and the previous one at once
@@ -1032,13 +1033,13 @@ RandomBlockOolWriter::do_write(
       if (writes.back().mergeable_bps.size() == 0) {
 	 writes.back().mergeable_bps.push_back(writes.back().bp);
       }
-      writes.back().mergeable_bps.push_back(ex->get_bptr());
+      writes.back().mergeable_bps.push_back(std::move(bp));
     } else {
       // Write a single extent in the existing way
       write_info_t w_info;
       w_info.offset = paddr;
       w_info.rbm = rbm;
-      w_info.bp = bp;
+      w_info.bp = std::move(bp);
       writes.push_back(w_info);
     }
 
@@ -1048,7 +1049,7 @@ RandomBlockOolWriter::do_write(
   };
   
   for (auto& ex : extents) {
-    auto paddr = ex->get_paddr();
+    const auto paddr = ex->get_paddr();
     assert(paddr.is_absolute());
     RandomBlockManager * rbm = rb_cleaner->get_rbm(paddr); 
     assert(rbm);
@@ -1071,14 +1072,21 @@ RandomBlockOolWriter::do_write(
 
     if (can_inplace_rewrite(t, ex)) {
       assert(ex->is_logical());
-      auto r = ex->template cast<LogicalCachedExtent>()->get_modified_region();
-      ceph_assert(r.has_value());
-      extent_len_t offset = p2align(r->offset, rbm->get_block_size());
-      extent_len_t len =
-	p2roundup(r->offset + r->len, rbm->get_block_size()) - offset;
-      bufferptr bp = ceph::bufferptr(ex->get_bptr(), offset, len);
-      paddr = ex->get_paddr() + offset;
-      add_write(rbm, ex, paddr, std::move(bp));
+      auto modified = ex->template cast<LogicalCachedExtent>(
+      )->get_modified_region();
+      for (auto &region : modified) {
+        assert(is_aligned(region.offset, rbm->get_block_size()));
+        assert(is_page_aligned(region.offset));
+        assert(is_aligned(region.bl.length(), rbm->get_block_size()));
+        assert(is_page_aligned(region.bl.length()));
+        extent_len_t offset = region.offset;
+        for (auto &bptr : region.bl.buffers()) {
+          assert(is_aligned(bptr.length(), rbm->get_block_size()));
+          assert(is_page_aligned(bptr.length()));
+          add_write(rbm, ex, paddr + offset, bptr);
+          offset += bptr.length();
+        }
+      }
     } else {
       bufferptr bp = ex->get_bptr();
       auto& trans_stats = get_by_src(w_stats.stats_by_src, t.get_src());
