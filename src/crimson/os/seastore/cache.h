@@ -1907,6 +1907,10 @@ private:
     LOG_PREFIX(Cache::read_extent);
     assert(extent->state == CachedExtent::extent_state_t::EXIST_CLEAN ||
            extent->state == CachedExtent::extent_state_t::CLEAN);
+    if (length == 0) {
+      return get_extent_ertr::make_ready_future<CachedExtentRef>(
+	std::move(extent));
+    }
     assert(!extent->is_range_loaded(offset, length));
     assert(is_aligned(offset, get_block_size()));
     assert(is_aligned(length, get_block_size()));
