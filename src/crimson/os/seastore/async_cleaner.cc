@@ -597,6 +597,7 @@ std::size_t JournalTrimmerImpl::get_alloc_journal_size() const
 }
 
 seastar::future<> JournalTrimmerImpl::trim() {
+  // TODOSAM: these probably shoudln't be attached
   return seastar::when_all(
     [this] {
       if (should_trim_alloc()) {
@@ -681,6 +682,7 @@ JournalTrimmerImpl::trim_dirty()
 
   auto target = get_dirty_tail_target_per_cycle();
   return ::crimson::repeat([this, FNAME, &shard_stats, target] {
+    // TODOSAM: does this normally cycle more than once?
     if (should_stop_trim_dirty(target)) {
       return trim_ertr::make_ready_future<
 	seastar::stop_iteration>(seastar::stop_iteration::yes);
@@ -697,6 +699,7 @@ JournalTrimmerImpl::trim_dirty()
       {
 	DEBUGT("start, dirty_tail={}, target={}",
 	       t, journal_dirty_tail, target);
+	// TODOSAM: can this repull the smae extent twice?
 	return extent_callback->get_next_dirty_extents(
 	  t,
 	  target,
