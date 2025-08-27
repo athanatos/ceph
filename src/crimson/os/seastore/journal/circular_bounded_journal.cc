@@ -72,6 +72,7 @@ CircularBoundedJournal::submit_record(
   assert(write_pipeline);
 
   stats.submit_record_count++;
+  assert(record.size.dlength == 0);
   stats.submit_record_size += record.size.get_raw_mdlength();
   auto start = ceph::mono_clock::now();
 
