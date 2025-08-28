@@ -199,6 +199,57 @@ void SeaStore::Shard::register_metrics()
       )
     }
   );
+
+  metrics.add_group(
+    "seastore",
+    {
+      sm::make_gauge(
+	"do_transaction_count",
+	[this] {
+	  return stats.do_transaction_count;
+	}
+      ),
+      sm::make_gauge(
+	"do_transaction_latency_total_s",
+	[this] {
+	  return stats.do_transaction_latency_total.count();
+	}
+      ),
+      sm::make_gauge(
+	"do_transaction_latency_average_s",
+	[this] {
+	  return stats.do_transaction_latency_total.count()
+	    / stats.do_transaction_count;
+	}
+      ),
+      sm::make_gauge(
+	"do_transaction_submit_latency_total_s",
+	[this] {
+	  return stats.do_transaction_submit_latency_total.count();
+	}
+      ),
+      sm::make_gauge(
+	"do_transaction_submit_latency_average_s",
+	[this] {
+	  return stats.do_transaction_submit_latency_total.count()
+	    / stats.do_transaction_count;
+	}
+      ),
+      sm::make_gauge(
+	"do_transaction_step_latency_total_s",
+	[this] {
+	  return stats.do_transaction_step_latency_total.count();
+	}
+      ),
+      sm::make_gauge(
+	"do_transaction_step_latency_average_s",
+	[this] {
+	  return stats.do_transaction_step_latency_total.count()
+	    / stats.do_transaction_count;
+	}
+      )
+    }
+  );
 }
 
 seastar::future<> SeaStore::start()
@@ -1572,13 +1623,20 @@ seastar::future<> SeaStore::Shard::do_transaction_no_callbacks(
 #endif
 
       ctx.reset_preserve_handle(*transaction_manager);
+      auto pre_steps = std::chrono::steady_clock::now();
       std::vector<OnodeRef> onodes(ctx.iter.objects.size());
       while (ctx.iter.have_op()) {
 	co_await _do_transaction_step(
 	  ctx, ctx.ch, onodes, ctx.iter);
       }
+      auto post_steps = std::chrono::steady_clock::now();
 
+      auto pre_submit = std::chrono::steady_clock::now();
       co_await transaction_manager->submit_transaction(*ctx.transaction);
+      stats.do_transaction_submit_latency_total +=
+	std::chrono::steady_clock::now() - pre_submit;
+      stats.do_transaction_step_latency_total +=
+	post_steps - pre_steps;
     })
   ).handle_error(
     crimson::ct_error::all_same_way([&ctx](auto e) {
@@ -1588,6 +1646,9 @@ seastar::future<> SeaStore::Shard::do_transaction_no_callbacks(
   );
 
   DEBUGT("done", *ctx.transaction);
+  stats.do_transaction_count++;
+  stats.do_transaction_latency_total +=
+    std::chrono::steady_clock::now() - ctx.begin_timestamp;
   add_latency_sample(
     op_type_t::DO_TRANSACTION,
     std::chrono::steady_clock::now() - ctx.begin_timestamp);

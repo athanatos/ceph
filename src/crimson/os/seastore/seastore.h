@@ -29,6 +29,8 @@
 #include "crimson/os/seastore/collection_manager.h"
 #include "crimson/os/seastore/object_data_handler.h"
 
+using namespace std::literals;
+
 namespace crimson::os::seastore {
 
 class Onode;
@@ -393,6 +395,11 @@ public:
 
     struct {
       std::array<seastar::metrics::histogram, LAT_MAX> op_lat;
+
+      uint64_t do_transaction_count = 0;
+      std::chrono::duration<double> do_transaction_latency_total = 0.0s;
+      std::chrono::duration<double> do_transaction_submit_latency_total = 0.0s;
+      std::chrono::duration<double> do_transaction_step_latency_total = 0.0s;
     } stats;
 
     seastar::metrics::histogram& get_latency(
