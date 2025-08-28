@@ -24,8 +24,11 @@ std::ostream &operator<<(std::ostream &out,
              << ")";
 }
 
-CircularJournalSpace::CircularJournalSpace(RBMDevice * device) : device(device) {}
-  
+CircularJournalSpace::CircularJournalSpace(RBMDevice * device) : device(device)
+{
+  register_metrics();
+}
+
 bool CircularJournalSpace::needs_roll(std::size_t length) const {
   if (length + get_rbm_addr(get_written_to()) >= get_journal_end()) {
     return true;
@@ -52,6 +55,11 @@ CircularJournalSpace::roll_ertr::future<> CircularJournalSpace::roll() {
 CircularJournalSpace::write_ertr::future<>
 CircularJournalSpace::write(ceph::bufferlist&& to_write) {
   LOG_PREFIX(CircularJournalSpace::write);
+
+  auto start = ceph::mono_clock::now();
+  stats.write_count++;
+  stats.write_size_total += to_write.length();
+
   assert(get_written_to().segment_seq != NULL_SEG_SEQ);
   auto encoded_size = to_write.length();
   if (encoded_size > get_records_available_size()) {
@@ -69,11 +77,13 @@ CircularJournalSpace::write(ceph::bufferlist&& to_write) {
   DEBUG("length {}, commit target {}, used_size {}",
         encoded_size, target, get_records_used_size());
 
-  return device_write_bl(target, to_write
+  co_await device_write_bl(target, to_write
   ).handle_error(
     write_ertr::pass_further{},
     crimson::ct_error::assert_all{ "Invalid error" }
   );
+
+  stats.write_latency_total += ceph::mono_clock::now() - start;
 }
 
 segment_nonce_t calc_new_nonce(
@@ -235,6 +245,46 @@ CircularJournalSpace::write_header()
   ).handle_error(
     submit_ertr::pass_further{},
     crimson::ct_error::assert_all{ "Invalid error device->write" }
+  );
+}
+
+void CircularJournalSpace::register_metrics()
+{
+  namespace sm = seastar::metrics;
+  metrics.add_group(
+    "seastore_cbj",
+    {
+      sm::make_gauge(
+	"write_count",
+	[this] {
+	  return stats.write_count;
+	}
+      ),
+      sm::make_gauge(
+	"write_size_total",
+	[this] {
+	  return stats.write_size_total;
+	}
+      ),
+      sm::make_gauge(
+	"write_size_avarage",
+	[this] {
+	  return static_cast<double>(stats.write_size_total) / stats.write_count;
+	}
+      ),
+      sm::make_gauge(
+	"write_latency_total_s",
+	[this] {
+	  return stats.write_latency_total.count();
+	}
+      ),
+      sm::make_gauge(
+	"write_latency_average_s",
+	[this] {
+	  return stats.write_latency_total.count() / stats.write_count;
+	}
+      )
+    }
   );
 }
 
