@@ -154,7 +154,7 @@ RecordSubmitter::RecordSubmitter(
               preferred_fullness <= 1);
   free_batch_ptrs.reserve(io_depth + 1);
   for (std::size_t i = 0; i <= io_depth; ++i) {
-    batches[i].initialize(i, batch_capacity, batch_flush_size);
+    batches[i].initialize(batch_capacity, batch_flush_size);
     free_batch_ptrs.push_back(&batches[i]);
   }
   pop_free_batch();
