@@ -83,10 +83,6 @@ public:
     return state == state_t::SUBMITTING;
   }
 
-  std::size_t get_index() const {
-    return index;
-  }
-
   std::size_t get_num_records() const {
     return pending.get_size();
   }
@@ -134,11 +130,9 @@ public:
     return {submit_size, is_full};
   }
 
-  void initialize(std::size_t i,
-                  std::size_t _batch_capacity,
+  void initialize(std::size_t _batch_capacity,
                   std::size_t _batch_flush_size) {
     ceph_assert(_batch_capacity > 0);
-    index = i;
     batch_capacity = _batch_capacity;
     batch_flush_size = _batch_flush_size;
     pending.reserve(batch_capacity);
@@ -197,7 +191,6 @@ private:
   }
 
   state_t state = state_t::EMPTY;
-  std::size_t index = 0;
   std::size_t batch_capacity = 0;
   std::size_t batch_flush_size = 0;
   // Valid at state_t::PENDING
@@ -310,7 +303,6 @@ private:
     assert(!free_batch_ptrs.empty());
     p_current_batch = free_batch_ptrs.front();
     assert(p_current_batch->is_empty());
-    assert(p_current_batch == &batches[p_current_batch->get_index()]);
     free_batch_ptrs.pop_front();
   }
 
