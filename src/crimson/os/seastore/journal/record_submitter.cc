@@ -141,7 +141,7 @@ RecordSubmitter::RecordSubmitter(
   : io_depth_limit{io_depth},
     preferred_fullness{preferred_fullness},
     journal_allocator{ja},
-    batches(new RecordBatch[io_depth + 1])
+    batches(io_depth + 1)
 {
   LOG_PREFIX(RecordSubmitter);
   INFO("{} io_depth_limit={}, batch_capacity={}, batch_flush_size=0x{:x}, "
