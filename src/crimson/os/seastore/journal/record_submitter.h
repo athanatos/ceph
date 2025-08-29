@@ -322,7 +322,7 @@ private:
   // committed_to may be in a previous journal segment
   journal_seq_t committed_to = JOURNAL_SEQ_NULL;
 
-  std::unique_ptr<RecordBatch[]> batches;
+  std::vector<RecordBatch> batches;
   // should not be nullptr after constructed
   RecordBatch* p_current_batch = nullptr;
   seastar::circular_buffer<RecordBatch*> free_batch_ptrs;
