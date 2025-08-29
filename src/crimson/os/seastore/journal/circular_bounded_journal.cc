@@ -73,10 +73,10 @@ CircularBoundedJournal::submit_record(
   DEBUG("H{} {} start ...", (void*)&handle, record);
   assert(write_pipeline);
 
-  stats.submit_record_count++;
+  auto accounter = journal_submit_metrics.account_op(
+    record.size.get_raw_mdlength());
+
   assert(record.size.dlength == 0);
-  stats.submit_record_size += record.size.get_raw_mdlength();
-  auto start = ceph::mono_clock::now();
 
   RecordSubmitter::action_t action;
   bool waited = false;
@@ -131,8 +131,6 @@ CircularBoundedJournal::submit_record(
   auto new_committed_to = result.write_result.get_end_seq();
   record_submitter.update_committed_to(new_committed_to);
   std::invoke(on_submission, result);
-
-  stats.submit_record_latency_total += ceph::mono_clock::now() - start;
 
   if (is_trim_transaction(t_src)) {
     co_await update_journal_tail(
@@ -425,42 +423,11 @@ Journal::replay_ret CircularBoundedJournal::replay(
 
 void CircularBoundedJournal::register_metrics()
 {
+  journal_submit_metrics.register_metrics();
   namespace sm = seastar::metrics;
   metrics.add_group(
     "seastore_cbj",
     {
-      sm::make_gauge(
-	"submit_record_count",
-	[this] {
-	  return stats.submit_record_count;
-	}
-      ),
-      sm::make_gauge(
-	"submit_record_size",
-	[this] {
-	  return stats.submit_record_size;
-	}
-      ),
-      sm::make_gauge(
-	"submit_record_latency_total",
-	[this] {
-	  return stats.submit_record_latency_total.count();
-	}
-      ),
-      sm::make_gauge(
-	"submit_record_latency_average",
-	[this] {
-	  return stats.submit_record_latency_total.count() /
-	    stats.submit_record_count;
-	}
-      ),
-      sm::make_gauge(
-	"submit_record_size_average",
-	[this] {
-	  return stats.submit_record_size /
-	    stats.submit_record_count;
-	}
-      ),
       sm::make_gauge(
 	"submit_record_roll_count",
 	[this] {

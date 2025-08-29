@@ -13,6 +13,7 @@
 #include "include/buffer.h"
 #include "include/denc.h"
 
+#include "crimson/common/metrics_helpers.h"
 #include "crimson/osd/exceptions.h"
 #include "crimson/os/seastore/journal.h"
 #include "include/uuid.h"
@@ -222,10 +223,6 @@ private:
   RecordSubmitter record_submitter; 
 
   struct {
-    uint64_t submit_record_count = 0;
-    uint64_t submit_record_size = 0;
-    std::chrono::duration<double> submit_record_latency_total = 0.0s;
-
     uint64_t submit_record_roll_count = 0;
     std::chrono::duration<double> submit_record_roll_latency_total = 0.0s;
 
@@ -233,6 +230,7 @@ private:
     std::chrono::duration<double> submit_record_wait_latency_total = 0.0s;
   } stats;
   seastar::metrics::metric_group metrics;
+  crimson::metrics::op_stats_t journal_submit_metrics{"seastore_cbj", {}};
   void register_metrics();
 };
 
