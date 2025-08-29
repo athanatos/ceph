@@ -30,7 +30,6 @@ RecordBatch::add_pending(
         new_size.get_encoded_length(),
         dlength_offset);
   assert(state != state_t::SUBMITTING);
-  assert(evaluate_submit(record.size, block_size).submit_size == new_size);
 
   pending.push_back(
       std::move(record), block_size);
@@ -124,7 +123,6 @@ RecordBatch::submit_pending_fast(
   auto new_size = get_encoded_length_after(record, block_size);
   std::ignore = new_size;
   assert(state == state_t::EMPTY);
-  assert(evaluate_submit(record.size, block_size).submit_size == new_size);
   assert(group.size == new_size);
   auto bl = encode_records(group, committed_to, segment_nonce);
   // Note: group is cleared here
@@ -139,6 +137,8 @@ RecordSubmitter::RecordSubmitter(
   double preferred_fullness,
   JournalAllocator& ja)
   : io_depth_limit{io_depth},
+    batch_capacity{batch_capacity},
+    batch_flush_size{batch_flush_size},
     preferred_fullness{preferred_fullness},
     journal_allocator{ja},
     batches(io_depth + 1)
@@ -154,7 +154,7 @@ RecordSubmitter::RecordSubmitter(
               preferred_fullness <= 1);
   free_batch_ptrs.reserve(io_depth + 1);
   for (std::size_t i = 0; i <= io_depth; ++i) {
-    batches[i].initialize(batch_capacity, batch_flush_size);
+    batches[i].initialize(batch_capacity);
     free_batch_ptrs.push_back(&batches[i]);
   }
   pop_free_batch();
@@ -171,7 +171,6 @@ bool RecordSubmitter::is_available() const
     ceph_assert(p_current_batch != nullptr);
     ceph_assert(!p_current_batch->is_submitting());
     // the current batch accepts a further write
-    ceph_assert(!p_current_batch->needs_flush());
     if (!p_current_batch->is_empty()) {
       auto submit_length =
         p_current_batch->get_submit_size().get_encoded_length();
@@ -215,11 +214,10 @@ RecordSubmitter::check_action(
   const record_size_t& rsize) const
 {
   assert(is_available());
-  auto eval = p_current_batch->evaluate_submit(
-      rsize, journal_allocator.get_block_size());
-  if (journal_allocator.needs_roll(eval.submit_size.get_encoded_length())) {
+  auto flush_ret = should_flush(&rsize);
+  if (journal_allocator.needs_roll(flush_ret.encoded_size)) {
     return action_t::ROLL;
-  } else if (eval.is_full) {
+  } else if (flush_ret.is_full) {
     return action_t::SUBMIT_FULL;
   } else {
     return action_t::SUBMIT_NOT_FULL;
@@ -230,8 +228,7 @@ RecordSubmitter::roll_segment_ertr::future<>
 RecordSubmitter::roll_segment()
 {
   LOG_PREFIX(RecordSubmitter::roll_segment);
-  ceph_assert(p_current_batch->needs_flush() ||
-              is_available());
+  ceph_assert(is_available());
   // #1 block concurrent submissions due to rolling
   wait_available_promise = seastar::shared_promise<>();
   ceph_assert(!wait_unfull_flush_promise.has_value());
@@ -295,15 +292,7 @@ RecordSubmitter::submit(
   ceph_assert(is_available());
   assert(check_action(record.size) != action_t::ROLL);
   journal_allocator.update_modify_time(record);
-  auto eval = p_current_batch->evaluate_submit(
-      record.size, journal_allocator.get_block_size());
-  bool needs_flush = (
-      state == state_t::IDLE ||
-      eval.submit_size.get_fullness() > preferred_fullness ||
-      // RecordBatch::needs_flush()
-      eval.is_full ||
-      p_current_batch->get_num_records() + 1 >=
-        p_current_batch->get_batch_capacity());
+  bool needs_flush = should_flush(&record.size).should_flush;
   if (p_current_batch->is_empty() &&
       needs_flush &&
       state != state_t::FULL) {
@@ -383,7 +372,6 @@ RecordSubmitter::submit(
           get_name(),
           p_current_batch->get_num_records(),
           num_outstanding_io);
-    assert(!p_current_batch->needs_flush());
   }
   return ret;
 }
@@ -495,13 +483,7 @@ void RecordSubmitter::decrement_io_with_flush()
     ceph_assert(!wait_unfull_flush_promise.has_value());
   }
 
-  auto needs_flush = (
-      !p_current_batch->is_empty() && (
-        state == state_t::IDLE ||
-        p_current_batch->get_submit_size().get_fullness() > preferred_fullness ||
-        p_current_batch->needs_flush()
-      ));
-  if (needs_flush) {
+  if (should_flush().should_flush) {
     DEBUG("{} flush", get_name());
     flush_current_batch();
   }

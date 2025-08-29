@@ -87,10 +87,6 @@ public:
     return pending.get_size();
   }
 
-  std::size_t get_batch_capacity() const {
-    return batch_capacity;
-  }
-
   const record_group_size_t& get_submit_size() const {
     assert(state != state_t::EMPTY);
     return pending.size;
@@ -100,41 +96,12 @@ public:
     return write_base;
   }
 
-  bool needs_flush() const {
-    assert(state != state_t::SUBMITTING);
-    assert(pending.get_size() <= batch_capacity);
-    if (state == state_t::EMPTY) {
-      return false;
-    } else {
-      assert(state == state_t::PENDING);
-      return (pending.get_size() >= batch_capacity ||
-              pending.size.get_encoded_length() > batch_flush_size);
-    }
-  }
-
   const record_group_t& get_record_group() const {
     return pending;
   }
 
-  struct evaluation_t {
-    record_group_size_t submit_size;
-    bool is_full;
-  };
-  evaluation_t evaluate_submit(
-      const record_size_t& rsize,
-      extent_len_t block_size) const {
-    assert(!needs_flush());
-    auto submit_size = pending.size.get_encoded_length_after(
-        rsize, block_size);
-    bool is_full = submit_size.get_encoded_length() > batch_flush_size;
-    return {submit_size, is_full};
-  }
-
-  void initialize(std::size_t _batch_capacity,
-                  std::size_t _batch_flush_size) {
-    ceph_assert(_batch_capacity > 0);
-    batch_capacity = _batch_capacity;
-    batch_flush_size = _batch_flush_size;
+  void initialize(std::size_t batch_capacity) {
+    ceph_assert(batch_capacity > 0);
     pending.reserve(batch_capacity);
   }
 
@@ -191,8 +158,6 @@ private:
   }
 
   state_t state = state_t::EMPTY;
-  std::size_t batch_capacity = 0;
-  std::size_t batch_flush_size = 0;
   // Valid at state_t::PENDING
   std::optional<journal_seq_t> write_base;
 
@@ -311,11 +276,42 @@ private:
   using maybe_result_t = RecordBatch::maybe_result_t;
   void finish_submit_batch(RecordBatch*, maybe_result_t);
 
+  struct should_flush_ret_t {
+    bool should_flush;
+    bool is_full;
+    size_t encoded_size;
+  };
+  should_flush_ret_t should_flush(const record_size_t *next = nullptr) const {
+    if (!next && p_current_batch->is_empty()) {
+      return should_flush_ret_t{false, false, 0};
+    }
+    auto pending_size = p_current_batch->get_record_group().size;
+    if (next) {
+      pending_size = pending_size.get_encoded_length_after(
+        *next,
+        journal_allocator.get_block_size());
+    }
+    auto batch_bytes = pending_size.get_encoded_length();
+    auto batch_records = p_current_batch->get_num_records();
+    if (next) {
+      batch_records++;
+    }
+    bool is_full = batch_bytes >= batch_flush_size ||
+      batch_records >= batch_capacity;
+    bool batch_empty = !next && p_current_batch->is_empty();
+    bool should_flush = (state == state_t::IDLE && !batch_empty) ||
+      is_full ||
+      pending_size.get_fullness() > preferred_fullness;
+    return should_flush_ret_t{should_flush, is_full, batch_bytes};
+  }
+
   void flush_current_batch();
 
   state_t state = state_t::IDLE;
   std::size_t num_outstanding_io = 0;
   std::size_t io_depth_limit;
+  std::size_t batch_capacity;
+  std::size_t batch_flush_size;
   double preferred_fullness;
 
   JournalAllocator& journal_allocator;
