@@ -26,6 +26,8 @@ CircularBoundedJournal::CircularBoundedJournal(
       "seastore_journal_batch_capacity"),
     crimson::common::get_conf<Option::size_t>(
       "seastore_journal_batch_flush_size"),
+    crimson::common::get_conf<Option::size_t>(
+      "seastore_journal_batch_busy_min_flush_size"),
     crimson::common::get_conf<double>(
       "seastore_journal_batch_preferred_fullness"),
     cjs)

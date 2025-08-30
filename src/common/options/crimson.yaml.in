@@ -135,6 +135,11 @@ options:
   level: dev
   desc: The size threshold to force flush a journal batch
   default: 16_M
+- name: seastore_journal_batch_busy_min_flush_size
+  type: size
+  level: dev
+  desc: Minimum batch size to submit additional concurrent batches
+  default: 0
 - name: seastore_journal_iodepth_limit
   type: uint
   level: dev
