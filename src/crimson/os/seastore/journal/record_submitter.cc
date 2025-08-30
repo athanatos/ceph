@@ -134,20 +134,25 @@ RecordSubmitter::RecordSubmitter(
   std::size_t io_depth,
   std::size_t batch_capacity,
   std::size_t batch_flush_size,
+  std::size_t batch_busy_min_flush_size,
   double preferred_fullness,
   JournalAllocator& ja)
   : io_depth_limit{io_depth},
     batch_capacity{batch_capacity},
     batch_flush_size{batch_flush_size},
+    batch_busy_min_flush_size{batch_busy_min_flush_size},
     preferred_fullness{preferred_fullness},
     journal_allocator{ja},
     batches(io_depth + 1)
 {
   LOG_PREFIX(RecordSubmitter);
   INFO("{} io_depth_limit={}, batch_capacity={}, batch_flush_size=0x{:x}, "
+       "batch_busy_min_flush_size=0x{:x}, "
        "preferred_fullness={}",
        get_name(), io_depth, batch_capacity,
-       batch_flush_size, preferred_fullness);
+       batch_flush_size,
+       batch_busy_min_flush_size,
+       preferred_fullness);
   ceph_assert(io_depth > 0);
   ceph_assert(batch_capacity > 0);
   ceph_assert(preferred_fullness >= 0 &&

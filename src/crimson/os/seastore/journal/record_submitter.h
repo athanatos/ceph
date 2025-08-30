@@ -198,8 +198,17 @@ public:
   RecordSubmitter(std::size_t io_depth,
                   std::size_t batch_capacity,
                   std::size_t batch_flush_size,
+                  std::size_t batch_busy_min_flush_size,
                   double preferred_fullness,
 		  JournalAllocator&);
+  RecordSubmitter(std::size_t io_depth,
+                  std::size_t batch_capacity,
+                  std::size_t batch_flush_size,
+                  double preferred_fullness,
+		  JournalAllocator& alloc)
+    : RecordSubmitter(io_depth, batch_capacity,
+                      batch_flush_size, 0,
+                      preferred_fullness, alloc) {}
 
   const std::string& get_name() const {
     return journal_allocator.get_name();
@@ -298,10 +307,14 @@ private:
     }
     bool is_full = batch_bytes >= batch_flush_size ||
       batch_records >= batch_capacity;
+    bool is_full_enough = pending_size.get_fullness() > preferred_fullness;
+    if (batch_busy_min_flush_size > 0) {
+      is_full_enough = (batch_bytes >= batch_busy_min_flush_size);
+    }
     bool batch_empty = !next && p_current_batch->is_empty();
     bool should_flush = (state == state_t::IDLE && !batch_empty) ||
       is_full ||
-      pending_size.get_fullness() > preferred_fullness;
+      is_full_enough;
     return should_flush_ret_t{should_flush, is_full, batch_bytes};
   }
 
@@ -312,6 +325,7 @@ private:
   std::size_t io_depth_limit;
   std::size_t batch_capacity;
   std::size_t batch_flush_size;
+  std::size_t batch_busy_min_flush_size;
   double preferred_fullness;
 
   JournalAllocator& journal_allocator;
