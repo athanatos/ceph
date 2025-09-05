@@ -120,6 +120,8 @@ write_ertr::future<> NVMeBlockDevice::write(
       bptr.length());
   auto length = bptr.length();
 
+  auto counter = write_stats.account_op(length);
+
   assert((length % super.block_size) == 0);
   uint16_t supported_stream = stream;
   if (stream >= stream_id_count) {
@@ -186,6 +188,8 @@ write_ertr::future<> NVMeBlockDevice::writev(
     "block: write offset {} len {}",
     offset,
     bl.length());
+
+  auto counter = write_stats.account_op(bl.length());
 
   uint16_t supported_stream = stream;
   if (stream >= stream_id_count) {

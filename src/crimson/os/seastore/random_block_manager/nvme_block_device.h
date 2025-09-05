@@ -11,6 +11,7 @@
 
 #include "crimson/osd/exceptions.h"
 #include "crimson/common/layout.h"
+#include "crimson/common/metrics_helpers.h"
 #include "rbm_device.h"
 
 namespace ceph {
@@ -212,7 +213,12 @@ public:
    * atomic_write_unit does not require fsync().
    */
 
-  NVMeBlockDevice(std::string device_path) : device_path(device_path) {}
+  NVMeBlockDevice(std::string device_path)
+    : device_path(device_path),
+      write_stats(
+	"seastore_nbd_write",
+	{seastar::metrics::label_instance("device_path", device_path)})
+  {}
   ~NVMeBlockDevice() = default;
 
   open_ertr::future<> open(
@@ -302,7 +308,10 @@ public:
   }
 
   seastar::future<> start() final {
-    return shard_devices.start(device_path);
+    co_await shard_devices.start(device_path);
+    co_await shard_devices.invoke_on_all([](auto &shard) {
+      shard.register_metrics();
+    });
   }
 
   seastar::future<> stop() final {
@@ -392,6 +401,12 @@ private:
   int namespace_id; // TODO: multi namespaces
   std::string device_path;
   seastar::sharded<NVMeBlockDevice> shard_devices;
+
+  crimson::metrics::op_stats_t write_stats;
+
+  void register_metrics() {
+    write_stats.register_metrics();
+  }
 };
 
 }
