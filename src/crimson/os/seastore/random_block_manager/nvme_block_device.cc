@@ -126,27 +126,25 @@ write_ertr::future<> NVMeBlockDevice::write(
     supported_stream = WRITE_LIFE_NOT_SET;
   }
   if (is_end_to_end_data_protection()) {
-    return seastar::do_with(
+    co_await seastar::do_with(
       bptr,
       [this, offset] (auto &bptr) {
       return nvme_write(offset, bptr.length(), bptr.c_str());
     });
+    co_return;
   }
-  return seastar::do_with(
-    bptr,
-    [this, offset, length, supported_stream] (auto& bptr) {
-    return io_device[supported_stream].dma_write(
-      offset, bptr.c_str(), length).handle_exception(
-      [](auto e) -> write_ertr::future<size_t> {
+  co_await io_device[supported_stream].dma_write(
+    offset, bptr.c_str(), length
+  ).handle_exception(
+    [](auto e) -> write_ertr::future<size_t> {
       logger().error("write: dma_write got error{}", e);
       return crimson::ct_error::input_output_error::make();
-    }).then([length](auto result) -> write_ertr::future<> {
-      if (result != length) {
-	logger().error("write: dma_write got error with not proper length");
-	return crimson::ct_error::input_output_error::make();
-      }
-      return write_ertr::now();
-    });
+  }).then([length](auto result) -> write_ertr::future<> {
+    if (result != length) {
+      logger().error("write: dma_write got error with not proper length");
+      return crimson::ct_error::input_output_error::make();
+    }
+    return write_ertr::now();
   });
 }
 
@@ -194,33 +192,23 @@ write_ertr::future<> NVMeBlockDevice::writev(
     supported_stream = WRITE_LIFE_NOT_SET;
   }
   if (is_end_to_end_data_protection()) {
-    return seastar::do_with(
-      std::move(bl),
-      [this, offset] (auto &bl) {
-      return nvme_write(offset, bl.length(), bl.c_str());
-    });
+    co_await nvme_write(offset, bl.length(), bl.c_str());
+    co_return;
   }
   bl.rebuild_aligned(super.block_size);
 
-  return seastar::do_with(
-    bl.prepare_iovs(),
-    std::move(bl),
-    [this, supported_stream, offset](auto& iovs, auto& bl)
-  {
-    return write_ertr::parallel_for_each(
-      iovs,
-      [this, supported_stream, offset](auto& p) mutable
-    {
+  auto iovs = bl.prepare_iovs();
+  co_await write_ertr::parallel_for_each(
+    iovs,
+    [this, supported_stream, offset](auto& p) mutable {
       auto off = offset + p.offset;
       auto len = p.length;
       auto& iov = p.iov;
       return io_device[supported_stream].dma_write(off, std::move(iov)
-      ).handle_exception(
-        [this, off, len](auto e) -> write_ertr::future<size_t>
-      {
-        logger().error("{} poffset={}~{} dma_write got error -- {}",
-                       device_id_printer_t{get_device_id()}, off, len, e);
-        return crimson::ct_error::input_output_error::make();
+      ).handle_exception([this, off, len](auto e) -> write_ertr::future<size_t> {
+	  logger().error("{} poffset={}~{} dma_write got error -- {}",
+			 device_id_printer_t{get_device_id()}, off, len, e);
+	  return crimson::ct_error::input_output_error::make();
       }).then([this, off, len](size_t written) -> write_ertr::future<> {
         if (written != len) {
           logger().error("{} poffset={}~{} dma_write len={} inconsistent",
@@ -230,7 +218,6 @@ write_ertr::future<> NVMeBlockDevice::writev(
         return write_ertr::now();
       });
     });
-  });
 }
 
 Device::close_ertr::future<> NVMeBlockDevice::close() {
