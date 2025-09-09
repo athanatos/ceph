@@ -15,7 +15,7 @@ using registered_metric = seastar::metrics::impl::registered_metric;
 using data_type = seastar::metrics::impl::data_type;
 using value_map = seastar::metrics::impl::value_map;
 
-void dump_metric_value(
+static void dump_metric_value(
   Formatter* f,
   std::string_view full_name,
   const registered_metric& metric,
