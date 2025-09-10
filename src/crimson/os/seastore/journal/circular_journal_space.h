@@ -11,6 +11,7 @@
 #include "include/buffer.h"
 
 #include "crimson/common/errorator.h"
+#include "crimson/common/metrics_helpers.h"
 #include "crimson/os/seastore/journal.h"
 #include "crimson/os/seastore/random_block_manager.h"
 #include "crimson/os/seastore/random_block_manager/rbm_device.h"
@@ -257,13 +258,7 @@ class CircularJournalSpace : public JournalAllocator {
   journal_seq_t written_to;
   bool initialized = false;
 
-  struct {
-    uint64_t write_count = 0;
-    uint64_t write_size_total = 0;
-    std::chrono::duration<double> write_latency_total = 0.0s;
-  } stats;
-  seastar::metrics::metric_group metrics;
-  void register_metrics();
+  crimson::metrics::op_stats_t op_stats{"seastore_cjs", {}};
 };
 
 std::ostream &operator<<(std::ostream &out, const CircularJournalSpace::cbj_header_t &header);
