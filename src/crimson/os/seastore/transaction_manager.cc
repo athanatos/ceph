@@ -43,6 +43,7 @@ TransactionManager::TransactionManager(
 {
   epm->set_extent_callback(this);
   journal->set_write_pipeline(&write_pipeline);
+  submit_transaction_stats.register_metrics();
 }
 
 TransactionManager::mkfs_ertr::future<> TransactionManager::mkfs()
@@ -445,6 +446,9 @@ TransactionManager::submit_transaction(
 {
   LOG_PREFIX(TransactionManager::submit_transaction);
   SUBDEBUGT(seastore_t, "start, entering reserve_projected_usage", t);
+
+  auto accounter = submit_transaction_stats.account_op(1);
+
   co_await trans_intr::make_interruptible(
     t.get_handle().enter(write_pipeline.reserve_projected_usage)
   );

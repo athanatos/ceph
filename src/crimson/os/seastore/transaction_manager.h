@@ -23,6 +23,7 @@
 
 #include "crimson/osd/exceptions.h"
 
+#include "crimson/common/metrics_helpers.h"
 #include "crimson/os/seastore/logging.h"
 #include "crimson/os/seastore/seastore_types.h"
 #include "crimson/os/seastore/cache.h"
@@ -1577,6 +1578,9 @@ private:
 
   friend class ::transaction_manager_test_t;
   friend class ::object_data_handler_test_t;
+
+  crimson::metrics::op_stats_t submit_transaction_stats{
+    "seastore_tm_st", {}};
 public:
   // Testing interfaces
   auto get_epm() {
