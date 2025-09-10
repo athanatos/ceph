@@ -6,6 +6,7 @@
 
 #include <seastar/core/scollectd_api.hh>
 
+#include "common/ceph_time.h"
 #include "common/Formatter.h"
 
 using namespace std::literals;
