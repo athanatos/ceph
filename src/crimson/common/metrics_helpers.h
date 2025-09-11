@@ -18,10 +18,10 @@ using registered_metric = seastar::metrics::impl::registered_metric;
 using data_type = seastar::metrics::impl::data_type;
 using value_map = seastar::metrics::impl::value_map;
 
-class op_stats_t {
-  struct counters_t {
+template <typename T>
+class queue_latency_tracker_t {
+  struct queue_counters_t {
     uint64_t op_count = 0;
-    uint64_t op_size_total = 0;
     std::chrono::duration<double> op_latency_total = 0.0s;
 
     uint64_t op_queue_depth_total = 0;
@@ -29,18 +29,16 @@ class op_stats_t {
     std::chrono::duration<double> time_idle = 0.0s;
     std::chrono::duration<double> time_busy = 0.0s;
 
-    void operator+=(const counters_t &rhs) {
+    void operator+=(const queue_counters_t &rhs) {
       op_count += rhs.op_count;
-      op_size_total += rhs.op_size_total;
       op_latency_total += rhs.op_latency_total;
       op_queue_depth_total += rhs.op_queue_depth_total;
       time_idle += rhs.time_idle;
       time_busy += rhs.time_busy;
     }
 
-    void operator-=(const counters_t &rhs) {
+    void operator-=(const queue_counters_t &rhs) {
       op_count -= rhs.op_count;
-      op_size_total -= rhs.op_size_total;
       op_latency_total -= rhs.op_latency_total;
       op_queue_depth_total -= rhs.op_queue_depth_total;
       time_idle -= rhs.time_idle;
@@ -51,7 +49,8 @@ class op_stats_t {
   uint64_t current_queue_depth = 0;
   struct entry_t {
     ceph::mono_clock::time_point start;
-    counters_t counters;
+    queue_counters_t counters;
+    T t_counters;
     entry_t(ceph::mono_clock::time_point start) : start(start) {}
   };
 
@@ -60,8 +59,9 @@ class op_stats_t {
   static constexpr std::chrono::duration<double> period = 1s;
   static constexpr std::chrono::duration<double> total = 10s;
 
-  struct summary_t : counters_t {
+  struct summary_t : queue_counters_t {
     ceph::mono_clock::time_point start;
+    T t_counters;
   };
   summary_t summary;
 
@@ -81,7 +81,7 @@ class op_stats_t {
     }
   }
 
-  counters_t &get_counters() {
+  entry_t &get_current_entry() {
     assert(counters.size() > 0);
     auto now = ceph::mono_clock::now();
     if (now - counters.front().start > period) {
@@ -94,31 +94,39 @@ class op_stats_t {
       summary.start = counters.back().start;
     }
     assert(counters.size() > 0);
-    return counters.front().counters;
+    return counters.front();
   }
 
   struct accounter_t {
     ceph::mono_clock::time_point start = ceph::mono_clock::now();
-    op_stats_t &parent;
-    uint64_t size;
+    queue_latency_tracker_t &parent;
+    T t_counters;
     uint64_t queue_depth_at_submission;
-    accounter_t(op_stats_t &parent, uint64_t size)
-      : parent(parent), size(size) {
+
+    template <typename... Args>
+    accounter_t(queue_latency_tracker_t &parent, Args &&...args)
+      : parent(parent), t_counters(std::forward<Args>(args)...) {
       if (parent.current_queue_depth == 0) {
 	parent.account_idle_time(ceph::mono_clock::now());
       }
       queue_depth_at_submission = ++parent.current_queue_depth;
     }
+
+    T &get_counters() {
+      return t_counters;
+    }
+
     ~accounter_t() {
-      auto &counters = parent.get_counters();
-      counters.op_count++;
+      auto &entry = parent.get_current_entry();
+      entry.counters.op_count++;
       parent.summary.op_count++;
-      counters.op_queue_depth_total += queue_depth_at_submission;
+      entry.counters.op_queue_depth_total += queue_depth_at_submission;
       parent.summary.op_queue_depth_total += queue_depth_at_submission;
-      counters.op_latency_total += ceph::mono_clock::now() - start;
+      entry.counters.op_latency_total += ceph::mono_clock::now() - start;
       parent.summary.op_latency_total += ceph::mono_clock::now() - start;
-      counters.op_size_total += size;
-      parent.summary.op_size_total += size;
+
+      entry.t_counters += t_counters;
+      parent.summary.t_counters += t_counters;
 
       if (parent.current_queue_depth == 1) {
 	parent.account_idle_time(ceph::mono_clock::now());
@@ -128,7 +136,7 @@ class op_stats_t {
   };
 
 public:
-  op_stats_t(
+  queue_latency_tracker_t(
     std::string group_name,
     std::vector<seastar::metrics::label_instance> labels)
     : group_name(group_name), labels(labels) {
@@ -138,6 +146,8 @@ public:
 
   void register_metrics() {
     namespace sm = seastar::metrics;
+    summary.t_counters.register_metrics(
+      metrics, group_name, labels);
     metrics.add_group(
       group_name,
       {
@@ -147,23 +157,6 @@ public:
 	    return summary.op_count;
 	  },
 	  sm::description("op count"),
-	  labels
-	),
-	sm::make_gauge(
-	  "op_size_total",
-	  [this] {
-	    return summary.op_size_total;
-	  },
-	  sm::description("op size total"),
-	  labels
-	),
-	sm::make_gauge(
-	  "op_size_avarage",
-	  [this] {
-	    return static_cast<double>(summary.op_size_total) /
-	      summary.op_count;
-	  },
-	  sm::description("average op size"),
 	  labels
 	),
 	sm::make_gauge(
@@ -250,14 +243,44 @@ public:
     );
   }
 
-  accounter_t account_op(uint64_t size) {
-    return accounter_t(*this, size);
-  }
-
-  const summary_t &get_summary() {
-    return summary;
+  template <typename... Args>
+  accounter_t account_op(Args&&... args) {
+    return accounter_t(*this, std::forward<Args>(args)...);
   }
 };
+
+struct op_size_counter_t {
+  uint64_t op_size_total = 0;
+
+  op_size_counter_t() = default;
+  op_size_counter_t(uint64_t size) :
+    op_size_total(size) {}
+
+  void operator+=(const op_size_counter_t &rhs) {
+    op_size_total += rhs.op_size_total;
+  }
+
+  void register_metrics(
+    seastar::metrics::metric_group &metrics,
+    const std::string &group,
+    std::vector<seastar::metrics::label_instance> labels) {
+    namespace sm = seastar::metrics;
+    metrics.add_group(
+      group,
+      {
+	sm::make_gauge(
+	  "op_size_total",
+	  [this] {
+	    return op_size_total;
+	  },
+	  sm::description("op size total"),
+	  labels
+	)
+      }
+    );
+  }
+};
+using op_stats_t = queue_latency_tracker_t<op_size_counter_t>;
 
 static void dump_metric_value(
   Formatter* f,
