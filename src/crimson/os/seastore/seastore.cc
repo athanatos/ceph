@@ -152,6 +152,7 @@ void SeaStore::Shard::register_metrics()
 {
   namespace sm = seastar::metrics;
   using op_type_t = crimson::os::seastore::op_type_t;
+  do_transaction_queue_stats.register_metrics();
   std::pair<op_type_t, sm::label_instance> labels_by_op_type[] = {
     {op_type_t::DO_TRANSACTION,   sm::label_instance("latency", "DO_TRANSACTION")},
     {op_type_t::READ,             sm::label_instance("latency", "READ")},
@@ -1573,6 +1574,9 @@ seastar::future<> SeaStore::Shard::do_transaction_no_callbacks(
   ceph::os::Transaction&& _t)
 {
   LOG_PREFIX(SeaStoreS::do_transaction_no_callbacks);
+
+  auto accounter = do_transaction_queue_stats.account_op();
+
   ++(shard_stats.io_num);
   ++(shard_stats.pending_io_num);
   ++(shard_stats.starting_io_num);
@@ -1608,8 +1612,10 @@ seastar::future<> SeaStore::Shard::do_transaction_no_callbacks(
 
   co_await with_repeat_trans_intr(
     *ctx.transaction,
-    seastar::coroutine::lambda([&ctx, this, FNAME, num_bytes](auto &t)
-			       -> tm_ret {
+    seastar::coroutine::lambda(
+      [&ctx, &accounter, this, FNAME, num_bytes](auto &t)
+      -> tm_ret {
+      ++accounter.get_counters().op_retry_total;
       ++(shard_stats.repeat_io_num);
 #ifndef NDEBUG
       TRACET(" transaction dump:\n", t);
@@ -1644,6 +1650,8 @@ seastar::future<> SeaStore::Shard::do_transaction_no_callbacks(
       return seastar::now();
     })
   );
+  assert(accounter.get_counters().op_retry_total > 0);
+  accounter.get_counters().op_retry_total--;
 
   DEBUGT("done", *ctx.transaction);
   stats.do_transaction_count++;

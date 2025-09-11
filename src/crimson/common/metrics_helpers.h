@@ -282,6 +282,37 @@ struct op_size_counter_t {
 };
 using op_stats_t = queue_latency_tracker_t<op_size_counter_t>;
 
+struct op_retry_counter_t {
+  uint64_t op_retry_total = 0;
+
+  op_retry_counter_t() = default;
+
+  void operator+=(const op_retry_counter_t &rhs) {
+    op_retry_total += rhs.op_retry_total;
+  }
+
+  void register_metrics(
+    seastar::metrics::metric_group &metrics,
+    const std::string &group,
+    std::vector<seastar::metrics::label_instance> labels) {
+    namespace sm = seastar::metrics;
+    metrics.add_group(
+      group,
+      {
+	sm::make_gauge(
+	  "op_retry_total",
+	  [this] {
+	    return op_retry_total;
+	  },
+	  sm::description("op retry total"),
+	  labels
+	)
+      }
+    );
+  }
+};
+using op_stats_with_retries_t = queue_latency_tracker_t<op_retry_counter_t>;
+
 static void dump_metric_value(
   Formatter* f,
   std::string_view full_name,

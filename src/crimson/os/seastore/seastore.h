@@ -18,6 +18,7 @@
 
 #include "os/Transaction.h"
 #include "crimson/common/throttle.h"
+#include "crimson/common/metrics_helpers.h"
 #include "crimson/os/futurized_collection.h"
 #include "crimson/os/futurized_store.h"
 
@@ -401,6 +402,10 @@ public:
       std::chrono::duration<double> do_transaction_submit_latency_total = 0.0s;
       std::chrono::duration<double> do_transaction_step_latency_total = 0.0s;
     } stats;
+
+    crimson::metrics::op_stats_with_retries_t do_transaction_queue_stats{
+      "seastore_dt",
+      {}};
 
     seastar::metrics::histogram& get_latency(
       op_type_t op_type) {
