@@ -866,6 +866,18 @@ class Module(MgrModule):
             # that never finishes)
             return self._handle_clear()
         elif cmd['prefix'] == "progress json":
+            ret = self.remote('rbd_support', 'get_sams_special_string')
+            import rbd_support
+            if isinstance(ret, rbd_support.module.SamsSpecialString):
+                self.getLogger().error('type(ret) {} is instance of {}'.format(
+                    type(ret),
+                    rbd_support.module.SamsSpecialString
+                ))
+            else:
+                self.getLogger().error('type(ret) {} is not instance of {}'.format(
+                    type(ret),
+                    rbd_support.module.SamsSpecialString
+                ))
             return 0, json.dumps(self._json(), indent=4, sort_keys=True), ""
         elif cmd['prefix'] == "progress on":
             if self.enabled:

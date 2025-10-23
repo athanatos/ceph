@@ -31,6 +31,13 @@ class ImageSortBy(enum.Enum):
     read_latency = 'read_latency'
 
 
+class SamsSpecialString:
+    def __init__(self, x):
+        self.x = x
+
+    def __repr__(self):
+        return str(self.x)
+
 FuncT = TypeVar('FuncT', bound=Callable)
 
 
@@ -191,6 +198,26 @@ class Module(MgrModule):
         with self.perf.lock:
             sort_by_name = sort_by.name if sort_by else OSD_PERF_QUERY_COUNTERS[0]
             return self.perf.get_perf_stats(pool_spec, sort_by_name)
+
+    @CLIReadCommand('rbd get_sams_special_string')
+    @with_latest_osdmap
+    def get_sams_special_string(self):
+        """
+        sam's special string
+        """
+        with self.perf.lock:
+            ret = SamsSpecialString("asdf")
+            if isinstance(ret, SamsSpecialString):
+                self.getLogger().error('type(ret) {} is instance of {}'.format(
+                    type(ret),
+                    SamsSpecialString
+                ))
+            else:
+                self.getLogger().error('type(ret) {} is not instance of {}'.format(
+                    type(ret),
+                    SamsSpecialString
+                ))
+            return ret
 
     @CLIReadCommand('rbd perf image counters')
     @with_latest_osdmap
