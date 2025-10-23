@@ -206,17 +206,17 @@ class Module(MgrModule):
         sam's special string
         """
         with self.perf.lock:
-            ret = SamsSpecialString("asdf")
-            if isinstance(ret, SamsSpecialString):
-                self.getLogger().error('type(ret) {} is instance of {}'.format(
-                    type(ret),
-                    SamsSpecialString
-                ))
-            else:
-                self.getLogger().error('type(ret) {} is not instance of {}'.format(
-                    type(ret),
-                    SamsSpecialString
-                ))
+            pool = 3
+            group = 4
+            placement = "asdf"
+            from ceph.deployment.service_spec import NvmeofServiceSpec, ServiceSpec, PlacementSpec
+            ret = NvmeofServiceSpec(
+                service_id=f'{pool}.{group}' if group else pool,
+                pool=pool,
+                group=group,
+                placement=PlacementSpec.from_string(placement),
+            )
+            #ret.validate()
             return ret
 
     @CLIReadCommand('rbd perf image counters')
