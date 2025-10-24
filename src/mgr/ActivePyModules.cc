@@ -636,6 +636,21 @@ PyObject *ActivePyModules::dispatch_remote(
   return mod_iter->second->dispatch_remote(method, args, kwargs, err);
 }
 
+std::optional<std::string> ActivePyModules::dispatch_remote(
+    const std::string &other_module,
+    const std::string &method,
+    std::string_view pickled_args,
+    std::string_view pickled_kwargs,
+    std::string *err)
+{
+  auto mod_iter = modules.find(other_module);
+  ceph_assert(mod_iter != modules.end());
+
+  return mod_iter->second->dispatch_remote(
+    method, pickled_args, pickled_kwargs, err);
+}
+
+
 bool ActivePyModules::get_config(const std::string &module_name,
     const std::string &key, std::string *val) const
 {

@@ -32,6 +32,13 @@ std::string handle_pyerror(bool generate_crash_dump = false,
 
 std::string peek_pyerror();
 
+std::string_view py_bytes_as_sv(PyObject*);
+PyObject *py_bytes_from_sv(std::string_view);
+
+std::string py_bytes_as_s(PyObject*);
+PyObject *py_bytes_from_s(const std::string &);
+
+
 /**
  * A Ceph CLI command description provided from a Python module
  */
@@ -95,6 +102,7 @@ public:
   SafeThreadState pMyThreadState;
   PyObject *pClass = nullptr;
   PyObject *pStandbyClass = nullptr;
+  PyObject *pPickleModule = nullptr;
 
   explicit PyModule(const std::string &module_name_)
     : module_name(module_name_)

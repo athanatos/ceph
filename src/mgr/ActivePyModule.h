@@ -72,6 +72,12 @@ public:
       PyObject *kwargs,
       std::string *err);
 
+  std::optional<std::string> dispatch_remote(
+      const std::string &method,
+      std::string_view pickled_args,
+      std::string_view pickled_kwargs,
+      std::string *err);
+
   int handle_command(
     const ModuleCommand& module_command,
     const MgrSession& session,

@@ -237,6 +237,13 @@ public:
       PyObject *kwargs,
       std::string *err);
 
+  std::optional<std::string> dispatch_remote(
+      const std::string &other_module,
+      const std::string &method,
+      std::string_view args,
+      std::string_view kwargs,
+      std::string *err);
+
   int init();
 
   void start_one(PyModuleRef py_module);
