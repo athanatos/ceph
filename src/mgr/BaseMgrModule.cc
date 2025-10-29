@@ -875,8 +875,10 @@ ceph_dispatch_remote(BaseMgrModule *self, PyObject *args)
       std::string caller = "ceph_dispatch_remote "s + " " + method;
       std::string err = handle_pyerror(true, other_module, caller);
       PyErr_SetString(PyExc_RuntimeError, err.c_str());
-      derr << "FAILED TO DESEIALIZE CHECK " << err << dendl;
+      derr << "FAILED TO DESERIALIZE CHECK " << err << dendl;
       return nullptr;
+    } else {
+      derr << "SOURCE DESERIALIZE WORKED" << dendl;
     }
     Py_DECREF(unpickled_args);
   }
