@@ -865,6 +865,22 @@ ceph_dispatch_remote(BaseMgrModule *self, PyObject *args)
   }
   std::span<std::byte const> pickled_args_span = py_bytes_as_span(pickled_args);
 
+  {
+    auto unpickled_args = PyObject_CallMethodObjArgs(
+      pmodule,
+      PyUnicode_FromString("dumps"),
+      pickled_args,
+      nullptr);
+    if (unpickled_args == nullptr) {
+      std::string caller = "ceph_dispatch_remote "s + " " + method;
+      std::string err = handle_pyerror(true, other_module, caller);
+      PyErr_SetString(PyExc_RuntimeError, err.c_str());
+      derr << "FAILED TO DESEIALIZE CHECK " << err << dendl;
+      return nullptr;
+    }
+    Py_DECREF(unpickled_args);
+  }
+
   auto pickled_kwargs = PyObject_CallMethodObjArgs(
     pmodule,
     PyUnicode_FromString("dumps"),
