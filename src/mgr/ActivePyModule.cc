@@ -150,9 +150,9 @@ std::optional<std::vector<std::byte>> ActivePyModule::dispatch_remote(
     nullptr);
   Py_DECREF(pickled_args_bytes);
   if (args == nullptr) {
-    derr << "Failed to deserialize (pickle.loads) args" << dendl;
     std::string caller = "ActivePyModule::dispatch_remote "s + method;
     *err = handle_pyerror(true, get_name(), caller);
+    derr << "Failed to deserialize (pickle.loads) args: " << *err << dendl;
     return std::nullopt;
   }
 
@@ -164,9 +164,9 @@ std::optional<std::vector<std::byte>> ActivePyModule::dispatch_remote(
     nullptr);
   Py_DECREF(pickled_kwargs_bytes);
   if (kwargs == nullptr) {
-    derr << "Failed to deserialize (pickle.loads) kwargs" << dendl;
     std::string caller = "ActivePyModule::dispatch_remote "s + method;
     *err = handle_pyerror(true, get_name(), caller);
+    derr << "Failed to deserialize (pickle.loads) kwargs: " << *err << dendl;
 
     Py_DECREF(args);
     return std::nullopt;
@@ -203,9 +203,9 @@ std::optional<std::vector<std::byte>> ActivePyModule::dispatch_remote(
     nullptr);
   Py_DECREF(ret);
   if (pickled_ret == nullptr) {
-    derr << "Failed to serialize (pickle.dumps) ret" << dendl;
     std::string caller = "ActivePyModule::dispatch_remote "s + method;
     *err = handle_pyerror(true, get_name(), caller);
+    derr << "Failed to serialize (pickle.dumps) ret: " << *err << dendl;
     return std::nullopt;
   }
 
