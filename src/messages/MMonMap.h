@@ -23,11 +23,15 @@
 #include "mon/MonMap.h"
 
 class MMonMap final : public Message {
+  constexpr static int HEAD_VERSION = 2;
+  constexpr static int COMPAT_VERSION = 1;
 public:
   ceph::buffer::list monmapbl;
+  uint64_t quorum_con_features = 0;
 
-  MMonMap() : Message{CEPH_MSG_MON_MAP} { }
-  explicit MMonMap(ceph::buffer::list &bl) : Message{CEPH_MSG_MON_MAP} {
+  MMonMap() : Message{CEPH_MSG_MON_MAP, HEAD_VERSION, COMPAT_VERSION} { }
+  explicit MMonMap(ceph::buffer::list &bl, uint64_t quorum_features)
+    : Message{CEPH_MSG_MON_MAP, HEAD_VERSION, COMPAT_VERSION} {
     monmapbl = std::move(bl);
   }
 private:
@@ -49,11 +53,15 @@ public:
 
     using ceph::encode;
     encode(monmapbl, payload);
+    encode(quorum_con_features, payload);
   }
   void decode_payload() override { 
     using ceph::decode;
     auto p = payload.cbegin();
     decode(monmapbl, p);
+    if (get_header().version >= 2) {
+      decode(quorum_con_features, p);
+    }
   }
 private:
   template<class T, typename... Args>

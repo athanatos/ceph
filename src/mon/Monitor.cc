@@ -5508,7 +5508,7 @@ void Monitor::send_latest_monmap(Connection *con)
 {
   bufferlist bl;
   monmap->encode(bl, con->get_features());
-  con->send_message(new MMonMap(bl));
+  con->send_message(new MMonMap(bl, quorum_con_features));
 }
 
 void Monitor::handle_mon_get_map(MonOpRequestRef op)

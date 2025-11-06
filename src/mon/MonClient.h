@@ -283,7 +283,13 @@ class MonClient : public Dispatcher,
 		  public AuthServer, /* for mgr, osd, mds */
 		  public AdminSocketHook {
   static constexpr auto dout_subsys = ceph_subsys_monc;
+  uint64_t quorum_con_features = 0;
+
 public:
+  uint64_t get_quorum_con_features() const {
+    return quorum_con_features;
+  }
+
   // Error, Newest, Oldest
   using VersionSig = void(boost::system::error_code, version_t, version_t);
   using VersionCompletion = boost::asio::any_completion_handler<VersionSig>;

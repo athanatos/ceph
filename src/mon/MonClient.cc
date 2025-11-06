@@ -407,6 +407,7 @@ void MonClient::flush_log()
 void MonClient::handle_monmap(MMonMap *m)
 {
   ldout(cct, 10) << __func__ << " " << *m << dendl;
+  quorum_con_features = m->quorum_con_features;
   auto con_addrs = m->get_source_addrs();
   string old_name = monmap.get_name(con_addrs);
   const auto old_epoch = monmap.get_epoch();
