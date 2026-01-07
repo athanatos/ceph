@@ -337,8 +337,8 @@ TransactionManager::resolve_cursor_to_mapping(
     co_return ret;
   }
 
-  assert(cursor->val->refcount == EXTENT_DEFAULT_REF_COUNT);
-  assert(cursor->val->checksum == 0);
+  assert(cursor->get_refcount() == EXTENT_DEFAULT_REF_COUNT);
+  assert(cursor->get_checksum() == 0);
 
   auto direct_cursors = co_await lba_manager->get_cursors(
     t,

@@ -199,9 +199,7 @@ struct __attribute__((packed)) backref_map_val_le_t {
  * time.
  */
 template <typename key_t, typename val_t>
-struct BtreeCursor
-  : public boost::intrusive_ref_counter<
-      BtreeCursor<key_t, val_t>, boost::thread_unsafe_counter> {
+struct BtreeCursor {
   BtreeCursor(
     op_context_t &ctx,
     CachedExtentRef parent,
@@ -234,67 +232,43 @@ struct BtreeCursor
   std::optional<val_t> val;
   btreenode_pos_t pos;
 
+protected:
   // NOTE: The overhead of calling is_viewable() might be not negligible in the
   // case of the parent extent is stable and shared by multiple transactions.
   // The best practice is to only hold cursors whose parent is pending in
   // current transaction in the long term.
-  bool is_viewable() const;
+  bool bc_is_viewable() const;
 
-  bool is_end() const {
+  bool bc_is_end() const {
     auto max_key = min_max_t<key_t>::max;
     assert((key != max_key) == (bool)val);
     return key == max_key;
   }
 
-  extent_len_t get_length() const {
-    assert(!is_end());
+  extent_len_t bc_get_length() const {
+    assert(!bc_is_end());
     return val->len;
   }
+
+  template <typename k_t, typename v_t>
+  friend std::ostream &operator<<(
+    std::ostream &out, const BtreeCursor<k_t, v_t> &cursor);
 };
 
-struct LBACursor : BtreeCursor<laddr_t, lba::lba_map_val_t> {
-  using Base = BtreeCursor<laddr_t, lba::lba_map_val_t>;
-  using Base::BtreeCursor;
-  bool is_indirect() const {
-    return !is_end() && val->pladdr.is_laddr();
-  }
-  bool is_direct() const {
-    return !is_end() && val->pladdr.is_paddr();
-  }
-  laddr_t get_laddr() const {
-    return key;
-  }
-  paddr_t get_paddr() const {
-    assert(!is_indirect());
-    assert(!is_end());
-    return val->pladdr.get_paddr();
-  }
-  laddr_t get_intermediate_key() const {
-    assert(is_indirect());
-    assert(!is_end());
-    return val->pladdr.get_laddr();
-  }
-  checksum_t get_checksum() const {
-    assert(!is_end());
-    assert(!is_indirect());
-    return val->checksum;
-  }
-  bool contains(laddr_t laddr) const {
-    return get_laddr() <= laddr && get_laddr() + get_length() > laddr;
-  }
-  extent_ref_count_t get_refcount() const {
-    assert(!is_end());
-    assert(is_direct() || val->refcount <= 1);
-    return val->refcount;
-  }
-
-  base_iertr::future<> refresh();
-};
-using LBACursorRef = boost::intrusive_ptr<LBACursor>;
-
-struct BackrefCursor : BtreeCursor<paddr_t, backref::backref_map_val_t> {
+struct BackrefCursor : public BtreeCursor<paddr_t, backref::backref_map_val_t>,
+                       public boost::intrusive_ref_counter<
+                         BackrefCursor, boost::thread_unsafe_counter> {
   using Base = BtreeCursor<paddr_t, backref::backref_map_val_t>;
   using Base::BtreeCursor;
+  bool is_viewable() const {
+    return bc_is_viewable();
+  }
+  bool is_end() const {
+    return bc_is_end();
+  }
+  extent_len_t get_length() const {
+    return bc_get_length();
+  }
   paddr_t get_paddr() const {
     assert(key.is_absolute());
     return key;
@@ -315,7 +289,7 @@ std::ostream &operator<<(
   std::ostream &out, const BtreeCursor<key_t, val_t> &cursor)
 {
   if constexpr (std::is_same_v<key_t, laddr_t>) {
-    out << "LBACursor(";
+    out << "BtreeLBACursor(";
   } else {
     out << "BackrefCursor(";
   }
@@ -323,7 +297,7 @@ std::ostream &operator<<(
       << "@" << cursor.pos
       << "#" << cursor.modifications
       << ",";
-  if (cursor.is_end()) {
+  if (cursor.bc_is_end()) {
     return out << "END)";
   }
   return out << "," << cursor.key
@@ -334,6 +308,5 @@ std::ostream &operator<<(
 } // namespace crimson::os::seastore
 
 #if FMT_VERSION >= 90000
-template <> struct fmt::formatter<crimson::os::seastore::LBACursor> : fmt::ostream_formatter {};
 template <> struct fmt::formatter<crimson::os::seastore::BackrefCursor> : fmt::ostream_formatter {};
 #endif

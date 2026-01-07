@@ -30,9 +30,70 @@ class LogicalCachedExtent;
 namespace crimson::os::seastore::lba {
 class BtreeLBAManager;
 
+struct BtreeLBACursor : public LBACursor,
+                        public BtreeCursor<laddr_t, lba::lba_map_val_t> {
+  using Base = BtreeCursor<laddr_t, lba::lba_map_val_t>;
+  using Base::BtreeCursor;
+
+  bool is_viewable() const final {
+    return bc_is_viewable();
+  }
+  bool is_end() const final {
+    return bc_is_end();
+  }
+  extent_len_t get_length() const final {
+    return bc_get_length();
+  }
+  bool is_indirect() const final {
+    return !is_end() && val->pladdr.is_laddr();
+  }
+  bool is_direct() const final {
+    return !is_end() && val->pladdr.is_paddr();
+  }
+  laddr_t get_laddr() const final {
+    return key;
+  }
+  paddr_t get_paddr() const final {
+    assert(!is_indirect());
+    assert(!is_end());
+    return val->pladdr.get_paddr();
+  }
+  laddr_t get_intermediate_key() const final {
+    assert(is_indirect());
+    assert(!is_end());
+    return val->pladdr.get_laddr();
+  }
+  checksum_t get_checksum() const final {
+    assert(!is_end());
+    assert(!is_indirect());
+    return val->checksum;
+  }
+  bool contains(laddr_t laddr) const final {
+    return get_laddr() <= laddr && get_laddr() + get_length() > laddr;
+  }
+  extent_ref_count_t get_refcount() const final {
+    assert(!is_end());
+    assert(is_direct() || val->refcount <= 1);
+    return val->refcount;
+  }
+
+  base_iertr::future<> refresh() final;
+  base_iertr::future<Ref<LBACursor>> next() final;
+
+  get_child_ret_t<lba::LBALeafNode, LogicalChildNode>
+  get_logical_extent(Transaction &t) final;
+
+  bool is_stable() const;
+  bool is_data_stable() const;
+  bool is_initial_pending() const;
+
+  std::ostream &print(std::ostream &) const final;
+};
+using BtreeLBACursorRef = boost::intrusive_ptr<BtreeLBACursor>;
+
 using LBABtree = FixedKVBtree<
   laddr_t, lba_map_val_t, LBAInternalNode,
-  LBALeafNode, LBACursor, LBA_BLOCK_SIZE>;
+  LBALeafNode, BtreeLBACursor, LBA_BLOCK_SIZE>;
 
 /**
  * BtreeLBAManager
@@ -306,6 +367,10 @@ private:
     return op_context_t{cache, t};
   }
 
+  auto cursor_to_iter(op_context_t c, LBABtree &btree, LBACursor &ref) {
+    return btree.make_partial_iter(c, *(ref.to_concrete<BtreeLBACursor>()));
+  }
+
   seastar::metrics::metric_group metrics;
   void register_metrics();
 
@@ -428,3 +493,8 @@ private:
 using BtreeLBAManagerRef = std::unique_ptr<BtreeLBAManager>;
 
 }
+
+#if FMT_VERSION >= 90000
+template <> struct fmt::formatter<crimson::os::seastore::lba::BtreeLBACursor> :
+  fmt::ostream_formatter {};
+#endif

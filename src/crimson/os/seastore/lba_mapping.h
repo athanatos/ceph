@@ -10,6 +10,50 @@
 
 namespace crimson::os::seastore {
 
+class LBACursor : public boost::intrusive_ref_counter<
+  LBACursor, boost::thread_unsafe_counter> {
+public:
+  template <typename T>
+  using Ref = boost::intrusive_ptr<T>;
+
+  virtual bool is_viewable() const = 0;
+  virtual bool is_end() const = 0;
+  virtual extent_len_t get_length() const = 0;
+  virtual bool is_indirect() const = 0;
+  virtual bool is_direct() const = 0;
+  virtual laddr_t get_laddr() const = 0;
+  virtual paddr_t get_paddr() const = 0;
+  virtual laddr_t get_intermediate_key() const = 0;
+  virtual checksum_t get_checksum() const = 0;
+  virtual bool contains(laddr_t laddr) const = 0;
+  virtual extent_ref_count_t get_refcount() const = 0;
+
+  virtual base_iertr::future<> refresh() = 0;
+  virtual base_iertr::future<Ref<LBACursor>> next() = 0;
+
+  virtual get_child_ret_t<lba::LBALeafNode, LogicalChildNode>
+  get_logical_extent(Transaction &t) = 0;
+
+  virtual bool is_stable() const = 0;
+  virtual bool is_data_stable() const = 0;
+  virtual bool is_initial_pending() const = 0;
+
+  virtual std::ostream &print(std::ostream &) const = 0;
+
+  template <typename T>
+  Ref<T> to_concrete() {
+    return static_cast<T*>(this);
+  }
+
+  virtual ~LBACursor() = default;
+};
+using LBACursorRef = LBACursor::Ref<LBACursor>;
+
+inline std::ostream &operator<<(
+  std::ostream &out, const LBACursor &ref) {
+  return ref.print(out);
+}
+
 namespace lba {
 class BtreeLBAManager;
 }
@@ -23,8 +67,8 @@ class LBAMapping {
     assert(!indirect_cursor || indirect_cursor->is_indirect());
     // if the mapping is indirect, it mustn't be at the end
     if (is_indirect() && is_linked_direct()) {
-      assert((bool)direct_cursor->val
-	    && direct_cursor->key != L_ADDR_NULL);
+      assert(!direct_cursor->is_end() &&
+             direct_cursor->get_laddr() != L_ADDR_NULL);
     }
   }
 
@@ -70,12 +114,12 @@ public:
   }
 
   bool is_end() const {
-    bool end = !is_indirect() && !direct_cursor->val;
+    bool end = !is_indirect() && direct_cursor->is_end();
     // if the mapping is at the end, it can't be indirect and
     // the physical cursor must be L_ADDR_NULL
     assert(end
-      ? (!indirect_cursor && direct_cursor->key == L_ADDR_NULL)
-      : true);
+           ? (!indirect_cursor && direct_cursor->get_laddr() == L_ADDR_NULL)
+           : true);
     return end;
   }
 
@@ -270,6 +314,7 @@ std::ostream &operator<<(std::ostream &out, const lba_mapping_list_t &rhs);
 } // namespace crimson::os::seastore
 
 #if FMT_VERSION >= 90000
+template <> struct fmt::formatter<crimson::os::seastore::LBACursor> : fmt::ostream_formatter {};
 template <> struct fmt::formatter<crimson::os::seastore::LBAMapping> : fmt::ostream_formatter {};
 template <> struct fmt::formatter<crimson::os::seastore::lba_mapping_list_t> : fmt::ostream_formatter {};
 #endif
