@@ -404,6 +404,19 @@ using LBALeafNodeRef = TCachedExtentRef<LBALeafNode>;
 struct LBACursor : BtreeCursor<laddr_t, lba::lba_map_val_t, LBALeafNode> {
   using Base = BtreeCursor<laddr_t, lba::lba_map_val_t, LBALeafNode>;
   using Base::BtreeCursor;
+
+  bool is_viewable() const {
+    return bc_is_viewable();
+  }
+  bool is_end() const {
+    return bc_is_end();
+  }
+  extent_len_t get_length() const {
+    return bc_get_length();
+  }
+  uint16_t get_pos() const {
+    return bc_get_pos();
+  }
   bool is_indirect() const {
     assert(is_viewable());
     return !is_end() && iter.get_val().pladdr.is_laddr();

@@ -52,7 +52,7 @@ bool modified_since(T &&extent, uint64_t iter_modifications) {
 }
 
 template <typename key_t, typename val_t, typename ParentT>
-bool BtreeCursor<key_t, val_t, ParentT>::is_viewable() const {
+bool BtreeCursor<key_t, val_t, ParentT>::bc_is_viewable() const {
   LOG_PREFIX(BtreeCursor::is_viewable());
   if (!parent->is_valid() ||
       modified_since<key_t>(parent, modifications)) {

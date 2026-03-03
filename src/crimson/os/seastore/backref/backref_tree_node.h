@@ -173,6 +173,18 @@ struct BackrefCursor :
   using Base = BtreeCursor<paddr_t,
 			   backref::backref_map_val_t,
 			   BackrefLeafNode>;
+  bool is_viewable() const {
+    return bc_is_viewable();
+  }
+  bool is_end() const {
+    return bc_is_end();
+  }
+  extent_len_t get_length() const {
+    return bc_get_length();
+  }
+  uint16_t get_pos() const {
+    return bc_get_pos();
+  }
   using Base::BtreeCursor;
   paddr_t get_paddr() const {
     assert(key.is_absolute());

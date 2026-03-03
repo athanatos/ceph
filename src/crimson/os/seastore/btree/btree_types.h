@@ -246,20 +246,20 @@ struct BtreeCursor
   // case of the parent extent is stable and shared by multiple transactions.
   // The best practice is to only hold cursors whose parent is pending in
   // current transaction in the long term.
-  bool is_viewable() const;
+  bool bc_is_viewable() const;
 
-  bool is_end() const {
-    assert(is_viewable());
+  bool bc_is_end() const {
+    assert(bc_is_viewable());
     return iter == parent->end();
   }
 
-  extent_len_t get_length() const {
-    assert(is_viewable());
-    assert(!is_end());
+  extent_len_t bc_get_length() const {
+    assert(bc_is_viewable());
+    assert(!bc_is_end());
     return iter.get_val().len;
   }
 
-  uint16_t get_pos() const {
+  uint16_t bc_get_pos() const {
     return iter.get_offset();
   }
 
@@ -280,9 +280,9 @@ std::ostream &operator<<(
   out << (void*)cursor.parent.get()
       << "@" << cursor.iter.get_offset()
       << "#" << cursor.modifications;
-  if (cursor.is_viewable()) {
+  if (cursor.bc_is_viewable()) {
     out << ",";
-    if (cursor.is_end()) {
+    if (cursor.bc_is_end()) {
       return out << "END)";
     }
     return out << "," << cursor.iter.get_key()
