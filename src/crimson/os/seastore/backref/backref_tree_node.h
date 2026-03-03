@@ -168,8 +168,9 @@ public:
 using BackrefLeafNodeRef = BackrefLeafNode::Ref;
 
 struct BackrefCursor :
-  BtreeCursor<paddr_t, backref::backref_map_val_t, BackrefLeafNode>
-{
+    boost::intrusive_ref_counter<
+      BackrefCursor, boost::thread_unsafe_counter>,
+    BtreeCursor<paddr_t, backref::backref_map_val_t, BackrefLeafNode> {
   using Base = BtreeCursor<paddr_t,
 			   backref::backref_map_val_t,
 			   BackrefLeafNode>;

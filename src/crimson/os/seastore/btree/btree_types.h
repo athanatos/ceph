@@ -209,9 +209,7 @@ struct __attribute__((packed)) backref_map_val_le_t {
  * time.
  */
 template <typename key_t, typename val_t, typename ParentT>
-struct BtreeCursor
-  : public boost::intrusive_ref_counter<
-      BtreeCursor<key_t, val_t, ParentT>, boost::thread_unsafe_counter> {
+struct BtreeCursor {
   BtreeCursor(
     op_context_t &ctx,
     TCachedExtentRef<ParentT> parent,

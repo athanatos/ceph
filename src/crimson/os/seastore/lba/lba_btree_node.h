@@ -401,7 +401,10 @@ struct LBALeafNode
 };
 using LBALeafNodeRef = TCachedExtentRef<LBALeafNode>;
 
-struct LBACursor : BtreeCursor<laddr_t, lba::lba_map_val_t, LBALeafNode> {
+struct LBACursor :
+    boost::intrusive_ref_counter<
+      LBACursor, boost::thread_unsafe_counter>,
+    BtreeCursor<laddr_t, lba::lba_map_val_t, LBALeafNode> {
   using Base = BtreeCursor<laddr_t, lba::lba_map_val_t, LBALeafNode>;
   using Base::BtreeCursor;
 
