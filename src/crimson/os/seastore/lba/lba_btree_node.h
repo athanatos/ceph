@@ -428,6 +428,9 @@ struct LBACursor :
     assert(is_viewable());
     return !is_end() && iter.get_val().pladdr.is_paddr();
   }
+  pladdr_t get_pladdr() const {
+    return iter.get_val().pladdr;
+  }
   laddr_t get_laddr() const {
     return key;
   }
@@ -460,12 +463,6 @@ struct LBACursor :
   }
 
   base_iertr::future<> refresh();
-private:
-
-  pladdr_t get_pladdr() const {
-    return std::move(iter.get_val().pladdr);
-  }
-  friend class BtreeLBAManager;
 };
 using LBACursorRef = boost::intrusive_ptr<LBACursor>;
 
