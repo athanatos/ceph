@@ -22,9 +22,47 @@ namespace lba {
 class BtreeLBAManager;
 }
 
+class LBACursor : public boost::intrusive_ref_counter<
+  LBACursor, boost::thread_unsafe_counter> {
+public:
+  virtual bool is_viewable() const = 0;
+  virtual bool is_end() const = 0;
+  virtual extent_len_t get_length() const = 0;
+  virtual uint16_t get_pos() const = 0;
+  virtual bool is_indirect() const = 0;
+  virtual bool is_direct() const = 0;
+  virtual pladdr_t get_pladdr() const = 0;
+  virtual laddr_t get_laddr() const = 0;
+  virtual paddr_t get_paddr() const = 0;
+  virtual laddr_t get_intermediate_key() const = 0;
+  virtual checksum_t get_checksum() const = 0;
+  virtual bool contains(laddr_t laddr) const = 0;
+  virtual extent_ref_count_t get_refcount() const = 0;
+  virtual base_iertr::future<> refresh() = 0;
+
+  virtual base_iertr::future<Ref<LBACursor>> next() = 0;
+
+  get_child_ret_t<lba::LBALeafNode, LogicalChildNode>
+  virtual get_logical_extent(Transaction &t) = 0;
+
+  virtual bool is_stable() const = 0;
+  virtual bool is_data_stable() const = 0;
+  virtual bool is_initial_pending() const = 0;
+
+  virtual std::ostream &print(std::ostream &oss) const = 0;
+
+  template <typename T>
+  Ref<T> to_concrete() {
+    return static_cast<T*>(this);
+  }
+};
+using LBACursorRef = boost::intrusive_ptr<LBACursor>;
+
+inline std::ostream &operator<<(std::ostream &out, const LBACursor &ref) {
+  return ref.print(out);
+}
+
 class LBAMapping {
-  using LBACursorRef = lba::LBACursorRef;
-  using LBACursor = lba::LBACursor;
   LBAMapping(LBACursorRef direct, LBACursorRef indirect)
     : direct_cursor(std::move(direct)),
       indirect_cursor(std::move(indirect))
@@ -281,6 +319,7 @@ std::ostream &operator<<(std::ostream &out, const lba_mapping_list_t &rhs);
 } // namespace crimson::os::seastore
 
 #if FMT_VERSION >= 90000
+template <> struct fmt::formatter<crimson::os::seastore::LBACursor> : fmt::ostream_formatter {};
 template <> struct fmt::formatter<crimson::os::seastore::LBAMapping> : fmt::ostream_formatter {};
 template <> struct fmt::formatter<crimson::os::seastore::lba_mapping_list_t> : fmt::ostream_formatter {};
 #endif

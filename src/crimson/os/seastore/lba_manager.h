@@ -24,9 +24,6 @@
 
 namespace crimson::os::seastore {
 
-using LBACursor = lba::LBACursor;
-using LBACursorRef = lba::LBACursorRef;
-
 /**
  * Abstract interface for managing the logical to physical mapping
  */

@@ -17,7 +17,7 @@ std::ostream &operator<<(std::ostream &out, const LBAMapping &rhs)
     out << std::dec
 	<< "->" << rhs.get_val();
   } else {
-    out << std::dec << "->" << rhs.indirect_cursor->iter.get_val();
+    out << std::dec << "->" << rhs.indirect_cursor->get_pladdr();
   }
   if (rhs.is_complete_indirect()) {
     out << ",indirect(" << rhs.get_intermediate_base()
@@ -45,63 +45,30 @@ using lba::LBALeafNode;
 get_child_ret_t<LBALeafNode, LogicalChildNode>
 LBAMapping::get_logical_extent(Transaction &t) const
 {
-  assert(is_linked_direct());
-  ceph_assert(direct_cursor->is_viewable());
-  ceph_assert(direct_cursor->ctx.trans.get_trans_id()
-	      == t.get_trans_id());
-  assert(!direct_cursor->is_end());
-  auto &i = *direct_cursor;
-  assert(i.get_pos() != BTREENODE_POS_NULL);
-  ceph_assert(t.get_trans_id() == i.ctx.trans.get_trans_id());
-  auto p = direct_cursor->parent->cast<LBALeafNode>();
-  return p->template get_child<LogicalChildNode>(
-    t, i.ctx.cache, i.get_pos(), i.get_laddr());
+  return direct_cursor->get_logical_extent(t);
 }
 
 bool LBAMapping::is_stable() const {
-  assert(is_linked_direct());
-  ceph_assert(direct_cursor->is_viewable());
-  assert(!direct_cursor->is_end());
-  auto leaf = direct_cursor->parent->cast<LBALeafNode>();
-  return leaf->is_child_stable(
-    direct_cursor->ctx,
-    direct_cursor->get_pos(),
-    direct_cursor->get_laddr());
+  return direct_cursor->is_stable();
+
 }
 
 bool LBAMapping::is_data_stable() const {
-  assert(is_linked_direct());
-  ceph_assert(direct_cursor->is_viewable());
-  assert(!direct_cursor->is_end());
-  auto leaf = direct_cursor->parent->cast<LBALeafNode>();
-  return leaf->is_child_data_stable(
-    direct_cursor->ctx,
-    direct_cursor->get_pos(),
-    direct_cursor->get_laddr());
+  return direct_cursor->is_data_stable();
+
 }
 
 base_iertr::future<LBAMapping> LBAMapping::next()
 {
   LOG_PREFIX(LBAMapping::next);
-  auto ctx = get_effective_cursor().ctx;
-  auto mapping = co_await refresh();
-  SUBDEBUGT(seastore_lba, "{}", ctx.trans, mapping);
-  mapping = co_await with_btree_state<lba::LBABtree, LBAMapping>(
-    ctx.cache,
-    ctx,
-    std::move(mapping),
-    [ctx](auto &btree, auto &mapping) mutable {
-    auto &cursor = mapping.get_effective_cursor();
-    auto iter = btree.make_partial_iter(ctx, cursor);
-    return iter.next(ctx).si_then([ctx, &mapping](auto iter) {
-      if (!iter.is_end() && iter.get_val().pladdr.is_laddr()) {
-	mapping = LBAMapping::create_indirect(nullptr, iter.get_cursor(ctx));
-      } else {
-	mapping = LBAMapping::create_direct(iter.get_cursor(ctx));
-      }
-    });
-  });
-  co_return mapping;
+  SUBDEBUG(seastore_lba, "{}", *this);
+  auto cursor = get_effective_cursor_ref();
+  co_await cursor->next();
+  if (cursor->is_indirect()) {
+    co_return LBAMapping::create_indirect(nullptr, std::move(cursor));
+  } else {
+    co_return LBAMapping::create_direct(std::move(cursor));
+  }
 }
 
 base_iertr::future<LBAMapping> LBAMapping::refresh()
@@ -143,14 +110,7 @@ base_iertr::future<> LBAMapping::co_refresh()
 }
 
 bool LBAMapping::is_initial_pending() const {
-  assert(is_linked_direct());
-  ceph_assert(direct_cursor->is_viewable());
-  assert(!direct_cursor->is_end());
-  auto leaf = direct_cursor->parent->cast<LBALeafNode>();
-  return leaf->is_child_initial_pending(
-    direct_cursor->ctx,
-    direct_cursor->get_pos(),
-    direct_cursor->get_laddr());
+  return direct_cursor->is_initial_pending();
 }
 
 } // namespace crimson::os::seastore

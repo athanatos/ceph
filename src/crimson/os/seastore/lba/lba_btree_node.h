@@ -401,71 +401,6 @@ struct LBALeafNode
 };
 using LBALeafNodeRef = TCachedExtentRef<LBALeafNode>;
 
-struct LBACursor :
-    boost::intrusive_ref_counter<
-      LBACursor, boost::thread_unsafe_counter>,
-    BtreeCursor<laddr_t, lba::lba_map_val_t, LBALeafNode> {
-  using Base = BtreeCursor<laddr_t, lba::lba_map_val_t, LBALeafNode>;
-  using Base::BtreeCursor;
-
-  bool is_viewable() const {
-    return bc_is_viewable();
-  }
-  bool is_end() const {
-    return bc_is_end();
-  }
-  extent_len_t get_length() const {
-    return bc_get_length();
-  }
-  uint16_t get_pos() const {
-    return bc_get_pos();
-  }
-  bool is_indirect() const {
-    assert(is_viewable());
-    return !is_end() && iter.get_val().pladdr.is_laddr();
-  }
-  bool is_direct() const {
-    assert(is_viewable());
-    return !is_end() && iter.get_val().pladdr.is_paddr();
-  }
-  pladdr_t get_pladdr() const {
-    return iter.get_val().pladdr;
-  }
-  laddr_t get_laddr() const {
-    return key;
-  }
-  paddr_t get_paddr() const {
-    assert(is_viewable());
-    assert(!is_indirect());
-    assert(!is_end());
-    auto ret = iter.get_val().pladdr.get_paddr();
-    return ret.maybe_relative_to(parent->get_paddr());
-  }
-  laddr_t get_intermediate_key() const {
-    assert(is_viewable());
-    assert(is_indirect());
-    assert(!is_end());
-    return iter.get_val().pladdr.get_laddr();
-  }
-  checksum_t get_checksum() const {
-    assert(is_viewable());
-    assert(!is_end());
-    return iter.get_val().checksum;
-  }
-  bool contains(laddr_t laddr) const {
-    assert(is_viewable());
-    return get_laddr() <= laddr && get_laddr() + get_length() > laddr;
-  }
-  extent_ref_count_t get_refcount() const {
-    assert(is_viewable());
-    assert(!is_end());
-    return iter.get_val().refcount;
-  }
-
-  base_iertr::future<> refresh();
-};
-using LBACursorRef = boost::intrusive_ptr<LBACursor>;
-
 }
 
 #if FMT_VERSION >= 90000
@@ -473,5 +408,4 @@ template <> struct fmt::formatter<crimson::os::seastore::lba::lba_node_meta_t> :
 template <> struct fmt::formatter<crimson::os::seastore::lba::lba_map_val_t> : fmt::ostream_formatter {};
 template <> struct fmt::formatter<crimson::os::seastore::lba::LBAInternalNode> : fmt::ostream_formatter {};
 template <> struct fmt::formatter<crimson::os::seastore::lba::LBALeafNode> : fmt::ostream_formatter {};
-template <> struct fmt::formatter<crimson::os::seastore::lba::LBACursor> : fmt::ostream_formatter {};
 #endif

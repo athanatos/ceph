@@ -1169,15 +1169,7 @@ private:
     Transaction &t,
     LBACursor &cursor)
   {
-    ceph_assert(cursor.is_viewable());
-    ceph_assert(cursor.ctx.trans.get_trans_id()
-		== t.get_trans_id());
-    assert(!cursor.is_end());
-    assert(cursor.get_pos() != BTREENODE_POS_NULL);
-    ceph_assert(t.get_trans_id() == cursor.ctx.trans.get_trans_id());
-    auto p = cursor.parent->cast<LBALeafNode>();
-    return p->template get_child<LogicalChildNode>(
-      t, cursor.ctx.cache, cursor.get_pos(), cursor.key);
+    return cursor.get_logical_extent(t);
   }
 
   base_iertr::future<LogicalChildNodeRef> read_cursor_by_type(

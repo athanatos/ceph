@@ -30,9 +30,84 @@ class LogicalCachedExtent;
 namespace crimson::os::seastore::lba {
 class BtreeLBAManager;
 
+struct BtreeLBACursor :
+    crimson::os::seastore::LBACursor,
+    BtreeCursor<laddr_t, lba::lba_map_val_t, LBALeafNode> {
+  using Base = BtreeCursor<laddr_t, lba::lba_map_val_t, LBALeafNode>;
+  using Base::BtreeCursor;
+
+  bool is_viewable() const {
+    return bc_is_viewable();
+  }
+  bool is_end() const {
+    return bc_is_end();
+  }
+  extent_len_t get_length() const {
+    return bc_get_length();
+  }
+  uint16_t get_pos() const {
+    return bc_get_pos();
+  }
+  bool is_indirect() const {
+    assert(is_viewable());
+    return !is_end() && iter.get_val().pladdr.is_laddr();
+  }
+  bool is_direct() const {
+    assert(is_viewable());
+    return !is_end() && iter.get_val().pladdr.is_paddr();
+  }
+  pladdr_t get_pladdr() const {
+    return iter.get_val().pladdr;
+  }
+  laddr_t get_laddr() const {
+    return key;
+  }
+  paddr_t get_paddr() const {
+    assert(is_viewable());
+    assert(!is_indirect());
+    assert(!is_end());
+    auto ret = iter.get_val().pladdr.get_paddr();
+    return ret.maybe_relative_to(parent->get_paddr());
+  }
+  laddr_t get_intermediate_key() const {
+    assert(is_viewable());
+    assert(is_indirect());
+    assert(!is_end());
+    return iter.get_val().pladdr.get_laddr();
+  }
+  checksum_t get_checksum() const {
+    assert(is_viewable());
+    assert(!is_end());
+    return iter.get_val().checksum;
+  }
+  bool contains(laddr_t laddr) const {
+    assert(is_viewable());
+    return get_laddr() <= laddr && get_laddr() + get_length() > laddr;
+  }
+  extent_ref_count_t get_refcount() const {
+    assert(is_viewable());
+    assert(!is_end());
+    return iter.get_val().refcount;
+  }
+
+  base_iertr::future<> refresh();
+  base_iertr::future<Ref<LBACursor>> next() final;
+
+  get_child_ret_t<lba::LBALeafNode, LogicalChildNode>
+  get_logical_extent(Transaction &t) final;
+
+  bool is_stable() const final;
+  bool is_data_stable() const final;
+  bool is_initial_pending() const final;
+
+  std::ostream &print(std::ostream &oss) const final;
+};
+using BtreeLBACursorRef = boost::intrusive_ptr<BtreeLBACursor>;
+
+
 using LBABtree = FixedKVBtree<
   laddr_t, lba_map_val_t, LBAInternalNode,
-  LBALeafNode, LBACursor, LBA_BLOCK_SIZE>;
+  LBALeafNode, BtreeLBACursor, LBA_BLOCK_SIZE>;
 
 /**
  * BtreeLBAManager
@@ -319,6 +394,10 @@ private:
     return op_context_t{cache, t};
   }
 
+  auto cursor_to_iter(LBABtree &btree, op_context_t c, LBACursor &ref) {
+    return btree.make_partial_iter(c, *(ref.to_concrete<BtreeLBACursor>()));
+  }
+
   seastar::metrics::metric_group metrics;
   void register_metrics();
 
@@ -441,3 +520,7 @@ private:
 using BtreeLBAManagerRef = std::unique_ptr<BtreeLBAManager>;
 
 }
+
+#if FMT_VERSION >= 90000
+template <> struct fmt::formatter<crimson::os::seastore::lba::BtreeLBACursor> : fmt::ostream_formatter {};
+#endif
